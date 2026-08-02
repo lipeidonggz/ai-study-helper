@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0007 · 当日进度存档（2026-08-02）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0007 · 当日进度存档</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-02</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：进度存档 / 会话小结</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>今日已完成</h2>
+      <ul>
+        <li><strong>阶段 0 完成</strong>：需求定义（<a href="0003-product-definition.html">0003</a>）、验收标准与 golden set 方案（<a href="0004-acceptance-criteria.html">0004</a>）</li>
+        <li><strong>架构设计定稿</strong>（<a href="0005-architecture-design.html">0005</a>）：Vue3+TS / FastAPI / SSE / SQLite+Qdrant / 存储接口抽象</li>
+        <li><strong>项目骨架</strong>：backend + frontend 可运行，git 初始提交 <code>2481fb4</code>；运行指南 <code>docs/how-to-run.html</code></li>
+        <li><strong>阶段 1 核心链路跑通</strong>（<a href="0006-llm-settings-and-real-client.html">0006</a>）：LLM 设置接口（SQLite 持久化 + Key 脱敏）、DeepSeek 真实客户端（SSE 流式 + function calling + tool_calls 回显）、手写 Agent loop（多轮工具调用）、前端设置面板 + 流式渲染；后端 13 个测试全绿，git 提交 <code>b42f7b5</code></li>
+        <li><strong>调试收获</strong>：SSE 解析丢事件名、Vue 3 响应式代理陷阱（详见 0006），均已在测试中验证修复</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>当前状态</h2>
+      <ul>
+        <li>阶段：阶段 1 进行中——真实 LLM 调用链路已验证通过</li>
+        <li>工作区：git 干净，所有代码与记录已提交</li>
+        <li>配置：API Key 已由用户在界面配置，存于 <code>backend/data/app.db</code>（不入库）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>明日起点（按优先级）</h2>
+      <ol>
+        <li>建立 <strong>golden set 评测基线</strong>：120 条用例结构化落盘（建议 JSON 格式），写最小评测 runner（输入用例 → 调用 Agent → 记录结果/引用/耗时 → 输出报告）</li>
+        <li><strong>获取并固定《三国演义》txt</strong>：版本/来源/哈希记录，按 120 回预处理（阶段 2 用，但素材可先备好）</li>
+        <li><strong>阶段 1 验证点跑批</strong>：prompt 策略对比（有/无 CoT）、结构化输出可靠性（schema 校验失败率）、工具调用成功率（计算/日期/笔记用例）</li>
+        <li><strong>对照测试</strong>：同一用例集跑豆包/千问，产出“能力差距报告”（记录项，不设追平门槛）</li>
+        <li>候选对比项：deepseek-chat vs deepseek-reasoner 的 function calling 支持差异</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>环境备忘</h2>
+      <ul>
+        <li>启动后端（backend 目录）：<code>.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload --no-use-colors</code></li>
+        <li>启动前端（frontend 目录）：<code>npm run dev</code>；浏览器用 <code>http://localhost:5173/</code>（vite 只监听 IPv6 localhost）</li>
+        <li>跑测试（backend 目录）：<code>.\.venv\Scripts\python.exe -m pytest</code>（已禁用 pytest cache 插件，见 pyproject 注释）</li>
+        <li>PowerShell 里看中文文件显示乱码是控制台编码问题，文件本身是 UTF-8，无需处理</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-02 · 下次会话从本记录的“明日起点”继续
+    </footer>
+  </div>
+</body>
+</html>
