@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0004 · v1 验收标准与 golden set 定稿（阶段 0 产出）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0004 · v1 验收标准与 golden set 定稿（阶段 0 产出）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-02</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：验收标准 / 决策（阶段 0 产出）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景</h2>
+      <p>在 <a href="0003-product-definition.html">0003 需求定义</a>基础上，把成功指标落地为可量化的验收标准，并确定 golden set 的取材来源与首批用例结构。本记录与 0003 共同构成阶段 0 的完成物。</p>
+      <p><strong>测量原则：</strong>v1 全部指标用 golden set + 人工标注 + 脚本统计测量；LLM-as-judge 留到阶段 6。所有数值为初始建议值，首轮基线跑完后校准再冻结。</p>
+    </section>
+
+    <section class="card">
+      <h2>一、v1 能力验收标准</h2>
+      <table>
+        <thead>
+          <tr><th>能力</th><th>验收指标</th><th>v1 建议门槛</th><th>测量方式</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>多轮对话</td><td>上下文一致性（回答基于前文）</td><td>≥ 90%</td><td>20 个多轮用例，人工标注</td></tr>
+          <tr><td>多轮对话</td><td>指代消解正确率</td><td>≥ 85%</td><td>同上</td></tr>
+          <tr><td>多轮对话</td><td>20 轮长对话关键事实召回</td><td>≥ 80%</td><td>脚本 + 人工抽查</td></tr>
+          <tr><td>流式输出</td><td>首 token 延迟（P95）</td><td>≤ 3s</td><td>50 次请求脚本测量</td></tr>
+          <tr><td>流式输出</td><td>中断/取消</td><td>可用</td><td>用例验证</td></tr>
+          <tr><td>知识库问答</td><td>答案正确率</td><td>≥ 85%</td><td>30 个问答用例，人工标注</td></tr>
+          <tr><td>知识库问答</td><td>引用正确率（引文确实支撑答案）</td><td>≥ 90%</td><td>同上</td></tr>
+          <tr><td>知识库问答</td><td>未覆盖问题不硬答</td><td>100% 符合配置</td><td>20 个边界用例</td></tr>
+          <tr><td>工具调用</td><td>工具选择正确率</td><td>≥ 90%</td><td>40 个用例，人工标注</td></tr>
+          <tr><td>工具调用</td><td>参数 schema 校验通过率</td><td>≥ 95%</td><td>脚本统计</td></tr>
+          <tr><td>工具调用</td><td>工具执行成功率</td><td>≥ 98%</td><td>脚本统计</td></tr>
+          <tr><td>工具调用</td><td>结果回填正确率</td><td>≥ 90%</td><td>人工标注</td></tr>
+          <tr><td>工具注册（L2）</td><td>注册后即时可用（免重启）</td><td>100%</td><td>5 个注册用例（含 1 个故意错误）</td></tr>
+          <tr><td>管理界面</td><td>文档上传 → 索引 → 可检索链路</td><td>100% 成功；1MB 文档索引 ≤ 60s</td><td>脚本 + 计时</td></tr>
+          <tr><td>管理界面</td><td>知识库启停/优先级设置生效</td><td>100%</td><td>用例验证</td></tr>
+          <tr><td>对话日志</td><td>完整记录（引用、工具调用、时间戳）</td><td>100%</td><td>抽样检查</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>二、范围控制验收标准</h2>
+      <table>
+        <thead>
+          <tr><th>机制</th><th>验收指标</th><th>门槛</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>会话级模式</td><td>通用/知识库优先/工具增强三种模式行为可区分</td><td>100% 用例验证</td></tr>
+          <tr><td>工具误用</td><td>不该用时调用工具的比例</td><td>≤ 5%</td></tr>
+          <tr><td>知识库优先级</td><td>设置优先级后，高优先级库引用占比</td><td>≥ 80%</td></tr>
+          <tr><td>可见性</td><td>知识库回答显示引用；工具调用展示调用过程</td><td>100%</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>三、golden set 取材与首批用例结构</h2>
+      <p><strong>总结构：建议首批 120 条。</strong></p>
+      <table>
+        <thead>
+          <tr><th>类别</th><th>数量</th><th>取材来源</th><th>验收维度</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>多轮对话</td><td>20</td><td>日常对话 + 学习/工作场景自造</td><td>一致性、指代、记忆</td></tr>
+          <tr><td>知识库问答</td><td>30</td><td>《三国演义》txt（详见下）</td><td>正确率、引用、拒答</td></tr>
+          <tr><td>工具调用</td><td>40</td><td>计算/日期时间/笔记场景自造</td><td>选择、schema、执行、回填</td></tr>
+          <tr><td>边界与拒答</td><td>20</td><td>自造（未覆盖、模糊、诱导性问题）</td><td>兜底行为</td></tr>
+          <tr><td>综合场景</td><td>10</td><td>组合场景（对话中同时用知识库和工具）</td><td>端到端</td></tr>
+        </tbody>
+      </table>
+
+      <h3>知识库取材：《三国演义》txt（用户指定）</h3>
+      <p>选用理由：事实可验证（公开可查，标注无争议）；内容复杂（120 回、数百人物、跨章节事件线）；公版无版权问题；半文言长文本能检验分块与检索质量。</p>
+      <p><strong>关键设计点：</strong>三国演义知名度高，模型可能凭参数记忆直接答对而不检索知识库——因此用例必须包含“只有检索才能答对”的类型，且引用校验为硬指标。30 条知识库用例细分：</p>
+      <table>
+        <thead>
+          <tr><th>子类型</th><th>数量</th><th>示例方向</th><th>验证目的</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>直接命中</td><td>8</td><td>人名、字号、事件、地点等单回明确事实</td><td>基础检索 + 回答正确</td></tr>
+          <tr><td>跨章综合</td><td>6</td><td>人物完整事迹线、某集团成员构成</td><td>多文档综合、证据组织</td></tr>
+          <tr><td>细节与原文引用</td><td>6</td><td>某句原话出自哪一回、生僻小人物</td><td>确认真的检索了 + 引用精度</td></tr>
+          <tr><td>关系与推理</td><td>5</td><td>人物关系、事件因果</td><td>基于检索到的证据推理</td></tr>
+          <tr><td>陷阱与拒答</td><td>5</td><td>书中不存在的内容、与其他演义易混淆点</td><td>兜底行为、不硬答</td></tr>
+        </tbody>
+      </table>
+      <p><strong>素材管理：</strong>固定一份干净可靠的 txt 来源（建议维基文库版或用户手头版本），记录版本/来源/哈希作为标注依据；预处理按 120 回切分，回目作为检索锚点。txt 文件在进入实现阶段时落到项目内。</p>
+      <p><strong>范围控制顺带验证：</strong>边界用例加入“三国以外的问题”（如问红楼梦），验证助手不会拿三国知识库硬答，而是走通用模式或明确拒答。</p>
+    </section>
+
+    <section class="card">
+      <h2>四、与豆包/千问的对照测试方式</h2>
+      <p>同一用例集分别跑本助手与豆包/千问，按能力维度记录差距，产出“能力差距报告”：达标项、差距项、差距原因归类（模型底座 / 检索 / 工具 / 编排）。v1 阶段不设“必须追平”的门槛——工程上可优化的是检索、工具、编排层，模型底座差距属于记录项而非达标项。</p>
+    </section>
+
+    <section class="card">
+      <h2>五、校准机制</h2>
+      <p>首轮基线跑完后：指标远高于门槛 → 用例太简单，补充更难用例；远低于门槛 → 判断是能力未达标还是门槛不合理，分析后调整。校准后冻结，作为后续阶段的回归基准。</p>
+    </section>
+
+    <section class="card">
+      <h2>当前状态与下一步</h2>
+      <ul>
+        <li>状态：阶段 0 完成（需求定义 + 验收标准 + golden set 结构均已定稿）</li>
+        <li>下一步：进入架构设计讨论（技术栈、系统模块划分）；实现阶段获取并固定《三国演义》txt 素材</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-02 · 本文件由 Codex 根据会话内容整理
+    </footer>
+  </div>
+</body>
+</html>

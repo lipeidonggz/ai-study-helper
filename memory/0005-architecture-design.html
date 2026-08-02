@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0005 · 架构设计定稿（逻辑划分与技术选型）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0005 · 架构设计定稿（逻辑划分与技术选型）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-02</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：架构设计 / 决策</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景</h2>
+      <p>在 <a href="0003-product-definition.html">0003 需求定义</a>与 <a href="0004-acceptance-criteria.html">0004 验收标准</a>基础上，完成逻辑模块划分与技术选型。本记录与 0003、0004 共同构成进入实现阶段前的设计基线。</p>
+    </section>
+
+    <section class="card">
+      <h2>技术选型总览（已确认）</h2>
+      <table>
+        <thead>
+          <tr><th>层面</th><th>选型</th><th>关键理由</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>架构形态</td><td>前后端分离（逻辑边界，物理可同机部署）</td><td>前端可替换，后端逻辑不动</td></tr>
+          <tr><td>前端</td><td>Vue 3 + TypeScript</td><td>Vue 2 已停止维护；组合式 API + TS 更顺</td></tr>
+          <tr><td>后端</td><td>Python + FastAPI</td><td>Agent 生态最强；异步/SSE 友好；Pydantic 承接工具 schema</td></tr>
+          <tr><td>流式输出</td><td>SSE（非 WebSocket）</td><td>单向服务器→客户端推送，基于 HTTP，自带重连</td></tr>
+          <tr><td>结构化存储</td><td>SQLite</td><td>嵌入式关系型，单文件零配置，单写多读，单用户足够</td></tr>
+          <tr><td>向量存储</td><td>Qdrant（本地嵌入模式）</td><td>元数据过滤强（知识库启停/优先级）、支持混合检索、本地→服务平滑演进</td></tr>
+          <tr><td>Embedding</td><td>本地 BGE / sentence-transformers 类模型（v1 建议）</td><td>本地化、免费、隐私好；DeepSeek API 无 embedding 端点</td></tr>
+          <tr><td>存储访问</td><td>接口（Port）+ 实现（Adapter）</td><td>换实现不换接口，为企业级扩展留位</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>逻辑模块划分</h2>
+      <table>
+        <thead>
+          <tr><th>模块</th><th>核心职责</th><th>v1 范围</th><th>后续演进点</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>前端</td><td>对话工作台 + 管理控制台</td><td>流式消息、引用/工具调用卡片、会话模式切换、文档/工具/设置/日志页面</td><td>整体可替换，不影响后端</td></tr>
+          <tr><td>API 契约层</td><td>前后端唯一通信边界</td><td>Chat（SSE）、文档、工具、设置、日志 API</td><td>契约稳定，新增以扩展为主</td></tr>
+          <tr><td>Agent 核心</td><td>编排 loop、上下文组装、范围路由、流式管线</td><td>手写单 Agent loop、会话模式路由、兜底策略</td><td>阶段 3 记忆/规划/反思；阶段 5 多 Agent</td></tr>
+          <tr><td>知识库服务</td><td>文档处理、索引、检索、引用溯源</td><td>txt 上传 → 分块 → 向量索引 → 检索 → 引用</td><td>阶段 2：分块策略、重排、压缩、上下文预算</td></tr>
+          <tr><td>工具服务</td><td>注册表、执行器、内置工具</td><td>L2 表单注册、本地命令/HTTP 执行、3 个内置工具</td><td>阶段 4：沙箱、MCP、重试/超时策略</td></tr>
+          <tr><td>状态与存储</td><td>会话、设置、文档、工具、日志持久化</td><td>SQLite + Qdrant 本地</td><td>阶段 3 长期记忆；阶段 4 断点续跑</td></tr>
+          <tr><td>观测与日志</td><td>记录/查询对话、工具调用、错误、指标</td><td>结构化日志 + 对话日志页面</td><td>阶段 4：完整 trace、指标面板</td></tr>
+        </tbody>
+      </table>
+      <p><strong>横切关注点：</strong></p>
+      <ul>
+        <li><strong>范围控制</strong>：配置模型（全局 + 会话级）存于存储层，执行逻辑落在 Agent 核心（模式路由、兜底策略），展示在前端（引用、工具调用过程）。三处缺一不可。</li>
+        <li><strong>评测</strong>：独立于运行时，golden set + runner + 报告生成，阶段 1 起使用，阶段 6 系统化。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>关键边界设计</h2>
+      <ol>
+        <li><strong>流式进契约</strong>：Chat API 用 SSE，管理类用 REST；流式从第一天设计进 API。</li>
+        <li><strong>LLM 客户端统一接口</strong>：定义模型调用接口，兼容 DeepSeek/OpenAI 类 API，换模型/对照测试零改动上层。</li>
+        <li><strong>工具执行器是安全边界</strong>：v1 本地进程执行 + 完整日志，阶段 4 沙箱化；边界先划好，后加防护不改结构。</li>
+        <li><strong>编排器与组件解耦</strong>：Agent 核心内部区分编排器（loop 控制）与组件（工具、记忆、规划器），阶段 3/5 换编排器不重写整层。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>存储抽象：接口（Port）+ 实现（Adapter）</h2>
+      <p>原则：依赖倒置（业务只依赖接口）；按业务聚合划分接口，而非按表划分；v1 抽象目标是“换实现不换接口”，不模拟企业架构。</p>
+      <table>
+        <thead>
+          <tr><th>接口</th><th>职责</th><th>v1 实现</th><th>企业级演进</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>SessionStore</td><td>会话与消息读写、断点状态</td><td>SQLite</td><td>PostgreSQL</td></tr>
+          <tr><td>DocumentStore</td><td>文档元数据 CRUD</td><td>SQLite</td><td>PostgreSQL + 对象存储</td></tr>
+          <tr><td>SettingStore</td><td>全局/会话级范围控制配置</td><td>SQLite</td><td>配置服务</td></tr>
+          <tr><td>ToolStore</td><td>工具定义 CRUD</td><td>SQLite</td><td>PostgreSQL</td></tr>
+          <tr><td>LogStore</td><td>对话/工具调用/错误日志</td><td>SQLite</td><td>时序库或 ES</td></tr>
+          <tr><td>VectorStore</td><td>upsert / search / delete、collection 管理</td><td>Qdrant 本地</td><td>Qdrant 服务</td></tr>
+          <tr><td>Embedder</td><td>文本 → 向量</td><td>本地 BGE / sentence-transformers</td><td>可更换模型</td></tr>
+        </tbody>
+      </table>
+      <p><strong>目录结构草图（实现阶段细化）：</strong></p>
+      <pre><code>backend/
+  app/
+    api/          # API 契约层
+    agent/        # Agent 核心
+    kb/           # 知识库服务
+    tools/        # 工具服务
+    storage/      # 接口定义（port）
+      sqlite/     # SQLite 适配器
+      vector/     # Qdrant 适配器
+    config/       # 依赖组装（简单工厂）</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>技术注意点</h2>
+      <ul>
+        <li><strong>跨库一致性</strong>：文档元数据在 SQLite、向量在 Qdrant，非同一事务。v1 策略：SQLite 主写入 + 向量写入失败补偿回滚；企业级再演进 Outbox 等机制。</li>
+        <li><strong>接口粒度克制</strong>：DocumentStore 管元数据、VectorStore 管向量，检索时两者配合，不揉成巨型仓储。</li>
+        <li><strong>SSE 断线恢复</strong>：v1 简单处理，完整断点恢复放到阶段 4。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>与六阶段路线图映射</h2>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>主要改动点</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Agent 核心（手写 loop）、API 契约（Chat/SSE）、工具服务（内置工具）</td></tr>
+          <tr><td>2</td><td>知识库服务（检索深化）、Agent 核心上下文组装器</td></tr>
+          <tr><td>3</td><td>Agent 核心（记忆/规划/反思）、状态存储（长期记忆）</td></tr>
+          <tr><td>4</td><td>工具服务（沙箱、MCP）、观测层（trace、人工介入）、状态存储（断点）</td></tr>
+          <tr><td>5</td><td>Agent 核心（多 Agent 编排器替换）</td></tr>
+          <tr><td>6</td><td>评测层、观测层（统一回归、成本优化）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>当前状态与下一步</h2>
+      <ul>
+        <li>状态：架构设计定稿，准备进入阶段 1（最小单 Agent MVP）</li>
+        <li>下一步：搭建项目骨架（目录结构、API 契约草案、存储接口定义），手写 Agent loop</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-02 · 本文件由 Codex 根据会话内容整理
+    </footer>
+  </div>
+</body>
+</html>

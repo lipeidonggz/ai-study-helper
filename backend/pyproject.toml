@@ -1,0 +1,29 @@
+[project]
+name = "ai-study-helper-backend"
+version = "0.1.0"
+description = "范围可控的通用 AI 助手 - 后端（阶段 1 骨架）"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4,<9",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 注意：本环境（Windows + Python 3.14）下 pytest 的 cache 插件与
+# TestClient 流式测试组合会导致会话结束挂起，故禁用缓存插件。
+addopts = "-p no:cacheprovider"

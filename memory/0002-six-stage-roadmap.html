@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0002 · 六阶段练习路线图（蓝图定稿）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0002 · 六阶段练习路线图（蓝图定稿）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-02</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：规划 / 决策</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景</h2>
+      <p>用户已熟悉单 Agent / 多 Agent 架构模式，理解 prompt 工程、context 工程、harness 工程、loop 工程的演化路径，并具备一定的 LLM 底层原理知识。目标是通过一个由浅入深的项目，实践并印证这些知识，最终覆盖当前 Agent 设计开发的主要知识体系。本记录是后续工作的路线图基线。</p>
+    </section>
+
+    <section class="card">
+      <h2>总体设计原则</h2>
+      <ol>
+        <li><strong>一个产品、多阶段演化</strong>：同一产品从简到繁持续重构，让架构演进的成本与收益可见、可记录。</li>
+        <li><strong>先手写、后框架</strong>：Agent loop、工具调用、上下文管理各手写一遍再引入框架，避免抽象掩盖要印证的知识点。</li>
+        <li><strong>每阶段 = 知识主题 + 验证点 + 对比测试</strong>：学习闭环为“提出假设 → 实现 → 对比 → 下结论 → 记录”。</li>
+        <li><strong>评测从第一天有，深度随复杂度递增</strong>：评测习惯（golden set、验收标准）从阶段 0 建立；评测建制化程度随产品稳定性与系统复杂度同步上升。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>产品载体（暂定）</h2>
+      <p>AI 学习助手（与目录名一致）。起步范围：上传学习资料 → 整理结构化笔记 → 生成复习卡片与测验。各阶段能力落点如下：</p>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>产品能力落点</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>单轮学习问答（资料 → 结构化笔记）</td></tr>
+          <tr><td>2</td><td>资料库问答，带引用溯源</td></tr>
+          <tr><td>3</td><td>记住用户掌握情况 + 学习规划 + 自我修正</td></tr>
+          <tr><td>4</td><td>工具接入（笔记/文件）+ 沙箱与观测</td></tr>
+          <tr><td>5</td><td>出题 / 批改 / 规划多 Agent 分工</td></tr>
+          <tr><td>6</td><td>学习效果指标闭环（测验通过率等）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>六阶段蓝图</h2>
+
+      <h3>阶段 0 · 需求与产品定义</h3>
+      <p><strong>知识模块：</strong>需求分析、成功指标定义、边界定义</p>
+      <p><strong>交付物：</strong>产品定义文档（用户、核心场景、最小闭环、成功指标、不做什么）</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>最小闭环是否足够窄，能支撑第一版上线</li>
+        <li>每个后续阶段的验收标准是否可量化（杜绝“效果变好”这类不可测表述）</li>
+        <li>成功指标能否覆盖“对用户有价值”，而非仅“系统能跑”</li>
+      </ul>
+      <p><strong>对比测试：</strong>需求文档评审</p>
+      <p><strong>评测：</strong>定义 golden set 的取材来源与首批用例</p>
+      <p><strong>框架：</strong>无</p>
+
+      <h3>阶段 1 · 最小单 Agent（手写 MVP）</h3>
+      <p><strong>知识模块：</strong>Prompt 工程、function calling、基础 Agent Loop（思考→行动→观察）、结构化输出、流式</p>
+      <p><strong>交付物：</strong>手写 loop 的单 Agent，跑通一个核心任务（如资料 → 结构化笔记）</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>loop 各步骤是否都必要（消融：去掉某步结果如何）</li>
+        <li>有/无 CoT、不同系统提示结构、few-shot，对准确率与稳定性的影响</li>
+        <li>结构化输出的可靠性：schema 校验失败率、JSON 解析鲁棒性</li>
+        <li>温度等采样参数对任务质量与一致性的影响</li>
+      </ul>
+      <p><strong>对比测试：</strong>prompt 策略矩阵、采样参数扫描</p>
+      <p><strong>评测：</strong>golden set + 人工标注，记录基线</p>
+      <p><strong>框架：</strong>纯手写（仅 LLM SDK）</p>
+
+      <h3>阶段 2 · Context 工程（RAG）</h3>
+      <p><strong>知识模块：</strong>分块、嵌入、向量检索、重排、上下文预算、压缩、引用溯源</p>
+      <p><strong>交付物：</strong>带引用的资料库问答</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>分块策略（大小/重叠/语义切分）对检索质量的影响</li>
+        <li>检索质量与答案质量的相关性——检索差是否必然导致答案差</li>
+        <li>Top-k、重排、上下文预算分配（检索内容 vs 系统提示 vs 历史）的取舍</li>
+        <li>上下文打满 vs 压缩后的信息损失如何量化</li>
+      </ul>
+      <p><strong>对比测试：</strong>分块 × 嵌入 × Top-k 检索质量矩阵；有/无重排；有/无压缩</p>
+      <p><strong>评测：</strong>recall@k、MRR 自动化 + 答案质量抽样</p>
+      <p><strong>框架：</strong>只引入嵌入/向量库，检索管线自拼</p>
+
+      <h3>阶段 3 · 单 Agent 深化（记忆、规划、反思）</h3>
+      <p><strong>知识模块：</strong>长期记忆（语义/情节）、记忆写入与检索策略、Plan-and-Execute、反思与自纠错</p>
+      <p><strong>交付物：</strong>Agent 记住用户掌握/未掌握的知识点，能做学习计划并自我修正</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>记忆的增量价值：冷启动 vs 多轮后，有/无记忆的差异</li>
+        <li>记忆污染：错误记忆如何影响输出；哪些该记、哪些该丢、如何修正</li>
+        <li>规划 vs 反应式：任务复杂到什么程度，plan-and-execute 才真正更优</li>
+        <li>反思是否真的提升结果，额外 token/延迟是否值得</li>
+      </ul>
+      <p><strong>对比测试：</strong>消融对比（有/无记忆、有/无规划、有/无反思）；多轮一致性</p>
+      <p><strong>评测：</strong>可复现任务集上的消融实验成为主线</p>
+      <p><strong>框架：</strong>纯手写</p>
+
+      <h3>阶段 4 · Harness 工程</h3>
+      <p><strong>知识模块：</strong>工具沙箱与安全、MCP、错误处理/重试/超时、可观测性、人工介入、状态持久化与断点</p>
+      <p><strong>交付物：</strong>生产级 harness——沙箱化工具执行、失败恢复、观测、人工审批点</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>沙箱是否真正隔离；prompt 注入等攻击能否得逞（红队测试）</li>
+        <li>故障注入（工具超时/报错/返回异常）下的恢复率</li>
+        <li>哪些环节必须人工介入，介入的成本与收益</li>
+        <li>观测数据能否定位一次失败的根本原因</li>
+      </ul>
+      <p><strong>对比测试：</strong>故障注入、安全用例集；阶段末的手写 vs 框架试点（spike）</p>
+      <p><strong>评测：</strong>恢复率、安全用例通过率、spike 对比数据</p>
+      <p><strong>框架：</strong>手写最小 harness → 阶段末限时框架 spike，用数据决定阶段 5</p>
+
+      <h3>阶段 5 · 多 Agent 架构</h3>
+      <p><strong>知识模块：</strong>编排模式（Supervisor/流水线/辩论）、通信协议、共享状态、任务分解</p>
+      <p><strong>交付物：</strong>多 Agent 版产品（如规划/出题/批改 Agent 分工）</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>单 vs 多：质量、成本、延迟的量化对比——什么任务值得拆</li>
+        <li>编排模式横向对比：Supervisor、流水线、辩论各自的适用场景</li>
+        <li>共享状态设计：黑板 vs 消息传递；状态一致性如何保证</li>
+        <li>错误传播：一个 Agent 失败的影响，以及降级回单 Agent 的路径</li>
+      </ul>
+      <p><strong>对比测试：</strong>单 vs 多三元组（质量/成本/延迟）、模式间对比、失败降级</p>
+      <p><strong>评测：</strong>阶段 3/4 任务集回归 + 成本/延迟指标</p>
+      <p><strong>框架：</strong>依据 spike 数据正式决定</p>
+
+      <h3>阶段 6 · 评测体系化与产品化</h3>
+      <p><strong>知识模块：</strong>eval 套件、LLM-as-judge、回归测试、成本/延迟优化、缓存、部署、产品指标闭环</p>
+      <p><strong>交付物：</strong>统一评测与观测体系、可部署版本、学习效果指标闭环</p>
+      <p><strong>验证点：</strong></p>
+      <ul>
+        <li>LLM-as-judge 与人工评分的一致性有多高，偏差模式是什么</li>
+        <li>回归套件能否捕捉到此前各阶段引入的回归</li>
+        <li>缓存/模型选择/并行等手段对成本与延迟的真实收益</li>
+        <li>产品指标（测验通过率等）与系统改动的因果关系</li>
+      </ul>
+      <p><strong>对比测试：</strong>judge vs 人工一致性、版本回归、A/B、成本优化前后</p>
+      <p><strong>评测：</strong>统一回归 + 线上指标</p>
+      <p><strong>框架：</strong>评测与观测体系保持与框架解耦</p>
+    </section>
+
+    <section class="card">
+      <h2>关键决策记录</h2>
+
+      <h3>决策一：评测分级原则</h3>
+      <p>评测习惯从阶段 0 建立（golden set、可量化验收标准）；评测建制化深度随产品稳定性与系统复杂度递增，而非一开始就建全套。理由：早期产品表面不稳定，重基建等于持续返工；输出复杂度低时人工/轻量评测 ROI 更高；过早引入 LLM-as-judge 容易变成“调裁判而非调产品”。各阶段评测对象：</p>
+      <ul>
+        <li>阶段 1：答案准确率与稳定性 → golden set + 人工标注</li>
+        <li>阶段 2：检索质量 → recall@k、MRR</li>
+        <li>阶段 3：记忆/规划/反思增量价值 → 消融对比、任务完成率</li>
+        <li>阶段 4：鲁棒性与安全 → 故障注入、恢复率、安全用例</li>
+        <li>阶段 5：多 Agent 性价比 → 质量/成本/延迟三元组</li>
+        <li>阶段 6：统一回归套件 + LLM-as-judge + 产品指标</li>
+      </ul>
+
+      <h3>决策二：框架引入策略</h3>
+      <p><strong>引入信号（满足一两条即认真考虑）：</strong></p>
+      <ul>
+        <li>手写胶水代码（持久化、断点、重试、流式、人工介入）开始超过 Agent 业务逻辑体量</li>
+        <li>状态机出现多入口与异常恢复路径，手写状态转移开始出 bug</li>
+        <li>需要大量官方维护的集成（工具生态、MCP、向量库），自维护 adapter 成本上升</li>
+        <li>需要多人协作的公共语言</li>
+      </ul>
+      <p><strong>不引入信号：</strong>说不出具体痛点；核心 loop 尚未被自己的评测验证；框架版本剧烈变动。</p>
+      <p><strong>执行方式：</strong>阶段 1–3 纯手写；阶段 4 手写最小 harness 后做限时 spike（1–2 天，同功能手写版 vs 框架版），对比维度固定为开发工时、代码量、调试难度、功能覆盖（断点续跑/人工介入/流式）、可维护性；用数据决定阶段 5 是否正式引入。业务层只依赖自有 Agent 接口，框架实现藏在后面；选型标准为“状态机 + 持久化 + 人工介入 + 多 Agent 编排”能力，而非名气。</p>
+    </section>
+
+    <section class="card">
+      <h2>当前状态与下一步</h2>
+      <ul>
+        <li>状态：路线图定稿，准备进入阶段 0</li>
+        <li>下一步：阶段 0 需求与产品定义，确认产品载体（暂定：AI 学习助手）</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-02 · 本文件由 Codex 根据会话内容整理
+    </footer>
+  </div>
+</body>
+</html>

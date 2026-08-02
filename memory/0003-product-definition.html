@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0003 · 需求定义定稿（阶段 0 产出）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0003 · 需求定义定稿（阶段 0 产出）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-02</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：需求定义 / 决策</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>产品定义</h2>
+      <p><strong>一句话功能定义（用户原话）：</strong>使用自有知识库、自有工具集增强的通用 AI 助手。</p>
+      <p><strong>讨论提炼建议稿：</strong>在豆包/千问级别的通用对话能力之上，让用户自己定义助手能“看到什么知识、调用什么工具”的 AI 助手。</p>
+      <p><strong>三大支柱：</strong>通用底座（对话与常用能力）、自有知识库（用户文档形成个性化知识源）、自有工具集（用户自定义工具集合）。</p>
+    </section>
+
+    <section class="card">
+      <h2>核心命题（已确认）：范围控制</h2>
+      <p>产品灵魂是解决通用助手“不易圈定优先使用的知识库范围、工具范围”的痛点，提炼为九个字：</p>
+      <ul>
+        <li><strong>看得见</strong>：用户随时能看到当前启用了哪些知识库、哪些工具</li>
+        <li><strong>控得住</strong>：能启停、调优先级，甚至按会话切换范围</li>
+        <li><strong>说得清</strong>：回答引用知识库来源，展示工具调用过程</li>
+      </ul>
+      <p>定位说明：知识库 + 工具组合在 Coze/Dify 等产品中已是标配，本项目不追求商业差异化，而是将范围控制作为设计透镜，使每个设计点可映射到学习路线图中的知识模块。</p>
+    </section>
+
+    <section class="card">
+      <h2>目标用户与部署（已确认）</h2>
+      <ul>
+        <li>先服务<strong>个人用户</strong>：单用户、本地优先部署</li>
+        <li>多用户、云端、账号体系后置，架构上预留扩展接口</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>核心场景与最小闭环</h2>
+      <p><strong>核心场景：</strong>用户上传文档形成个人知识库，与助手对话获取带引用的回答；用户通过表单注册工具，在对话中触发工具调用并看到调用过程。</p>
+      <p><strong>最小闭环 v1：</strong>多轮对话 + 知识库问答（带引用）+ 2–3 个内置工具 + 工具表单注册（L2）+ 管理界面。</p>
+    </section>
+
+    <section class="card">
+      <h2>v1 功能范围（已确认）</h2>
+      <h3>v1 包含</h3>
+      <ul>
+        <li>多轮对话（上下文记忆）</li>
+        <li>流式输出</li>
+        <li>知识库问答（带引用）</li>
+        <li>工具调用（先 2–3 个内置工具：计算、日期/时间、笔记）</li>
+        <li>管理界面：文档上传与管理、知识库启停与优先级、工具注册（L2）与启停、对话日志</li>
+      </ul>
+      <h3>v1 明确不做（后置）</h3>
+      <ul>
+        <li>多模态输入、图像生成、语音</li>
+        <li>实时网页检索（依赖外部搜索 API）</li>
+        <li>复杂多步工作流</li>
+      </ul>
+      <p><strong>取舍依据：</strong>不支撑前几阶段要验证的知识点，且工程量不可控。</p>
+    </section>
+
+    <section class="card">
+      <h2>工具自定义深度（已确认）</h2>
+      <p>MVP 做到 <strong>L2 表单注册</strong>：名称、描述、参数 schema、执行方式（本地命令或 HTTP）。</p>
+      <ul>
+        <li>L1 内置工具，用户只能启停——作为基础层</li>
+        <li>L2 表单注册——MVP 目标，足够练习 function calling 与 harness 工程</li>
+        <li>L3 上传代码脚本——后置到阶段 4，配合代码沙箱能力</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>范围控制机制（需求草案）</h2>
+      <ul>
+        <li><strong>全局设置</strong>：知识库/工具的默认启停与优先级</li>
+        <li><strong>会话级模式</strong>：通用模式 / 知识库优先 / 工具增强，每会话可选</li>
+        <li><strong>可解释性</strong>：回答展示引用来源，工具调用过程在对话流中可见</li>
+        <li><strong>兜底策略</strong>：知识库未覆盖的问题不硬答——可配置为拒答或退化为通用回答（阶段 2 核心验证点）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>成功指标草案</h2>
+      <ul>
+        <li><strong>能力达标</strong>：每个 v1 能力对应一组基准用例（多轮一致性、引用正确率、工具调用成功率），与豆包/千问做对照测试</li>
+        <li><strong>范围控制</strong>：知识库命中率、工具误用率（该用没用/不该用乱用）、拒答准确性</li>
+        <li><strong>产品指标</strong>：v1 阶段以任务完成率为主</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>与六阶段路线图的映射</h2>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>产品能力落点</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>通用对话 + 工具调用（内置工具）</td></tr>
+          <tr><td>2</td><td>知识库问答 + 引用 + 兜底策略验证</td></tr>
+          <tr><td>3</td><td>记忆用户偏好（默认知识库优先级）+ 多步任务规划</td></tr>
+          <tr><td>4</td><td>工具执行沙箱、观测台、人工介入</td></tr>
+          <tr><td>5</td><td>检索 / 工具 / 回答多 Agent 分工</td></tr>
+          <tr><td>6</td><td>指标回归与产品化（任务完成率等）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>下一步</h2>
+      <ol>
+        <li>把成功指标落地为可量化的验收标准（每个 v1 能力的具体通过标准）</li>
+        <li>定义 golden set 的取材来源与首批用例</li>
+        <li>进入架构设计讨论（技术栈、系统结构）</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-02 · 本文件由 Codex 根据会话内容整理
+    </footer>
+  </div>
+</body>
+</html>
