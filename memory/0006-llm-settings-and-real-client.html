@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0006 · LLM 配置与真实调用链路跑通（阶段 1 里程碑）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0006 · LLM 配置与真实调用链路跑通（阶段 1 里程碑）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-02</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：里程碑 / 调试记录</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景</h2>
+      <p>按 <a href="0005-architecture-design.html">0005 架构</a>推进阶段 1 核心：实现“前端配置大模型 Key → 真实 DeepSeek 调用 → 流式输出 → 前端实时渲染”的完整链路。本记录同时收录调试过程中发现的两个高价值前端 bug。</p>
+    </section>
+
+    <section class="card">
+      <h2>交付内容</h2>
+      <h3>1. LLM 设置接口（backend/app/api/settings.py）</h3>
+      <ul>
+        <li><code>GET /api/settings/llm</code>：返回配置，Key 一律脱敏（<code>sk-****5678</code>），带 <code>has_key</code> 与可选模型列表</li>
+        <li><code>PUT /api/settings/llm</code>：保存配置；<code>api_key</code> 留空表示保留原 Key；校验 provider 仅 deepseek、model 在列表中、Key 以 <code>sk-</code> 开头</li>
+        <li>持久化：SettingStore 的 SQLite 适配器（backend/app/storage/sqlite/settings_store.py），默认 <code>backend/data/app.db</code>，重启不丢</li>
+      </ul>
+
+      <h3>2. DeepSeek 真实客户端（backend/app/agent/llm.py）</h3>
+      <ul>
+        <li>OpenAI 兼容协议：<code>/chat/completions</code>，支持 <code>deepseek-chat</code> / <code>deepseek-reasoner</code></li>
+        <li>SSE 流式解析、function calling、多轮工具调用的 <code>tool_calls</code> 回显</li>
+        <li>测试用 httpx MockTransport 注入，不依赖真实网络</li>
+      </ul>
+
+      <h3>3. Agent Loop 流式版（backend/app/agent/loop.py）</h3>
+      <ul>
+        <li>“思考 → 行动 → 观察 → 输出”手写循环，文本边收边发</li>
+        <li>工具调用事件收集后执行，结果回填上下文继续，上限 4 轮</li>
+      </ul>
+
+      <h3>4. 前端设置面板与对话页（frontend/src/App.vue、api/client.ts）</h3>
+      <ul>
+        <li>右上角“设置”：API Key 输入（密码框）+ 模型选择 + 保存状态展示</li>
+        <li>对话页支持 SSE 流式渲染与错误事件展示</li>
+      </ul>
+
+      <h3>5. 测试</h3>
+      <p>后端 13 个测试全绿：设置接口存取/脱敏/校验、SQLite 持久化（模拟重启）、DeepSeek 客户端请求格式与流式/工具调用解析、Agent loop。前端 <code>vue-tsc</code> 类型检查 + 构建通过。</p>
+    </section>
+
+    <section class="card">
+      <h2>调试记录：两个前端 bug（本次最有价值的收获）</h2>
+
+      <h3>Bug 1：SSE 解析器丢失事件名（前端不渲染的真正原因）</h3>
+      <p>现象：后端流式响应正常（Network 面板能看到 <code>delta</code> 事件陆续到达），但界面完全无输出。</p>
+      <p>根因：<code>client.ts</code> 的解析器只读取 <code>data:</code> 行，把每个 SSE 块开头的 <code>event:</code> 行（事件名）丢弃。回调拿到的对象没有 <code>event</code> 字段，<code>event.event === 'delta'</code> 永远为 false，文本从未被拼进回复。</p>
+      <p>修复：每个块同时解析 <code>event:</code> 与 <code>data:</code> 并合并后再回调（<code>onEvent({ event: eventName, ...data })</code>）。用 Node 模拟后端真实字节流（含 JSON 从中间切开的网络分包）验证通过。</p>
+      <p><strong>教训：SSE 协议的事件名在 <code>event:</code> 行，解析时必须成对消费，不能只取数据行。</strong></p>
+
+      <h3>Bug 2：Vue 3 响应式代理陷阱（修复 Bug 1 后暴露的第二层问题）</h3>
+      <p>现象：把回复对象 push 进 <code>ref</code> 数组后，直接修改原始对象，模板不更新。</p>
+      <p>根因：<code>messages.value.push(obj)</code> 后数组里存的是 <code>obj</code> 的响应式代理；继续改原始对象不会触发渲染。</p>
+      <p>修复：push 后从数组取回代理再拼接：<code>const reply = messages.value[messages.value.length - 1]</code>。</p>
+      <p><strong>教训：操作响应式数组中的元素，要从数组访问路径取回代理，不要持有原始对象引用。</strong></p>
+
+      <h3>附带排查：PowerShell 控制台“乱码”</h3>
+      <p>Get-Content 显示中文为乱码是 PowerShell 用 GBK 解码 UTF-8 的显示问题，文件本身是合法 UTF-8（字节级校验确认），浏览器渲染正常，不影响运行。</p>
+    </section>
+
+    <section class="card">
+      <h2>验证与结论</h2>
+      <ul>
+        <li>用户确认：配置 Key → 对话 → 流式渲染 全链路调用通过</li>
+        <li>设置保存在 <code>backend/data/app.db</code>（已 gitignore，Key 不会入库）</li>
+        <li>工具调用代码链路就绪（loop 多轮 + 回显），具体成功率待评测基线阶段用例验证</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>下一步</h2>
+      <ol>
+        <li>建立 golden set 评测基线（阶段 1 验证点：prompt 策略对比、结构化输出可靠性、采样参数影响）</li>
+        <li>工具调用成功率用例（计算/日期/笔记）</li>
+        <li>候选对比项：deepseek-chat vs deepseek-reasoner 的 function calling 支持差异</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-02 · 本文件由 Codex 根据会话内容整理
+    </footer>
+  </div>
+</body>
+</html>

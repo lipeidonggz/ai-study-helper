@@ -9,6 +9,7 @@ from typing import Any
 class Message:
     role: str  # system | user | assistant | tool
     content: str
+    tool_calls: list[dict] | None = None  # 回显给 API 的原始 tool_calls（多轮工具调用必需）
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -53,3 +54,12 @@ class SessionSettings:
     """会话级范围控制配置。"""
 
     mode: str = "general"
+
+
+@dataclass
+class LLMSettings:
+    """大模型调用配置（provider 当前仅支持 deepseek）。"""
+
+    provider: str = "deepseek"
+    model: str = "deepseek-chat"
+    api_key: str = ""

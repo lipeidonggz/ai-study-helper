@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "ai-study-helper"
     llm_provider: str = "fake"  # fake | deepseek | openai（阶段 1 接入真实客户端时启用）
     default_mode: str = "general"
+    db_path: str = ""  # 为空时默认 backend/data/app.db
 
     model_config = {"env_prefix": "ASH_"}
 

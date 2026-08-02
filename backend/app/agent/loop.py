@@ -1,22 +1,21 @@
-"""手写 Agent Loop（骨架版）——阶段 1 的主战场。
+"""手写 Agent Loop —— 阶段 1 的主战场。
 
 结构：思考 → 行动 → 观察 → 输出
-- 思考：组装上下文，调用 LLM，判断是否需要工具
+- 思考：组装上下文，流式调用 LLM，判断是否需要工具
 - 行动：调用工具执行器
 - 观察：把工具结果回填上下文，再调用 LLM 生成最终回答
 - 输出：逐块流式 yield
 
-骨架版用 FakeLLMClient 占位；阶段 1 实现真实 LLM 客户端与 function calling。
+支持多轮工具调用（受 _MAX_TOOL_ROUNDS 限制）；流式文本边收边发。
 """
 
-import asyncio
 from typing import AsyncIterator
 
 from app.agent.context import assemble
-from app.agent.llm import FakeLLMClient, LLMClient, LLMMessage
+from app.agent.llm import LLMClient, LLMEvent, LLMMessage
 from app.tools.executor import ToolExecutor
 
-_CHUNK_SIZE = 4
+_MAX_TOOL_ROUNDS = 4
 
 
 async def run_agent_turn(
@@ -30,22 +29,27 @@ async def run_agent_turn(
     history = history or []
     messages = assemble(mode, history, user_message)
 
-    # —— 思考：LLM 决策（真实实现中返回文本或工具调用请求） ——
-    response = await llm.chat(messages=messages, tools=tools.schemas() if tools else None)
+    for _ in range(_MAX_TOOL_ROUNDS):
+        # —— 思考 + 输出：流式调用，文本边收边发，工具调用事件先收集 ——
+        tool_events: list[LLMEvent] = []
+        async for event in llm.stream(
+            messages=messages, tools=tools.schemas() if tools else None
+        ):
+            if event.type == "text" and event.text:
+                yield event.text
+            elif event.type == "tool_call":
+                tool_events.append(event)
 
-    # —— 行动 + 观察：有工具调用则执行并把结果回填 ——
-    if response.tool_call and tools is not None:
-        result = await tools.execute(response.tool_call.name, response.tool_call.arguments)
-        messages.append(LLMMessage(role="assistant", content=""))
-        messages.append(LLMMessage(role="tool", content=result))
-        response = await llm.chat(messages=messages, tools=tools.schemas())
+        # 无工具调用：本轮输出结束
+        if not tool_events or tools is None:
+            return
 
-    # —— 输出：流式 ——
-    for i in range(0, len(response.content), _CHUNK_SIZE):
-        yield response.content[i : i + _CHUNK_SIZE]
-        await asyncio.sleep(0.01)
+        # —— 行动 + 观察：执行工具，回填结果，进入下一轮 ——
+        first = tool_events[0]
+        result = await tools.execute(first.tool_call.name, first.tool_call.arguments)
+        messages.append(
+            LLMMessage(role="assistant", content="", tool_calls=first.raw_tool_calls)
+        )
+        messages.append(LLMMessage(role="tool", content=str(result)))
 
-
-def fake_run(user_message: str, mode: str, tools: ToolExecutor) -> AsyncIterator[str]:
-    """骨架冒烟入口：用 FakeLLM 跑通完整链路。"""
-    return run_agent_turn(user_message, mode=mode, llm=FakeLLMClient(), tools=tools)
+    # 超出工具轮次上限：静默结束（阶段 4 加入提示与降级策略）

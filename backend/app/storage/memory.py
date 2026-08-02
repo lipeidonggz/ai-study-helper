@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from app.models import GlobalSettings, Message, Session, SessionSettings
+from app.models import GlobalSettings, LLMSettings, Message, Session, SessionSettings
 from app.storage.ports import LogStore, SessionStore, SettingStore
 
 
@@ -33,6 +33,7 @@ class InMemorySettingStore(SettingStore):
     def __init__(self) -> None:
         self._global = GlobalSettings()
         self._sessions: dict[str, SessionSettings] = {}
+        self._llm = LLMSettings()
 
     def get_global(self) -> GlobalSettings:
         return self._global
@@ -45,6 +46,12 @@ class InMemorySettingStore(SettingStore):
 
     def save_session(self, session_id: str, settings: SessionSettings) -> None:
         self._sessions[session_id] = settings
+
+    def get_llm_settings(self) -> LLMSettings:
+        return self._llm
+
+    def save_llm_settings(self, settings: LLMSettings) -> None:
+        self._llm = settings
 
 
 class InMemoryLogStore(LogStore):

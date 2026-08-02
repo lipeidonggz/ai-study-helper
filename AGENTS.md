@@ -21,6 +21,6 @@
 
 ## 当前状态
 
-- 阶段：阶段 0 完成、架构设计定稿（memory/0003 ~ 0005），准备进入阶段 1（最小单 Agent MVP）
+- 阶段：阶段 1 进行中——LLM 配置与真实调用链路已跑通（memory/0006）
 - 技术基线：Vue 3 + TS 前端；Python + FastAPI 后端；SSE 流式；SQLite + Qdrant 本地存储；存储接口抽象（Port + Adapter）；本地 embedding
-- 下一步：搭建项目骨架（目录结构、API 契约草案、存储接口定义），手写 Agent loop；阶段 2 前获取并固定《三国演义》txt 素材
+- 下一步：建立 golden set 评测基线（阶段 1 验证点）；阶段 2 前获取并固定《三国演义》txt 素材

@@ -6,7 +6,15 @@
 
 from abc import ABC, abstractmethod
 
-from app.models import Document, GlobalSettings, Message, Session, SessionSettings, ToolDefinition
+from app.models import (
+    Document,
+    GlobalSettings,
+    LLMSettings,
+    Message,
+    Session,
+    SessionSettings,
+    ToolDefinition,
+)
 
 
 class SessionStore(ABC):
@@ -35,6 +43,12 @@ class SettingStore(ABC):
 
     @abstractmethod
     def save_session(self, session_id: str, settings: SessionSettings) -> None: ...
+
+    @abstractmethod
+    def get_llm_settings(self) -> LLMSettings: ...
+
+    @abstractmethod
+    def save_llm_settings(self, settings: LLMSettings) -> None: ...
 
 
 class DocumentStore(ABC):
