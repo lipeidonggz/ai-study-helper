@@ -9,7 +9,7 @@
 import time
 from typing import Callable
 
-from app.agent.llm import LLMEvent
+from app.agent.llm import LLMEvent, LLMMessage
 
 OnStep = Callable[[dict], None]
 
@@ -59,3 +59,17 @@ def event_to_dict(evt: LLMEvent) -> dict:
     if evt.raw_tool_calls:
         d["raw_tool_calls"] = evt.raw_tool_calls  # 回显用的原始结构
     return d
+
+
+def messages_to_dicts(messages: list[LLMMessage]) -> list[dict]:
+    """把消息列表转成纯字典（用于展示"发给模型的完整提示词"）。
+
+    与 DeepSeek 客户端发送的格式一致：role + content，有 tool_calls 时带上。
+    """
+    out: list[dict] = []
+    for m in messages:
+        item: dict = {"role": m.role, "content": m.content}
+        if m.tool_calls:
+            item["tool_calls"] = m.tool_calls
+        out.append(item)
+    return out

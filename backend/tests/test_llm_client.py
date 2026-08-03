@@ -202,5 +202,8 @@ def test_loop_trace_steps():
         assert "llm_call" in types  # 有 LLM 调用记录
         assert "event" in types  # 有流式事件记录
         assert types[-1] == "done"  # 最后是结束统计
+        llm_call = next(s for s in trace.steps() if s["type"] == "llm_call")
+        assert "prompt" in llm_call["data"]  # llm_call 应包含完整提示词
+        assert llm_call["data"]["prompt"][0]["role"] == "system"  # 第一条是系统提示
 
     asyncio.run(scenario())

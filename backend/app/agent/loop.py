@@ -22,7 +22,7 @@ from typing import AsyncIterator
 
 from app.agent.context import assemble, system_prompt  # 上下文组装与系统提示
 from app.agent.llm import LLMClient, LLMEvent, LLMMessage
-from app.agent.trace import Trace, event_to_dict  # 处理过程记录器
+from app.agent.trace import Trace, event_to_dict, messages_to_dicts  # 处理过程记录器
 from app.tools.executor import ToolExecutor
 
 _MAX_TOOL_ROUNDS = 4  # 工具调用轮数上限，防止模型无限循环烧钱
@@ -68,7 +68,11 @@ async def run_agent_turn(
         if trace:
             trace.step(
                 "llm_call",
-                {"tool_count": len(tool_names), "message_count": len(messages)},
+                {
+                    "tool_count": len(tool_names),
+                    "message_count": len(messages),
+                    "prompt": messages_to_dicts(messages),  # 完整提示词（含历史与工具结果）
+                },
             )
 
         # —— 思考 + 输出：流式调用，文本边收边发，工具调用事件先收集 ——

@@ -141,7 +141,7 @@ async function send() {
         <li v-for="step in traceSteps" :key="step.seq">
           <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
           <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
-          <details>
+          <details open>
             <summary>详情</summary>
             <pre>{{ JSON.stringify(step.data, null, 2) }}</pre>
           </details>

@@ -65,7 +65,12 @@ export async function streamChat(
           }
         }
       }
-      onEvent({ event: eventName as ChatEvent['event'], ...data })
+      onEvent({
+        event: eventName as ChatEvent['event'],
+        ...data,
+        // trace 事件的 data 就是步骤对象本身，规整到 trace 字段供面板使用
+        ...(eventName === 'trace' ? { trace: data as unknown as TraceStep } : {})
+      })
       sep = buffer.indexOf('\n\n')
     }
   }
