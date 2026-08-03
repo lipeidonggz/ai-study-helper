@@ -53,7 +53,8 @@ class LLMResponse:
 class LLMEvent:
     """流式事件：统一告诉上层"现在发生了什么"。
 
-    三种类型：
+    四种类型：
+    - raw：原始流 chunk（还没加工的数据，用于展示"流式返回长什么样"）
     - text：产出了一段文本增量（直接推给前端即可）
     - tool_call：模型想调用工具（需要执行工具后再回一轮）
     - done：本轮生成结束
@@ -63,6 +64,7 @@ class LLMEvent:
     text: str | None = None
     tool_call: ToolCall | None = None
     raw_tool_calls: list[dict] | None = None  # 原始 tool_calls（回传给 API 用）
+    raw: dict | None = None  # type="raw" 时携带原始 chunk（或 {"marker": "[DONE]"}）
 
 
 class LLMClient(ABC):
@@ -221,8 +223,11 @@ class DeepSeekLLMClient(LLMClient):
                         continue
                     raw = line[5:].strip()  # 去掉 "data:" 前缀
                     if raw == "[DONE]":  # OpenAI 协议：流结束标记
+                        yield LLMEvent(type="raw", raw={"marker": "[DONE]"})  # 结束标记也展示
                         break
                     chunk = json.loads(raw)
+                    # 原始 chunk 原样产出（前端可开关展示）
+                    yield LLMEvent(type="raw", raw=chunk)
                     delta = chunk["choices"][0].get("delta", {})  # 每片内容在 delta 里
                     if delta.get("content"):
                         yield LLMEvent(type="text", text=delta["content"])  # 文本增量直接产出

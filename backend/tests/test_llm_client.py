@@ -11,7 +11,13 @@ import json
 
 import httpx
 
-from app.agent.llm import DeepSeekLLMClient, LLMMessage
+from app.agent.llm import (
+    DeepSeekLLMClient,
+    LLMClient,
+    LLMEvent,
+    LLMMessage,
+    LLMResponse,
+)
 
 
 def _sse(chunks: list[dict]) -> str:
@@ -45,13 +51,18 @@ def test_stream_text():
             client = DeepSeekLLMClient(api_key="sk-test", http_client=hc)
             parts: list[str] = []
             tool_events = []
+            raw_events = []
             async for evt in client.stream([LLMMessage(role="user", content="hi")]):
-                if evt.type == "text":
+                if evt.type == "raw":
+                    raw_events.append(evt)
+                elif evt.type == "text":
                     parts.append(evt.text or "")
                 elif evt.type == "tool_call":
                     tool_events.append(evt)
             assert "".join(parts) == "你好世界"
             assert tool_events == []  # 纯文本响应不应有工具调用事件
+            assert len(raw_events) >= 2  # 每个原始 chunk 都应产出 raw 事件
+            assert raw_events[0].raw["choices"][0]["delta"]["content"] == "你好"
 
     asyncio.run(scenario())
 
@@ -219,5 +230,47 @@ def test_loop_trace_steps():
         assert llm_call["data"]["prompt"][0]["role"] == "system"  # 第一条是系统提示
         assert llm_call["data"]["model"] == "fake"  # 记录模型名
         assert llm_call["data"]["tools"]  # 记录发送给模型的工具定义
+
+    asyncio.run(scenario())
+
+
+def test_loop_raw_chunk_forwarding():
+    """loop 应把原始 chunk 转发为 raw_chunk trace 步骤，且不影响文本输出。"""
+
+    class RawStubLLM(LLMClient):
+        """模拟会产出原始 chunk 的 LLM（Fake 不产出 raw，这里专门构造）。"""
+
+        model_name = "stub"
+
+        async def chat(self, messages, tools=None) -> LLMResponse:
+            return LLMResponse(content="")
+
+        async def stream(self, messages, tools=None):
+            yield LLMEvent(type="raw", raw={"choices": [{"delta": {"content": "你"}}]})
+            yield LLMEvent(type="raw", raw={"marker": "[DONE]"})
+            yield LLMEvent(type="text", text="hi")
+            yield LLMEvent(type="done")
+
+    async def scenario():
+        from app.agent.loop import run_agent_turn
+
+        from app.agent.trace import Trace
+        from app.tools.executor import ToolExecutor
+        from app.tools.registry import default_registry
+
+        trace = Trace()
+        chunks = [
+            chunk
+            async for chunk in run_agent_turn(
+                "hi",
+                mode="general",
+                llm=RawStubLLM(),
+                tools=ToolExecutor(default_registry()),
+                trace=trace,
+            )
+        ]
+        assert "".join(chunks) == "hi"  # raw 事件不影响文本输出
+        types = [s["type"] for s in trace.steps()]
+        assert types.count("raw_chunk") == 2  # 两个原始 chunk 都被记录
 
     asyncio.run(scenario())

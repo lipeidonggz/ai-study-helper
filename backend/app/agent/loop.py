@@ -80,6 +80,11 @@ async def run_agent_turn(
         # —— 思考 + 输出：流式调用，文本边收边发，工具调用事件先收集 ——
         tool_events: list[LLMEvent] = []
         async for event in llm.stream(messages=messages, tools=schemas):
+            if event.type == "raw":
+                # 原始流 chunk：不直接产出文本，只记录到 trace（前端可开关展示）
+                if trace:
+                    trace.step("raw_chunk", {"chunk": event.raw})
+                continue
             if trace:
                 trace.step("event", {"event": event_to_dict(event)})  # 每个流式事件都记录
             if event.type == "text" and event.text:

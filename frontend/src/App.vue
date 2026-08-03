@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import {
   getLLMSettings,
@@ -27,6 +27,12 @@ const saveMsg = ref('')
 // —— 处理过程面板（展示 Agent 内部步骤） ——
 const traceSteps = ref<TraceStep[]>([])
 const showTrace = ref(true)
+// —— 原始流开关：默认关闭，打开后显示每个原始 chunk ——
+const showRaw = ref(false)
+const visibleTraceSteps = computed(() =>
+  showRaw.value ? traceSteps.value : traceSteps.value.filter((s) => s.type !== 'raw_chunk')
+)
+const rawCount = computed(() => traceSteps.value.filter((s) => s.type === 'raw_chunk').length)
 
 onMounted(async () => {
   try {
@@ -132,13 +138,19 @@ async function send() {
     <section class="trace">
       <div class="trace-head">
         <strong>处理过程</strong>
-        <span class="hint">{{ traceSteps.length }} 个步骤</span>
+        <label class="trace-toggle">
+          <input v-model="showRaw" type="checkbox" /> 原始流
+        </label>
+        <span class="hint">
+          {{ visibleTraceSteps.length }} 个步骤
+          <template v-if="!showRaw && rawCount">（+{{ rawCount }} 原始流）</template>
+        </span>
         <button class="link-btn" @click="showTrace = !showTrace">
           {{ showTrace ? '收起' : '展开' }}
         </button>
       </div>
       <ol v-if="showTrace" class="trace-list">
-        <li v-for="step in traceSteps" :key="step.seq">
+        <li v-for="step in visibleTraceSteps" :key="step.seq">
           <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
           <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
           <details open>
@@ -282,6 +294,19 @@ footer.bar button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.trace-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85em;
+  color: #57606a;
+  cursor: pointer;
+}
+.trace-badge.type-raw_chunk {
+  background: #e6edf3;
+  color: #57606a;
+  font-family: Consolas, 'Courier New', monospace;
 }
 .trace-list {
   margin: 10px 0 0;

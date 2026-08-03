@@ -35,6 +35,7 @@
         <li><strong>传输方式</strong>：扩展现有 SSE 协议，新增 <code>trace</code> 事件；现有 delta/error/done 不变，向后兼容</li>
         <li><strong>后端实现</strong>：观察者模式 Trace 收集器——loop 只负责记录，chat.py 负责实时推送；为阶段 4 换持久化/对接观测平台预留</li>
         <li><strong>默认状态</strong>：面板默认展开</li>
+        <li><strong>原始流开关</strong>：默认关闭；打开后展示每个原始 chunk（含 id/model/finish_reason 等元数据与 [DONE] 标记），纯前端过滤，不改协议</li>
         <li><strong>v1 范围</strong>：只做实时展示，不做持久化与历史回看（阶段 4 再补）</li>
       </ul>
     </section>
@@ -45,7 +46,7 @@
         <li><strong>backend/app/agent/trace.py</strong>：Trace 记录器（step 序号、类型、数据、耗时）+ LLMEvent 转字典工具</li>
         <li><strong>backend/app/agent/loop.py</strong>：关键节点埋点——context（系统提示、消息数）/ round / llm_call（模型、工具定义、完整提示词）/ event（每个流式事件）/ tool_exec（名称、参数、结果、耗时）/ done（轮数、工具次数、结束原因）</li>
         <li><strong>backend/app/api/chat.py</strong>：Trace 实时转成 SSE <code>trace</code> 事件（用 deque 缓冲保证顺序：trace 先于对应文本发出）</li>
-        <li><strong>frontend/src/App.vue + client.ts</strong>：“处理过程”面板——步骤时间线、类型徽章（工具调用/错误/结束高亮）、JSON 详情默认展开</li>
+        <li><strong>frontend/src/App.vue + client.ts</strong>：“处理过程”面板——步骤时间线、类型徽章（工具调用/错误/结束/原始流高亮）、JSON 详情默认展开、原始流开关</li>
       </ul>
     </section>
 
