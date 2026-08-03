@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0009 · 当前主要功能清单与提交规范</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0009 · 当前主要功能清单与提交规范</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-03</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：存档规范 / 功能清单</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>用途</h2>
+      <p>从本记录开始，<strong>每次 git 提交的说明中必须包含“当前项目主要功能”摘要</strong>，随项目演进更新。本记录是该清单的权威副本，功能有增删时同步维护，并在 commit message 中保持一致。</p>
+    </section>
+
+    <section class="card">
+      <h2>当前主要功能（阶段 1，2026-08-03）</h2>
+      <ul>
+        <li><strong>前后端分离架构</strong>：Vue 3 + TS 前端 / Python + FastAPI 后端 / SSE 流式对话</li>
+        <li><strong>对话能力</strong>：多轮上下文 + 流式输出（打字机效果）+ 会话模式（通用 / 知识库优先 / 工具增强）</li>
+        <li><strong>LLM 配置</strong>：前端设置面板配置 DeepSeek API Key 与模型（deepseek-chat / deepseek-reasoner）；Key 脱敏存取、SQLite 持久化</li>
+        <li><strong>手写 Agent Loop</strong>：思考→行动→观察循环，支持多轮工具调用（上限 4 轮）与 tool_calls 回显</li>
+        <li><strong>内置工具</strong>：安全计算器（AST 求值）/ 日期时间 / 笔记保存 / 笔记读取；注册表 + 执行器架构</li>
+        <li><strong>存储抽象</strong>：Port + Adapter 结构；设置持久化 SQLite，会话/日志暂用内存实现</li>
+        <li><strong>测试</strong>：13 个用例全绿（冒烟、设置接口、LLM 客户端 Mock、Agent loop）</li>
+        <li><strong>文档</strong>：记忆库 0001–0008（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读）+ 运行指南 docs/how-to-run.html</li>
+        <li><strong>代码注释</strong>：backend 全部 Python 文件中文注释（文件头职责与设计原因、流程逐行说明）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>提交规范（以后所有提交都遵守）</h2>
+      <ol>
+        <li>commit 说明分为两部分：标题（本次改动一句话）+ 正文（当前项目主要功能摘要）</li>
+        <li>功能摘要直接从本记录复制并同步最新状态；功能有变化时先更新本记录</li>
+        <li>敏感信息（API Key、密钥）绝不允许出现在 commit 或记录中</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-03 · 随项目演进维护
+    </footer>
+  </div>
+</body>
+</html>

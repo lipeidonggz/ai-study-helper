@@ -1,7 +1,10 @@
-"""存储接口（Port）：业务层只依赖这里的抽象，具体实现见 memory / sqlite / vector。
+"""存储接口（Port）：定义"存储层必须提供什么能力"，不关心怎么实现。
 
-原则：按业务聚合划分接口，不按表划分；目标是“换实现不换接口”。
-企业级演进：SQLite → PostgreSQL、Qdrant 本地 → Qdrant 服务，只需替换适配器。
+设计角度：为什么单独定义接口？
+- 这是 0005 架构里"接口先行、实现可换"的核心：业务只依赖这里的抽象
+- 企业级演进：SQLite → PostgreSQL、Qdrant 本地 → Qdrant 服务，只需替换适配器
+
+命名约定：接口名以 Store 结尾，方法名描述"做什么"而非"怎么做"。
 """
 
 from abc import ABC, abstractmethod
@@ -18,6 +21,8 @@ from app.models import (
 
 
 class SessionStore(ABC):
+    """会话存储：会话的创建、查询、消息读写（多轮对话的基础）。"""
+
     @abstractmethod
     def create_session(self, mode: str) -> Session: ...
 
@@ -32,6 +37,8 @@ class SessionStore(ABC):
 
 
 class SettingStore(ABC):
+    """设置存储：全局/会话级范围控制配置 + LLM 配置。"""
+
     @abstractmethod
     def get_global(self) -> GlobalSettings: ...
 
@@ -52,6 +59,8 @@ class SettingStore(ABC):
 
 
 class DocumentStore(ABC):
+    """文档存储：知识库文档元数据（阶段 2 落地）。"""
+
     @abstractmethod
     def create(self, document: Document) -> Document: ...
 
@@ -66,6 +75,8 @@ class DocumentStore(ABC):
 
 
 class ToolStore(ABC):
+    """工具定义存储：L2 表单注册的工具（阶段 4 落地）。"""
+
     @abstractmethod
     def create(self, definition: ToolDefinition) -> ToolDefinition: ...
 
@@ -80,6 +91,8 @@ class ToolStore(ABC):
 
 
 class LogStore(ABC):
+    """日志存储：记录对话、工具调用、错误（可观测性的基础）。"""
+
     @abstractmethod
     def append(self, entry_type: str, payload: dict) -> None: ...
 

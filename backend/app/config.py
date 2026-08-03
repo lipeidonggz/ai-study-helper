@@ -1,15 +1,29 @@
-"""应用配置：环境变量前缀 ASH_（避免与系统变量冲突）。"""
+"""应用配置：集中管理所有可调参数。
+
+设计角度：为什么单独一个文件？
+- 一处修改、全局生效，而不是把参数散落在各个模块里
+- 支持用环境变量覆盖（前缀 ASH_），方便以后部署，也方便测试隔离
+这里使用 pydantic-settings 读取配置。
+"""
 
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "ai-study-helper"
-    llm_provider: str = "fake"  # fake | deepseek | openai（阶段 1 接入真实客户端时启用）
-    default_mode: str = "general"
-    db_path: str = ""  # 为空时默认 backend/data/app.db
+    """配置模型：字段的默认值就是"未额外配置时"使用的值。"""
 
+    app_name: str = "ai-study-helper"
+    # LLM 提供方：fake=占位实现（不联网）；deepseek=真实调用（前端配置 Key 后生效）
+    llm_provider: str = "fake"
+    # 默认会话模式：general 通用 / kb_priority 知识库优先 / tool_enhanced 工具增强
+    default_mode: str = "general"
+    # 数据库文件路径；为空时由 di.py 计算默认值 backend/data/app.db
+    db_path: str = ""
+
+    # 告诉 pydantic-settings：所有环境变量必须以 ASH_ 开头，
+    # 例如 ASH_DB_PATH=xxx 会覆盖 db_path 字段
     model_config = {"env_prefix": "ASH_"}
 
 
+# 模块级单例：整个进程只加载一次配置，任何地方 import 都是同一份
 settings = Settings()

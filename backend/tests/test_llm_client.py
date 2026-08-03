@@ -1,4 +1,12 @@
-import asyncio
+"""LLM 客户端测试：用 httpx MockTransport 模拟 HTTP 层，不依赖真实网络。
+
+设计角度：为什么要 Mock？
+- 测试不能真的调用 DeepSeek（花钱且不稳定）
+- MockTransport 拦截请求，测试可以断言"请求格式对不对"，再喂回假响应，
+  从而验证客户端的组装、解析、流式处理逻辑
+"""
+
+import asyncio  # 在同步测试函数里手动跑异步逻辑
 import json
 
 import httpx
@@ -7,14 +15,18 @@ from app.agent.llm import DeepSeekLLMClient, LLMMessage
 
 
 def _sse(chunks: list[dict]) -> str:
+    """把若干 JSON 块拼成 OpenAI 流式响应格式（data: ... 空行分隔，[DONE] 收尾）。"""
     body = "".join(f"data: {json.dumps(c, ensure_ascii=False)}\n\n" for c in chunks)
     return body + "data: [DONE]\n\n"
 
 
 def test_stream_text():
+    """流式文本：逐块 content 应被完整拼接，且请求带 stream=True。"""
+
     async def handler(request: httpx.Request) -> httpx.Response:
+        """模拟服务器：先校验请求，再返回两段文本增量。"""
         payload = json.loads(request.content)
-        assert payload["stream"] is True
+        assert payload["stream"] is True  # 流式请求标记
         assert payload["messages"][0]["role"] == "user"
         return httpx.Response(
             200,
@@ -28,7 +40,7 @@ def test_stream_text():
         )
 
     async def scenario():
-        transport = httpx.MockTransport(handler)
+        transport = httpx.MockTransport(handler)  # 拦截所有 HTTP 请求
         async with httpx.AsyncClient(transport=transport) as hc:
             client = DeepSeekLLMClient(api_key="sk-test", http_client=hc)
             parts: list[str] = []
@@ -39,13 +51,16 @@ def test_stream_text():
                 elif evt.type == "tool_call":
                     tool_events.append(evt)
             assert "".join(parts) == "你好世界"
-            assert tool_events == []
+            assert tool_events == []  # 纯文本响应不应有工具调用事件
 
     asyncio.run(scenario())
 
 
 def test_stream_tool_call():
+    """流式工具调用：分片的 name/arguments 应被拼接成完整调用，且保留原始结构。"""
+
     async def handler(request: httpx.Request) -> httpx.Response:
+        # 模拟：工具名和参数 JSON 都拆成两片到达
         return httpx.Response(
             200,
             text=_sse(
@@ -93,12 +108,14 @@ def test_stream_tool_call():
             assert tool_event is not None
             assert tool_event.tool_call.name == "calculator"
             assert tool_event.tool_call.arguments == {"expression": "1+1"}
-            assert tool_event.raw_tool_calls  # 回显用原始结构
+            assert tool_event.raw_tool_calls  # 回显用原始结构不能丢
 
     asyncio.run(scenario())
 
 
 def test_chat_tool_call_non_stream():
+    """非流式响应里的 tool_calls：应解析出 ToolCall（工具名 + 参数）。"""
+
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -133,6 +150,8 @@ def test_chat_tool_call_non_stream():
 
 
 def test_loop_with_fake_llm():
+    """Agent loop + FakeLLM：确认循环能跑通并产出完整文本（回归保护）。"""
+
     async def scenario():
         from app.agent.loop import run_agent_turn
 

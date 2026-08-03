@@ -1,75 +1,101 @@
-"""LLM 客户端接口与实现：统一模型调用抽象，兼容 DeepSeek/OpenAI 类 API。
+"""LLM 客户端：统一封装"调用大模型"这件事。
 
-- LLMClient：抽象接口（chat 非流式 + stream 流式事件）
-- FakeLLMClient：占位实现，让 loop 在没有真实 API 时也可运行
-- DeepSeekLLMClient：真实实现（HTTP 调用 + SSE 流式 + function calling）
+设计角度：为什么单独一个文件、还要定义接口？
+- Agent 核心（loop）只需要知道"给消息列表，还我文本或工具调用"，
+  不需要知道调的是 DeepSeek 还是别的厂商——这就是"面向接口编程"
+- 现在有两个实现：
+  * FakeLLMClient：不联网的占位，用于测试和还没配 Key 时跑通流程
+  * DeepSeekLLMClient：真实调用 DeepSeek 的 Chat Completions 接口（OpenAI 兼容协议）
+- 以后想换模型厂商，新增一个实现类即可，loop 一行都不用改
 """
 
-import json
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import AsyncIterator
+import json  # 解析 API 返回的 JSON / 把工具参数字符串解析成字典
+from abc import ABC, abstractmethod  # 定义抽象基类：约束子类必须实现哪些方法
+from dataclasses import dataclass  # 定义轻量数据结构
+from typing import AsyncIterator  # 标注异步生成器的返回值
 
-import httpx
+import httpx  # HTTP 客户端库，负责发请求和读流式响应
 
+# DeepSeek 当前可选的模型名（用于前端下拉框和参数校验）
 DEEPSEEK_MODELS = ["deepseek-chat", "deepseek-reasoner"]
 
 
 @dataclass
 class LLMMessage:
-    role: str  # system | user | assistant | tool
+    """发给大模型的一条消息（OpenAI 协议的消息格式）。"""
+
+    role: str  # system / user / assistant / tool
     content: str
-    tool_calls: list[dict] | None = None  # assistant 消息回显用（OpenAI 格式）
+    # 多轮工具调用时，OpenAI 协议要求把上一次的 tool_calls 原样回传，
+    # 否则模型会"忘记"自己刚才调了什么工具
+    tool_calls: list[dict] | None = None
 
 
 @dataclass
 class ToolCall:
+    """模型请求调用某个工具：工具名 + 参数（已解析成字典）。"""
+
     name: str
     arguments: dict
 
 
 @dataclass
 class LLMResponse:
+    """非流式调用的返回：要么是文本，要么是工具调用请求。"""
+
     content: str
     tool_call: ToolCall | None = None
 
 
 @dataclass
 class LLMEvent:
-    """流式事件：text（增量文本）| tool_call（工具调用）| done（结束）。"""
+    """流式事件：统一告诉上层"现在发生了什么"。
+
+    三种类型：
+    - text：产出了一段文本增量（直接推给前端即可）
+    - tool_call：模型想调用工具（需要执行工具后再回一轮）
+    - done：本轮生成结束
+    """
 
     type: str
     text: str | None = None
     tool_call: ToolCall | None = None
-    raw_tool_calls: list[dict] | None = None  # 回显给 API 的原始 tool_calls
+    raw_tool_calls: list[dict] | None = None  # 原始 tool_calls（回传给 API 用）
 
 
 class LLMClient(ABC):
+    """LLM 客户端接口：所有实现都必须提供这两个方法。"""
+
     @abstractmethod
     async def chat(
         self, messages: list[LLMMessage], tools: list[dict] | None = None
     ) -> LLMResponse:
-        """返回文本内容或工具调用请求。流式输出由上层生成器接入。"""
+        """非流式调用：一次拿回完整结果（测试和简单场景用）。"""
 
     @abstractmethod
     def stream(
         self, messages: list[LLMMessage], tools: list[dict] | None = None
     ) -> AsyncIterator[LLMEvent]:
-        """流式生成：text 事件逐块产出，工具调用在结束时以 tool_call 事件给出。"""
+        """流式调用：逐块产出事件（对话场景用，边生成边推给前端）。"""
 
 
 class FakeLLMClient(LLMClient):
-    """占位实现：让 Agent loop 在没有真实 API 的情况下跑通结构。"""
+    """占位实现：不联网，永远返回固定前缀 + 用户最后一条消息。
+
+    用途：还没配 API Key、或写测试时，让整个链路能跑通。
+    """
 
     async def chat(self, messages, tools=None) -> LLMResponse:
+        # 从消息列表里倒着找最后一条 user 消息（作为"收到什么"的展示）
         last_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
         return LLMResponse(content=f"（骨架占位回复）收到：{last_user}")
 
     async def stream(self, messages, tools=None) -> AsyncIterator[LLMEvent]:
+        # 复用 chat 拿到整段文本，然后切成小块假装"流式"输出
         response = await self.chat(messages, tools)
-        for i in range(0, len(response.content), 4):
+        for i in range(0, len(response.content), 4):  # 每 4 个字符产出一个事件
             yield LLMEvent(type="text", text=response.content[i : i + 4])
-        yield LLMEvent(type="done")
+        yield LLMEvent(type="done")  # 最后告诉上层"本轮结束"
 
 
 class DeepSeekLLMClient(LLMClient):
@@ -87,14 +113,16 @@ class DeepSeekLLMClient(LLMClient):
     ) -> None:
         self._api_key = api_key
         self._model = model
-        self._base_url = base_url.rstrip("/")
+        self._base_url = base_url.rstrip("/")  # 去掉末尾斜杠，拼接 URL 更安全
         self._http_client = http_client  # 测试注入用；None 则每次调用自建
 
     def _headers(self) -> dict:
+        """构造认证请求头：把 API Key 放进 Authorization（OpenAI 兼容标准）。"""
         return {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
     @staticmethod
     def _to_api_messages(messages: list[LLMMessage]) -> list[dict]:
+        """把内部消息对象转成 API 认识的字典列表；带 tool_calls 的照原样带上。"""
         out: list[dict] = []
         for m in messages:
             item: dict = {"role": m.role, "content": m.content}
@@ -106,36 +134,39 @@ class DeepSeekLLMClient(LLMClient):
     async def chat(
         self, messages: list[LLMMessage], tools: list[dict] | None = None
     ) -> LLMResponse:
+        """非流式调用：组装请求 → POST → 解析 JSON 响应。"""
         payload = {
             "model": self._model,
             "messages": self._to_api_messages(messages),
-            "stream": False,
+            "stream": False,  # 非流式：等完整结果再返回
         }
         if tools:
-            payload["tools"] = tools
+            payload["tools"] = tools  # 告诉模型"你可以用这些工具"
         created = self._http_client is None
-        client = self._http_client or httpx.AsyncClient(timeout=120)
+        client = self._http_client or httpx.AsyncClient(timeout=120)  # 120 秒超时兜底
         try:
             resp = await client.post(
                 f"{self._base_url}/chat/completions", headers=self._headers(), json=payload
             )
-            resp.raise_for_status()
+            resp.raise_for_status()  # 非 2xx 直接抛异常，由上层统一处理
             return self._parse_response(resp.json())
         finally:
             if created:
-                await client.aclose()
+                await client.aclose()  # 自己创建的客户端要记得关闭，防止连接泄漏
 
     @staticmethod
     def _parse_response(data: dict) -> LLMResponse:
-        message = data["choices"][0].get("message", {})
+        """从 API 响应里提取文本或工具调用。"""
+        message = data["choices"][0].get("message", {})  # 取第一个候选的 message
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls") or []
         if tool_calls:
+            # 只处理第一个工具调用（多个并行调用是后续阶段的优化点）
             fn = tool_calls[0]["function"]
             try:
-                arguments = json.loads(fn.get("arguments") or "{}")
+                arguments = json.loads(fn.get("arguments") or "{}")  # 参数是 JSON 字符串
             except json.JSONDecodeError:
-                arguments = {}
+                arguments = {}  # 解析失败给空字典，宁可让工具报错也不要让链路崩溃
             return LLMResponse(
                 content="", tool_call=ToolCall(name=fn.get("name", ""), arguments=arguments)
             )
@@ -144,17 +175,22 @@ class DeepSeekLLMClient(LLMClient):
     async def stream(
         self, messages: list[LLMMessage], tools: list[dict] | None = None
     ) -> AsyncIterator[LLMEvent]:
+        """流式调用：逐行解析 SSE，边收边产出事件。
+
+        为什么在这里"攒"工具调用？流式响应里一个 tool_calls 会被拆成很多片
+        （名字可能分两片、参数 JSON 可能分十片），必须等流结束才能拼出完整调用。
+        """
         payload = {
             "model": self._model,
             "messages": self._to_api_messages(messages),
-            "stream": True,
+            "stream": True,  # 开启流式
         }
         if tools:
             payload["tools"] = tools
         created = self._http_client is None
         client = self._http_client or httpx.AsyncClient(timeout=120)
-        collected: dict[int, dict] = {}
-        raw_tool_calls: list[dict] = []
+        collected: dict[int, dict] = {}  # index -> {"name", "arguments"}，按片拼接
+        raw_tool_calls: list[dict] = []  # 保留原始片段，回传给 API 时要用
         try:
             async with client.stream(
                 "POST",
@@ -163,29 +199,29 @@ class DeepSeekLLMClient(LLMClient):
                 json=payload,
             ) as resp:
                 resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
+                async for line in resp.aiter_lines():  # 逐行读流
+                    if not line.startswith("data:"):  # SSE 数据行以 data: 开头，其他忽略
                         continue
-                    raw = line[5:].strip()
-                    if raw == "[DONE]":
+                    raw = line[5:].strip()  # 去掉 "data:" 前缀
+                    if raw == "[DONE]":  # OpenAI 协议：流结束标记
                         break
                     chunk = json.loads(raw)
-                    delta = chunk["choices"][0].get("delta", {})
+                    delta = chunk["choices"][0].get("delta", {})  # 每片内容在 delta 里
                     if delta.get("content"):
-                        yield LLMEvent(type="text", text=delta["content"])
-                    for tc in delta.get("tool_calls") or []:
-                        raw_tool_calls.append(tc)
-                        idx = tc.get("index", 0)
+                        yield LLMEvent(type="text", text=delta["content"])  # 文本增量直接产出
+                    for tc in delta.get("tool_calls") or []:  # 工具调用片段
+                        raw_tool_calls.append(tc)  # 整块保留（含 id/type 等原始结构）
+                        idx = tc.get("index", 0)  # 多个并行调用用 index 区分
                         slot = collected.setdefault(idx, {"name": "", "arguments": ""})
                         fn = tc.get("function", {})
-                        slot["name"] += fn.get("name", "")
-                        slot["arguments"] += fn.get("arguments", "")
+                        slot["name"] += fn.get("name", "")  # 名字可能分片，累加
+                        slot["arguments"] += fn.get("arguments", "")  # 参数 JSON 分片，累加
         finally:
             if created:
                 await client.aclose()
 
-        if collected:
-            first = collected[min(collected)]
+        if collected:  # 流结束时若攒出了工具调用，产出 tool_call 事件
+            first = collected[min(collected)]  # 取 index 最小的（第一个工具）
             try:
                 arguments = json.loads(first["arguments"] or "{}")
             except json.JSONDecodeError:
