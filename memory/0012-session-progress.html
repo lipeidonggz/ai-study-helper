@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0012 · 当日进度存档（2026-08-03）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0012 · 当日进度存档</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-03</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：进度存档 / 会话小结</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>今日已完成</h2>
+      <ul>
+        <li><strong>代码导读</strong>（<a href="0008-code-reading-guide.html">0008</a>）：按“一次对话请求”组织的阅读路线</li>
+        <li><strong>提交规范与功能清单</strong>（<a href="0009-current-features.html">0009</a>）：以后每个 commit 带“当前项目主要功能”摘要</li>
+        <li><strong>全量中文注释</strong>：backend 全部 Python 文件（文件头职责+设计原因、流程逐行说明），逻辑零改动</li>
+        <li><strong>处理过程可视化</strong>（<a href="0010-trace-panel.html">0010</a>）：Trace 收集器（观察者模式）+ SSE trace 事件 + 前端面板；后续迭代：原始流开关、llm_call 完整提示词/模型/工具定义、token 用量采集（include_usage + done 汇总）</li>
+        <li><strong>调试记录</strong>（<a href="0011-function-calling-protocol.html">0011</a>）：function calling 400 修复（tool_calls 完整合并回显 + tool_call_id 关联）；usage 键误判导致流式文本丢失的修复（判断用值不用键、兼容两种 usage 变体）</li>
+        <li><strong>关键验证</strong>：真实 API 端到端跑通工具链路（current_datetime，2 轮）；流式文本/event/usage/done 全部正常；后端测试增至 15 个全绿</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>当前状态</h2>
+      <ul>
+        <li>阶段：阶段 1 进行中——核心链路完备：配置 → 真实模型 → 流式 → 工具调用 → 前端渲染 + 全量观测</li>
+        <li>工作区：git 干净；最后一次提交 <code>15a4173</code></li>
+        <li>技术备忘：DeepSeek 流式每个 chunk 带 usage 键（内容块为 null）；deepseek-reasoner 思考过程在 reasoning_content 字段（暂未展示）；deepseek-chat 别名路由到 deepseek-v4-flash</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>明日起点（按优先级）</h2>
+      <ol>
+        <li>建立 <strong>golden set 评测基线</strong>：120 条用例结构化落盘（JSON）+ 最小评测 runner</li>
+        <li><strong>获取并固定《三国演义》txt</strong>：版本/来源/哈希，120 回预处理（阶段 2 用）</li>
+        <li><strong>阶段 1 验证点跑批</strong>：prompt 策略对比（含工具调用率——实测简单算术模型可能不用工具）、结构化输出可靠性、工具调用成功率</li>
+        <li><strong>对照测试</strong>：同一用例集跑豆包/千问，产出“能力差距报告”（记录项）</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>环境备忘</h2>
+      <ul>
+        <li>启动后端（backend 目录）：<code>.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload --no-use-colors</code></li>
+        <li>启动前端（frontend 目录）：<code>npm run dev</code>（依赖已装）</li>
+        <li>跑测试：<code>.\.venv\Scripts\python.exe -m pytest</code></li>
+        <li>PowerShell 向 python 管道传中文会乱码（GBK 控制台），测试脚本用文件或英文输入</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-03 · 下次会话从“明日起点”继续
+    </footer>
+  </div>
+</body>
+</html>
