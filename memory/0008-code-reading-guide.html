@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0008 · 代码导读：一次对话请求的主处理流程</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0008 · 代码导读：一次对话请求的主处理流程</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-03</span>
+        <span>类型：技术文档 / 代码导读</span>
+        <span>对应版本：git 提交 b42f7b5（阶段 1 链路跑通）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>目的</h2>
+      <p>代码由 AI 生成，逐目录扫读效率低。本记录给出“跟随一次对话请求”的阅读路线，按主处理流程理解系统。所有文件都很小（每文件几十行），第一遍约 20 分钟。</p>
+      <p><strong>更新约定：</strong>代码演进后需同步更新本记录。阶段 2 加入知识库服务、阶段 3 加入记忆后，在“主线叙事”和对应阅读条目中补充。</p>
+    </section>
+
+    <section class="card">
+      <h2>主线叙事（先记住这条链路）</h2>
+      <blockquote>
+        用户在界面发消息 → 前端 <code>send()</code> 调 <code>/api/chat</code> → 后端端点检查 API Key（无 Key 返回 error 事件）→ 进入 Agent loop（思考→行动→观察循环）→ 循环内流式调用 DeepSeek → 边生成边通过 SSE 推回前端 → 前端解析 SSE 事件实时渲染。若模型决定调用工具，loop 执行工具并把结果回填上下文，再进入下一轮（上限 4 轮）。
+      </blockquote>
+    </section>
+
+    <section class="card">
+      <h2>第一遍：跟随一次对话请求（推荐顺序）</h2>
+      <ol>
+        <li>
+          <strong>backend/app/main.py + backend/app/di.py（约 2 分钟）</strong>
+          <p>应用入口与依赖组装：<code>create_app()</code> 建 FastAPI 实例、注册路由；<code>AppDeps</code> 把存储等依赖装进 <code>app.state</code>。看重点：依赖从哪来、路由挂在哪。</p>
+        </li>
+        <li>
+          <strong>backend/app/api/chat.py（约 5 分钟）</strong>
+          <p>对话端点：校验请求 → <code>_build_llm()</code> 从设置取 Key 构建客户端（无 Key 发 error 事件）→ 返回 <code>StreamingResponse</code>。<code>gen()</code> 是 SSE 生成器，逐个事件 <code>yield</code>，异常透传给前端。</p>
+        </li>
+        <li>
+          <strong>backend/app/agent/loop.py（约 10 分钟，全场重点）</strong>
+          <p><code>run_agent_turn()</code> 是手写 Agent 循环：流式调用 LLM → 收到 <code>tool_call</code> 事件就执行工具、结果回填消息列表 → 再来一轮。看明白这个文件，Agent 核心机制就通了。</p>
+        </li>
+        <li>
+          <strong>backend/app/agent/context.py（约 3 分钟）</strong>
+          <p><code>assemble()</code>：系统提示（按会话模式选择）+ 历史 + 当前消息。当前是雏形；阶段 2 的上下文预算、检索注入都在这里长出来。</p>
+        </li>
+        <li>
+          <strong>backend/app/agent/llm.py（约 10 分钟）</strong>
+          <p><code>DeepSeekLLMClient</code>：<code>chat()</code>（非流式，测试用）与 <code>stream()</code>（真实流式）。重点看 <code>stream()</code> 如何解析 SSE、如何把零散的 <code>tool_calls</code> 片段拼成完整调用、以及 <code>tool_calls</code> 回显（<code>LLMMessage.tool_calls</code>）为什么必要。<code>FakeLLMClient</code> 是占位，先不看。</p>
+        </li>
+        <li>
+          <strong>backend/app/tools/ 三个文件（约 5 分钟）</strong>
+          <p>顺序：<code>builtin.py</code>（工具长什么样：名字/描述/参数 schema/handler）→ <code>registry.py</code>（注册表，<code>schemas()</code> 把工具转成 API 认识的格式）→ <code>executor.py</code>（执行入口，阶段 4 的沙箱加在这里）。</p>
+        </li>
+        <li>
+          <strong>backend/app/api/settings.py（约 2 分钟）</strong>
+          <p>Key 的存取与脱敏，很短，扫一眼即可。</p>
+        </li>
+        <li>
+          <strong>backend/app/storage/（约 5 分钟）</strong>
+          <p><code>ports.py</code>（接口定义）+ <code>sqlite/settings_store.py</code>（SQLite 实现）是 Port/Adapter 结构；现在只用到 SettingStore，其余接口为后续阶段预留。</p>
+        </li>
+        <li>
+          <strong>最后读测试（约 5 分钟，反证理解）</strong>
+          <p><code>tests/test_llm_client.py</code>（Mock 传输层，展示客户端协议）、<code>tests/test_settings.py</code>（接口行为）、<code>tests/test_smoke.py</code>（SSE 事件流）。测试即“应该表现为什么样”的规格。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>第二遍：架构视角</h2>
+      <ul>
+        <li><strong>依赖方向</strong>：前端 → API 契约层 → Agent 核心 →（知识库/工具/存储）。Agent 核心不直接碰数据库，通过存储接口访问。</li>
+        <li><strong>接口先行</strong>：ports.py 里 DocumentStore / VectorStore / Embedder 尚未实现，是阶段 2/3 的落点；换实现不换接口。</li>
+        <li><strong>依赖注入</strong>：main.create_app 里 build_deps() 一次性组装，测试里替换成内存实现即可隔离数据库。</li>
+        <li><strong>范围控制三处落地</strong>：配置存于存储层（LLMSettings/GlobalSettings）、执行在 Agent 核心（模式路由）、展示在前端（设置面板）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>验证理解的方法</h2>
+      <ul>
+        <li>浏览器发一条消息，Network 面板看 <code>/api/chat</code> 的 SSE 事件，对应 <code>gen()</code> 里每个 <code>yield</code>。</li>
+        <li>在 loop.py 的循环里临时加 <code>print(messages)</code>，看每轮上下文怎么变，看完删掉。</li>
+        <li>自问自答：为什么 <code>stream()</code> 要收集 <code>raw_tool_calls</code> 并回显？答不上来就回读 llm.py 与 loop.py。</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-03 · 代码演进后需同步更新本记录
+    </footer>
+  </div>
+</body>
+</html>
