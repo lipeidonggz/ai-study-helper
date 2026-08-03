@@ -69,6 +69,8 @@ def messages_to_dicts(messages: list[LLMMessage]) -> list[dict]:
     out: list[dict] = []
     for m in messages:
         item: dict = {"role": m.role, "content": m.content}
+        if m.tool_call_id:
+            item["tool_call_id"] = m.tool_call_id
         if m.tool_calls:
             item["tool_calls"] = m.tool_calls
         out.append(item)

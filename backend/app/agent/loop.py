@@ -63,23 +63,23 @@ async def run_agent_turn(
         if trace:
             trace.step("round", {"round": round_no})
 
-        # —— 记录：本轮 LLM 调用（工具数量和消息数量，供观察上下文规模） ——
-        tool_names = [t["function"]["name"] for t in tools.schemas()] if tools else []
+        # —— 记录：本轮 LLM 调用（模型、工具定义、完整提示词） ——
+        schemas = tools.schemas() if tools else None
         if trace:
             trace.step(
                 "llm_call",
                 {
-                    "tool_count": len(tool_names),
+                    "model": llm.model_name,
+                    "tool_count": len(schemas or []),
                     "message_count": len(messages),
                     "prompt": messages_to_dicts(messages),  # 完整提示词（含历史与工具结果）
+                    "tools": schemas or [],  # 发送给模型的工具定义
                 },
             )
 
         # —— 思考 + 输出：流式调用，文本边收边发，工具调用事件先收集 ——
         tool_events: list[LLMEvent] = []
-        async for event in llm.stream(
-            messages=messages, tools=tools.schemas() if tools else None
-        ):
+        async for event in llm.stream(messages=messages, tools=schemas):
             if trace:
                 trace.step("event", {"event": event_to_dict(event)})  # 每个流式事件都记录
             if event.type == "text" and event.text:
@@ -118,8 +118,10 @@ async def run_agent_turn(
             )
         # 把"AI 刚才要调工具"这件事回传模型（OpenAI 协议要求原样回显 tool_calls）
         messages.append(LLMMessage(role="assistant", content="", tool_calls=first.raw_tool_calls))
-        # 把工具执行结果作为"观察"回填，模型据此生成最终回答
-        messages.append(LLMMessage(role="tool", content=str(result)))
+        # 把工具执行结果作为"观察"回填，并关联对应的 tool_call_id（协议要求）
+        messages.append(
+            LLMMessage(role="tool", content=str(result), tool_call_id=first.tool_call.id)
+        )
 
     # 超出工具轮次上限：记录结束原因后静默结束（阶段 4 加入提示与降级策略）
     if trace:

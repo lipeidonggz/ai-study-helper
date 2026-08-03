@@ -108,7 +108,18 @@ def test_stream_tool_call():
             assert tool_event is not None
             assert tool_event.tool_call.name == "calculator"
             assert tool_event.tool_call.arguments == {"expression": "1+1"}
-            assert tool_event.raw_tool_calls  # 回显用原始结构不能丢
+            assert tool_event.tool_call.id == "call_1"  # id 必须保留，tool 消息要关联
+            # 回显必须是协议要求的完整结构（缺 id/type 会被 API 400 拒绝）
+            assert tool_event.raw_tool_calls == [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "calculator",
+                        "arguments": '{"expression": "1+1"}',
+                    },
+                }
+            ]
 
     asyncio.run(scenario())
 
@@ -145,6 +156,7 @@ def test_chat_tool_call_non_stream():
             assert resp.tool_call is not None
             assert resp.tool_call.name == "current_datetime"
             assert resp.tool_call.arguments == {}
+            assert resp.tool_call.id == "call_1"
 
     asyncio.run(scenario())
 
@@ -205,5 +217,7 @@ def test_loop_trace_steps():
         llm_call = next(s for s in trace.steps() if s["type"] == "llm_call")
         assert "prompt" in llm_call["data"]  # llm_call 应包含完整提示词
         assert llm_call["data"]["prompt"][0]["role"] == "system"  # 第一条是系统提示
+        assert llm_call["data"]["model"] == "fake"  # 记录模型名
+        assert llm_call["data"]["tools"]  # 记录发送给模型的工具定义
 
     asyncio.run(scenario())

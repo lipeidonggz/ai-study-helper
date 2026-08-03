@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0011 · function calling 协议调试记录（400 修复）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0011 · function calling 协议调试记录（400 修复）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-03</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：调试记录 / 协议学习</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>现象</h2>
+      <p>用户询问“3+5等于几？”时，DeepSeek 返回 <code>400 Bad Request</code>。从处理过程面板看，第一轮消息只有 system + user（2 条），工具定义看似“没发出去”。</p>
+      <p>排查过程：用已配置 Key 直接探测——第一轮载荷（4 个工具 + 同款消息）返回 200；deepseek-reasoner 同样 200。最终用模拟第二轮请求复现 400，错误体给出准确原因：<code>messages[2]: missing field 'name'</code>。</p>
+    </section>
+
+    <section class="card">
+      <h2>根因（两个协议细节）</h2>
+      <ol>
+        <li>
+          <strong>流式 tool_calls 片段不能原样回显</strong>
+          <p>流式响应里一个工具调用被拆成多片：第一片带 <code>id</code>/<code>type</code>/<code>name</code>，后续片只有 <code>arguments</code> 增量。原实现把原始片段列表直接回显，第二片缺 <code>name</code>（更早版本还缺 id/type），API 反序列化失败 → 400。</p>
+          <p>修复：按 index 合并成完整对象再回显：<code>{"id": ..., "type": "function", "function": {"name": ..., "arguments": ...}}</code>。</p>
+        </li>
+        <li>
+          <strong>tool 消息必须带 tool_call_id</strong>
+          <p>第一处修复后第二轮报 <code>messages[3]: missing field 'tool_call_id'</code>：OpenAI 兼容协议要求每条 <code>role="tool"</code> 的消息通过 <code>tool_call_id</code> 关联到对应的工具调用。</p>
+          <p>修复：<code>ToolCall</code> 与 <code>LLMMessage</code> 增加 id 字段，回填工具结果时带上 <code>tool_call_id</code>。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>验证</h2>
+      <ul>
+        <li>真实 API 端到端：询问当前时间（强制触发工具）→ 模型调用 <code>current_datetime</code> → 执行成功（0.1ms）→ 第二轮消息数变为 4（含回显与结果）→ 生成最终回答；<code>rounds: 2, tool_calls: 1</code></li>
+        <li>后端 14 个测试全绿（新增断言：回显必须是完整结构、id 保留）</li>
+        <li>附带改进：API 错误信息现在会带上响应体原文，前端/日志直接可见失败原因；trace 的 llm_call 展示模型名与发送的工具定义</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>附带观察（prompt 工程素材）</h2>
+      <p>“3+5等于几”这类简单算术，模型即使看到工具定义也可能<strong>直接心算</strong>而不调用工具（本次复测即如此）。这提示：工具增强模式的系统提示需要更明确的任务要求，否则模型是否用工具是“看心情”的——这是 golden set 阶段值得做对比测试的点（不同 prompt 下工具调用率）。</p>
+    </section>
+
+    <section class="card">
+      <h2>教训</h2>
+      <p>手写 function calling 时，OpenAI 兼容协议有两个硬性要求：<strong>tool_calls 回显必须完整合并</strong>（不能回显流式原始片段），<strong>tool 消息必须关联 tool_call_id</strong>。排查 API 400 时，先看错误响应体，别猜。</p>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-03
+    </footer>
+  </div>
+</body>
+</html>

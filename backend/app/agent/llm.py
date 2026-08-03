@@ -26,6 +26,7 @@ class LLMMessage:
 
     role: str  # system / user / assistant / tool
     content: str
+    tool_call_id: str | None = None  # tool 消息必须关联对应的工具调用 id（协议要求）
     # 多轮工具调用时，OpenAI 协议要求把上一次的 tool_calls 原样回传，
     # 否则模型会"忘记"自己刚才调了什么工具
     tool_calls: list[dict] | None = None
@@ -37,6 +38,7 @@ class ToolCall:
 
     name: str
     arguments: dict
+    id: str = ""  # 工具调用 id（回显 tool 消息时关联用）
 
 
 @dataclass
@@ -66,6 +68,8 @@ class LLMEvent:
 class LLMClient(ABC):
     """LLM 客户端接口：所有实现都必须提供这两个方法。"""
 
+    model_name: str = "unknown"  # 供 trace 展示当前使用的模型
+
     @abstractmethod
     async def chat(
         self, messages: list[LLMMessage], tools: list[dict] | None = None
@@ -84,6 +88,8 @@ class FakeLLMClient(LLMClient):
 
     用途：还没配 API Key、或写测试时，让整个链路能跑通。
     """
+
+    model_name = "fake"
 
     async def chat(self, messages, tools=None) -> LLMResponse:
         # 从消息列表里倒着找最后一条 user 消息（作为"收到什么"的展示）
@@ -113,6 +119,7 @@ class DeepSeekLLMClient(LLMClient):
     ) -> None:
         self._api_key = api_key
         self._model = model
+        self.model_name = model  # 便于 trace 展示当前模型
         self._base_url = base_url.rstrip("/")  # 去掉末尾斜杠，拼接 URL 更安全
         self._http_client = http_client  # 测试注入用；None 则每次调用自建
 
@@ -126,6 +133,8 @@ class DeepSeekLLMClient(LLMClient):
         out: list[dict] = []
         for m in messages:
             item: dict = {"role": m.role, "content": m.content}
+            if m.tool_call_id:
+                item["tool_call_id"] = m.tool_call_id  # tool 消息的关联 id
             if m.tool_calls:
                 item["tool_calls"] = m.tool_calls
             out.append(item)
@@ -148,7 +157,9 @@ class DeepSeekLLMClient(LLMClient):
             resp = await client.post(
                 f"{self._base_url}/chat/completions", headers=self._headers(), json=payload
             )
-            resp.raise_for_status()  # 非 2xx 直接抛异常，由上层统一处理
+            if resp.status_code >= 400:
+                # 把 API 返回的具体原因带进异常，前端/日志能直接看到为什么失败
+                raise RuntimeError(f"DeepSeek API {resp.status_code}: {resp.text[:300]}")
             return self._parse_response(resp.json())
         finally:
             if created:
@@ -168,7 +179,12 @@ class DeepSeekLLMClient(LLMClient):
             except json.JSONDecodeError:
                 arguments = {}  # 解析失败给空字典，宁可让工具报错也不要让链路崩溃
             return LLMResponse(
-                content="", tool_call=ToolCall(name=fn.get("name", ""), arguments=arguments)
+                content="",
+                tool_call=ToolCall(
+                    name=fn.get("name", ""),
+                    arguments=arguments,
+                    id=tool_calls[0].get("id", ""),
+                ),
             )
         return LLMResponse(content=content)
 
@@ -189,8 +205,7 @@ class DeepSeekLLMClient(LLMClient):
             payload["tools"] = tools
         created = self._http_client is None
         client = self._http_client or httpx.AsyncClient(timeout=120)
-        collected: dict[int, dict] = {}  # index -> {"name", "arguments"}，按片拼接
-        raw_tool_calls: list[dict] = []  # 保留原始片段，回传给 API 时要用
+        collected: dict[int, dict] = {}  # index -> {"id","type","name","arguments"}，按片拼接
         try:
             async with client.stream(
                 "POST",
@@ -198,7 +213,9 @@ class DeepSeekLLMClient(LLMClient):
                 headers=self._headers(),
                 json=payload,
             ) as resp:
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    raw = (await resp.aread()).decode("utf-8", "ignore")
+                    raise RuntimeError(f"DeepSeek API {resp.status_code}: {raw[:300]}")
                 async for line in resp.aiter_lines():  # 逐行读流
                     if not line.startswith("data:"):  # SSE 数据行以 data: 开头，其他忽略
                         continue
@@ -210,10 +227,15 @@ class DeepSeekLLMClient(LLMClient):
                     if delta.get("content"):
                         yield LLMEvent(type="text", text=delta["content"])  # 文本增量直接产出
                     for tc in delta.get("tool_calls") or []:  # 工具调用片段
-                        raw_tool_calls.append(tc)  # 整块保留（含 id/type 等原始结构）
                         idx = tc.get("index", 0)  # 多个并行调用用 index 区分
-                        slot = collected.setdefault(idx, {"name": "", "arguments": ""})
+                        slot = collected.setdefault(
+                            idx, {"id": "", "type": "", "name": "", "arguments": ""}
+                        )
                         fn = tc.get("function", {})
+                        if tc.get("id"):  # id 只在第一片出现，取完整值
+                            slot["id"] = tc["id"]
+                        if tc.get("type"):  # type 同理
+                            slot["type"] = tc["type"]
                         slot["name"] += fn.get("name", "")  # 名字可能分片，累加
                         slot["arguments"] += fn.get("arguments", "")  # 参数 JSON 分片，累加
         finally:
@@ -221,6 +243,15 @@ class DeepSeekLLMClient(LLMClient):
                 await client.aclose()
 
         if collected:  # 流结束时若攒出了工具调用，产出 tool_call 事件
+            # 合并成协议要求的完整结构再回显（缺 id/type 会被 API 拒绝，见 400 调试记录）
+            merged_tool_calls = [
+                {
+                    "id": s["id"],
+                    "type": s["type"] or "function",
+                    "function": {"name": s["name"], "arguments": s["arguments"]},
+                }
+                for s in collected.values()
+            ]
             first = collected[min(collected)]  # 取 index 最小的（第一个工具）
             try:
                 arguments = json.loads(first["arguments"] or "{}")
@@ -228,7 +259,9 @@ class DeepSeekLLMClient(LLMClient):
                 arguments = {}
             yield LLMEvent(
                 type="tool_call",
-                tool_call=ToolCall(name=first["name"], arguments=arguments),
-                raw_tool_calls=raw_tool_calls,
+                tool_call=ToolCall(
+                    name=first["name"], arguments=arguments, id=first["id"]
+                ),
+                raw_tool_calls=merged_tool_calls,  # 回显用合并后的完整结构
             )
         yield LLMEvent(type="done")
