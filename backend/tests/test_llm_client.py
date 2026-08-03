@@ -33,17 +33,24 @@ def test_stream_text():
         """模拟服务器：先校验请求，再返回两段文本增量。"""
         payload = json.loads(request.content)
         assert payload["stream"] is True  # 流式请求标记
+        assert payload["stream_options"] == {"include_usage": True}  # 请求返回 token 用量
         assert payload["messages"][0]["role"] == "user"
         return httpx.Response(
             200,
             text=_sse(
                 [
-                    {"choices": [{"delta": {"content": "你好"}}]},
-                    {"choices": [{"delta": {"content": "世界"}}]},
+                    # 模拟 DeepSeek 实际行为：内容 chunk 也带 usage 键（值为 null）
+                    {"choices": [{"delta": {"content": "你好"}}], "usage": None},
+                    {"choices": [{"delta": {"content": "世界"}}], "usage": None},
                     # 开启 include_usage 后，最后一个 chunk 只带 usage、choices 为空
                     {
                         "choices": [],
                         "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12},
+                    },
+                    # 另一种格式：usage 带在最后一个有 choices 的 chunk（finish_reason 块）
+                    {
+                        "choices": [{"delta": {}, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
                     },
                 ]
             ),
@@ -71,7 +78,7 @@ def test_stream_text():
             assert tool_events == []  # 纯文本响应不应有工具调用事件
             assert len(raw_events) >= 2  # 每个原始 chunk 都应产出 raw 事件
             assert raw_events[0].raw["choices"][0]["delta"]["content"] == "你好"
-            assert len(usage_events) == 1  # usage chunk 应产出 usage 事件
+            assert len(usage_events) == 2  # 两种 usage 格式都应被采集
             assert usage_events[0].usage["total_tokens"] == 12
 
     asyncio.run(scenario())

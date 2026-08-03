@@ -63,6 +63,11 @@
       <p>手写 function calling 时，OpenAI 兼容协议有两个硬性要求：<strong>tool_calls 回显必须完整合并</strong>（不能回显流式原始片段），<strong>tool 消息必须关联 tool_call_id</strong>。排查 API 400 时，先看错误响应体，别猜。</p>
     </section>
 
+    <section class="card">
+      <h2>补充：usage 解析教训（2026-08-03 追加）</h2>
+      <p>实现流式 token 用量采集时发现：DeepSeek 开启 <code>include_usage</code> 后，<strong>每个流式 chunk 都带 <code>usage</code> 键</strong>（内容 chunk 里为 <code>null</code>）。判断“是否用量 chunk”不能看 <code>usage</code> 键是否存在，否则所有内容 chunk 都会被误跳过。且响应有两种变体：用量可能出现在 <code>choices</code> 为空的 chunk，也可能带在最后一个有 <code>finish_reason</code> 的 chunk 里——稳妥做法是“只要 usage 非空就采集”。</p>
+    </section>
+
     <footer class="page-foot">
       记录创建：2026-08-03
     </footer>

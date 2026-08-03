@@ -233,14 +233,20 @@ class DeepSeekLLMClient(LLMClient):
                     chunk = json.loads(raw)
                     # 原始 chunk 原样产出（前端可开关展示）
                     yield LLMEvent(type="raw", raw=chunk)
-                    if "usage" in chunk or not chunk.get("choices"):
-                        # 开启 include_usage 后，最后一个 chunk 没有 choices、只带 usage
+                    if not chunk.get("choices"):
+                        # 用量汇总 chunk：choices 为空、只带 usage
+                        # 注意：不能按 "usage" in chunk 判断——DeepSeek 每个 chunk 都带 usage 键
+                        # （内容 chunk 里是 null），真正用法要看 choices 是否为空
                         if chunk.get("usage"):
                             yield LLMEvent(type="usage", usage=chunk["usage"])
                         continue
                     delta = chunk["choices"][0].get("delta", {})  # 每片内容在 delta 里
                     if delta.get("content"):
                         yield LLMEvent(type="text", text=delta["content"])  # 文本增量直接产出
+                    if chunk.get("usage"):
+                        # 兜底：usage 也可能带在最后一个有 choices 的 chunk 里
+                        # （finish_reason=stop 块），两种格式都采集
+                        yield LLMEvent(type="usage", usage=chunk["usage"])
                     for tc in delta.get("tool_calls") or []:  # 工具调用片段
                         idx = tc.get("index", 0)  # 多个并行调用用 index 区分
                         slot = collected.setdefault(
