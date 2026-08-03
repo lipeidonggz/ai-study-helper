@@ -57,6 +57,16 @@ async def run_agent_turn(
         )
 
     tool_call_count = 0  # 累计工具调用次数（用于结束统计）
+    total_tokens = {"prompt": 0, "completion": 0, "total": 0}  # 累计 token 用量
+
+    def _done_data(rounds: int, reason: str) -> dict:
+        """组装结束统计（含 token 用量汇总，供 trace 与前端展示）。"""
+        return {
+            "rounds": rounds,
+            "tool_calls": tool_call_count,
+            "end_reason": reason,
+            "tokens": dict(total_tokens),
+        }
 
     for round_no in range(1, _MAX_TOOL_ROUNDS + 1):
         # —— 记录：新一轮开始 ——
@@ -85,6 +95,15 @@ async def run_agent_turn(
                 if trace:
                     trace.step("raw_chunk", {"chunk": event.raw})
                 continue
+            if event.type == "usage" and event.usage:
+                # 流结束的 token 用量：累计并记录（reasoner 的 usage 里还有 reasoning_tokens）
+                u = event.usage
+                total_tokens["prompt"] += u.get("prompt_tokens", 0)
+                total_tokens["completion"] += u.get("completion_tokens", 0)
+                total_tokens["total"] += u.get("total_tokens", 0)
+                if trace:
+                    trace.step("usage", {"usage": u})
+                continue
             if trace:
                 trace.step("event", {"event": event_to_dict(event)})  # 每个流式事件都记录
             if event.type == "text" and event.text:
@@ -95,14 +114,7 @@ async def run_agent_turn(
         # 没有工具调用：本轮输出结束
         if not tool_events or tools is None:
             if trace:
-                trace.step(
-                    "done",
-                    {
-                        "rounds": round_no,
-                        "tool_calls": tool_call_count,
-                        "end_reason": "no_tool_call",
-                    },
-                )
+                trace.step("done", _done_data(round_no, "no_tool_call"))
             return
 
         # —— 行动 + 观察：执行工具，回填结果，进入下一轮 ——
@@ -130,11 +142,4 @@ async def run_agent_turn(
 
     # 超出工具轮次上限：记录结束原因后静默结束（阶段 4 加入提示与降级策略）
     if trace:
-        trace.step(
-            "done",
-            {
-                "rounds": _MAX_TOOL_ROUNDS,
-                "tool_calls": tool_call_count,
-                "end_reason": "max_rounds",
-            },
-        )
+        trace.step("done", _done_data(_MAX_TOOL_ROUNDS, "max_rounds"))

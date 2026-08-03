@@ -44,7 +44,7 @@
       <h2>实现内容</h2>
       <ul>
         <li><strong>backend/app/agent/trace.py</strong>：Trace 记录器（step 序号、类型、数据、耗时）+ LLMEvent 转字典工具</li>
-        <li><strong>backend/app/agent/loop.py</strong>：关键节点埋点——context（系统提示、消息数）/ round / llm_call（模型、工具定义、完整提示词）/ event（每个流式事件）/ tool_exec（名称、参数、结果、耗时）/ done（轮数、工具次数、结束原因）</li>
+        <li><strong>backend/app/agent/loop.py</strong>：关键节点埋点——context（系统提示、消息数）/ round / llm_call（模型、工具定义、完整提示词）/ event（每个流式事件）/ tool_exec（名称、参数、结果、耗时）/ usage（每轮 token 用量）/ done（轮数、工具次数、token 汇总、结束原因）</li>
         <li><strong>backend/app/api/chat.py</strong>：Trace 实时转成 SSE <code>trace</code> 事件（用 deque 缓冲保证顺序：trace 先于对应文本发出）</li>
         <li><strong>frontend/src/App.vue + client.ts</strong>：“处理过程”面板——步骤时间线、类型徽章（工具调用/错误/结束/原始流高亮）、JSON 详情默认展开、原始流开关</li>
       </ul>

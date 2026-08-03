@@ -47,16 +47,18 @@ class LLMResponse:
 
     content: str
     tool_call: ToolCall | None = None
+    usage: dict | None = None  # token 用量（非流式响应自带）
 
 
 @dataclass
 class LLMEvent:
     """流式事件：统一告诉上层"现在发生了什么"。
 
-    四种类型：
+    五种类型：
     - raw：原始流 chunk（还没加工的数据，用于展示"流式返回长什么样"）
     - text：产出了一段文本增量（直接推给前端即可）
     - tool_call：模型想调用工具（需要执行工具后再回一轮）
+    - usage：流结束时的 token 用量（开启 stream_options.include_usage 才有）
     - done：本轮生成结束
     """
 
@@ -65,6 +67,7 @@ class LLMEvent:
     tool_call: ToolCall | None = None
     raw_tool_calls: list[dict] | None = None  # 原始 tool_calls（回传给 API 用）
     raw: dict | None = None  # type="raw" 时携带原始 chunk（或 {"marker": "[DONE]"}）
+    usage: dict | None = None  # type="usage" 时携带 token 用量
 
 
 class LLMClient(ABC):
@@ -187,8 +190,9 @@ class DeepSeekLLMClient(LLMClient):
                     arguments=arguments,
                     id=tool_calls[0].get("id", ""),
                 ),
+                usage=data.get("usage"),
             )
-        return LLMResponse(content=content)
+        return LLMResponse(content=content, usage=data.get("usage"))
 
     async def stream(
         self, messages: list[LLMMessage], tools: list[dict] | None = None
@@ -202,6 +206,7 @@ class DeepSeekLLMClient(LLMClient):
             "model": self._model,
             "messages": self._to_api_messages(messages),
             "stream": True,  # 开启流式
+            "stream_options": {"include_usage": True},  # 让流式响应也返回 token 用量
         }
         if tools:
             payload["tools"] = tools
@@ -228,6 +233,11 @@ class DeepSeekLLMClient(LLMClient):
                     chunk = json.loads(raw)
                     # 原始 chunk 原样产出（前端可开关展示）
                     yield LLMEvent(type="raw", raw=chunk)
+                    if "usage" in chunk or not chunk.get("choices"):
+                        # 开启 include_usage 后，最后一个 chunk 没有 choices、只带 usage
+                        if chunk.get("usage"):
+                            yield LLMEvent(type="usage", usage=chunk["usage"])
+                        continue
                     delta = chunk["choices"][0].get("delta", {})  # 每片内容在 delta 里
                     if delta.get("content"):
                         yield LLMEvent(type="text", text=delta["content"])  # 文本增量直接产出

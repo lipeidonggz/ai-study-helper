@@ -308,6 +308,10 @@ footer.bar button:disabled {
   color: #57606a;
   font-family: Consolas, 'Courier New', monospace;
 }
+.trace-badge.type-usage {
+  background: #fef2e0;
+  color: #9a6700;
+}
 .trace-list {
   margin: 10px 0 0;
   padding-left: 0;

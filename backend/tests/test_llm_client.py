@@ -40,6 +40,11 @@ def test_stream_text():
                 [
                     {"choices": [{"delta": {"content": "你好"}}]},
                     {"choices": [{"delta": {"content": "世界"}}]},
+                    # 开启 include_usage 后，最后一个 chunk 只带 usage、choices 为空
+                    {
+                        "choices": [],
+                        "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12},
+                    },
                 ]
             ),
             headers={"Content-Type": "text/event-stream"},
@@ -52,9 +57,12 @@ def test_stream_text():
             parts: list[str] = []
             tool_events = []
             raw_events = []
+            usage_events = []
             async for evt in client.stream([LLMMessage(role="user", content="hi")]):
                 if evt.type == "raw":
                     raw_events.append(evt)
+                elif evt.type == "usage":
+                    usage_events.append(evt)
                 elif evt.type == "text":
                     parts.append(evt.text or "")
                 elif evt.type == "tool_call":
@@ -63,6 +71,8 @@ def test_stream_text():
             assert tool_events == []  # 纯文本响应不应有工具调用事件
             assert len(raw_events) >= 2  # 每个原始 chunk 都应产出 raw 事件
             assert raw_events[0].raw["choices"][0]["delta"]["content"] == "你好"
+            assert len(usage_events) == 1  # usage chunk 应产出 usage 事件
+            assert usage_events[0].usage["total_tokens"] == 12
 
     asyncio.run(scenario())
 
@@ -249,6 +259,10 @@ def test_loop_raw_chunk_forwarding():
             yield LLMEvent(type="raw", raw={"choices": [{"delta": {"content": "你"}}]})
             yield LLMEvent(type="raw", raw={"marker": "[DONE]"})
             yield LLMEvent(type="text", text="hi")
+            yield LLMEvent(
+                type="usage",
+                usage={"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+            )
             yield LLMEvent(type="done")
 
     async def scenario():
@@ -272,5 +286,8 @@ def test_loop_raw_chunk_forwarding():
         assert "".join(chunks) == "hi"  # raw 事件不影响文本输出
         types = [s["type"] for s in trace.steps()]
         assert types.count("raw_chunk") == 2  # 两个原始 chunk 都被记录
+        assert "usage" in types  # usage 步骤被记录
+        done = next(s for s in trace.steps() if s["type"] == "done")
+        assert done["data"]["tokens"]["total"] == 8  # done 统计汇总 token 用量
 
     asyncio.run(scenario())
