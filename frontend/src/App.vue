@@ -5,7 +5,8 @@ import {
   getLLMSettings,
   saveLLMSettings,
   streamChat,
-  type SessionMode
+  type SessionMode,
+  type TraceStep
 } from './api/client'
 
 interface ChatMsg {
@@ -22,6 +23,10 @@ const showSettings = ref(false)
 const settings = ref({ model: 'deepseek-chat', apiKey: '', masked: '', hasKey: false })
 const saving = ref(false)
 const saveMsg = ref('')
+
+// —— 处理过程面板（展示 Agent 内部步骤） ——
+const traceSteps = ref<TraceStep[]>([])
+const showTrace = ref(true)
 
 onMounted(async () => {
   try {
@@ -58,6 +63,7 @@ async function saveSettings() {
 async function send() {
   const text = input.value.trim()
   if (!text || streaming.value) return
+  traceSteps.value = [] // 新请求开始：清空上一次的处理过程
   messages.value.push({ role: 'user', content: text })
   input.value = ''
   messages.value.push({ role: 'assistant', content: '' })
@@ -68,6 +74,7 @@ async function send() {
     await streamChat(text, mode.value, (event) => {
       if (event.event === 'delta' && event.text) reply.content += event.text
       else if (event.event === 'error' && event.message) reply.content = event.message
+      else if (event.event === 'trace' && event.trace) traceSteps.value.push(event.trace)
     })
   } catch (err) {
     reply.content = `（请求失败：${err}）`
@@ -120,6 +127,27 @@ async function send() {
         <pre>{{ msg.content }}</pre>
       </div>
       <p v-if="streaming" class="hint">正在生成…</p>
+    </section>
+
+    <section class="trace">
+      <div class="trace-head">
+        <strong>处理过程</strong>
+        <span class="hint">{{ traceSteps.length }} 个步骤</span>
+        <button class="link-btn" @click="showTrace = !showTrace">
+          {{ showTrace ? '收起' : '展开' }}
+        </button>
+      </div>
+      <ol v-if="showTrace" class="trace-list">
+        <li v-for="step in traceSteps" :key="step.seq">
+          <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
+          <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
+          <details>
+            <summary>详情</summary>
+            <pre>{{ JSON.stringify(step.data, null, 2) }}</pre>
+          </details>
+        </li>
+        <li v-if="!traceSteps.length" class="trace-empty">发送消息后，这里会逐步展示内部处理过程</li>
+      </ol>
     </section>
 
     <footer class="bar">
@@ -242,5 +270,77 @@ footer.bar button:disabled {
   background: #0969da;
   color: #fff;
   cursor: pointer;
+}
+.trace {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.trace-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.trace-list {
+  margin: 10px 0 0;
+  padding-left: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 1px solid #eee;
+}
+.trace-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.trace-badge {
+  font-size: 0.78em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #444;
+  white-space: nowrap;
+}
+.trace-badge.type-tool_exec,
+.trace-badge.type-tool_call {
+  background: #dbeafe;
+  color: #0969da;
+}
+.trace-badge.type-error {
+  background: #ffeef0;
+  color: #cf222e;
+}
+.trace-badge.type-done {
+  background: #dafbe1;
+  color: #1a7f37;
+}
+.trace-ms {
+  font-size: 0.8em;
+  color: #888;
+}
+.trace-list details {
+  flex: 1;
+}
+.trace-list summary {
+  cursor: pointer;
+  font-size: 0.85em;
+  color: #57606a;
+}
+.trace-list pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.8em;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.trace-empty {
+  color: #999;
+  font-size: 0.85em;
 }
 </style>

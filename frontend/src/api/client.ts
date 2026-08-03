@@ -3,11 +3,20 @@
 export type SessionMode = 'general' | 'kb_priority' | 'tool_enhanced'
 
 export interface ChatEvent {
-  event: 'start' | 'delta' | 'done' | 'error'
+  event: 'start' | 'delta' | 'done' | 'error' | 'trace'
   text?: string
   message?: string
+  trace?: TraceStep
   session_id?: string | null
   mode?: SessionMode
+}
+
+/** Agent 内部处理过程的一个步骤（来自后端 trace 事件）。 */
+export interface TraceStep {
+  seq: number
+  type: string // context | round | llm_call | event | tool_exec | done
+  data: Record<string, unknown>
+  elapsed_ms: number
 }
 
 export interface LLMSettingsView {

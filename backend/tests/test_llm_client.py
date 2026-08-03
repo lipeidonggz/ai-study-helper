@@ -171,3 +171,36 @@ def test_loop_with_fake_llm():
         assert "".join(chunks) == "（骨架占位回复）收到：你好"
 
     asyncio.run(scenario())
+
+
+def test_loop_trace_steps():
+    """Agent loop 的 trace：应记录 context → round → llm_call → event → done 的关键步骤。"""
+
+    async def scenario():
+        from app.agent.loop import run_agent_turn
+
+        from app.agent.llm import FakeLLMClient
+        from app.agent.trace import Trace
+        from app.tools.executor import ToolExecutor
+        from app.tools.registry import default_registry
+
+        trace = Trace()
+        chunks = [
+            chunk
+            async for chunk in run_agent_turn(
+                "你好",
+                mode="general",
+                llm=FakeLLMClient(),
+                tools=ToolExecutor(default_registry()),
+                trace=trace,
+            )
+        ]
+        assert "".join(chunks) == "（骨架占位回复）收到：你好"  # 文本不受 trace 影响
+        types = [s["type"] for s in trace.steps()]
+        assert types[0] == "context"  # 第一笔是上下文组装
+        assert "round" in types  # 有轮次记录
+        assert "llm_call" in types  # 有 LLM 调用记录
+        assert "event" in types  # 有流式事件记录
+        assert types[-1] == "done"  # 最后是结束统计
+
+    asyncio.run(scenario())

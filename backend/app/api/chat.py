@@ -13,6 +13,7 @@ POST /api/chat
 """
 
 import json  # 把事件数据序列化成 JSON 字符串
+from collections import deque  # 双端队列：按顺序缓存实时产生的 trace 步骤
 from typing import Literal  # 限定 mode 只能取几个枚举值
 
 from fastapi import APIRouter, Request
@@ -21,6 +22,7 @@ from pydantic import BaseModel  # 请求体校验：自动校验字段类型与�
 
 from app.agent.llm import DeepSeekLLMClient, LLMClient
 from app.agent.loop import run_agent_turn  # 核心：Agent 循环
+from app.agent.trace import Trace  # 处理过程记录器
 from app.tools.executor import ToolExecutor
 from app.tools.registry import default_registry
 
@@ -65,9 +67,12 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
     tools = ToolExecutor(default_registry())  # 内置工具的执行器
     deps.log_store.append("chat", {"message": req.message, "mode": req.mode})  # 记录日志
     llm = _build_llm(deps)  # 构建 LLM 客户端
+    pending_trace: deque[dict] = deque()  # trace 步骤缓冲：loop 产生、gen 取走
 
     async def gen():
         """生成器：按顺序产出 SSE 事件。"""
+        trace = Trace()  # 本次请求的处理过程记录器
+        trace.set_on_step(pending_trace.append)  # 每个新步骤立即入队
         yield _sse("start", {"session_id": req.session_id, "mode": req.mode})  # 通知前端开始
         if llm is None:
             # 没配 Key：直接发错误事件（前端会把它显示在对话里）
@@ -75,8 +80,16 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
         else:
             try:
                 # 进入 Agent 循环，逐块拿到文本并包成 delta 事件
-                async for chunk in run_agent_turn(req.message, mode=req.mode, llm=llm, tools=tools):
+                async for chunk in run_agent_turn(
+                    req.message, mode=req.mode, llm=llm, tools=tools, trace=trace
+                ):
+                    # 先清空已产生的 trace 步骤（保证顺序：trace 在对应文本之前）
+                    while pending_trace:
+                        yield _sse("trace", pending_trace.popleft())
                     yield _sse("delta", {"text": chunk})
+                # 流结束后可能还有剩余 trace 步骤（如 done），一并发完
+                while pending_trace:
+                    yield _sse("trace", pending_trace.popleft())
             except Exception as exc:
                 # 骨架阶段：异常直接透传给前端（阶段 4 再做正式错误处理体系）
                 yield _sse("error", {"message": f"调用出错：{exc}"})

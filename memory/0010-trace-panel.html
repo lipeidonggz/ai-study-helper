@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0010 · 处理过程可视化（Trace 面板）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0010 · 处理过程可视化（Trace 面板）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-03</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：功能设计 / 实现</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景</h2>
+      <p>用户读代码后反馈：看代码能理解处理流程，但对“stream 把 LLM 流式返回转成一个个 event”这类内部过程缺乏直观感受。为此新增功能：在前端界面上完整展示一次对话的内部处理过程。</p>
+      <p>功能定位：同时是调试工具、产品“说得清”（可解释性）的实现、阶段 4 可观测性的先导。</p>
+    </section>
+
+    <section class="card">
+      <h2>设计决策（已确认）</h2>
+      <ul>
+        <li><strong>两层展示</strong>：事件流层（每个 LLMEvent 原样展示）+ 语义层（轮次/工具调用/耗时统计）</li>
+        <li><strong>传输方式</strong>：扩展现有 SSE 协议，新增 <code>trace</code> 事件；现有 delta/error/done 不变，向后兼容</li>
+        <li><strong>后端实现</strong>：观察者模式 Trace 收集器——loop 只负责记录，chat.py 负责实时推送；为阶段 4 换持久化/对接观测平台预留</li>
+        <li><strong>默认状态</strong>：面板默认展开</li>
+        <li><strong>v1 范围</strong>：只做实时展示，不做持久化与历史回看（阶段 4 再补）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>实现内容</h2>
+      <ul>
+        <li><strong>backend/app/agent/trace.py</strong>：Trace 记录器（step 序号、类型、数据、耗时）+ LLMEvent 转字典工具</li>
+        <li><strong>backend/app/agent/loop.py</strong>：关键节点埋点——context（系统提示、消息数）/ round / llm_call（工具数、消息数）/ event（每个流式事件）/ tool_exec（名称、参数、结果、耗时）/ done（轮数、工具次数、结束原因）</li>
+        <li><strong>backend/app/api/chat.py</strong>：Trace 实时转成 SSE <code>trace</code> 事件（用 deque 缓冲保证顺序：trace 先于对应文本发出）</li>
+        <li><strong>frontend/src/App.vue + client.ts</strong>：“处理过程”面板——步骤时间线、类型徽章（工具调用/错误/结束高亮）、可展开 JSON 详情</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>验证</h2>
+      <ul>
+        <li>后端 14 个测试全绿（新增 trace 步骤回归测试：context → round → llm_call → event → done）</li>
+        <li>前端 vue-tsc 类型检查 + 构建通过</li>
+        <li>待用户在界面实际验证：发一条消息，观察面板逐步出现各步骤</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>与路线图的关系</h2>
+      <p>这是阶段 4“可观测性”的轻量先导：Trace 收集器接口已就位，后续持久化、指标面板、对接 Langfuse 等观测平台时只需扩展消费方，loop 不动。</p>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-03
+    </footer>
+  </div>
+</body>
+</html>
