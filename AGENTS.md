@@ -30,5 +30,5 @@
 - 阶段：阶段 1 进行中——核心链路（配置→真实模型→流式→工具调用→渲染）与处理过程观测已完备（memory/0006、0010、0011）；当日进度见 memory/0012-session-progress.html
 - 技术基线：Vue 3 + TS 前端；Python + FastAPI 后端；SSE 流式；SQLite + Qdrant 本地存储；存储接口抽象（Port + Adapter）；本地 embedding
 - 代码导读：主处理流程阅读路线见 memory/0008-code-reading-guide.html
-- 最新功能：处理过程可视化（Trace + 前端面板：原始流、完整提示词、token 用量，见 memory/0010）；golden set 评测基线（schema + 首批 70 条用例，见 memory/0013）
-- 下一步：最小评测 runner（跑首批 70 条用例出基线报告）→ 获取并固定《三国演义》txt → 阶段 1 验证点跑批
+- 最新功能：处理过程可视化（Trace + 前端面板：原始流、完整提示词、token 用量，见 memory/0010）；golden set 评测体系（70 条用例 + runner，见 memory/0013、0014）
+- 下一步：真实模型跑首批 70 条用例出基线报告（python -m eval.runner）→ 获取并固定《三国演义》txt → 阶段 1 验证点跑批

@@ -55,6 +55,15 @@ def _now(timezone: str = "Asia/Shanghai") -> str:
 _notes: dict[str, str] = {}  # 笔记暂存进程内存（后续由 SQLite 持久化）
 
 
+def clear_notes() -> None:
+    """清空笔记（评测/测试用例隔离用）。
+
+    注意：笔记是进程级共享状态；评测并发跑批时 note 用例可能互相影响，
+    需要严格隔离请用 --concurrency 1。
+    """
+    _notes.clear()
+
+
 def _note_add(title: str, content: str) -> str:
     """保存笔记工具的实现。"""
     _notes[title] = content

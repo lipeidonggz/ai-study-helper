@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0014 · 最小评测 runner（设计定稿与实现）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0014 · 最小评测 runner（设计定稿与实现）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-04</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：评测体系 / 实现</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>设计决策（用户已确认）</h2>
+      <ul>
+        <li><strong>进程内直连 loop</strong>：复用 run_agent_turn + Trace，不走 HTTP API——直接拿到完整 trace，无需 SSE 解析，不需要后端服务在跑</li>
+        <li><strong>自动判定范围</strong>：tool_used / tool_not_used / stream_complete / latency_budget 由机器判定；answer_correct / refusal 进 CSV 待人工标注列，不假装全自动</li>
+        <li><strong>并发默认 3</strong> + <code>--limit N</code> 子集跑批</li>
+        <li><strong><code>--llm fake</code> 干跑模式</strong>：FakeLLM 验证管道，零成本</li>
+        <li><strong>人工标注 CSV 合并回报告 v1 不做</strong>（只出标注表，阶段 6 再系统化）</li>
+        <li><strong>max_rounds 语义</strong>：指“预期最多调用几次工具”（工具执行次数），不是循环轮数——单次工具调用在 loop 里会经历 2 轮循环（决策轮 + 回答轮），用工具次数比较更直观</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>实现（backend/eval/runner.py）</h2>
+      <ul>
+        <li><code>run_case</code>：组装输入（最后一条为当前消息、前面为历史，多轮就绪后生效）、asyncio.wait_for 超时控制、从 trace 提取工具调用/轮数/token/耗时</li>
+        <li><code>judge_case</code>：自动判定 + pending_human 标记 + metrics（answer_contains / max_rounds / tool_calls_count）</li>
+        <li><code>run_all</code>：信号量限流并发 + 汇总统计（状态分布、分类自动通过率、工具调用率、平均耗时、token 总量）</li>
+        <li><code>write_report</code>：JSON 全量明细 + CSV 人工标注表（utf-8-sig，Excel 友好），写入 eval/reports/（已 gitignore）</li>
+        <li>CLI：<code>python -m eval.runner --llm fake|real --limit N --concurrency M</code></li>
+        <li><code>builtin.clear_notes()</code>：批次开始前重置笔记状态（进程级共享的隔离手段）</li>
+      </ul>
+      <p><strong>已知局限</strong>：笔记是进程级内存，并发跑批时 note 用例可能互相影响；需要严格隔离用 <code>--concurrency 1</code>（记录在 runner 文档与用例 notes 中）。</p>
+    </section>
+
+    <section class="card">
+      <h2>验证</h2>
+      <ul>
+        <li>测试增至 22 个全绿（新增：Fake 干跑全量出报告、工具链路观察、tool_used 判定、超时判定）</li>
+        <li>CLI Fake 干跑 10 条：加载 70 条、跑完、JSON + CSV 落盘</li>
+        <li>下一步：真实模型跑首批 70 条，产出基线报告（工具调用率、耗时、token 成本），CSV 人工标注</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-04
+    </footer>
+  </div>
+</body>
+</html>
