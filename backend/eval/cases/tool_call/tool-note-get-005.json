@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-get-005",
+  "category": "tool_call",
+  "title": "读取不存在的笔记",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "读取笔记：不存在的标题XYZ" }] },
+  "expected": {
+    "behavior": "调用 note_get，结果不存在时应如实说明未找到",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "note_get", "arguments": { "title": "不存在的标题XYZ" } }],
+    "max_rounds": 1
+  },
+  "tags": ["note"],
+  "notes": "验证工具结果被正确回填到回答（不编造笔记内容）"
+}

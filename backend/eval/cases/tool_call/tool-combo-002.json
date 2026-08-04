@@ -1,0 +1,17 @@
+{
+  "id": "tool-combo-002",
+  "category": "tool_call",
+  "title": "乘法结果存笔记",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "把 7乘8 的结果保存到笔记，标题是乘法结果" }] },
+  "expected": {
+    "behavior": "先调用 calculator 得到 56，再调用 note_add 保存",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "calculator", "arguments": { "expression": "7*8" } },
+      { "name": "note_add" }
+    ],
+    "max_rounds": 2
+  },
+  "tags": ["multi-step"]
+}

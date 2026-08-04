@@ -1,0 +1,13 @@
+{
+  "id": "boundary-fuzzy-003",
+  "category": "boundary",
+  "title": "缺少上下文",
+  "mode": "general",
+  "input": { "messages": [{ "role": "user", "content": "帮我查一下" }] },
+  "expected": {
+    "behavior": "应询问要查什么，而不是自行假设",
+    "criteria": ["refusal"],
+    "max_rounds": 1
+  },
+  "tags": ["ambiguity"]
+}

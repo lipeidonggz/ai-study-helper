@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-011",
+  "category": "tool_call",
+  "title": "连续加法",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "1加2加3加4加5等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 15",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "1+2+3+4+5" } }],
+    "answer_contains": ["15"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

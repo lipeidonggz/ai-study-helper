@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-add-004",
+  "category": "tool_call",
+  "title": "保存会议纪要",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "记一下会议纪要：标题=周会，内容=确定了下周发布计划" }] },
+  "expected": {
+    "behavior": "调用 note_add 保存笔记并确认",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "note_add", "arguments": { "title": "周会", "content": "确定了下周发布计划" } }],
+    "answer_contains": ["已保存"],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

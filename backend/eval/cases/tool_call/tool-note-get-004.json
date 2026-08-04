@@ -1,0 +1,14 @@
+{
+  "id": "tool-note-get-004",
+  "category": "tool_call",
+  "title": "读取菜谱",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "把番茄炒蛋的菜谱读出来" }] },
+  "expected": {
+    "behavior": "调用 note_get 读取笔记",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "note_get", "arguments": { "title": "番茄炒蛋" } }],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

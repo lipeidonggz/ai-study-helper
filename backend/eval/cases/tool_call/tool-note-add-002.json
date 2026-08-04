@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-add-002",
+  "category": "tool_call",
+  "title": "保存学习计划",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "记个笔记：标题=学习计划，内容=明天上午复习第三章" }] },
+  "expected": {
+    "behavior": "调用 note_add 保存笔记并确认",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "note_add", "arguments": { "title": "学习计划", "content": "明天上午复习第三章" } }],
+    "answer_contains": ["已保存"],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

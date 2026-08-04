@@ -1,0 +1,13 @@
+{
+  "id": "boundary-fuzzy-002",
+  "category": "boundary",
+  "title": "多义词歧义",
+  "mode": "general",
+  "input": { "messages": [{ "role": "user", "content": "给我讲讲苹果" }] },
+  "expected": {
+    "behavior": "应澄清是水果还是品牌，或覆盖说明，不假装确定用户所指",
+    "criteria": ["answer_correct", "refusal"],
+    "max_rounds": 1
+  },
+  "tags": ["ambiguity"]
+}

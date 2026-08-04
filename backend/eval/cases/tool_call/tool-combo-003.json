@@ -1,0 +1,18 @@
+{
+  "id": "tool-combo-003",
+  "category": "tool_call",
+  "title": "先保存再读取",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "先保存一条笔记：标题=测试，内容=hello，然后立刻把它读出来" }] },
+  "expected": {
+    "behavior": "先调用 note_add 保存，再调用 note_get 读取确认",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "note_add", "arguments": { "title": "测试", "content": "hello" } },
+      { "name": "note_get", "arguments": { "title": "测试" } }
+    ],
+    "max_rounds": 2
+  },
+  "tags": ["multi-step"],
+  "notes": "同一次请求内进程内存共享，应能读到刚保存的笔记"
+}

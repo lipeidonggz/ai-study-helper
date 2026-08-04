@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-003",
+  "category": "tool_call",
+  "title": "减法",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "100减去23等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 77",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "100-23" } }],
+    "answer_contains": ["77"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

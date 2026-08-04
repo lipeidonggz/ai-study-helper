@@ -1,0 +1,14 @@
+{
+  "id": "tool-datetime-006",
+  "category": "tool_call",
+  "title": "年月日",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "现在是哪一年哪一月哪一天？" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取并回答当前年月日",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 1
+  },
+  "tags": ["datetime"]
+}

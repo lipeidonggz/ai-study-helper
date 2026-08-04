@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-009",
+  "category": "tool_call",
+  "title": "整数除法",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "19除以4，商是多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算整数商并回答 4",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "19//4" } }],
+    "answer_contains": ["4"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

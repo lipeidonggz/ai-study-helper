@@ -1,0 +1,18 @@
+{
+  "id": "combined-007",
+  "category": "combined",
+  "title": "多问题分步处理",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "今天是几号？同时帮我算一下 365 除以 7 等于多少" }] },
+  "expected": {
+    "behavior": "分别调用 current_datetime 和 calculator，回答两个问题",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "current_datetime", "arguments": {} },
+      { "name": "calculator", "arguments": { "expression": "365/7" } }
+    ],
+    "answer_contains": ["52"],
+    "max_rounds": 2
+  },
+  "tags": ["multi-step"]
+}

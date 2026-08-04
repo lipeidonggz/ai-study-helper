@@ -1,0 +1,17 @@
+{
+  "id": "combined-004",
+  "category": "combined",
+  "title": "笔记+检索验证",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "保存一条笔记：标题=任务，内容=写周报，然后确认它真的保存成功了" }] },
+  "expected": {
+    "behavior": "先 note_add 保存，再 note_get 读取验证内容一致",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "note_add", "arguments": { "title": "任务", "content": "写周报" } },
+      { "name": "note_get", "arguments": { "title": "任务" } }
+    ],
+    "max_rounds": 2
+  },
+  "tags": ["note", "verify"]
+}

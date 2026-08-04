@@ -1,0 +1,16 @@
+{
+  "id": "combined-001",
+  "category": "combined",
+  "title": "计算并解释步骤",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "计算（15+5）×3 的结果，并解释一下运算顺序" }] },
+  "expected": {
+    "behavior": "调用 calculator 得到 60，并解释先括号后乘法",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "(15+5)*3" } }],
+    "answer_contains": ["60"],
+    "max_rounds": 1
+  },
+  "tags": ["math", "explain"],
+  "compare": true
+}

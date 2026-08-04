@@ -1,0 +1,14 @@
+{
+  "id": "tool-note-get-003",
+  "category": "tool_call",
+  "title": "读取待办",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "我记的待办是什么？帮我查一下" }] },
+  "expected": {
+    "behavior": "调用 note_get 读取笔记",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "note_get" }],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

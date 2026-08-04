@@ -1,0 +1,18 @@
+{
+  "id": "tool-combo-001",
+  "category": "tool_call",
+  "title": "计算后保存笔记",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "计算 3+5 的结果，并保存为笔记，标题叫计算结果" }] },
+  "expected": {
+    "behavior": "先调用 calculator 得到结果，再调用 note_add 保存",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "calculator", "arguments": { "expression": "3+5" } },
+      { "name": "note_add", "arguments": { "title": "计算结果", "content": "8" } }
+    ],
+    "max_rounds": 2
+  },
+  "tags": ["multi-step"],
+  "compare": true
+}

@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-add-003",
+  "category": "tool_call",
+  "title": "保存灵感",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "帮我保存一个想法：标题=项目灵感，内容=用 RAG 做知识问答" }] },
+  "expected": {
+    "behavior": "调用 note_add 保存笔记并确认",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "note_add", "arguments": { "title": "项目灵感", "content": "用 RAG 做知识问答" } }],
+    "answer_contains": ["已保存"],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

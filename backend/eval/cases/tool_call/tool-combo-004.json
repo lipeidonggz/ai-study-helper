@@ -1,0 +1,15 @@
+{
+  "id": "tool-combo-004",
+  "category": "tool_call",
+  "title": "日期推算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "今天是几号？请用工具获取，并告诉我 10 天后是几号" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取今天日期，再用 calculator 或推理得出 10 天后的日期",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 2
+  },
+  "tags": ["multi-step"],
+  "notes": "验证多轮执行：观察 + 推理的组合"
+}

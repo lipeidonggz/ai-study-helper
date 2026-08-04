@@ -1,0 +1,15 @@
+{
+  "id": "tool-datetime-005",
+  "category": "tool_call",
+  "title": "指定时区",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "东京现在几点？" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取当前时间（骨架版忽略时区参数）",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 1
+  },
+  "tags": ["datetime"],
+  "notes": "骨架版 current_datetime 忽略时区参数，使用系统本地时区；时区处理是后续改进点"
+}

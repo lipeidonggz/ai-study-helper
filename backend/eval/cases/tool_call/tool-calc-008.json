@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-008",
+  "category": "tool_call",
+  "title": "取模运算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "17除以5的余数是多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 2",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "17%5" } }],
+    "answer_contains": ["2"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

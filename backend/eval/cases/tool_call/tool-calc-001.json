@@ -1,0 +1,17 @@
+{
+  "id": "tool-calc-001",
+  "category": "tool_call",
+  "title": "简单加法",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "3+5等于几？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 8",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "3+5" } }],
+    "answer_contains": ["8"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"],
+  "compare": true,
+  "notes": "实测模型可能直接心算不调工具，tool_calls 作为工具调用率观察指标"
+}

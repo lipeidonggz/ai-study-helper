@@ -1,0 +1,14 @@
+{
+  "id": "tool-datetime-008",
+  "category": "tool_call",
+  "title": "今天日期确认",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "今天的具体日期是什么？" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取并回答具体日期",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 1
+  },
+  "tags": ["datetime"]
+}

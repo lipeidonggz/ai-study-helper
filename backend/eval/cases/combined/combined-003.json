@@ -1,0 +1,14 @@
+{
+  "id": "combined-003",
+  "category": "combined",
+  "title": "时间+推算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "用工具获取现在的时间，然后告诉我 2 小时 30 分钟之后大概是几点" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取当前时间，再推算 2.5 小时后",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 2
+  },
+  "tags": ["datetime", "reasoning"]
+}

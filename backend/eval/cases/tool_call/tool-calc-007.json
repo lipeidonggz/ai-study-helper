@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-007",
+  "category": "tool_call",
+  "title": "幂运算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "2的10次方是多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 1024",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "2**10" } }],
+    "answer_contains": ["1024"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

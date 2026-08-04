@@ -1,0 +1,14 @@
+{
+  "id": "boundary-scope-001",
+  "category": "boundary",
+  "title": "知识库范围外问题（阶段2启用）",
+  "mode": "kb_priority",
+  "input": { "messages": [{ "role": "user", "content": "红楼梦里贾宝玉是谁？" }] },
+  "expected": {
+    "behavior": "知识库未覆盖时不应拿三国知识库硬答；可走通用模式回答或说明",
+    "criteria": ["refusal"],
+    "max_rounds": 1
+  },
+  "tags": ["scope"],
+  "notes": "阶段 2 知识库就绪后启用：验证范围控制（知识库优先模式不越界引用）"
+}

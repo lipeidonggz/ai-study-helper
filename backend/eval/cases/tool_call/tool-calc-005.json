@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-005",
+  "category": "tool_call",
+  "title": "混合运算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "7乘8再加2等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 58",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "7*8+2" } }],
+    "answer_contains": ["58"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

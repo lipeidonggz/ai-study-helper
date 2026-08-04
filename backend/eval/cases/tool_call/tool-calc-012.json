@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-012",
+  "category": "tool_call",
+  "title": "除不尽的小数",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "100除以3等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并给出约 33.33 的结果",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "100/3" } }],
+    "answer_contains": ["33"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

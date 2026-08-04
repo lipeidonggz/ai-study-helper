@@ -1,0 +1,16 @@
+{
+  "id": "combined-008",
+  "category": "combined",
+  "title": "计算错误纠正",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "9×9 是不是 89？用计算器确认一下" }] },
+  "expected": {
+    "behavior": "调用 calculator 得出 81，纠正 89 的错误前提",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "9*9" } }],
+    "answer_contains": ["81"],
+    "max_rounds": 2
+  },
+  "tags": ["verify"],
+  "notes": "验证不被用户错误前提带偏，以工具结果为准"
+}

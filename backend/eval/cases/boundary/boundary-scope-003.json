@@ -1,0 +1,14 @@
+{
+  "id": "boundary-scope-003",
+  "category": "boundary",
+  "title": "知识库模式下的通用数学题",
+  "mode": "kb_priority",
+  "input": { "messages": [{ "role": "user", "content": "（阶段2启用）圆周率前5位是什么？" }] },
+  "expected": {
+    "behavior": "与知识库无关的通用问题应正常回答，不应强行关联知识库",
+    "criteria": ["answer_correct"],
+    "max_rounds": 1
+  },
+  "tags": ["scope"],
+  "notes": "阶段 2 启用：验证范围控制不矫枉过正"
+}

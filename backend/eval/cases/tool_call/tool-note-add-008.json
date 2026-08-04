@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-add-008",
+  "category": "tool_call",
+  "title": "保存提醒",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "记一条提醒：明天早上八点开会" }] },
+  "expected": {
+    "behavior": "调用 note_add 保存提醒并确认",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "note_add" }],
+    "answer_contains": ["已保存"],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

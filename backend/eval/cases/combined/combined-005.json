@@ -1,0 +1,15 @@
+{
+  "id": "combined-005",
+  "category": "combined",
+  "title": "工具结果再加工",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "用计算器算 2 的 20 次方，然后把结果的位数告诉我" }] },
+  "expected": {
+    "behavior": "调用 calculator 得到 1048576，再指出是 7 位数",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "2**20" } }],
+    "answer_contains": ["1048576"],
+    "max_rounds": 2
+  },
+  "tags": ["math", "reasoning"]
+}

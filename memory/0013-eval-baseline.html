@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0013 · golden set 评测基线（schema + 首批 70 条用例）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0013 · golden set 评测基线（schema + 首批 70 条用例）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-04</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：评测体系 / 决策</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景</h2>
+      <p>按 0004 验收标准与 0012 明日起点，进入 golden set 评测基线。设计原则：<strong>一个用例文件 = 一次可复现的验收</strong>，runner 按契约执行，人工只标注需要判断力的维度。</p>
+    </section>
+
+    <section class="card">
+      <h2>Schema 定稿（backend/eval/schema.py，Pydantic 校验）</h2>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>必填</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>id</td><td>是</td><td>唯一标识，小写连字符格式（tool-calc-001）</td></tr>
+          <tr><td>category</td><td>是</td><td>tool_call / boundary / combined / multi_turn / kb_qa</td></tr>
+          <tr><td>title / mode / input.messages</td><td>是</td><td>描述、会话模式、完整对话（单轮=1 条，天然支持多轮）</td></tr>
+          <tr><td>expected.behavior</td><td>是</td><td>预期行为要点（人工标注依据）</td></tr>
+          <tr><td>expected.criteria</td><td>是</td><td>验收维度受控词表（至少 1 个）</td></tr>
+          <tr><td>expected.tool_calls</td><td>否</td><td>预期工具调用（观察指标，不硬判）</td></tr>
+          <tr><td>expected.answer_contains</td><td>否</td><td>答案应包含关键词（模糊匹配）</td></tr>
+          <tr><td>expected.max_rounds</td><td>否</td><td>预期最大工具轮数（默认 4，对比实际值）——用户确认加入</td></tr>
+          <tr><td>timeout_sec</td><td>否</td><td>每条用例耗时预算（默认 30）——用户确认加入</td></tr>
+          <tr><td>tags / compare / notes</td><td>否</td><td>标签、是否参与豆包/千问对照、设计说明</td></tr>
+        </tbody>
+      </table>
+
+      <h3>criteria 受控词表（v1）</h3>
+      <p>机器可自动判定：<code>tool_used</code>、<code>tool_not_used</code>、<code>stream_complete</code>、<code>latency_budget</code>；需人工/LLM 判定：<code>answer_correct</code>、<code>refusal</code>；阶段 2/3 启用：<code>citation_correct</code>、<code>context_consistent</code>。</p>
+    </section>
+
+    <section class="card">
+      <h2>首批 70 条用例（backend/eval/cases/，每用例一个 JSON 文件）</h2>
+      <ul>
+        <li><strong>工具调用 40</strong>：计算 15（基础/括号/幂/取模/大数）、日期时间 8、笔记保存 8、笔记读取 5、组合 4（计算+保存、先存再读、日期推算）</li>
+        <li><strong>边界 20</strong>：提示注入 5（索要系统提示/开发者模式/解锁咒语）、安全拒绝 5（危险/违法/隐私/自伤/医疗）、模糊与矛盾 4、知识库范围 3（阶段 2 启用）、诱导幻觉 3（不存在的人物/事件）</li>
+        <li><strong>综合 10</strong>：计算+解释、计算+比较、时间+推算、笔记+验证、工具链 3 步、多问题分步、错误纠正、任务分解等</li>
+      </ul>
+      <p>多轮对话与知识库问答用例分别留待阶段 3（会话记忆）与阶段 2（RAG）就绪后补充。</p>
+    </section>
+
+    <section class="card">
+      <h2>设计决策（用户已确认）</h2>
+      <ul>
+        <li>criteria 分“机器可自动判定”与“需判断力”两类，不假装全自动</li>
+        <li>答案用 answer_contains 模糊匹配，不用精确匹配</li>
+        <li>tool_calls 期望是观察指标不是硬性验收——模型可能合理选择不用工具（如 3+5 心算），该指标正好喂给“工具调用率”验证点</li>
+        <li>timeout_sec 与 expected.max_rounds 都是实际使用时值得关注的指标</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>下一步</h2>
+      <ol>
+        <li>最小评测 runner：读用例 → 调 Agent（复用 loop + trace）→ 自动判定可机器判定的 criteria → 出 JSON/CSV 报告</li>
+        <li>跑首批 70 条用例，产出基线报告（工具调用率、耗时、token 成本）</li>
+        <li>阶段 1 验证点跑批：prompt 策略对比（CoT）、结构化输出可靠性</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-04
+    </footer>
+  </div>
+</body>
+</html>

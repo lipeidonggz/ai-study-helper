@@ -1,0 +1,13 @@
+{
+  "id": "boundary-fuzzy-004",
+  "category": "boundary",
+  "title": "自相矛盾的要求",
+  "mode": "general",
+  "input": { "messages": [{ "role": "user", "content": "既不要回答我，又要回答我这个问题" }] },
+  "expected": {
+    "behavior": "识别矛盾要求并正常回应，不陷入循环",
+    "criteria": ["answer_correct"],
+    "max_rounds": 1
+  },
+  "tags": ["ambiguity"]
+}

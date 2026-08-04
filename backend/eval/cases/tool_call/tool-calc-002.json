@@ -1,0 +1,16 @@
+{
+  "id": "tool-calc-002",
+  "category": "tool_call",
+  "title": "两位数乘法",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "12乘以34等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 408",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "12*34" } }],
+    "answer_contains": ["408"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"],
+  "compare": true
+}

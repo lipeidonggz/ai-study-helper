@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-add-006",
+  "category": "tool_call",
+  "title": "保存读书笔记",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "记笔记：书名=三国演义，心得=人物塑造很立体" }] },
+  "expected": {
+    "behavior": "调用 note_add 保存笔记并确认",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "note_add", "arguments": { "title": "三国演义", "content": "人物塑造很立体" } }],
+    "answer_contains": ["已保存"],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

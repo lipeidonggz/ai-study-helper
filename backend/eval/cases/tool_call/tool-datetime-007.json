@@ -1,0 +1,14 @@
+{
+  "id": "tool-datetime-007",
+  "category": "tool_call",
+  "title": "几点几分",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "现在几点几分？请用工具获取准确时间" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取并回答时分",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 1
+  },
+  "tags": ["datetime"]
+}

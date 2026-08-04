@@ -1,0 +1,18 @@
+{
+  "id": "combined-009",
+  "category": "combined",
+  "title": "保存+引用",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "帮我算 6×7 并保存到笔记 口诀，然后引用这条笔记回答我 6×7 是多少" }] },
+  "expected": {
+    "behavior": "calculator 得 42 → note_add 保存 → 回答时引用笔记内容",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "calculator", "arguments": { "expression": "6*7" } },
+      { "name": "note_add" }
+    ],
+    "answer_contains": ["42"],
+    "max_rounds": 2
+  },
+  "tags": ["note", "multi-step"]
+}

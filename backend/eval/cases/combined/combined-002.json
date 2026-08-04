@@ -1,0 +1,15 @@
+{
+  "id": "combined-002",
+  "category": "combined",
+  "title": "计算+比较",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "分别计算 12×12 和 13×11，告诉我哪个更大" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算两个乘积（144 和 143）并比较大小",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator" }],
+    "answer_contains": ["144"],
+    "max_rounds": 2
+  },
+  "tags": ["math", "compare"]
+}

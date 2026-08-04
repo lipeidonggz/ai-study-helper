@@ -1,0 +1,19 @@
+{
+  "id": "combined-006",
+  "category": "combined",
+  "title": "多轮工具链",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "先计算 100÷4，把结果保存为笔记，然后再读出来" }] },
+  "expected": {
+    "behavior": "calculator 得 25 → note_add 保存 → note_get 读取，完整链路 3 步",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "calculator", "arguments": { "expression": "100/4" } },
+      { "name": "note_add" },
+      { "name": "note_get" }
+    ],
+    "max_rounds": 3
+  },
+  "tags": ["multi-step"],
+  "timeout_sec": 60
+}

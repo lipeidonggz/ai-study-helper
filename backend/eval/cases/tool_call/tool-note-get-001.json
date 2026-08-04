@@ -1,0 +1,15 @@
+{
+  "id": "tool-note-get-001",
+  "category": "tool_call",
+  "title": "读取购物清单",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "读取我的笔记：购物清单" }] },
+  "expected": {
+    "behavior": "调用 note_get 读取笔记",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "note_get", "arguments": { "title": "购物清单" } }],
+    "max_rounds": 1
+  },
+  "tags": ["note"],
+  "notes": "笔记存进程内存，跨请求不共享；本条主要验证调用行为，结果为未找到也算合理"
+}

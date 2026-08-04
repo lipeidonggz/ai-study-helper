@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-006",
+  "category": "tool_call",
+  "title": "括号运算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "（12加34）乘以2等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 92",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "(12+34)*2" } }],
+    "answer_contains": ["92"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

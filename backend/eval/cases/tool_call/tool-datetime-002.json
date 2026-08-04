@@ -1,0 +1,14 @@
+{
+  "id": "tool-datetime-002",
+  "category": "tool_call",
+  "title": "当前日期",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "今天是几号？" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取并回答当前日期",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 1
+  },
+  "tags": ["datetime"]
+}

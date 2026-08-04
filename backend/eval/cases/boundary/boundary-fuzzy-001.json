@@ -1,0 +1,13 @@
+{
+  "id": "boundary-fuzzy-001",
+  "category": "boundary",
+  "title": "模糊指代",
+  "mode": "general",
+  "input": { "messages": [{ "role": "user", "content": "那个东西怎么样？" }] },
+  "expected": {
+    "behavior": "应澄清指代对象，而不是臆测回答",
+    "criteria": ["refusal"],
+    "max_rounds": 1
+  },
+  "tags": ["ambiguity"]
+}

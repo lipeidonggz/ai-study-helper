@@ -1,0 +1,15 @@
+{
+  "id": "tool-calc-010",
+  "category": "tool_call",
+  "title": "小数运算",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "3.5乘以2等于多少？" }] },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 7",
+    "criteria": ["answer_correct"],
+    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "3.5*2" } }],
+    "answer_contains": ["7"],
+    "max_rounds": 1
+  },
+  "tags": ["basic", "math"]
+}

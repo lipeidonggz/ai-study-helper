@@ -1,0 +1,14 @@
+{
+  "id": "tool-note-get-002",
+  "category": "tool_call",
+  "title": "读取学习计划",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "帮我看看之前存的学习计划" }] },
+  "expected": {
+    "behavior": "调用 note_get 读取笔记",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "note_get" }],
+    "max_rounds": 1
+  },
+  "tags": ["note"]
+}

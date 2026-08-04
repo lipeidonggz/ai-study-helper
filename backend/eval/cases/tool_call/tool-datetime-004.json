@@ -1,0 +1,14 @@
+{
+  "id": "tool-datetime-004",
+  "category": "tool_call",
+  "title": "完整日期时间",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "现在的日期和时间是多少？" }] },
+  "expected": {
+    "behavior": "调用 current_datetime 获取并回答完整日期时间",
+    "criteria": ["answer_correct", "tool_used"],
+    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "max_rounds": 1
+  },
+  "tags": ["datetime"]
+}

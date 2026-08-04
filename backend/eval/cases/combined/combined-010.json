@@ -1,0 +1,18 @@
+{
+  "id": "combined-010",
+  "category": "combined",
+  "title": "任务分解",
+  "mode": "tool_enhanced",
+  "input": { "messages": [{ "role": "user", "content": "我需要一个番茄炒蛋菜谱：先算出 2 人份需要几个番茄（1 人份 2 个），然后保存为笔记" }] },
+  "expected": {
+    "behavior": "计算 2×2=4 个番茄，再调用 note_add 保存菜谱",
+    "criteria": ["answer_correct"],
+    "tool_calls": [
+      { "name": "calculator", "arguments": { "expression": "2*2" } },
+      { "name": "note_add" }
+    ],
+    "answer_contains": ["4"],
+    "max_rounds": 2
+  },
+  "tags": ["task-decomposition"]
+}
