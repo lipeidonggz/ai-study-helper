@@ -69,6 +69,25 @@ class SlowLLM(LLMClient):
         yield LLMEvent(type="done")
 
 
+class FlakyLLM(LLMClient):
+    """第一次调用抛错，第二次正常（用于验证重试）。"""
+
+    model_name = "flaky"
+
+    def __init__(self) -> None:
+        self._calls = 0
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        return LLMResponse(content="")
+
+    async def stream(self, messages, tools=None):
+        self._calls += 1
+        if self._calls == 1:
+            raise RuntimeError("transient failure")
+        yield LLMEvent(type="text", text="ok")
+        yield LLMEvent(type="done")
+
+
 def test_fake_dry_run(tmp_path):
     """Fake 干跑：70+ 用例应全部跑完并产出 JSON + CSV 报告。"""
     from app.agent.llm import FakeLLMClient
@@ -133,3 +152,20 @@ def test_timeout_judgment():
     assert result.status == "timeout"
     judgment = judge_case(case, result)
     assert judgment["judgments"]["latency_budget"] == "fail"
+
+
+def test_retry_on_transient_error():
+    """首次失败应退避重试，重试成功后 status=ok。"""
+    case = CaseFile(
+        id="t-retry",
+        category="combined",
+        title="t",
+        mode="general",
+        input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
+        expected=Expected(behavior="b", criteria=["answer_correct"]),
+    )
+    result = asyncio.run(
+        run_case(case, FlakyLLM(), ToolExecutor(default_registry()), max_retries=1)
+    )
+    assert result.status == "ok"
+    assert result.output == "ok"

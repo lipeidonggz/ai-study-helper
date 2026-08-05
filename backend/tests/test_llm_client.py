@@ -295,6 +295,68 @@ def test_loop_executes_all_parallel_tool_calls():
     asyncio.run(scenario())
 
 
+def test_loop_tool_error_does_not_crash():
+    """工具执行失败不应崩掉整个 turn：错误作为 tool 消息回填，模型可继续回答。"""
+
+    class ErrorToolLLM(LLMClient):
+        """第一次调用返回一个会执行失败的工具调用，第二次返回文本。"""
+
+        model_name = "stub"
+
+        def __init__(self) -> None:
+            self._calls = 0
+
+        async def chat(self, messages, tools=None) -> LLMResponse:
+            return LLMResponse(content="")
+
+        async def stream(self, messages, tools=None):
+            self._calls += 1
+            if self._calls == 1:
+                yield LLMEvent(
+                    type="tool_call",
+                    tool_call=ToolCall(name="calculator", arguments={"expression": "sqrt(9)"}, id="call_x"),
+                    tool_calls=[ToolCall(name="calculator", arguments={"expression": "sqrt(9)"}, id="call_x")],
+                    raw_tool_calls=[
+                        {
+                            "id": "call_x",
+                            "type": "function",
+                            "function": {"name": "calculator", "arguments": '{"expression": "sqrt(9)"}'},
+                        }
+                    ],
+                )
+                yield LLMEvent(type="done")
+            else:
+                yield LLMEvent(type="text", text="该表达式不支持，请使用其他写法")
+                yield LLMEvent(type="done")
+
+    async def scenario():
+        from app.agent.loop import run_agent_turn
+
+        from app.agent.trace import Trace
+        from app.tools.executor import ToolExecutor
+        from app.tools.registry import default_registry
+
+        trace = Trace()
+        chunks = [
+            chunk
+            async for chunk in run_agent_turn(
+                "计算 9 的平方根",
+                mode="tool_enhanced",
+                llm=ErrorToolLLM(),
+                tools=ToolExecutor(default_registry()),
+                trace=trace,
+            )
+        ]
+        # turn 不应崩溃，最终文本正常产出
+        assert "".join(chunks) == "该表达式不支持，请使用其他写法"
+        tool_execs = [s for s in trace.steps() if s["type"] == "tool_exec"]
+        assert len(tool_execs) == 1
+        assert "工具执行出错" in tool_execs[0]["data"]["result"]  # 错误作为观察回填
+        assert tool_execs[0]["data"]["error"]  # 且记录 error 字段
+
+    asyncio.run(scenario())
+
+
 def test_chat_tool_call_non_stream():
     """非流式响应里的 tool_calls：应解析出 ToolCall（工具名 + 参数）。"""
 

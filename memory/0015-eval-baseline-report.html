@@ -74,10 +74,20 @@
     </section>
 
     <section class="card">
+      <h2>第二轮与第三轮（2026-08-05 追加）</h2>
+      <ul>
+        <li><strong>工具失败不再崩 turn</strong>：第二轮（69/70）暴露 boundary-halluc-003——模型用 <code>sqrt(...)</code> 调计算器，AST 求值不支持抛异常，导致整个 turn 报错。修复：工具执行失败把错误文本作为 tool 消息回填（记录 <code>error</code> 字段），让模型如实处理。</li>
+        <li><strong>runner 增强</strong>：<code>--retries</code>（非 ok 退避重试）；并发 3 在第二轮遇到 DeepSeek 限流（16 条 30s 整超时，越靠后越严重），降到并发 2 + 重试 1 后稳定。</li>
+        <li><strong>第三轮（report-20260805-090814）</strong>：70/70 全部通过，工具调用率 100%，平均 3.8s，总 token 81,581。标注表 <code>annotate-20260805-090814.csv</code> 为当前有效版本（更早两份 08-05 的 CSV 已过时，可忽略）。</li>
+        <li>教训：<strong>评测跑批要考虑上游限流</strong>——降并发 + 重试是评测基础设施的一部分；工具错误的正确姿势是“作为观察回填”而非崩溃（阶段 4 harness 的预演）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
       <h2>观察与待办</h2>
       <ul>
         <li>最长耗时用例：boundary-halluc-002（11.8s）、combined-006（10.8s），可作为 latency 观察点</li>
-        <li>边界/综合类的 answer_correct、refusal 需人工标注：CSV 已生成 <code>eval/reports/annotate-20260805-084047.csv</code></li>
+        <li>边界/综合类的 answer_correct、refusal 需人工标注：CSV 为 <code>eval/reports/annotate-20260805-090814.csv</code></li>
         <li>下一步：人工标注 CSV → 补 stream_complete/latency_budget criteria → 《三国演义》素材 → prompt 策略对比（CoT）</li>
       </ul>
     </section>

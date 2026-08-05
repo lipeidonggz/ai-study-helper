@@ -131,7 +131,13 @@ async def run_agent_turn(
         )
         for call in all_calls:
             start = time.perf_counter()  # 工具执行开始计时
-            result = await tools.execute(call.name, call.arguments)
+            try:
+                result = await tools.execute(call.name, call.arguments)
+                error = ""
+            except Exception as exc:
+                # 工具失败不崩整个 turn：把错误作为观察回填，让模型如实处理/解释
+                result = f"工具执行出错：{exc}"
+                error = str(exc)
             duration_ms = round((time.perf_counter() - start) * 1000, 1)
             tool_call_count += 1
             if trace:
@@ -142,6 +148,7 @@ async def run_agent_turn(
                         "arguments": call.arguments,
                         "result": str(result),
                         "duration_ms": duration_ms,
+                        "error": error,
                     },
                 )
             # 每个工具调用各回填一条 tool 消息（协议要求与 tool_call_id 一一对应）

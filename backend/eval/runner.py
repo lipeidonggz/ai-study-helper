@@ -50,10 +50,8 @@ class CaseResult:
     trace_types: list[str] = field(default_factory=list)
 
 
-async def run_case(
-    case: CaseFile, llm: LLMClient, tools: ToolExecutor
-) -> CaseResult:
-    """跑单条用例：组装输入（最后一条为当前消息，前面为历史）、超时控制、收集指标。"""
+async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> CaseResult:
+    """跑单条用例一次：组装输入（最后一条为当前消息，前面为历史）、超时控制、收集指标。"""
     messages = case.input.messages
     user_message = messages[-1].content  # 当前用户消息
     # 多轮用例就绪后生效：最后一条之前的都是历史
@@ -98,6 +96,18 @@ async def run_case(
         error=error,
         trace_types=[s["type"] for s in trace.steps()],
     )
+
+
+async def run_case(
+    case: CaseFile, llm: LLMClient, tools: ToolExecutor, max_retries: int = 1
+) -> CaseResult:
+    """跑单条用例，非 ok 时退避重试（吸收 DeepSeek 临时限流/慢响应）。"""
+    for attempt in range(max_retries + 1):
+        result = await _run_once(case, llm, tools)
+        if result.status == "ok" or attempt == max_retries:
+            return result
+        await asyncio.sleep(5 * (attempt + 1))  # 退避后重试
+    return result
 
 
 def judge_case(case: CaseFile, result: CaseResult) -> dict:
@@ -148,6 +158,7 @@ async def run_all(
     tools: ToolExecutor,
     concurrency: int = DEFAULT_CONCURRENCY,
     limit: int | None = None,
+    retries: int = 1,
 ) -> dict:
     """并发跑批（信号量限流）并聚合报告。"""
     selected = cases[:limit] if limit else cases
@@ -156,7 +167,7 @@ async def run_all(
 
     async def worker(case: CaseFile) -> CaseResult:
         async with sem:
-            return await run_case(case, llm, tools)
+            return await run_case(case, llm, tools, max_retries=retries)
 
     results = await asyncio.gather(*(worker(c) for c in selected))
     entries = []
@@ -276,6 +287,7 @@ def main() -> int:
     parser.add_argument("--cases", type=Path, default=CASES_DIR, help="用例目录")
     parser.add_argument("--limit", type=int, default=None, help="只跑前 N 条")
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
+    parser.add_argument("--retries", type=int, default=1, help="非 ok 时重试次数")
     parser.add_argument("--llm", choices=["real", "fake"], default="real", help="fake=干跑不花钱")
     parser.add_argument("--report-dir", type=Path, default=REPORTS_DIR)
     args = parser.parse_args()
@@ -293,7 +305,9 @@ def main() -> int:
             return 1
         llm = DeepSeekLLMClient(api_key=settings.api_key, model=settings.model or "deepseek-chat")
 
-    report = asyncio.run(run_all(cases, llm, tools, args.concurrency, args.limit))
+    report = asyncio.run(
+        run_all(cases, llm, tools, args.concurrency, args.limit, args.retries)
+    )
     json_path, csv_path = write_report(report, args.report_dir)
     print_summary(report["summary"])
     print(f"报告: {json_path}")
