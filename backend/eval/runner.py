@@ -13,7 +13,6 @@
 
 import argparse
 import asyncio
-import csv
 import json
 import time
 from collections import Counter
@@ -29,6 +28,10 @@ from app.tools.builtin import clear_notes
 from app.tools.executor import ToolExecutor
 from app.tools.registry import default_registry
 from eval.schema import CaseFile, load_cases
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 CASES_DIR = Path(__file__).resolve().parent / "cases"
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
@@ -244,36 +247,67 @@ def _aggregate(entries: list[dict]) -> dict:
 
 
 def write_report(report: dict, report_dir: Path) -> tuple[Path, Path]:
-    """写 JSON 全量明细 + CSV 人工标注表。"""
+    """写 JSON 全量明细 + Excel 人工标注表（格式化：冻结表头、列宽、自动换行、下拉选项）。"""
     report_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     json_path = report_dir / f"report-{timestamp}.json"
-    csv_path = report_dir / f"annotate-{timestamp}.csv"
+    xlsx_path = report_dir / f"annotate-{timestamp}.xlsx"
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    with csv_path.open("w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.writer(f)
-        writer.writerow(
-            ["id", "category", "behavior", "input", "output", "status", "elapsed_ms", "rounds", "tool_calls", "judgments", "answer_correct", "refusal"]
-        )
-        for e in report["cases"]:
-            writer.writerow(
-                [
-                    e["id"],
-                    e["category"],
-                    e["title"],
-                    e["input"],
-                    e["output"],  # 完整输出，避免截断误导人工判定
-                    e["status"],
-                    e["elapsed_ms"],
-                    e["rounds"],
-                    ",".join(e["tool_calls"]),
-                    json.dumps(e["judgments"], ensure_ascii=False),
-                    "",  # answer_correct 待人工填
-                    "",  # refusal 待人工填
-                ]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "人工标注"
+    headers = [
+        "id", "category", "behavior", "input", "output", "status",
+        "elapsed_ms", "rounds", "tool_calls", "judgments",
+        "answer_correct", "refusal",
+    ]
+    widths = {
+        "A": 22, "B": 12, "C": 34, "D": 44, "E": 72, "F": 10,
+        "G": 11, "H": 10, "I": 22, "J": 24, "K": 13, "L": 15,
+    }
+    header_fill = PatternFill("solid", fgColor="4472C4")
+    header_font = Font(bold=True, color="FFFFFF")
+
+    for col, name in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=name)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        letter = get_column_letter(col)
+        ws.column_dimensions[letter].width = widths[letter]
+    ws.row_dimensions[1].height = 22
+    ws.freeze_panes = "A2"  # 冻结表头，滚动时始终可见
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"  # 支持筛选
+
+    wrap_cols = {3, 4, 5, 9, 10}  # behavior/input/output/tool_calls/judgments 自动换行
+    for i, e in enumerate(report["cases"], start=2):
+        row = [
+            e["id"], e["category"], e["title"], e["input"], e["output"],
+            e["status"], e["elapsed_ms"], e["rounds"],
+            ", ".join(e["tool_calls"]), json.dumps(e["judgments"], ensure_ascii=False),
+            "", "",  # answer_correct / refusal 待人工填
+        ]
+        for j, value in enumerate(row, 1):
+            cell = ws.cell(row=i, column=j, value=value)
+            cell.alignment = (
+                Alignment(wrap_text=True, vertical="top")
+                if j in wrap_cols
+                else Alignment(vertical="top")
             )
-    return json_path, csv_path
+        # 数据行不显式设置行高 → Excel 按自动换行内容自适应行高
+
+    # answer_correct / refusal 提供下拉选项，减少手输与笔误
+    dv_answer = DataValidation(type="list", formula1='"对,错,存疑"', allow_blank=True)
+    dv_refusal = DataValidation(type="list", formula1='"合理,不合理,不适用"', allow_blank=True)
+    ws.add_data_validation(dv_answer)
+    ws.add_data_validation(dv_refusal)
+    last = ws.max_row
+    dv_answer.add(f"K2:K{last}")
+    dv_refusal.add(f"L2:L{last}")
+
+    wb.save(xlsx_path)
+    return json_path, xlsx_path
 
 
 def print_summary(summary: dict) -> None:
@@ -311,10 +345,10 @@ def main() -> int:
     report = asyncio.run(
         run_all(cases, llm, tools, args.concurrency, args.limit, args.retries)
     )
-    json_path, csv_path = write_report(report, args.report_dir)
+    json_path, xlsx_path = write_report(report, args.report_dir)
     print_summary(report["summary"])
     print(f"报告: {json_path}")
-    print(f"人工标注表: {csv_path}")
+    print(f"人工标注表: {xlsx_path}")
     return 0
 
 

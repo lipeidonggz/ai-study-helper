@@ -80,7 +80,7 @@
         <li><strong>runner 增强</strong>：<code>--retries</code>（非 ok 退避重试）；并发 3 在第二轮遇到 DeepSeek 限流（16 条 30s 整超时，越靠后越严重），降到并发 2 + 重试 1 后稳定。</li>
         <li><strong>第三轮（report-20260805-090814）</strong>：70/70 全部通过，工具调用率 100%，平均 3.8s，总 token 81,581。</li>
         <li><strong>标注表补充 input 列</strong>：用户指出 CSV 缺“输入文本”列（不便对照判定），runner 报告条目与 CSV 均增加 <code>input</code> 列；从已有报告补生成，未重跑模型。</li>
-        <li><strong>标注表输出不截断</strong>：用户发现 boundary-fuzzy-002 的输出“看起来没写完”——原因是 CSV 输出列截断到 200 字符（完整回答实际 627 字、结尾正常）。修复：标注 CSV 输出列改为完整输出，避免截断误导人工判定。当前有效标注表 <code>annotate-20260805-094341.csv</code>（更早 CSV 已过时，可忽略）。</li>
+        <li><strong>标注表输出不截断 + 改用 Excel</strong>：用户发现 boundary-fuzzy-002 的输出“看起来没写完”——原因是 CSV 输出列截断到 200 字符（完整回答实际 627 字、结尾正常）。修复：输出列改为完整输出；且按用户要求改用 <strong>Excel（.xlsx）</strong> 格式（openpyxl）：冻结表头、预设列宽、自动换行与行高自适应、<code>answer_correct</code>/<code>refusal</code> 下拉选项（对/错/存疑、合理/不合理/不适用）、筛选功能。当前有效标注表 <code>annotate-20260805-094714.xlsx</code>（更早 CSV 已过时，可忽略）。</li>
         <li>教训：<strong>评测跑批要考虑上游限流</strong>——降并发 + 重试是评测基础设施的一部分；工具错误的正确姿势是“作为观察回填”而非崩溃（阶段 4 harness 的预演）。</li>
       </ul>
     </section>
@@ -89,7 +89,7 @@
       <h2>观察与待办</h2>
       <ul>
         <li>最长耗时用例：boundary-halluc-002（11.8s）、combined-006（10.8s），可作为 latency 观察点</li>
-        <li>边界/综合类的 answer_correct、refusal 需人工标注：CSV 为 <code>eval/reports/annotate-20260805-094341.csv</code>（含 input 列、完整输出）</li>
+        <li>边界/综合类的 answer_correct、refusal 需人工标注：Excel 标注表为 <code>eval/reports/annotate-20260805-094714.xlsx</code>（含 input 列、完整输出、下拉选项）</li>
         <li>下一步：人工标注 CSV → 补 stream_complete/latency_budget criteria → 《三国演义》素材 → prompt 策略对比（CoT）</li>
       </ul>
     </section>

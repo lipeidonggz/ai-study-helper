@@ -98,15 +98,20 @@ def test_fake_dry_run(tmp_path):
     )
     assert report["summary"]["total"] >= 70
     assert all(e["status"] in ("ok", "timeout", "error") for e in report["cases"])
-    json_path, csv_path = write_report(report, tmp_path)
-    assert json_path.exists() and csv_path.exists()
+    json_path, xlsx_path = write_report(report, tmp_path)
+    assert json_path.exists() and xlsx_path.exists()
     data = json.loads(json_path.read_text(encoding="utf-8"))
     assert len(data["cases"]) >= 70
     assert "summary" in data and "generated_at" in data
     assert "input" in data["cases"][0]  # 报告条目应含输入文本
-    with csv_path.open(encoding="utf-8-sig") as fp:
-        header = fp.readline().strip()
-    assert "input" in header  # CSV 应有 input 列
+    from openpyxl import load_workbook
+
+    wb = load_workbook(xlsx_path)
+    ws = wb.active
+    headers = [c.value for c in ws[1]]
+    assert "input" in headers and "answer_correct" in headers  # Excel 表头完整
+    assert ws.freeze_panes == "A2"  # 表头冻结
+    assert ws["K2"].value in (None, "")  # answer_correct 待人工填
 
 
 def test_tool_link_and_observation():
