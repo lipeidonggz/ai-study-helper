@@ -179,6 +179,8 @@ async def run_all(
                 "category": case.category,
                 "title": case.title,
                 "mode": case.mode,
+                # 输入文本：完整对话（单轮=用户消息；多轮=全部消息），供人工标注时对照
+                "input": " | ".join(f"{m.role}: {m.content}" for m in case.input.messages),
                 "status": result.status,
                 "elapsed_ms": result.elapsed_ms,
                 "rounds": result.rounds,
@@ -252,7 +254,7 @@ def write_report(report: dict, report_dir: Path) -> tuple[Path, Path]:
     with csv_path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(
-            ["id", "category", "behavior", "output", "status", "elapsed_ms", "rounds", "tool_calls", "judgments", "answer_correct", "refusal"]
+            ["id", "category", "behavior", "input", "output", "status", "elapsed_ms", "rounds", "tool_calls", "judgments", "answer_correct", "refusal"]
         )
         for e in report["cases"]:
             writer.writerow(
@@ -260,6 +262,7 @@ def write_report(report: dict, report_dir: Path) -> tuple[Path, Path]:
                     e["id"],
                     e["category"],
                     e["title"],
+                    e["input"],
                     e["output"][:200],
                     e["status"],
                     e["elapsed_ms"],

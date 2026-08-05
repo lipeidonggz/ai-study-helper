@@ -103,6 +103,10 @@ def test_fake_dry_run(tmp_path):
     data = json.loads(json_path.read_text(encoding="utf-8"))
     assert len(data["cases"]) >= 70
     assert "summary" in data and "generated_at" in data
+    assert "input" in data["cases"][0]  # 报告条目应含输入文本
+    with csv_path.open(encoding="utf-8-sig") as fp:
+        header = fp.readline().strip()
+    assert "input" in header  # CSV 应有 input 列
 
 
 def test_tool_link_and_observation():
