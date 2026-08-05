@@ -109,7 +109,7 @@ def test_fake_dry_run(tmp_path):
     wb = load_workbook(xlsx_path)
     ws = wb.active
     headers = [c.value for c in ws[1]]
-    assert "input" in headers and "answer_correct" in headers  # Excel 表头完整
+    assert "输入" in headers and "答案正确" in headers  # Excel 表头完整（中文）
     assert ws.freeze_panes == "A2"  # 表头冻结
     assert ws["K2"].value in (None, "")  # answer_correct 待人工填
 

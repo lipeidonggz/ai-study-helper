@@ -31,4 +31,4 @@
 - 技术基线：Vue 3 + TS 前端；Python + FastAPI 后端；SSE 流式；SQLite + Qdrant 本地存储；存储接口抽象（Port + Adapter）；本地 embedding
 - 代码导读：主处理流程阅读路线见 memory/0008-code-reading-guide.html
 - 最新功能：处理过程可视化（Trace + 前端面板：原始流、完整提示词、token 用量，见 memory/0010）；golden set 评测体系（70 条用例 + runner + 基线报告，见 memory/0013~0015）
-- 下一步：人工标注 Excel（backend/eval/reports/annotate-20260805-100207.xlsx，冻结表头/自动换行/下拉选项，填 answer_correct/refusal）→ 补 stream_complete/latency_budget criteria → 获取并固定《三国演义》txt → prompt 策略对比
+- 下一步：人工标注 Excel（backend/eval/reports/annotate-20260805-141452.xlsx，中文表头/冻结/自动换行/下拉选项，填 答案正确/拒答合理）→ 补 stream_complete/latency_budget criteria → 获取并固定《三国演义》txt → prompt 策略对比

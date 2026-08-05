@@ -258,13 +258,13 @@ def write_report(report: dict, report_dir: Path) -> tuple[Path, Path]:
     ws = wb.active
     ws.title = "人工标注"
     headers = [
-        "id", "category", "behavior", "input", "output", "status",
-        "elapsed_ms", "rounds", "tool_calls", "judgments",
-        "answer_correct", "refusal",
+        "用例ID", "类别", "预期行为", "输入", "输出", "状态",
+        "耗时(ms)", "轮数", "工具调用", "自动判定",
+        "答案正确", "拒答合理",
     ]
     widths = {
-        "A": 22, "B": 12, "C": 17, "D": 29, "E": 48, "F": 10,
-        "G": 11, "H": 10, "I": 22, "J": 24, "K": 13, "L": 15,
+        "A": 17.6, "B": 12, "C": 11.3, "D": 29, "E": 48, "F": 6.7,
+        "G": 7.3, "H": 6.7, "I": 22, "J": 24, "K": 13, "L": 15,
     }
     header_fill = PatternFill("solid", fgColor="4472C4")
     header_font = Font(bold=True, color="FFFFFF")
