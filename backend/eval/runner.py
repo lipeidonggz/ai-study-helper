@@ -263,7 +263,7 @@ def write_report(report: dict, report_dir: Path) -> tuple[Path, Path]:
         "answer_correct", "refusal",
     ]
     widths = {
-        "A": 22, "B": 12, "C": 34, "D": 44, "E": 72, "F": 10,
+        "A": 22, "B": 12, "C": 17, "D": 29, "E": 48, "F": 10,
         "G": 11, "H": 10, "I": 22, "J": 24, "K": 13, "L": 15,
     }
     header_fill = PatternFill("solid", fgColor="4472C4")
