@@ -21,7 +21,7 @@ import time  # 工具执行耗时计时
 from typing import AsyncIterator
 
 from app.agent.context import assemble, system_prompt  # 上下文组装与系统提示
-from app.agent.llm import LLMClient, LLMEvent, LLMMessage
+from app.agent.llm import LLMClient, LLMEvent, LLMMessage, ToolCall
 from app.agent.trace import Trace, event_to_dict, messages_to_dicts  # 处理过程记录器
 from app.tools.executor import ToolExecutor
 
@@ -117,28 +117,37 @@ async def run_agent_turn(
                 trace.step("done", _done_data(round_no, "no_tool_call"))
             return
 
-        # —— 行动 + 观察：执行工具，回填结果，进入下一轮 ——
-        first = tool_events[0]  # 本轮只处理第一个工具调用
-        start = time.perf_counter()  # 工具执行开始计时
-        result = await tools.execute(first.tool_call.name, first.tool_call.arguments)
-        duration_ms = round((time.perf_counter() - start) * 1000, 1)
-        tool_call_count += 1
-        if trace:
-            trace.step(
-                "tool_exec",
-                {
-                    "name": first.tool_call.name,
-                    "arguments": first.tool_call.arguments,
-                    "result": str(result),
-                    "duration_ms": duration_ms,
-                },
-            )
-        # 把"AI 刚才要调工具"这件事回传模型（OpenAI 协议要求原样回显 tool_calls）
-        messages.append(LLMMessage(role="assistant", content="", tool_calls=first.raw_tool_calls))
-        # 把工具执行结果作为"观察"回填，并关联对应的 tool_call_id（协议要求）
+        # —— 行动 + 观察：执行全部工具调用，回填结果，进入下一轮 ——
+        # 一次响应里可能有多个并行 tool_calls（如"分别计算两个数"），
+        # 协议要求：一个 assistant tool_calls 回显 + 每个 tool_call_id 各一条 tool 消息
+        all_calls: list[ToolCall] = []
+        for evt in tool_events:
+            calls = evt.tool_calls or ([evt.tool_call] if evt.tool_call else [])
+            all_calls.extend(calls)
+
+        # 回显完整的 assistant tool_calls（原样合并后的结构）
         messages.append(
-            LLMMessage(role="tool", content=str(result), tool_call_id=first.tool_call.id)
+            LLMMessage(role="assistant", content="", tool_calls=tool_events[0].raw_tool_calls)
         )
+        for call in all_calls:
+            start = time.perf_counter()  # 工具执行开始计时
+            result = await tools.execute(call.name, call.arguments)
+            duration_ms = round((time.perf_counter() - start) * 1000, 1)
+            tool_call_count += 1
+            if trace:
+                trace.step(
+                    "tool_exec",
+                    {
+                        "name": call.name,
+                        "arguments": call.arguments,
+                        "result": str(result),
+                        "duration_ms": duration_ms,
+                    },
+                )
+            # 每个工具调用各回填一条 tool 消息（协议要求与 tool_call_id 一一对应）
+            messages.append(
+                LLMMessage(role="tool", content=str(result), tool_call_id=call.id)
+            )
 
     # 超出工具轮次上限：记录结束原因后静默结束（阶段 4 加入提示与降级策略）
     if trace:

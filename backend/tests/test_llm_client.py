@@ -17,6 +17,7 @@ from app.agent.llm import (
     LLMEvent,
     LLMMessage,
     LLMResponse,
+    ToolCall,
 )
 
 
@@ -137,6 +138,8 @@ def test_stream_tool_call():
             assert tool_event.tool_call.name == "calculator"
             assert tool_event.tool_call.arguments == {"expression": "1+1"}
             assert tool_event.tool_call.id == "call_1"  # id 必须保留，tool 消息要关联
+            assert len(tool_event.tool_calls) == 1  # tool_calls 列表包含该调用
+            assert tool_event.tool_calls[0].name == "calculator"
             # 回显必须是协议要求的完整结构（缺 id/type 会被 API 400 拒绝）
             assert tool_event.raw_tool_calls == [
                 {
@@ -148,6 +151,146 @@ def test_stream_tool_call():
                     },
                 }
             ]
+
+    asyncio.run(scenario())
+
+
+def test_stream_multi_tool_calls():
+    """流式多工具并行调用：应解析出全部调用（每个 index 一个完整对象）。"""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text=_sse(
+                [
+                    {
+                        "choices": [
+                            {
+                                "delta": {
+                                    "tool_calls": [
+                                        {
+                                            "index": 0,
+                                            "id": "call_a",
+                                            "type": "function",
+                                            "function": {"name": "calculator", "arguments": ""},
+                                        },
+                                        {
+                                            "index": 1,
+                                            "id": "call_b",
+                                            "type": "function",
+                                            "function": {"name": "note_add", "arguments": ""},
+                                        },
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "choices": [
+                            {
+                                "delta": {
+                                    "tool_calls": [
+                                        {"index": 0, "function": {"arguments": '{"expression": "12*34"}'}},
+                                        {"index": 1, "function": {"arguments": '{"title": "x", "content": "y"}'}},
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                ]
+            ),
+            headers={"Content-Type": "text/event-stream"},
+        )
+
+    async def scenario():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as hc:
+            client = DeepSeekLLMClient(api_key="sk-test", http_client=hc)
+            event = None
+            async for evt in client.stream([LLMMessage(role="user", content="分别算一下")]):
+                if evt.type == "tool_call":
+                    event = evt
+            assert event is not None
+            assert len(event.tool_calls) == 2  # 两个并行调用都被解析
+            assert event.tool_calls[0].name == "calculator"
+            assert event.tool_calls[0].arguments == {"expression": "12*34"}
+            assert event.tool_calls[0].id == "call_a"
+            assert event.tool_calls[1].name == "note_add"
+            assert event.tool_calls[1].arguments == {"title": "x", "content": "y"}
+            assert event.tool_calls[1].id == "call_b"
+            assert len(event.raw_tool_calls) == 2  # 回显结构也完整
+
+    asyncio.run(scenario())
+
+
+def test_loop_executes_all_parallel_tool_calls():
+    """loop 应执行全部并行工具调用，并为每个 tool_call_id 回填一条 tool 消息。"""
+
+    class MultiToolLLM(LLMClient):
+        """第一次调用返回两个并行工具调用，第二次返回文本。"""
+
+        model_name = "stub"
+
+        def __init__(self) -> None:
+            self._calls = 0
+
+        async def chat(self, messages, tools=None) -> LLMResponse:
+            return LLMResponse(content="")
+
+        async def stream(self, messages, tools=None):
+            self._calls += 1
+            if self._calls == 1:
+                yield LLMEvent(
+                    type="tool_call",
+                    tool_call=ToolCall(
+                        name="calculator", arguments={"expression": "12*34"}, id="call_a"
+                    ),
+                    tool_calls=[
+                        ToolCall(name="calculator", arguments={"expression": "12*34"}, id="call_a"),
+                        ToolCall(name="note_add", arguments={"title": "x", "content": "y"}, id="call_b"),
+                    ],
+                    raw_tool_calls=[
+                        {
+                            "id": "call_a",
+                            "type": "function",
+                            "function": {"name": "calculator", "arguments": '{"expression": "12*34"}'},
+                        },
+                        {
+                            "id": "call_b",
+                            "type": "function",
+                            "function": {"name": "note_add", "arguments": '{"title": "x", "content": "y"}'},
+                        },
+                    ],
+                )
+                yield LLMEvent(type="done")
+            else:
+                yield LLMEvent(type="text", text="完成")
+                yield LLMEvent(type="done")
+
+    async def scenario():
+        from app.agent.loop import run_agent_turn
+
+        from app.agent.trace import Trace
+        from app.tools.executor import ToolExecutor
+        from app.tools.registry import default_registry
+
+        trace = Trace()
+        chunks = [
+            chunk
+            async for chunk in run_agent_turn(
+                "分别算一下",
+                mode="tool_enhanced",
+                llm=MultiToolLLM(),
+                tools=ToolExecutor(default_registry()),
+                trace=trace,
+            )
+        ]
+        assert "".join(chunks) == "完成"
+        tool_execs = [s for s in trace.steps() if s["type"] == "tool_exec"]
+        assert len(tool_execs) == 2  # 两个工具都被执行
+        assert {s["data"]["name"] for s in tool_execs} == {"calculator", "note_add"}
+        done = next(s for s in trace.steps() if s["type"] == "done")
+        assert done["data"]["tool_calls"] == 2  # 结束统计计入全部调用
 
     asyncio.run(scenario())
 

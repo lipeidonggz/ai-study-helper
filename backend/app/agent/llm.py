@@ -47,6 +47,7 @@ class LLMResponse:
 
     content: str
     tool_call: ToolCall | None = None
+    tool_calls: list[ToolCall] | None = None  # 可能一次返回多个并行工具调用
     usage: dict | None = None  # token 用量（非流式响应自带）
 
 
@@ -57,7 +58,7 @@ class LLMEvent:
     五种类型：
     - raw：原始流 chunk（还没加工的数据，用于展示"流式返回长什么样"）
     - text：产出了一段文本增量（直接推给前端即可）
-    - tool_call：模型想调用工具（需要执行工具后再回一轮）
+    - tool_call：模型想调用工具（可能一次多个并行调用；tool_calls 字段是完整列表）
     - usage：流结束时的 token 用量（开启 stream_options.include_usage 才有）
     - done：本轮生成结束
     """
@@ -65,6 +66,7 @@ class LLMEvent:
     type: str
     text: str | None = None
     tool_call: ToolCall | None = None
+    tool_calls: list[ToolCall] | None = None  # 全部并行工具调用（tool_call 指向第一个）
     raw_tool_calls: list[dict] | None = None  # 原始 tool_calls（回传给 API 用）
     raw: dict | None = None  # type="raw" 时携带原始 chunk（或 {"marker": "[DONE]"}）
     usage: dict | None = None  # type="usage" 时携带 token 用量
@@ -177,19 +179,21 @@ class DeepSeekLLMClient(LLMClient):
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls") or []
         if tool_calls:
-            # 只处理第一个工具调用（多个并行调用是后续阶段的优化点）
-            fn = tool_calls[0]["function"]
-            try:
-                arguments = json.loads(fn.get("arguments") or "{}")  # 参数是 JSON 字符串
-            except json.JSONDecodeError:
-                arguments = {}  # 解析失败给空字典，宁可让工具报错也不要让链路崩溃
+            # 解析全部并行工具调用（如"分别计算两个数"会一次返回多个）
+            parsed_calls = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                try:
+                    arguments = json.loads(fn.get("arguments") or "{}")  # 参数是 JSON 字符串
+                except json.JSONDecodeError:
+                    arguments = {}  # 解析失败给空字典，宁可让工具报错也不要让链路崩溃
+                parsed_calls.append(
+                    ToolCall(name=fn.get("name", ""), arguments=arguments, id=tc.get("id", ""))
+                )
             return LLMResponse(
                 content="",
-                tool_call=ToolCall(
-                    name=fn.get("name", ""),
-                    arguments=arguments,
-                    id=tool_calls[0].get("id", ""),
-                ),
+                tool_call=parsed_calls[0],
+                tool_calls=parsed_calls,
                 usage=data.get("usage"),
             )
         return LLMResponse(content=content, usage=data.get("usage"))
@@ -273,16 +277,20 @@ class DeepSeekLLMClient(LLMClient):
                 }
                 for s in collected.values()
             ]
-            first = collected[min(collected)]  # 取 index 最小的（第一个工具）
-            try:
-                arguments = json.loads(first["arguments"] or "{}")
-            except json.JSONDecodeError:
-                arguments = {}
+            # 解析全部并行调用（一次响应可能包含多个工具调用）
+            parsed_calls = []
+            for tc in merged_tool_calls:
+                try:
+                    arguments = json.loads(tc["function"].get("arguments") or "{}")
+                except json.JSONDecodeError:
+                    arguments = {}
+                parsed_calls.append(
+                    ToolCall(name=tc["function"]["name"], arguments=arguments, id=tc["id"])
+                )
             yield LLMEvent(
                 type="tool_call",
-                tool_call=ToolCall(
-                    name=first["name"], arguments=arguments, id=first["id"]
-                ),
+                tool_call=parsed_calls[0] if parsed_calls else None,
+                tool_calls=parsed_calls,
                 raw_tool_calls=merged_tool_calls,  # 回显用合并后的完整结构
             )
         yield LLMEvent(type="done")

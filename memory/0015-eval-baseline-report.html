@@ -65,11 +65,20 @@
     </section>
 
     <section class="card">
+      <h2>修复与验证（2026-08-05 追加）</h2>
+      <p>多工具并行调用 400 已修复：<code>llm.py</code> 解析全部并行调用（<code>tool_calls</code> 列表），<code>loop.py</code> 每轮执行<strong>全部</strong>工具调用，一个 assistant tool_calls 回显 + 每个 <code>tool_call_id</code> 各一条 tool 消息。</p>
+      <ul>
+        <li>新增测试：流式多工具解析（2 个 index 各自完整）、loop 并行调用全部执行并回填（测试增至 24 个全绿）</li>
+        <li>真实 API 重跑：combined-002（calculator ×2，144 vs 143 比较正确）、combined-007（current_datetime + calculator，日期与除法均正确）——两条全部 ok</li>
+      </ul>
+    </section>
+
+    <section class="card">
       <h2>观察与待办</h2>
       <ul>
         <li>最长耗时用例：boundary-halluc-002（11.8s）、combined-006（10.8s），可作为 latency 观察点</li>
         <li>边界/综合类的 answer_correct、refusal 需人工标注：CSV 已生成 <code>eval/reports/annotate-20260805-084047.csv</code></li>
-        <li>下一步：修复多工具并行调用 → 重跑 affected 用例 → 人工标注 CSV → 补 criteria → 《三国演义》素材 → prompt 策略对比（CoT）</li>
+        <li>下一步：人工标注 CSV → 补 stream_complete/latency_budget criteria → 《三国演义》素材 → prompt 策略对比（CoT）</li>
       </ul>
     </section>
 
