@@ -38,7 +38,7 @@
         <li><strong>存储抽象</strong>：Port + Adapter 结构；设置持久化 SQLite，会话/日志暂用内存实现</li>
         <li><strong>测试</strong>：13 个用例全绿（冒烟、设置接口、LLM 客户端 Mock、Agent loop）</li>
         <li><strong>处理过程可视化</strong>：SSE <code>trace</code> 事件 + 前端“处理过程”面板（事件流 + 语义摘要 + 原始流开关 + 每轮 token 用量与汇总）</li>
-        <li><strong>评测体系</strong>：golden set 用例 schema + 首批 70 条用例 + 最小评测 runner（自动判定 + JSON/CSV 报告 + fake 干跑）</li>
+        <li><strong>评测体系</strong>：golden set 用例 schema + 首批 70 条用例 + 最小评测 runner + 真实基线报告（68/70，工具调用率 100%）</li>
         <li><strong>文档</strong>：记忆库 0001–0008（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读）+ 运行指南 docs/how-to-run.html</li>
         <li><strong>代码注释</strong>：backend 全部 Python 文件中文注释（文件头职责与设计原因、流程逐行说明）</li>
       </ul>

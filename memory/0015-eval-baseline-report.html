@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0015 · 首批 70 条用例真实评测基线报告</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0015 · 首批 70 条用例真实评测基线报告</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-05</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：对比测试 / 基线报告</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>运行信息</h2>
+      <ul>
+        <li>命令：<code>python -m eval.runner</code>（真实模型，并发 3）</li>
+        <li>模型：deepseek-chat（别名路由 deepseek-v4-flash）</li>
+        <li>用例：首批 70 条（工具调用 40 / 边界 20 / 综合 10）</li>
+        <li>报告文件：<code>eval/reports/report-20260805-084047.json</code>（生成物，gitignored）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>结果总览</h2>
+      <table>
+        <thead>
+          <tr><th>指标</th><th>数值</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>通过 / 错误</td><td>68 / 2</td></tr>
+          <tr><td>工具调用率（tool_call 类）</td><td>100%（40/40）</td></tr>
+          <tr><td>tool_used 自动判定</td><td>13 条判定，通过率 100%</td></tr>
+          <tr><td>平均耗时</td><td>4.2s</td></tr>
+          <tr><td>总 token</td><td>79,921（成本约几毛钱量级）</td></tr>
+          <tr><td>boundary</td><td>20/20 运行通过（人工标注待填）</td></tr>
+          <tr><td>tool_call</td><td>40/40 运行通过</td></tr>
+          <tr><td>combined</td><td>8/10（2 条报错）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>重要发现 1：多工具并行调用 400（真 bug）</h2>
+      <p>combined-002（分别计算两个乘积）与 combined-007（同时问日期和除法）报错：<code>An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'</code>。</p>
+      <p><strong>根因</strong>：模型一次响应里返回了<strong>多个并行 tool_calls</strong>，而 loop 只执行第一个（<code>tool_events[0]</code>）、只回填一条 tool 消息。API 协议要求每个 tool_call_id 都有对应的 tool 消息。</p>
+      <p><strong>修复方向</strong>：每轮执行全部工具调用，逐条回填 tool 消息（一个 assistant tool_calls + N 条 tool 结果）。</p>
+      <p><strong>意义</strong>：这是评测体系第一次抓到代码 bug——正是“跑批验证”的价值。</p>
+    </section>
+
+    <section class="card">
+      <h2>重要发现 2：机器判定覆盖面偏窄</h2>
+      <p>70 条用例中只有 13 条带 <code>tool_used</code> criterion；<code>stream_complete</code> 与 <code>latency_budget</code> 没有任何用例使用（judged=0）。建议后续给 tool_call / combined 用例补充这两个 criteria，提高自动化判定覆盖率——它们都是机器可判的。</p>
+    </section>
+
+    <section class="card">
+      <h2>观察与待办</h2>
+      <ul>
+        <li>最长耗时用例：boundary-halluc-002（11.8s）、combined-006（10.8s），可作为 latency 观察点</li>
+        <li>边界/综合类的 answer_correct、refusal 需人工标注：CSV 已生成 <code>eval/reports/annotate-20260805-084047.csv</code></li>
+        <li>下一步：修复多工具并行调用 → 重跑 affected 用例 → 人工标注 CSV → 补 criteria → 《三国演义》素材 → prompt 策略对比（CoT）</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-05
+    </footer>
+  </div>
+</body>
+</html>
