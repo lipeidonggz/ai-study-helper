@@ -263,7 +263,7 @@ def write_report(report: dict, report_dir: Path) -> tuple[Path, Path]:
                     e["category"],
                     e["title"],
                     e["input"],
-                    e["output"][:200],
+                    e["output"],  # 完整输出，避免截断误导人工判定
                     e["status"],
                     e["elapsed_ms"],
                     e["rounds"],
