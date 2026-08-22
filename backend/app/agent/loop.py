@@ -121,13 +121,18 @@ async def run_agent_turn(
         # 一次响应里可能有多个并行 tool_calls（如"分别计算两个数"），
         # 协议要求：一个 assistant tool_calls 回显 + 每个 tool_call_id 各一条 tool 消息
         all_calls: list[ToolCall] = []
+        raw_calls_all: list[dict] = []
         for evt in tool_events:
             calls = evt.tool_calls or ([evt.tool_call] if evt.tool_call else [])
             all_calls.extend(calls)
+            # 回显必须合并全部事件的原始 tool_calls：
+            # 不同 LLM 实现可能产出多个 tool_call 事件（每个带部分/完整调用），
+            # 只取第一个事件会导致 assistant 回显与下方逐条 tool 消息不对应（协议 400）。
+            raw_calls_all.extend(evt.raw_tool_calls or [])
 
-        # 回显完整的 assistant tool_calls（原样合并后的结构）
+        # 回显完整的 assistant tool_calls（合并全部事件，原样结构）
         messages.append(
-            LLMMessage(role="assistant", content="", tool_calls=tool_events[0].raw_tool_calls)
+            LLMMessage(role="assistant", content="", tool_calls=raw_calls_all)
         )
         for call in all_calls:
             start = time.perf_counter()  # 工具执行开始计时

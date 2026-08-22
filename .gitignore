@@ -23,6 +23,9 @@ node_modules/
 frontend/dist/
 npm-debug.log*
 
+# 运行时日志（启动脚本输出重定向）
+*.log
+
 # IDE / 系统
 .idea/
 .vscode/
