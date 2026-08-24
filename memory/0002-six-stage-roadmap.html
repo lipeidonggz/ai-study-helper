@@ -38,19 +38,19 @@
     </section>
 
     <section class="card">
-      <h2>产品载体（暂定）</h2>
-      <p>AI 学习助手（与目录名一致）。起步范围：上传学习资料 → 整理结构化笔记 → 生成复习卡片与测验。各阶段能力落点如下：</p>
+      <h2>产品载体（定稿：以 0003 为准）</h2>
+      <p><strong>使用自有知识库、自有工具集增强的通用 AI 助手</strong>（与目录名一致）。三大支柱：通用底座（对话与常用能力）、自有知识库（用户文档形成个性化知识源）、自有工具集（用户自定义工具集合）；核心命题是范围控制：看得见 / 控得住 / 说得清。完整需求定义见 <a href="0003-product-definition.html">0003</a>（阶段 0 已定稿）。各阶段能力落点如下：</p>
       <table>
         <thead>
           <tr><th>阶段</th><th>产品能力落点</th></tr>
         </thead>
         <tbody>
-          <tr><td>1</td><td>单轮学习问答（资料 → 结构化笔记）</td></tr>
-          <tr><td>2</td><td>资料库问答，带引用溯源</td></tr>
-          <tr><td>3</td><td>记住用户掌握情况 + 学习规划 + 自我修正</td></tr>
-          <tr><td>4</td><td>工具接入（笔记/文件）+ 沙箱与观测</td></tr>
-          <tr><td>5</td><td>出题 / 批改 / 规划多 Agent 分工</td></tr>
-          <tr><td>6</td><td>学习效果指标闭环（测验通过率等）</td></tr>
+          <tr><td>1</td><td>通用对话 + 工具调用（内置工具）</td></tr>
+          <tr><td>2</td><td>知识库问答 + 引用 + 兜底策略验证</td></tr>
+          <tr><td>3</td><td>记忆用户偏好（默认知识库/工具优先级）+ 多步任务规划</td></tr>
+          <tr><td>4</td><td>工具执行沙箱、观测台、人工介入</td></tr>
+          <tr><td>5</td><td>检索 / 工具 / 回答多 Agent 分工</td></tr>
+          <tr><td>6</td><td>指标回归与产品化（任务完成率等）</td></tr>
         </tbody>
       </table>
     </section>
@@ -73,7 +73,7 @@
 
       <h3>阶段 1 · 最小单 Agent（手写 MVP）</h3>
       <p><strong>知识模块：</strong>Prompt 工程、function calling、基础 Agent Loop（思考→行动→观察）、结构化输出、流式</p>
-      <p><strong>交付物：</strong>手写 loop 的单 Agent，跑通一个核心任务（如资料 → 结构化笔记）</p>
+      <p><strong>交付物：</strong>手写 loop 的单 Agent，跑通阶段 1 产品落点：通用对话 + 内置工具调用（范围见 0003）</p>
       <p><strong>验证点：</strong></p>
       <ul>
         <li>loop 各步骤是否都必要（消融：去掉某步结果如何）</li>
@@ -101,7 +101,7 @@
 
       <h3>阶段 3 · 单 Agent 深化（记忆、规划、反思）</h3>
       <p><strong>知识模块：</strong>长期记忆（语义/情节）、记忆写入与检索策略、Plan-and-Execute、反思与自纠错</p>
-      <p><strong>交付物：</strong>Agent 记住用户掌握/未掌握的知识点，能做学习计划并自我修正</p>
+      <p><strong>交付物：</strong>Agent 记住用户偏好（如默认知识库/工具优先级），能做多步任务规划并自我修正</p>
       <p><strong>验证点：</strong></p>
       <ul>
         <li>记忆的增量价值：冷启动 vs 多轮后，有/无记忆的差异</li>
@@ -129,7 +129,7 @@
 
       <h3>阶段 5 · 多 Agent 架构</h3>
       <p><strong>知识模块：</strong>编排模式（Supervisor/流水线/辩论）、通信协议、共享状态、任务分解</p>
-      <p><strong>交付物：</strong>多 Agent 版产品（如规划/出题/批改 Agent 分工）</p>
+      <p><strong>交付物：</strong>多 Agent 版产品（如检索 / 工具 / 回答 Agent 分工）</p>
       <p><strong>验证点：</strong></p>
       <ul>
         <li>单 vs 多：质量、成本、延迟的量化对比——什么任务值得拆</li>
@@ -143,13 +143,13 @@
 
       <h3>阶段 6 · 评测体系化与产品化</h3>
       <p><strong>知识模块：</strong>eval 套件、LLM-as-judge、回归测试、成本/延迟优化、缓存、部署、产品指标闭环</p>
-      <p><strong>交付物：</strong>统一评测与观测体系、可部署版本、学习效果指标闭环</p>
+      <p><strong>交付物：</strong>统一评测与观测体系、可部署版本、任务完成率等产品指标闭环</p>
       <p><strong>验证点：</strong></p>
       <ul>
         <li>LLM-as-judge 与人工评分的一致性有多高，偏差模式是什么</li>
         <li>回归套件能否捕捉到此前各阶段引入的回归</li>
         <li>缓存/模型选择/并行等手段对成本与延迟的真实收益</li>
-        <li>产品指标（测验通过率等）与系统改动的因果关系</li>
+        <li>产品指标（任务完成率等）与系统改动的因果关系</li>
       </ul>
       <p><strong>对比测试：</strong>judge vs 人工一致性、版本回归、A/B、成本优化前后</p>
       <p><strong>评测：</strong>统一回归 + 线上指标</p>
@@ -185,13 +185,13 @@
     <section class="card">
       <h2>当前状态与下一步</h2>
       <ul>
-        <li>状态：路线图定稿，准备进入阶段 0</li>
-        <li>下一步：阶段 0 需求与产品定义，确认产品载体（暂定：AI 学习助手）</li>
+        <li>状态：阶段 0 已完成（0003 需求定义 + 0004 验收标准），阶段 1 进行中</li>
+        <li>阶段 1 进展与收尾清单：见记忆主页 <a href="index.html">index.html</a> 与 <a href="0016-minimal-tool-agent.html">0016</a></li>
       </ul>
     </section>
 
     <footer class="page-foot">
-      记录创建：2026-08-02 · 本文件由 Codex 根据会话内容整理
+      记录创建：2026-08-02 · 更新：2026-08-24（产品载体按 0003 定稿对齐，能力落点表同步）
     </footer>
   </div>
 </body>
