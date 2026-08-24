@@ -7,18 +7,27 @@
 
 from fastapi import FastAPI
 
-from app.api import chat, health, settings as settings_api  # 起别名避免与配置变量同名
+from app.api import chat, eval as eval_api, health, settings as settings_api  # 起别名避免与配置变量同名
 from app.config import settings  # 应用配置对象（注意：这里的 settings 不是 api 模块）
 from app.di import build_deps  # 依赖组装工厂
+from eval.run_manager import RunManager  # 评测台后台跑批管理器
 
 
-def create_app() -> FastAPI:
-    """创建并配置 FastAPI 应用。"""
+def create_app(eval_db_path: str | None = None, eval_cases_dir: str | None = None) -> FastAPI:
+    """创建并配置 FastAPI 应用。
+
+    eval_db_path：评测结果库路径；测试可注入临时路径避免污染真实数据。
+    eval_cases_dir：评测用例目录；测试可注入临时目录避免污染真实用例。
+    """
     app = FastAPI(title=settings.app_name, version="0.1.0")
     app.state.deps = build_deps()  # 把依赖挂到 app.state，路由里通过 request.app.state.deps 取
+    app.state.eval_manager = RunManager(
+        db_path=eval_db_path, cases_dir=eval_cases_dir
+    )  # 评测台：跑批任务 + 结果库
     app.include_router(health.router)  # 注册 /health
     app.include_router(chat.router)  # 注册 /api/chat
     app.include_router(settings_api.router)  # 注册 /api/settings
+    app.include_router(eval_api.router)  # 注册 /api/eval
     return app
 
 

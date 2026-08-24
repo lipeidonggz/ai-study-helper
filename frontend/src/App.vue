@@ -8,6 +8,7 @@ import {
   type SessionMode,
   type TraceStep
 } from './api/client'
+import EvalConsole from './components/EvalConsole.vue'
 
 interface ChatMsg {
   role: 'user' | 'assistant'
@@ -18,6 +19,7 @@ const messages = ref<ChatMsg[]>([])
 const input = ref('')
 const mode = ref<SessionMode>('general')
 const streaming = ref(false)
+const view = ref<'chat' | 'eval'>('chat')
 
 const showSettings = ref(false)
 const settings = ref({ model: 'deepseek-chat', apiKey: '', masked: '', hasKey: false })
@@ -91,9 +93,13 @@ async function send() {
 </script>
 
 <template>
-  <main class="page">
+  <main class="page" :class="{ wide: view === 'eval' }">
     <header class="bar">
       <h1>AI 助手</h1>
+      <nav class="nav">
+        <button :class="{ on: view === 'chat' }" @click="view = 'chat'">聊天</button>
+        <button :class="{ on: view === 'eval' }" @click="view = 'eval'">评测台</button>
+      </nav>
       <select v-model="mode" :disabled="streaming">
         <option value="general">通用模式</option>
         <option value="kb_priority">知识库优先</option>
@@ -104,7 +110,10 @@ async function send() {
       </button>
     </header>
 
-    <div v-if="showSettings" class="settings">
+    <EvalConsole v-if="view === 'eval'" />
+
+    <template v-else>
+      <div v-if="showSettings" class="settings">
       <label>
         模型
         <select v-model="settings.model">
@@ -126,51 +135,52 @@ async function send() {
       <span class="hint">
         {{ settings.hasKey ? `当前：${settings.masked}` : '未配置' }} {{ saveMsg }}
       </span>
-    </div>
-
-    <section class="chat">
-      <div v-for="(msg, i) in messages" :key="i" class="msg" :class="msg.role">
-        <pre>{{ msg.content }}</pre>
       </div>
-      <p v-if="streaming" class="hint">正在生成…</p>
-    </section>
 
-    <section class="trace">
-      <div class="trace-head">
-        <strong>处理过程</strong>
-        <label class="trace-toggle">
-          <input v-model="showRaw" type="checkbox" /> 原始流
-        </label>
-        <span class="hint">
-          {{ visibleTraceSteps.length }} 个步骤
-          <template v-if="!showRaw && rawCount">（+{{ rawCount }} 原始流）</template>
-        </span>
-        <button class="link-btn" @click="showTrace = !showTrace">
-          {{ showTrace ? '收起' : '展开' }}
-        </button>
-      </div>
-      <ol v-if="showTrace" class="trace-list">
-        <li v-for="step in visibleTraceSteps" :key="step.seq">
-          <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
-          <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
-          <details open>
-            <summary>详情</summary>
-            <pre>{{ JSON.stringify(step.data, null, 2) }}</pre>
-          </details>
-        </li>
-        <li v-if="!traceSteps.length" class="trace-empty">发送消息后，这里会逐步展示内部处理过程</li>
-      </ol>
-    </section>
+      <section class="chat">
+        <div v-for="(msg, i) in messages" :key="i" class="msg" :class="msg.role">
+          <pre>{{ msg.content }}</pre>
+        </div>
+        <p v-if="streaming" class="hint">正在生成…</p>
+      </section>
 
-    <footer class="bar">
-      <input
-        v-model="input"
-        placeholder="输入消息，回车发送"
-        :disabled="streaming"
-        @keyup.enter="send"
-      />
-      <button :disabled="streaming" @click="send">发送</button>
-    </footer>
+      <section class="trace">
+        <div class="trace-head">
+          <strong>处理过程</strong>
+          <label class="trace-toggle">
+            <input v-model="showRaw" type="checkbox" /> 原始流
+          </label>
+          <span class="hint">
+            {{ visibleTraceSteps.length }} 个步骤
+            <template v-if="!showRaw && rawCount">（+{{ rawCount }} 原始流）</template>
+          </span>
+          <button class="link-btn" @click="showTrace = !showTrace">
+            {{ showTrace ? '收起' : '展开' }}
+          </button>
+        </div>
+        <ol v-if="showTrace" class="trace-list">
+          <li v-for="step in visibleTraceSteps" :key="step.seq">
+            <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
+            <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
+            <details open>
+              <summary>详情</summary>
+              <pre>{{ JSON.stringify(step.data, null, 2) }}</pre>
+            </details>
+          </li>
+          <li v-if="!traceSteps.length" class="trace-empty">发送消息后，这里会逐步展示内部处理过程</li>
+        </ol>
+      </section>
+
+      <footer class="bar">
+        <input
+          v-model="input"
+          placeholder="输入消息，回车发送"
+          :disabled="streaming"
+          @keyup.enter="send"
+        />
+        <button :disabled="streaming" @click="send">发送</button>
+      </footer>
+    </template>
   </main>
 </template>
 
@@ -190,6 +200,27 @@ body {
   display: flex;
   flex-direction: column;
   padding: 16px;
+}
+.page.wide {
+  max-width: 1200px;
+  display: block;
+  height: auto;
+}
+.nav {
+  display: flex;
+  gap: 4px;
+}
+.nav button {
+  padding: 6px 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+.nav button.on {
+  background: #0969da;
+  color: #fff;
+  border-color: #0969da;
 }
 .bar {
   display: flex;

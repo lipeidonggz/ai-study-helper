@@ -68,6 +68,11 @@ class CaseFile(BaseModel):
     tags: list[str] = Field(default_factory=list)
     compare: bool = False  # 是否参与豆包/千问对照
     notes: str = ""
+    # —— 评测台管理字段（0017 需求）：默认值保证存量用例零改动可加载 ——
+    enabled: bool = True  # 停用的用例不参与跑批
+    admin_note: str = ""  # 管理备注：停用原因 / TODO / 标注判断依据（与 notes 设计说明区分）
+    updated_at: str = ""  # 最近编辑时间（ISO 格式字符串，由编辑方写入）
+    updated_by: str = ""  # 最近编辑者（单用户本地）
 
     @field_validator("id")
     @classmethod

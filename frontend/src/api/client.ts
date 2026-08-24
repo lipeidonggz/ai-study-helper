@@ -108,3 +108,144 @@ export async function saveLLMSettings(body: {
   }
   return resp.json()
 }
+
+// —— 评测台（0017）：用例管理 + 跑批管理 ——
+
+export interface EvalMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+export interface EvalCase {
+  id: string
+  category: string
+  title: string
+  mode: SessionMode
+  input: { messages: EvalMessage[] }
+  expected: {
+    behavior: string
+    criteria: string[]
+    tool_calls?: { name: string; arguments: Record<string, unknown> }[]
+    answer_contains?: string[]
+    max_rounds?: number
+  }
+  timeout_sec: number
+  tags: string[]
+  compare: boolean
+  notes: string
+  enabled: boolean
+  admin_note: string
+  updated_at: string
+  updated_by: string
+}
+
+export type RunStatus = 'queued' | 'running' | 'done' | 'canceled' | 'error'
+
+export interface EvalRun {
+  id: number
+  name: string
+  status: RunStatus
+  progress: number
+  total: number
+  error?: string
+  created_at: string
+  started_at?: string
+  finished_at?: string
+  summary?: Record<string, unknown>
+}
+
+export interface EvalRunCase {
+  run_id: number
+  case_id: string
+  category: string
+  title: string
+  input: string
+  status: string
+  elapsed_ms: number
+  rounds: number
+  tool_calls: string[]
+  output: string
+  error: string
+  judgments: Record<string, string>
+  pending_human: string[]
+  answer_correct: string
+  refusal: string
+  annotate_note: string
+}
+
+async function http<T>(url: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(url, init)
+  if (!resp.ok) {
+    let detail = ''
+    try {
+      const json = await resp.json()
+      detail = json.detail ?? ''
+    } catch {
+      // 非 JSON 错误体，忽略
+    }
+    throw new Error(`${resp.status}${detail ? ' ' + detail : ''}`)
+  }
+  return resp.json() as Promise<T>
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+export const evalApi = {
+  listCases(params: Record<string, string> = {}): Promise<EvalCase[]> {
+    const qs = new URLSearchParams(params).toString()
+    return http(`/api/eval/cases${qs ? '?' + qs : ''}`)
+  },
+  createCase(body: EvalCase): Promise<EvalCase> {
+    return http('/api/eval/cases', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
+  updateCase(id: string, body: EvalCase): Promise<EvalCase> {
+    return http(`/api/eval/cases/${id}`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
+  deleteCase(id: string): Promise<{ ok: boolean }> {
+    return http(`/api/eval/cases/${id}`, { method: 'DELETE' })
+  },
+  listRuns(): Promise<EvalRun[]> {
+    return http('/api/eval/runs')
+  },
+  getRun(id: number): Promise<{ run: EvalRun; cases: EvalRunCase[]; active: boolean }> {
+    return http(`/api/eval/runs/${id}`)
+  },
+  startRun(body: {
+    name: string
+    llm: 'real' | 'fake'
+    concurrency: number
+    retries: number
+    case_filter: { ids?: string[]; categories?: string[]; tags?: string[] }
+  }): Promise<{ run_id: number }> {
+    return http('/api/eval/runs', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
+  cancelRun(id: number): Promise<{ ok: boolean; status: string }> {
+    return http(`/api/eval/runs/${id}/cancel`, { method: 'POST' })
+  },
+  annotate(
+    runId: number,
+    caseId: string,
+    body: { answer_correct: string; refusal: string; note: string }
+  ): Promise<EvalRunCase> {
+    return http(`/api/eval/runs/${runId}/cases/${caseId}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
+  exportUrl(runId: number): string {
+    return `/api/eval/runs/${runId}/export`
+  }
+}

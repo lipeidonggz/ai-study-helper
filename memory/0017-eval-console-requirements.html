@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0017 · 评测台需求定稿（用例管理 + 测试管理 UI）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0017 · 评测台需求定稿（用例管理 + 测试管理 UI）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-24</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：需求定义 / 决策（P1 范围定稿）</span>
+        <span>关联：0013–0015（评测体系）、0002（路线图）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>为什么提前做（背景与动机）</h2>
+      <p>0002 原计划把"评测体系化"放在阶段 6，但那是"完整体系化"（LLM-as-judge、统一回归、成本/延迟优化）。本次提前做的不是那一整套，而是<strong>评测的使用门槛</strong>——理由有四：</p>
+      <ol>
+        <li><strong>阶段 2–5 的验证点全部依赖评测</strong>：检索指标（recall@k/MRR）、消融对比、故障注入、多 Agent 三元组，都建在"用例 + 跑批 + 结果追踪"这套地基上。评测不是阶段 6 的锦上添花，而是后面每个阶段的必备工具。</li>
+        <li><strong>当前结果闭环断在人工标注</strong>：Excel 标注表填了也无法合并回报告统计，质量维度（答案正确/拒答合理）的结论一直出不来——阶段 1 的验收也因此悬着。评测台把标注 UI 化，是把闭环合上的关键一步。</li>
+        <li><strong>评测价值已被验证</strong>：0015 的 70 条用例跑批抓到了两个真 bug（多工具并行 400、工具失败崩 turn）。这套体系值得加码投入，而不是停在"能跑"。</li>
+        <li><strong>提前但不越界</strong>：只做 P1 内部工具（够用、可追踪），用例仍以 JSON 文件为真源（git 可 diff、可评审、可回滚），不做产品级后台，避免"基建返工"。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>定位</h2>
+      <blockquote>
+        评测台是项目的"内部工具"：让用例管理、跑批触发、结果跟踪、人工标注都在一个界面里完成，支撑阶段 1 验收与阶段 2–5 的对比测试。不是产品后台，不追求通用性与美观。
+      </blockquote>
+    </section>
+
+    <section class="card">
+      <h2>P1 范围（本次实现）</h2>
+
+      <h3>一、用例管理（Case Management）</h3>
+      <ul>
+        <li>列表：按 <code>category</code> / <code>criteria</code> / <code>tags</code> / 状态 / 关键词（id、title、input）筛选与排序</li>
+        <li>CRUD：新建 / 查看 / 编辑 / 删除；保存走现有 Pydantic schema 校验，错误逐字段提示</li>
+        <li>状态字段：新增 <code>enabled</code>（默认 true），停用的用例不参与跑批</li>
+        <li>备注拆分：<code>notes</code>（设计说明，已有）+ 新增 <code>admin_note</code>（管理备注：停用原因 / TODO / 标注判断依据）</li>
+        <li>轻量变更记录：<code>updated_at</code> + <code>updated_by</code>（单用户本地，不做完整审计）</li>
+        <li>导入 / 导出：导出当前筛选结果为 JSON；支持从目录导入（现有 70 条零成本迁移）</li>
+      </ul>
+
+      <h3>二、测试管理（Test Run Management）</h3>
+      <ul>
+        <li>触发跑批：选择用例范围（全部 / 分类 / 标签 / 手选 id 子集）+ 参数（<code>llm</code> real|fake、<code>concurrency</code>、<code>retries</code>、超时）；真实模型前有确认提示（会花钱 + 限流经验：并发 2 + 重试）</li>
+        <li>运行状态机：<code>queued → running → done / canceled / error</code>；进度 = 已完成/总数；v1 轮询刷新（1–2s），SSE 为可选增强</li>
+        <li>结果查看：汇总指标（通过/错误/待标注、工具调用率、平均耗时、总 token、分类统计）+ 用例结果表（状态、耗时、轮数、工具调用、自动判定），可展开看输出、trace 关键事件、错误信息</li>
+        <li>历史与对比：runs 列表 + 两个 run 的<strong>汇总级对比</strong>（同指标并列）</li>
+        <li>人工标注 UI 化：run 详情内联标注（答案正确 对/错/存疑；拒答 合理/不合理/不适用 + 备注），保存进 run 数据，实时计算人工判定通过率；Excel 降级为导出格式</li>
+        <li>导出：JSON 全量 + Excel 保留</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>五个决策点（用户已确认）</h2>
+      <table>
+        <thead>
+          <tr><th>决策点</th><th>结论</th><th>理由</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>备注字段</td>
+            <td><code>notes</code>（设计）+ <code>admin_note</code>（管理）分开</td>
+            <td>设计说明面向读者与用例意图，管理备注面向维护过程（停用原因/待办/标注依据），混在一起语义不清</td>
+          </tr>
+          <tr>
+            <td>用例存储</td>
+            <td>JSON 文件为唯一真源</td>
+            <td>git 可 diff、可评审、可回滚，符合项目"一切可追踪"的风格；UI 直接读写文件，SQLite 只存跑批结果</td>
+          </tr>
+          <tr>
+            <td>人工标注</td>
+            <td>本轮 UI 化，替代 Excel 为主途径</td>
+            <td>Excel 标注无法合并回统计，结果闭环断在此处；UI 内联标注才能实时算出质量维度结论</td>
+          </tr>
+          <tr>
+            <td>run 对比</td>
+            <td>P1 只做汇总级对比</td>
+            <td>汇总对比已能支撑"改动是否变好"的日常判断；case 级 diff 是增强，后置</td>
+          </tr>
+          <tr>
+            <td>断点恢复</td>
+            <td>不需要；取消跑批要</td>
+            <td>单用户本地跑批分钟级完成，续跑收益低；取消是操作体验必需（跑错参数/想停就停）</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>数据与存储设计</h2>
+      <ul>
+        <li><strong>用例</strong>：继续 <code>backend/eval/cases/*.json</code>；schema 新增 <code>enabled</code>、<code>admin_note</code>、<code>updated_at</code>、<code>updated_by</code></li>
+        <li><strong>新增 SQLite 表 <code>eval_runs</code></strong>：id、创建时间、名称、配置（JSON）、状态、进度、汇总（JSON）、错误信息</li>
+        <li><strong>新增 SQLite 表 <code>eval_run_cases</code></strong>：run_id、case_id、状态、输出、elapsed_ms、rounds、tool_calls、tokens、自动判定、pending_human、人工判定（answer_correct / refusal / 备注）</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>技术落点（大致方案）</h2>
+      <ul>
+        <li>后端：新增 <code>app/api/eval.py</code> router（<code>/api/eval/cases</code>、<code>/api/eval/runs</code> 等）；跑批复用 runner 核心函数，从 CLI + <code>asyncio.run</code> 重构为<strong>可取消的异步任务</strong>（asyncio task 承载，支持 cancel）</li>
+        <li>前端：新增"评测"入口 + 两个页面（用例管理、测试管理），复用现有 Vue/TS 结构与样式体系</li>
+        <li>注意：跑批进程内直连 loop 会占用 uvicorn 事件循环，跑批期间其他请求响应受影响——单用户本地可接受，但 <code>--reload</code> / 多 worker 场景要小心</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>P2 后置项（本次不做）</h2>
+      <ul>
+        <li>case 级 run diff（逐用例对比）</li>
+        <li>批量编辑用例</li>
+        <li>LLM-as-judge（0002 阶段 6 内容）</li>
+        <li>定时 / CI 集成</li>
+        <li>多模型对照面板（豆包/千问）</li>
+        <li>断点恢复 / 续跑</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>与既有记录的关系</h2>
+      <ul>
+        <li>建立在 0013（schema + 70 条用例）、0014（runner）、0015（基线报告）之上，三者保持不变，评测台是它们的"操作界面"</li>
+        <li>是 0002 决策一"评测深度随复杂度递增"的提前落地，不属于阶段 6 的完整体系化</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>下一步</h2>
+      <ol>
+        <li>schema 扩展：<code>enabled</code> / <code>admin_note</code> / <code>updated_at</code> / <code>updated_by</code></li>
+        <li>runner 重构：核心函数可复用、可取消；新增 runs 存储</li>
+        <li>后端 eval API + 前端两个页面</li>
+        <li>迁移现有 70 条用例（补默认值即可），联调跑批与标注闭环</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-24 · 需求变更时同步更新本记录
+    </footer>
+  </div>
+</body>
+</html>

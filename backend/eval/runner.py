@@ -162,40 +162,54 @@ async def run_all(
     concurrency: int = DEFAULT_CONCURRENCY,
     limit: int | None = None,
     retries: int = 1,
+    on_case=None,
+    cancel_event: asyncio.Event | None = None,
 ) -> dict:
-    """并发跑批（信号量限流）并聚合报告。"""
+    """并发跑批（信号量限流）并聚合报告。
+
+    新增两个可选参数（0017 评测台用，CLI/测试不传时行为不变）：
+    - on_case：每条用例完成后回调 on_case(entry, completed, total)，用于实时进度
+    - cancel_event：置位后不再启动新的用例（配合外层任务取消做优雅停止）
+    """
     selected = cases[:limit] if limit else cases
     clear_notes()  # 批次开始前重置笔记状态
     sem = asyncio.Semaphore(concurrency)
+    entries: list[dict] = []
+    total = len(selected)
 
-    async def worker(case: CaseFile) -> CaseResult:
+    async def worker(index: int, case: CaseFile) -> None:
         async with sem:
+            if cancel_event is not None and cancel_event.is_set():
+                return  # 已请求取消：不再开始新用例
             return await run_case(case, llm, tools, max_retries=retries)
 
-    results = await asyncio.gather(*(worker(c) for c in selected))
-    entries = []
-    for case, result in zip(selected, results):
+    async def produce(index: int, case: CaseFile) -> None:
+        result = await worker(index, case)
         judgment = judge_case(case, result)
-        entries.append(
-            {
-                "id": case.id,
-                "category": case.category,
-                "title": case.title,
-                "mode": case.mode,
-                # 输入文本：完整对话（单轮=用户消息；多轮=全部消息），供人工标注时对照
-                "input": " | ".join(f"{m.role}: {m.content}" for m in case.input.messages),
-                "status": result.status,
-                "elapsed_ms": result.elapsed_ms,
-                "rounds": result.rounds,
-                "tool_calls": result.tool_calls,
-                "tokens": result.tokens,
-                "output": result.output,
-                "error": result.error,
-                "judgments": judgment["judgments"],
-                "pending_human": judgment["pending_human"],
-                "metrics": judgment["metrics"],
-            }
-        )
+        entry = {
+            "id": case.id,
+            "category": case.category,
+            "title": case.title,
+            "mode": case.mode,
+            # 输入文本：完整对话（单轮=用户消息；多轮=全部消息），供人工标注时对照
+            "input": " | ".join(f"{m.role}: {m.content}" for m in case.input.messages),
+            "status": result.status,
+            "elapsed_ms": result.elapsed_ms,
+            "rounds": result.rounds,
+            "tool_calls": result.tool_calls,
+            "tokens": result.tokens,
+            "output": result.output,
+            "error": result.error,
+            "judgments": judgment["judgments"],
+            "pending_human": judgment["pending_human"],
+            "metrics": judgment["metrics"],
+        }
+        entries.append(entry)
+        if on_case:
+            on_case(entry, len(entries), total)  # 实时进度：已完成/总数
+
+    await asyncio.gather(*(produce(i, c) for i, c in enumerate(selected)))
+    entries.sort(key=lambda e: e["id"])  # 并发完成顺序不定，统一按 id 排
     summary = _aggregate(entries)
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
