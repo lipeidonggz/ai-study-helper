@@ -137,6 +137,16 @@ export interface EvalCase {
   admin_note: string
   updated_at: string
   updated_by: string
+  annotation: EvalAnnotation
+}
+
+export interface EvalAnnotation {
+  answer_correct: string
+  refusal: string
+  note: string
+  golden_answer: string
+  annotated_at: string
+  annotated_by: string
 }
 
 export type RunStatus = 'queued' | 'running' | 'done' | 'canceled' | 'error'
@@ -212,8 +222,21 @@ export const evalApi = {
   deleteCase(id: string): Promise<{ ok: boolean }> {
     return http(`/api/eval/cases/${id}`, { method: 'DELETE' })
   },
+  adoptAnnotation(
+    caseId: string,
+    body: { answer_correct: string; refusal: string; note: string; golden_answer?: string }
+  ): Promise<EvalCase> {
+    return http(`/api/eval/cases/${caseId}/adopt-annotation`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
   listRuns(): Promise<EvalRun[]> {
     return http('/api/eval/runs')
+  },
+  deleteRun(id: number): Promise<{ ok: boolean }> {
+    return http(`/api/eval/runs/${id}`, { method: 'DELETE' })
   },
   getRun(id: number): Promise<{ run: EvalRun; cases: EvalRunCase[]; active: boolean }> {
     return http(`/api/eval/runs/${id}`)

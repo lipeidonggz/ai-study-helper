@@ -40,6 +40,7 @@
         <li><strong>处理过程可视化</strong>：SSE <code>trace</code> 事件 + 前端“处理过程”面板（事件流 + 语义摘要 + 原始流开关 + 每轮 token 用量与汇总）</li>
         <li><strong>评测体系</strong>：golden set 用例 schema + 首批 70 条用例 + 最小评测 runner（重试/并发控制）+ 真实基线 68/70（多工具并行 400 bug 已修复）+ Excel 人工标注表</li>
         <li><strong>评测台（P1，0017）</strong>：用例管理 Web UI（CRUD / 筛选 / 备注拆分 notes+admin_note / 启停）+ 测试管理 UI（后台跑批、进度、结果跟踪、汇总对比、取消）+ 人工标注 UI 化（替代 Excel 为主途径）+ JSON 导出；用例仍以 JSON 文件为真源，跑批结果入 SQLite</li>
+        <li><strong>评测台（P1.5，2026-08-24）</strong>：独立页面（hash 路由、新标签打开）+ 跑批详情独立页（输入输出逐条展开 / 全部展开 / 人工标注）+ 历史跑批自动刷新 + 历史跑批删除（运行中拒绝）；标注结论可沉淀回用例（<code>annotation</code> 金标准字段），为后续自动判定做数据基础；运行指南补充沙箱出网注意事项</li>
         <li><strong>文档</strong>：记忆库 0001–0017（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读 / 最小 Agent 全貌 / 评测台需求）+ 运行指南 docs/how-to-run.html</li>
         <li><strong>代码注释</strong>：backend 全部 Python 文件中文注释（文件头职责与设计原因、流程逐行说明）</li>
       </ul>

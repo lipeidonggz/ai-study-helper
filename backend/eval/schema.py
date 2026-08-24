@@ -55,6 +55,21 @@ class Expected(BaseModel):
     max_rounds: int = Field(default=4, ge=1, le=10)  # 预期最大工具轮数（对比实际值）
 
 
+class CaseAnnotation(BaseModel):
+    """人工标注结论（金标准）：沉淀到用例后，供后续跑批自动判定/抽检复用。
+
+    设计角度：标注结论属于"用例资产"，不是某次跑批的产出——
+    标一遍沉淀到这里，之后每次跑批都不用再人工全量标注。
+    """
+
+    answer_correct: str = ""  # 对/错/存疑（"" 表示未标）
+    refusal: str = ""  # 合理/不合理/不适用（"" 表示未标）
+    note: str = ""  # 标注依据 / 备注
+    golden_answer: str = ""  # 金标准答案要点（LLM-as-judge 与人工对照的依据）
+    annotated_at: str = ""  # 最近沉淀时间
+    annotated_by: str = ""  # 最近沉淀人
+
+
 class CaseFile(BaseModel):
     """一个 golden set 用例。"""
 
@@ -73,6 +88,7 @@ class CaseFile(BaseModel):
     admin_note: str = ""  # 管理备注：停用原因 / TODO / 标注判断依据（与 notes 设计说明区分）
     updated_at: str = ""  # 最近编辑时间（ISO 格式字符串，由编辑方写入）
     updated_by: str = ""  # 最近编辑者（单用户本地）
+    annotation: CaseAnnotation = Field(default_factory=CaseAnnotation)  # 人工标注金标准
 
     @field_validator("id")
     @classmethod

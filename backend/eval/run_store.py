@@ -225,3 +225,11 @@ def get_run_cases(db_path: Path, run_id: int) -> list[dict]:
             "SELECT * FROM eval_run_cases WHERE run_id = ? ORDER BY case_id", (run_id,)
         ).fetchall()
         return [_case_row_to_dict(r) for r in rows]
+
+
+def delete_run(db_path: Path, run_id: int) -> bool:
+    """删除跑批记录及其全部用例结果；不存在返回 False。"""
+    with _lock, _connect(db_path) as conn:
+        conn.execute("DELETE FROM eval_run_cases WHERE run_id = ?", (run_id,))
+        cur = conn.execute("DELETE FROM eval_runs WHERE id = ?", (run_id,))
+        return cur.rowcount > 0

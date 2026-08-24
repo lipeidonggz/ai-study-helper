@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import {
   getLLMSettings,
@@ -8,7 +8,9 @@ import {
   type SessionMode,
   type TraceStep
 } from './api/client'
-import EvalConsole from './components/EvalConsole.vue'
+import { navigate, parseHash, type Route } from './router'
+import EvalPage from './components/EvalPage.vue'
+import RunDetailPage from './components/RunDetailPage.vue'
 
 interface ChatMsg {
   role: 'user' | 'assistant'
@@ -19,7 +21,7 @@ const messages = ref<ChatMsg[]>([])
 const input = ref('')
 const mode = ref<SessionMode>('general')
 const streaming = ref(false)
-const view = ref<'chat' | 'eval'>('chat')
+const route = ref<Route>(parseHash(window.location.hash))
 
 const showSettings = ref(false)
 const settings = ref({ model: 'deepseek-chat', apiKey: '', masked: '', hasKey: false })
@@ -37,12 +39,19 @@ const visibleTraceSteps = computed(() =>
 const rawCount = computed(() => traceSteps.value.filter((s) => s.type === 'raw_chunk').length)
 
 onMounted(async () => {
+  window.addEventListener('hashchange', onHashChange)
   try {
     await loadSettings()
   } catch {
     saveMsg.value = '设置读取失败'
   }
 })
+
+onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
+
+function onHashChange() {
+  route.value = parseHash(window.location.hash)
+}
 
 async function loadSettings() {
   const s = await getLLMSettings()
@@ -93,12 +102,15 @@ async function send() {
 </script>
 
 <template>
-  <main class="page" :class="{ wide: view === 'eval' }">
+  <main class="page" :class="{ wide: route.name !== 'chat' }">
+    <EvalPage v-if="route.name === 'eval'" />
+    <RunDetailPage v-else-if="route.name === 'run'" :run-id="route.runId" />
+    <template v-else>
     <header class="bar">
       <h1>AI 助手</h1>
       <nav class="nav">
-        <button :class="{ on: view === 'chat' }" @click="view = 'chat'">聊天</button>
-        <button :class="{ on: view === 'eval' }" @click="view = 'eval'">评测台</button>
+        <button :class="{ on: route.name === 'chat' }" @click="navigate('#/')">聊天</button>
+        <a class="nav-link" href="#/eval" target="_blank" rel="noopener">评测台</a>
       </nav>
       <select v-model="mode" :disabled="streaming">
         <option value="general">通用模式</option>
@@ -110,9 +122,6 @@ async function send() {
       </button>
     </header>
 
-    <EvalConsole v-if="view === 'eval'" />
-
-    <template v-else>
       <div v-if="showSettings" class="settings">
       <label>
         模型
@@ -216,6 +225,19 @@ body {
   border-radius: 6px;
   background: #fff;
   cursor: pointer;
+}
+.nav a {
+  padding: 6px 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
+}
+.nav a:hover {
+  background: #f6f8fa;
 }
 .nav button.on {
   background: #0969da;

@@ -3,8 +3,10 @@
 接口总览：
   /api/eval/cases            GET 列表（支持筛选） / POST 新建
   /api/eval/cases/{id}       GET / PUT / DELETE
+  /api/eval/cases/{id}/adopt-annotation  POST 把本次标注沉淀回用例（金标准）
   /api/eval/runs             GET 历史跑批 / POST 启动跑批
   /api/eval/runs/{id}        GET 详情（含逐用例结果）
+  /api/eval/runs/{id}        DELETE 删除历史跑批（运行中不可删）
   /api/eval/runs/{id}/cancel POST 取消
   /api/eval/runs/{id}/cases/{case_id}  PATCH 人工标注
   /api/eval/runs/{id}/export GET 导出 JSON
@@ -45,6 +47,15 @@ class AnnotateIn(BaseModel):
     answer_correct: Literal["", "对", "错", "存疑"] = ""
     refusal: Literal["", "合理", "不合理", "不适用"] = ""
     note: str = ""
+
+
+class AdoptAnnotationIn(BaseModel):
+    """把一次跑批的人工标注结论沉淀回用例（成为金标准）。"""
+
+    answer_correct: Literal["", "对", "错", "存疑"] = ""
+    refusal: Literal["", "合理", "不合理", "不适用"] = ""
+    note: str = ""
+    golden_answer: str = ""  # 可选：一并更新金标准答案要点；留空则保留原值
 
 
 def _manager(request: Request):
@@ -129,12 +140,51 @@ def delete_case(case_id: str, request: Request) -> dict:
     return {"ok": True}
 
 
+@router.post("/cases/{case_id}/adopt-annotation")
+def adopt_annotation(case_id: str, body: AdoptAnnotationIn, request: Request) -> dict:
+    """把标注结论沉淀到用例：答案正确/拒答合理/备注写入 case.annotation。"""
+    case = case_store.get_case(case_id, _cases_dir(request))
+    if case is None:
+        raise HTTPException(404, f"用例不存在：{case_id}")
+    ann = case.annotation.model_copy(
+        update={
+            "answer_correct": body.answer_correct,
+            "refusal": body.refusal,
+            "note": body.note,
+            "golden_answer": body.golden_answer or case.annotation.golden_answer,
+            "annotated_at": datetime.now().isoformat(timespec="seconds"),
+            "annotated_by": "local",
+        }
+    )
+    case_store.save_case(
+        case.model_copy(update={"annotation": ann}),
+        cases_dir=_cases_dir(request),
+        author="local",
+    )
+    _deps(request).log_store.append(
+        "eval", {"action": "case_adopt_annotation", "id": case_id}
+    )
+    return case_store.get_case(case_id, _cases_dir(request)).model_dump()
+
+
 # —— 跑批管理 ——
 
 
 @router.get("/runs")
 def list_runs(request: Request) -> list[dict]:
     return run_store.list_runs(_db(request))
+
+
+@router.delete("/runs/{run_id}")
+def delete_run(run_id: int, request: Request) -> dict:
+    """删除历史跑批（连同用例结果）；运行中的跑批拒绝删除。"""
+    if run_store.get_run(_db(request), run_id) is None:
+        raise HTTPException(404, f"跑批不存在：{run_id}")
+    if _manager(request).is_active(run_id):
+        raise HTTPException(409, "跑批运行中，请先取消再删除")
+    run_store.delete_run(_db(request), run_id)
+    _deps(request).log_store.append("eval", {"action": "run_delete", "id": run_id})
+    return {"ok": True}
 
 
 @router.post("/runs", status_code=201)

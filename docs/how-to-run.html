@@ -18,7 +18,7 @@
       <ul>
         <li>Python 3.14（后端依赖已安装到 <code>backend\.venv</code>）</li>
         <li>Node 24 / npm（前端依赖已安装到 <code>frontend\node_modules</code>）</li>
-        <li>无需额外配置环境变量；当前 Agent 使用 Fake 占位回复，不调用真实 LLM</li>
+        <li>调用真实模型需要先在页面右上角“设置”里配置 DeepSeek API Key；评测台支持 <code>Fake</code> 干跑（不联网、不花钱）验证管道。</li>
       </ul>
     </section>
 
@@ -40,8 +40,9 @@ npm run dev</code></pre>
       <h2>验证</h2>
       <ol>
         <li>浏览器打开 <a href="http://localhost:5173/">http://localhost:5173/</a>，应显示“AI 助手”对话界面，可切换三种会话模式（通用 / 知识库优先 / 工具增强）。</li>
-        <li>输入任意消息发送，应流式返回骨架占位回复：<code>（骨架占位回复）收到：…</code></li>
-        <li>直接访问 <a href="http://localhost:5173/api/health">http://localhost:5173/api/health</a>，应返回 <code>{"status":"ok","app":"ai-study-helper"}</code>，说明前后端代理链路通畅。</li>
+        <li>配置 Key 后输入任意消息发送，应流式返回真实回答；未配置时会提示先到“设置”里配置。</li>
+        <li>直接访问 <a href="http://127.0.0.1:8000/health">http://127.0.0.1:8000/health</a>，应返回 <code>{"status":"ok","app":"ai-study-helper"}</code>，说明后端存活（注意健康检查挂在 <code>/health</code>，不在 <code>/api</code> 下）。</li>
+        <li>评测台：聊天页顶部点击“评测台”（新标签页打开），在“测试管理”里可新建跑批（Fake 干跑 / 真实模型），跑批进度自动刷新。</li>
       </ol>
     </section>
 
@@ -72,6 +73,7 @@ npm run dev</code></pre>
         <li><strong>PowerShell 里发中文请求乱码</strong>：是终端编码问题，浏览器界面不受影响；命令行测试建议用英文消息或先执行 <code>[Console]::OutputEncoding=[Text.Encoding]::UTF8</code>。</li>
         <li><strong>改了后端代码没生效</strong>：确认启动时带了 <code>--reload</code>；没带则手动重启。</li>
         <li><strong>前端改了没反应</strong>：Vite 默认热更新，确认启动的是 <code>npm run dev</code> 而非 build 产物。</li>
+        <li><strong>评测跑批（真实模型）全部报 <code>All connection attempts failed</code></strong>：后端进程没有出网权限（常见于后端由 Codex 沙箱启动，沙箱限制网络）。解决：在沙箱外启动后端（直接开终端跑 uvicorn，或让 Codex 提权启动），再重新跑批。</li>
       </ul>
     </section>
 
@@ -80,13 +82,13 @@ npm run dev</code></pre>
       <ul>
         <li>LLM 配置：点击页面右上角“设置”，配置 DeepSeek API Key 并选择模型（deepseek-chat / deepseek-reasoner），保存在 <code>backend/data/app.db</code>；未配置时对话会返回提示。</li>
         <li>Agent loop 为手写实现（<code>backend/app/agent/loop.py</code>），支持流式输出与多轮工具调用；未配置 Key 前对话不可用。</li>
-        <li>下一步（阶段 1 核心验证）：用真实 Key 跑通“对话 + 工具调用”链路，并开始建 golden set 评测基线。</li>
+        <li>评测体系 P1 已完成：用例管理（70 条 golden set）+ 跑批跟踪（进度/状态/取消/导出）+ 人工标注（答案正确/拒答合理），入口在聊天页顶部“评测台”。</li>
         <li>项目完整记录与路线图见 <a href="../memory/index.html">记忆主页</a>。</li>
       </ul>
     </section>
 
     <footer class="page-foot">
-      最后更新：2026-08-02
+      最后更新：2026-08-24
     </footer>
   </div>
 </body>
