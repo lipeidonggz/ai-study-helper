@@ -118,6 +118,12 @@
             <td>首批 70 条用例真实评测基线：68/70，发现多工具并行调用 400 bug</td>
             <td><span class="badge">已完成</span></td>
           </tr>
+          <tr>
+            <td><a href="0016-minimal-tool-agent.html">0016</a></td>
+            <td>2026-08-24</td>
+            <td>最小 Agent 全貌：带自定义工具的单轮对话（剖开 LangChain/LangGraph 封装）</td>
+            <td><span class="badge">初稿</span></td>
+          </tr>
         </tbody>
       </table>
     </section>
@@ -126,13 +132,14 @@
       <h2>当前状态</h2>
       <ul>
         <li>阶段：阶段 1 进行中——真实评测基线已出（68/70，见 0015）</li>
-        <li>下一步：修复多工具并行调用 bug → 人工标注 CSV → 补 criteria → 《三国演义》素材 → prompt 对比</li>
+        <li>最近进展：多工具并行调用 400 bug 已修复（loop 回显合并全部事件，26 测试全绿）；最小 Agent 全貌笔记初稿已出（见 0016）</li>
+        <li>下一步：人工标注 Excel（backend/eval/reports/annotate-20260805-141452.xlsx）→ 补 stream_complete / latency_budget criteria → 《三国演义》素材 → prompt 策略对比</li>
         <li>约定速览：记录一律用 HTML；值得记录时 Codex 会主动提醒</li>
       </ul>
     </section>
 
     <footer class="page-foot">
-      最后更新：2026-08-02 · 本页由会话记录自动维护
+      最后更新：2026-08-24 · 本页由会话记录自动维护
     </footer>
   </div>
 </body>
