@@ -34,6 +34,51 @@
     </section>
 
     <section class="card">
+      <h2>当前实现效果与边界：它能做什么，不能做什么</h2>
+      <p>写这篇笔记时（阶段 1），系统刻意保持"最小但完整"：核心链路该有的都有，进阶能力全部留白。读者先知道这个边界，才能正确理解后面每一层代码的动机——尤其是"为什么没有 RAG""为什么是单轮"这类问题，答案不是遗漏，而是取舍。</p>
+      <table>
+        <thead>
+          <tr><th>能力</th><th>状态</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>用户侧 SSE 流式输出（打字机效果）</td>
+            <td><span class="badge">已实现</span></td>
+            <td>从 DeepSeek 拉流 → Agent 循环 → 对外 SSE（<code>start</code> / <code>trace</code> / <code>delta</code> / <code>error</code> / <code>done</code>）→ 前端实时渲染。这是"对话体验"的地基。</td>
+          </tr>
+          <tr>
+            <td>工具调用闭环（自定义工具）</td>
+            <td><span class="badge">已实现</span></td>
+            <td>模型可调用 <code>calculator</code> / <code>current_datetime</code> / <code>note_add</code> / <code>note_get</code>；loop 执行并把结果回填上下文，最多 4 轮。这是"Agent 之所以是 Agent"的核心。</td>
+          </tr>
+          <tr>
+            <td>LLM 配置与处理过程可视化</td>
+            <td><span class="badge">已实现</span></td>
+            <td>API Key 与模型前端可配（SQLite 持久化、脱敏存取）；trace 把每步事件、完整提示词、工具执行、token 用量实时推给前端面板。</td>
+          </tr>
+          <tr>
+            <td>多轮会话记忆</td>
+            <td><span class="badge">刻意留白</span></td>
+            <td><code>history</code> 参数已预留但调用方未传，每次用户消息都是独立上下文。理由：先把单次链路的语义搞清楚；多轮记忆属于阶段 3，还牵出上下文预算、压缩等新问题。</td>
+          </tr>
+          <tr>
+            <td>RAG / 知识库</td>
+            <td><span class="badge">刻意留白</span></td>
+            <td><code>kb_priority</code> 模式目前只是提示词层面（"优先使用个人知识库"），实际没有检索。理由：RAG 依赖向量库、embedding、文档解析一整层基础设施，是阶段 2 的练习点；不加它才能让"模型上下文拼装"与"检索注入"两个问题互不干扰。</td>
+          </tr>
+          <tr>
+            <td>规划 / 记忆 / 多 Agent</td>
+            <td><span class="badge">刻意留白</span></td>
+            <td>阶段 3/4+ 在同一个 loop 上扩展，不是推翻重来。</td>
+          </tr>
+        </tbody>
+      </table>
+      <blockquote>
+        取舍原则：阶段 1 的目标不是"功能多"，而是"用最少的环节跑通并看透最典型的 LLM 应用"。凡是会干扰理解核心循环的东西（RAG、历史、框架），一律留到后面；另外评测体系（golden set runner）也已实现，但按约定本篇不展开，避免稀释主线。
+      </blockquote>
+    </section>
+
+    <section class="card">
       <h2>一次请求的完整调用链</h2>
       <p>用户在界面发一条消息，后端发生的事（忽略前端渲染细节）：</p>
       <pre style="background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;overflow-x:auto;font-size:0.9em;line-height:1.5;">用户消息
@@ -70,7 +115,7 @@
           </tr>
           <tr>
             <td><code>agent/llm.py</code></td>
-            <td>"调用大模型"这件事：协议、流式解析、消息模型、事件模型</td>
+            <td>把"调用大模型"封装成统一接口：底层流式协议（本实现为 SSE）被适配成五种内部事件，上层不感知厂商差异</td>
             <td><code>LLMClient</code> 接口：<code>chat()</code> / <code>stream()</code></td>
           </tr>
           <tr>
@@ -96,7 +141,7 @@ for round_no in range(1, _MAX_TOOL_ROUNDS + 1):   # 上限 4 轮
     tool_events = []
     async for event in llm.stream(messages, tools=schemas):
         # text → yield 给前端（打字机效果）
-        # tool_call → 先攒着，流结束后统一处理
+        # tool_call → 攒进 tool_events，等本轮流结束（llm.stream 的 async for 走完）再统一执行
         # usage → 累计 token；raw → 只进 trace
     if not tool_events:            # 模型决定不调工具 → 本轮就是最终回答
         return
@@ -108,7 +153,8 @@ for round_no in range(1, _MAX_TOOL_ROUNDS + 1):   # 上限 4 轮
     # 回到循环顶部，模型带着"自己调过什么 + 工具返回什么"继续思考</pre>
       <p>要点拆解：</p>
       <ul>
-        <li><strong>流式事件是唯一的"语言"</strong>：<code>llm.stream()</code> 把零散的 SSE chunk 统一成五种事件——<code>raw</code>（原始 chunk）、<code>text</code>（文本增量）、<code>tool_call</code>（工具调用请求）、<code>usage</code>（token 用量）、<code>done</code>（本轮结束）。上层只认识这五种，不认识 SSE 格式。</li>
+        <li><strong>流式事件是唯一的"语言"</strong>：<code>llm.stream()</code> 的本质是一个<strong>适配器</strong>——把 LLM 厂商的流式输出翻译成统一的五种内部事件：<code>raw</code>（原始 chunk）、<code>text</code>（文本增量）、<code>tool_call</code>（工具调用请求）、<code>usage</code>（token 用量）、<code>done</code>（本轮结束）。上层（loop）只依赖这五种事件，不感知底层传输；LLM 到底怎么流式输出——本实现是 OpenAI 兼容的 SSE，其他厂商可能是 NDJSON、WebSocket 等——是 <code>llm.py</code> 内部消化掉的细节，不属于概念必需。</li>
+        <li><strong>系统里有两套"流"，别混淆</strong>：一是 LLM → 后端的流式输出（本实现是 SSE，llm.py 解析成内部事件），二是后端 → 前端的对外 SSE（chat.py 封装成 <code>start</code> / <code>trace</code> / <code>delta</code> / <code>error</code> / <code>done</code>）。前者是"厂商协议细节"，后者是"应用层契约"；Agent 循环夹在中间做消费与再编排，两套流的语义完全不同。</li>
         <li><strong>工具调用要"攒"到流结束</strong>：流式响应里一个 tool_calls 会被拆成很多片（名字可能两片、参数 JSON 可能十几片），必须等流结束按 index 拼出完整对象才能执行。</li>
         <li><strong>终止只有两种原因</strong>：<code>no_tool_call</code>（模型不再调用工具，正常结束）或 <code>max_rounds</code>（达到 4 轮上限，静默结束）。没有"强制完成动作"——这由模型的"不再调工具"隐式表达。</li>
         <li><strong>并行工具是天然支持的</strong>：一次响应可带多个 <code>tool_calls</code>，循环逐个执行、每条各回填一条 tool 消息。</li>
@@ -202,7 +248,7 @@ for round_no in range(1, _MAX_TOOL_ROUNDS + 1):   # 上限 4 轮
     <section class="card">
       <h2>延伸思考</h2>
       <ul>
-        <li><strong>与 ReAct 的关系</strong>：本循环是"ReAct 的骨架 + 原生 function calling 的血肉"。行动层用结构化 tool_calls 替代文本解析是合理进步；但"思考"被折叠进模型内部——<code>reasoning_content</code> 只适合当观测数据，不宜直接当系统可控的状态（专题讨论待后续记录）。</li>
+        <li><strong>与 ReAct 的关系（易误解，需精确）</strong>：ReAct 的完整单元是 <strong>Thought → Action → Observation 三件套闭环</strong>——显式推理轨迹（Thought）与外部交互（Action）交错，环境反馈（Observation）锚定并纠偏下一步思考。其中外化 Thought 的<strong>第一受益者是模型自己</strong>：它是模型的自引用工作记忆，让模型能诱导、追踪、更新行动计划并处理异常（论文原话）；<strong>人的可观测、可干预（可审查/可打断/可纠正）是外化的红利，不是第一动机</strong>。对照本实现：执行流程上其实具备 Action → Observation（工具结果回填），但 Thought 被折叠进模型内部——模型看不到自己"为什么这么想"，系统也没有干预点，<code>reasoning_content</code> 只是被动的观测副产品。所以准确的说法是：它有 ReAct 的"流程"，没有 ReAct 的"节点意图"；<strong>流程 + 节点意图</strong>（每步在做什么、为什么、如何被干预）才是完整的 ReAct。</li>
         <li><strong>背压传导</strong>：流式是拉模式，慢客户端 → 上游停拉 → TCP 反压 → DeepSeek 超时掐断。整条链路无需任何缓存层就能天然限速，但也意味着用户侧网络问题会中断生成。</li>
         <li><strong>下一步自然演化</strong>：历史接通（把多轮消息传进 <code>history</code>）→ 上下文预算 → 记忆/检索 → 显式规划。每一步都在这同一个循环上加，而不是推翻它。</li>
       </ul>
