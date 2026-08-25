@@ -3,15 +3,49 @@
   "category": "tool_call",
   "title": "乘法结果存笔记",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "把 7乘8 的结果保存到笔记，标题是乘法结果" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "把 7乘8 的结果保存到笔记，标题是乘法结果"
+      }
+    ]
+  },
   "expected": {
     "behavior": "先调用 calculator 得到 56，再调用 note_add 保存",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "calculator", "arguments": { "expression": "7*8" } },
-      { "name": "note_add" }
+    "criteria": [
+      "answer_correct"
     ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "7*8"
+        }
+      },
+      {
+        "name": "note_add",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 2
   },
-  "tags": ["multi-step"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "multi-step"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:38",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "金标准答案要点：满分回答必须明确表达先调用calculator计算7*8得到56，再调用note_add保存，且保存内容与计算结果一致，不得将未经验证的近似值或编造结果表述为精确值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:38",
+    "annotated_by": "generator"
+  }
 }

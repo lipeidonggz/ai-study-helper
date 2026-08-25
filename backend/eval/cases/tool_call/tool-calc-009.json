@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "整数除法",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "19除以4，商是多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "19除以4，商是多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算整数商并回答 4",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "19//4" } }],
-    "answer_contains": ["4"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "19//4"
+        }
+      }
+    ],
+    "answer_contains": [
+      "4"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:26",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "工具计算结果为19//4=4，回答须明确商为4，不得给出小数或余数表述。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:26",
+    "annotated_by": "generator"
+  }
 }

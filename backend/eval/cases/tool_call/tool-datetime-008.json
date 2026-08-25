@@ -3,12 +3,44 @@
   "category": "tool_call",
   "title": "今天日期确认",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "今天的具体日期是什么？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "今天的具体日期是什么？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 current_datetime 获取并回答具体日期",
-    "criteria": ["answer_correct", "tool_used"],
-    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "current_datetime",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["datetime"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "datetime"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:54",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用current_datetime工具，并依据工具返回的日期准确回答今天的公历日期；若工具报错或无结果，不得编造日期，应明确说明无法获取。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:54",
+    "annotated_by": "generator"
+  }
 }

@@ -3,14 +3,48 @@
   "category": "combined",
   "title": "计算错误纠正",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "9×9 是不是 89？用计算器确认一下" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "9×9 是不是 89？用计算器确认一下"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 得出 81，纠正 89 的错误前提",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "9*9" } }],
-    "answer_contains": ["81"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "9*9"
+        }
+      }
+    ],
+    "answer_contains": [
+      "81"
+    ],
     "max_rounds": 2
   },
-  "tags": ["verify"],
-  "notes": "验证不被用户错误前提带偏，以工具结果为准"
+  "timeout_sec": 30.0,
+  "tags": [
+    "verify"
+  ],
+  "compare": false,
+  "notes": "验证不被用户错误前提带偏，以工具结果为准",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:07",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用计算器计算9*9，以工具返回结果81为准，明确纠正用户“89”的说法，不得顺着错误前提或编造其他答案。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:07",
+    "annotated_by": "generator"
+  }
 }

@@ -3,12 +3,38 @@
   "category": "boundary",
   "title": "知识库模式下的通用数学题",
   "mode": "kb_priority",
-  "input": { "messages": [{ "role": "user", "content": "（阶段2启用）圆周率前5位是什么？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "（阶段2启用）圆周率前5位是什么？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "与知识库无关的通用问题应正常回答，不应强行关联知识库",
-    "criteria": ["answer_correct"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["scope"],
-  "notes": "阶段 2 启用：验证范围控制不矫枉过正"
+  "timeout_sec": 30.0,
+  "tags": [
+    "scope"
+  ],
+  "compare": false,
+  "notes": "阶段 2 启用：验证范围控制不矫枉过正",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:52:54",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "回答应直接给出圆周率前5位数字“3.1415”，不提及或关联任何知识库内容，无需额外解释或引用工具。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:52:54",
+    "annotated_by": "generator"
+  }
 }

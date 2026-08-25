@@ -3,13 +3,49 @@
   "category": "combined",
   "title": "工具结果再加工",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "用计算器算 2 的 20 次方，然后把结果的位数告诉我" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "用计算器算 2 的 20 次方，然后把结果的位数告诉我"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 得到 1048576，再指出是 7 位数",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "2**20" } }],
-    "answer_contains": ["1048576"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "2**20"
+        }
+      }
+    ],
+    "answer_contains": [
+      "1048576"
+    ],
     "max_rounds": 2
   },
-  "tags": ["math", "reasoning"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "reasoning"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:01",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应通过调用calculator计算表达式2**20得到结果1048576，并明确说明该结果是7位数。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:01",
+    "annotated_by": "generator"
+  }
 }

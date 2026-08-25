@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import { evalApi, type EvalCase, type EvalRun } from '../api/client'
 import { navigate } from '../router'
@@ -20,16 +20,52 @@ const CRITERIA_OPTIONS = [
 ]
 const MODES = ['general', 'kb_priority', 'tool_enhanced']
 
+// —— 字段说明元数据（编辑界面提示用） ——
+const CATEGORY_META: Record<string, string> = {
+  tool_call: '验证工具调用行为（调不调、调得对不对）',
+  boundary: '边界/安全：拒答、提示注入、幻觉、隐私等',
+  combined: '多步组合：工具调用 + 推理/保存/验证串联',
+  multi_turn: '多轮一致性（阶段 3 启用）',
+  kb_qa: '知识库问答（阶段 2 启用）'
+}
+const MODE_META: Record<string, string> = {
+  general: '通用助手，中文回答',
+  kb_priority: '优先个人知识库并给出引用（阶段 2）',
+  tool_enhanced: '适合时调用工具获取准确结果'
+}
+const CRITERIA_META: Record<string, string> = {
+  answer_correct: '需人工/LLM',
+  tool_used: '机器判定',
+  tool_not_used: '机器判定',
+  refusal: '需人工/LLM',
+  stream_complete: '机器判定',
+  latency_budget: '机器判定',
+  citation_correct: '阶段 2',
+  context_consistent: '阶段 3'
+}
+
+function critTagClass(cr: string): string {
+  const m = CRITERIA_META[cr] ?? ''
+  if (m === '机器判定') return 'auto'
+  if (m === '需人工/LLM') return 'human'
+  return 'later'
+}
+
 const cases = ref<EvalCase[]>([])
 const caseFilter = ref({ q: '', category: '', enabled: '' })
 const editing = ref<EvalCase | null>(null)
 const isNew = ref(false)
 const caseError = ref('')
 const caseMsg = ref('')
+const goldenCopyMsg = ref('')
 const criteriaSel = ref<string[]>([])
 const toolCallsText = ref('')
 const tagsText = ref('')
 const messagesText = ref('')
+
+const criteriaConflict = computed(
+  () => criteriaSel.value.includes('tool_used') && criteriaSel.value.includes('tool_not_used')
+)
 
 function blankCase(): EvalCase {
   return {
@@ -54,10 +90,9 @@ function blankCase(): EvalCase {
     updated_at: '',
     updated_by: '',
     annotation: {
-      answer_correct: '',
-      refusal: '',
-      note: '',
       golden_answer: '',
+      reference_answer: '',
+      note: '',
       annotated_at: '',
       annotated_by: ''
     }
@@ -101,6 +136,21 @@ function editCase(c: EvalCase) {
 
 function closeEditor() {
   editing.value = null
+  goldenCopyMsg.value = ''
+}
+
+function copyBehaviorToGolden() {
+  if (!editing.value) return
+  const cur = editing.value.annotation.golden_answer
+  const behavior = editing.value.expected.behavior
+  if (cur.trim() && cur.trim() !== behavior.trim()) {
+    if (!confirm('金标准答案要点已有内容，复制将覆盖当前内容。继续？')) return
+  }
+  editing.value.annotation.golden_answer = behavior
+  goldenCopyMsg.value = '已复制，可在此基础上修改'
+  window.setTimeout(() => {
+    goldenCopyMsg.value = ''
+  }, 3000)
 }
 
 function parseMessages(): { role: 'user' | 'assistant' | 'system'; content: string }[] {
@@ -121,6 +171,10 @@ function parseMessages(): { role: 'user' | 'assistant' | 'system'; content: stri
 async function saveCase() {
   if (!editing.value) return
   caseError.value = ''
+  if (criteriaConflict.value) {
+    caseError.value = '验收维度互斥：tool_used 与 tool_not_used 不能同时选择'
+    return
+  }
   try {
     const body: EvalCase = JSON.parse(JSON.stringify(editing.value))
     body.input.messages = parseMessages()
@@ -166,6 +220,7 @@ const startForm = ref({
   llm: 'real' as 'real' | 'fake',
   concurrency: 2,
   retries: 1,
+  repeat: 1,
   filterType: 'all' as 'all' | 'categories' | 'ids',
   categories: [] as string[],
   ids: ''
@@ -222,6 +277,7 @@ async function startRun() {
       llm: startForm.value.llm,
       concurrency: startForm.value.concurrency,
       retries: startForm.value.retries,
+      repeat: startForm.value.repeat,
       case_filter: filter
     })
     showStart.value = false
@@ -255,6 +311,17 @@ function statusLabel(s: string): string {
   return map[s] ?? s
 }
 
+function runBadgeClass(s: string): string {
+  const map: Record<string, string> = {
+    done: 'ok',
+    running: 'info',
+    queued: 'info',
+    canceled: 'neutral',
+    error: 'error'
+  }
+  return map[s] ?? 'neutral'
+}
+
 function summaryText(run: EvalRun): string {
   const s = run.summary as Record<string, unknown> | undefined
   if (!s) return '—'
@@ -269,6 +336,7 @@ function summaryText(run: EvalRun): string {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKeydown)
   try {
     await Promise.all([loadCases(), loadRuns()])
   } catch (err) {
@@ -276,40 +344,49 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(stopPolling)
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  stopPolling()
+})
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && editing.value) {
+    closeEditor()
+  }
+}
 </script>
 
 <template>
   <div class="ec">
-    <header class="ec-tabs">
-      <button class="ec-tab" :class="{ on: tab === 'cases' }" @click="tab = 'cases'">
+    <header class="ui-tabs">
+      <button class="ui-tab" :class="{ on: tab === 'cases' }" @click="tab = 'cases'">
         用例管理
       </button>
-      <button class="ec-tab" :class="{ on: tab === 'runs' }" @click="tab = 'runs'">
+      <button class="ui-tab" :class="{ on: tab === 'runs' }" @click="tab = 'runs'">
         测试管理
       </button>
     </header>
 
     <!-- ========== 用例管理 ========== -->
     <section v-if="tab === 'cases'">
-      <div class="ec-card">
-        <div class="ec-toolbar">
-          <input v-model="caseFilter.q" placeholder="搜索 id / 标题" @keyup.enter="loadCases" />
-          <select v-model="caseFilter.category">
+      <div class="ui-card">
+        <div class="ui-toolbar">
+          <input v-model="caseFilter.q" placeholder="搜索 id / 标题" class="ui-input" @keyup.enter="loadCases" />
+          <select v-model="caseFilter.category" class="ui-select">
             <option value="">全部类别</option>
             <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
           </select>
-          <select v-model="caseFilter.enabled">
+          <select v-model="caseFilter.enabled" class="ui-select">
             <option value="">全部状态</option>
             <option value="true">启用</option>
             <option value="false">停用</option>
           </select>
-          <button class="ec-btn" @click="loadCases">筛选</button>
-          <button class="ec-btn primary" @click="newCase">新建用例</button>
+          <button class="ui-btn" @click="loadCases">筛选</button>
+          <button class="ui-btn primary" @click="newCase">新建用例</button>
         </div>
-        <p v-if="caseError" class="ec-error">{{ caseError }}</p>
-        <p v-if="caseMsg" class="ec-ok">{{ caseMsg }}</p>
-        <table class="ec-table">
+        <p v-if="caseError" class="ui-error">{{ caseError }}</p>
+        <p v-if="caseMsg" class="ui-ok">{{ caseMsg }}</p>
+        <table class="ui-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -324,158 +401,214 @@ onUnmounted(stopPolling)
           </thead>
           <tbody>
             <tr v-for="c in cases" :key="c.id">
-              <td class="ec-mono">{{ c.id }}</td>
+              <td class="ui-mono">{{ c.id }}</td>
               <td>{{ c.category }}</td>
               <td>{{ c.title }}</td>
               <td class="ec-criteria">
-                <span v-for="cr in c.expected.criteria" :key="cr" class="ec-chip">{{ cr }}</span>
+                <span v-for="cr in c.expected.criteria" :key="cr" class="ui-chip">{{ cr }}</span>
               </td>
               <td>
-                <span class="ec-badge" :class="c.enabled ? 'ok' : 'off'">
+                <span class="ui-badge" :class="c.enabled ? 'ok' : 'neutral'">
                   {{ c.enabled ? '启用' : '停用' }}
                 </span>
               </td>
               <td>
                 <span
-                  class="ec-badge"
-                  :class="c.annotation.answer_correct || c.annotation.golden_answer ? 'ok' : 'muted'"
+                  class="ui-badge"
+                  :class="c.annotation.golden_answer || c.annotation.reference_answer ? 'ok' : 'neutral'"
                 >
-                  {{ c.annotation.answer_correct || c.annotation.golden_answer ? '已标' : '未标' }}
+                  {{ c.annotation.golden_answer || c.annotation.reference_answer ? '已标' : '未标' }}
                 </span>
               </td>
-              <td class="ec-muted">{{ c.updated_at || '—' }}</td>
+              <td class="ui-muted">{{ c.updated_at || '—' }}</td>
               <td>
-                <button class="ec-link" @click="editCase(c)">编辑</button>
-                <button class="ec-link danger" @click="removeCase(c)">删除</button>
+                <button class="ui-link" @click="editCase(c)">编辑</button>
+                <button class="ui-link danger" @click="removeCase(c)">删除</button>
               </td>
             </tr>
             <tr v-if="!cases.length">
-              <td colspan="8" class="ec-muted">没有匹配的用例</td>
+              <td colspan="8" class="ui-muted">没有匹配的用例</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div v-if="editing" class="ec-card ec-editor">
-        <h3>{{ isNew ? '新建用例' : `编辑 ${editing.id}` }}</h3>
-        <div class="ec-grid">
-          <label>ID<input v-model="editing.id" :disabled="!isNew" /></label>
-          <label>类别
-            <select v-model="editing.category">
-              <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
-            </select>
-          </label>
-          <label>标题<input v-model="editing.title" /></label>
-          <label>模式
-            <select v-model="editing.mode">
-              <option v-for="m in MODES" :key="m" :value="m">{{ m }}</option>
-            </select>
-          </label>
-          <label>超时(秒)<input v-model.number="editing.timeout_sec" type="number" /></label>
-          <label class="ec-check">
-            <input v-model="editing.enabled" type="checkbox" /> 参与跑批
-          </label>
-          <label class="ec-check">
-            <input v-model="editing.compare" type="checkbox" /> 参与对照
-          </label>
-          <label>标签（逗号分隔）<input v-model="tagsText" /></label>
-        </div>
-        <label class="ec-field">输入消息（每行 "role: content"，支持多轮）</label>
-        <textarea v-model="messagesText" rows="4"></textarea>
-        <label class="ec-field">预期行为</label>
-        <textarea v-model="editing.expected.behavior" rows="2"></textarea>
-        <label class="ec-field">验收维度（可多选）</label>
-        <div class="ec-checks">
-          <label v-for="cr in CRITERIA_OPTIONS" :key="cr" class="ec-check">
-            <input v-model="criteriaSel" type="checkbox" :value="cr" /> {{ cr }}
-          </label>
-        </div>
-        <label class="ec-field">预期工具调用（JSON 数组，可选）</label>
-        <textarea v-model="toolCallsText" rows="3" class="ec-mono"></textarea>
-        <label class="ec-field">设计说明（notes）</label>
-        <textarea v-model="editing.notes" rows="2"></textarea>
-        <label class="ec-field">管理备注（admin_note）</label>
-        <textarea v-model="editing.admin_note" rows="2"></textarea>
+      <div v-if="editing" class="ui-modal-backdrop" @click.self="closeEditor">
+        <div class="ui-modal">
+          <div class="ui-modal-head">
+            <h3>{{ isNew ? '新建用例' : `编辑 ${editing.id}` }}</h3>
+            <button class="ui-modal-close" title="关闭" @click="closeEditor">×</button>
+          </div>
+          <div class="ui-modal-body">
+            <!-- —— 基本信息 —— -->
+            <h3 class="ui-sec">基本信息</h3>
+            <div class="ui-grid">
+              <label>ID<input v-model="editing.id" :disabled="!isNew" class="ui-input" /></label>
+              <label>类别
+                <select v-model="editing.category" class="ui-select">
+                  <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
+                </select>
+                <span class="ui-help-inline">{{ CATEGORY_META[editing.category] }}</span>
+              </label>
+              <label>标题<input v-model="editing.title" class="ui-input" /></label>
+              <label>模式
+                <select v-model="editing.mode" class="ui-select">
+                  <option v-for="m in MODES" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <span class="ui-help-inline">{{ MODE_META[editing.mode] }}</span>
+              </label>
+              <label>超时(秒)
+                <input v-model.number="editing.timeout_sec" type="number" class="ui-input" />
+                <span class="ui-help-inline">超过判超时；同时是 latency_budget 的耗时预算</span>
+              </label>
+              <label class="ui-check">
+                <input v-model="editing.enabled" type="checkbox" /> 参与跑批
+              </label>
+              <label class="ui-check">
+                <input v-model="editing.compare" type="checkbox" /> 参与对照
+                <span class="ui-hint" title="是否纳入豆包/千问等跨模型对照评测（compare=true 进对照组）">ⓘ</span>
+              </label>
+              <label>标签（逗号分隔）<input v-model="tagsText" class="ui-input" /></label>
+            </div>
 
-        <h3 class="ec-sub">金标准（人工标注结论）</h3>
-        <label class="ec-field">金标准答案要点（供自动判定与人工对照）</label>
-        <textarea v-model="editing.annotation.golden_answer" rows="3"></textarea>
-        <div class="ec-grid">
-          <label>答案正确
-            <select v-model="editing.annotation.answer_correct">
-              <option value="">未标</option>
-              <option value="对">对</option>
-              <option value="错">错</option>
-              <option value="存疑">存疑</option>
-            </select>
-          </label>
-          <label>拒答合理
-            <select v-model="editing.annotation.refusal">
-              <option value="">未标</option>
-              <option value="合理">合理</option>
-              <option value="不合理">不合理</option>
-              <option value="不适用">不适用</option>
-            </select>
-          </label>
-        </div>
-        <label class="ec-field">标注备注 / 依据</label>
-        <textarea v-model="editing.annotation.note" rows="2"></textarea>
+            <!-- —— 输入与预期 —— -->
+            <h3 class="ui-sec">输入与预期</h3>
+            <label class="ui-field">输入消息</label>
+            <textarea v-model="messagesText" rows="4" class="ui-textarea"></textarea>
+            <p class="ui-help">
+              每行一条，格式 <code>role: 内容</code>（role 为 user / assistant / system）。
+              最后一条是当前用户消息，之前的作为多轮历史。
+            </p>
+            <label class="ui-field">预期行为</label>
+            <textarea v-model="editing.expected.behavior" rows="2" class="ui-textarea"></textarea>
+            <p class="ui-help">
+              判分核心：一句话写明"模型做到什么算合格"。例如：应调用 calculator 并给出准确结果 /
+              应澄清指代而非臆测 / 应拒绝并说明原因。
+            </p>
+            <label class="ui-field">预期工具调用（JSON 数组，可选）</label>
+            <textarea v-model="toolCallsText" rows="3" class="ui-textarea ui-mono"></textarea>
+            <p class="ui-help">
+              预期模型会调用的工具，只作观察指标、不硬性判定。
+              参数留 <code>{}</code> 表示只校验工具名；多个调用按顺序列出。
+            </p>
+            <label class="ui-field">设计说明（notes）</label>
+            <textarea v-model="editing.notes" rows="2" class="ui-textarea"></textarea>
+            <p class="ui-help">用例的设计意图与背景：为什么测、想验证什么，供人阅读。</p>
+            <label class="ui-field">管理备注（admin_note）</label>
+            <textarea v-model="editing.admin_note" rows="2" class="ui-textarea"></textarea>
+            <p class="ui-help">内部管理信息：停用原因、TODO、标注判断依据等；不进入用例语义。</p>
 
-        <div class="ec-toolbar">
-          <button class="ec-btn primary" @click="saveCase">保存</button>
-          <button class="ec-btn" @click="closeEditor">取消</button>
+            <!-- —— 验收维度 —— -->
+            <h3 class="ui-sec">验收维度</h3>
+            <p class="ui-sec-desc">
+              选择本用例的判定维度：机器判定项跑批后自动出结论；需人工/LLM 项进入金标准对照。
+            </p>
+            <div class="ui-checks">
+              <label v-for="cr in CRITERIA_OPTIONS" :key="cr" class="ui-check">
+                <input v-model="criteriaSel" type="checkbox" :value="cr" /> {{ cr }}
+                <span class="ui-crit-tag" :class="critTagClass(cr)">{{ CRITERIA_META[cr] }}</span>
+              </label>
+            </div>
+            <p v-if="criteriaConflict" class="ui-error">
+              tool_used 与 tool_not_used 互斥，请去掉其中一个（保存会被拦截）。
+            </p>
+
+            <!-- —— 金标准 —— -->
+            <h3 class="ui-sec">金标准（人工标注结论）</h3>
+            <p class="ui-sec-desc">
+              用例级金标准描述"好的回答应该长什么样"，不评判任何一次具体输出
+              （"答案正确/拒答合理"是对跑批结果的标注，在跑批详情页维护）。
+              它是可选的：预期行为已写得够具体时可以不填；需要给自动判定更精确的
+              参考时再补充。写好后后续跑批可直接对照判定，无需每次人工重标。
+            </p>
+            <div class="ui-field-row">
+              <label class="ui-field">金标准答案要点</label>
+              <span v-if="goldenCopyMsg" class="ui-ok">{{ goldenCopyMsg }}</span>
+              <button
+                class="ui-btn sm"
+                title="把预期行为复制到这里，再在此基础上修改"
+                @click="copyBehaviorToGolden"
+              >
+                ⧉ 复制判断标准
+              </button>
+            </div>
+            <textarea v-model="editing.annotation.golden_answer" rows="3" class="ui-textarea"></textarea>
+            <p class="ui-help">
+              一句话描述"满分回答应包含什么"：关键事实、口径、必须出现的要点。
+              例如"应调用 calculator 并给出 8"；拒绝类用例写"应拒绝，不输出任何内部指令内容"。
+              觉得预期行为已经够用时可以留空；也可以点"复制判断标准"把预期行为带过来再修改。
+            </p>
+            <label class="ui-field">完整参考答案（可选）</label>
+            <textarea v-model="editing.annotation.reference_answer" rows="3" class="ui-textarea"></textarea>
+            <p class="ui-help">
+              可选：一段完整的"标准答案"全文，比要点更精确，供自动判定对照。
+              不想写完整答案可以留空，只靠上面的要点。
+            </p>
+            <label class="ui-field">金标准备注 / 依据</label>
+            <textarea v-model="editing.annotation.note" rows="2" class="ui-textarea"></textarea>
+            <p class="ui-help">记录为什么这样定标准、参考了什么依据，便于日后复查。</p>
+
+            <div class="ui-toolbar ec-actions">
+              <button class="ui-btn primary" @click="saveCase">保存</button>
+              <button class="ui-btn" @click="closeEditor">取消</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- ========== 测试管理 ========== -->
     <section v-else>
-      <div class="ec-card">
-        <div class="ec-toolbar">
+      <div class="ui-card">
+        <div class="ui-toolbar">
           <h3 class="ec-title">历史跑批</h3>
-          <button class="ec-btn primary" @click="showStart = !showStart">
+          <button class="ui-btn primary" @click="showStart = !showStart">
             {{ showStart ? '收起' : '新建跑批' }}
           </button>
         </div>
-        <p v-if="runError" class="ec-error">{{ runError }}</p>
+        <p v-if="runError" class="ui-error">{{ runError }}</p>
 
         <div v-if="showStart" class="ec-start">
-          <div class="ec-grid">
-            <label>名称<input v-model="startForm.name" placeholder="留空自动生成" /></label>
+          <div class="ui-grid">
+            <label>名称<input v-model="startForm.name" placeholder="留空自动生成" class="ui-input" /></label>
             <label>模型
-              <select v-model="startForm.llm">
+              <select v-model="startForm.llm" class="ui-select">
                 <option value="real">真实模型（会花钱）</option>
                 <option value="fake">Fake（干跑不花钱）</option>
               </select>
             </label>
-            <label>并发<input v-model.number="startForm.concurrency" type="number" min="1" max="10" /></label>
-            <label>重试<input v-model.number="startForm.retries" type="number" min="0" max="5" /></label>
+            <label>并发<input v-model.number="startForm.concurrency" type="number" min="1" max="10" class="ui-input" /></label>
+            <label>重试<input v-model.number="startForm.retries" type="number" min="0" max="5" class="ui-input" /></label>
+            <label>重复次数
+              <input v-model.number="startForm.repeat" type="number" min="1" max="10" class="ui-input" />
+              <span class="ui-help-inline">每条跑 N 次，看稳定性（成本 ×N）</span>
+            </label>
             <label>范围
-              <select v-model="startForm.filterType">
+              <select v-model="startForm.filterType" class="ui-select">
                 <option value="all">全部启用用例</option>
                 <option value="categories">按类别</option>
                 <option value="ids">按 ID</option>
               </select>
             </label>
           </div>
-          <div v-if="startForm.filterType === 'categories'" class="ec-checks">
-            <label v-for="c in CATEGORIES" :key="c" class="ec-check">
+          <div v-if="startForm.filterType === 'categories'" class="ui-checks">
+            <label v-for="c in CATEGORIES" :key="c" class="ui-check">
               <input v-model="startForm.categories" type="checkbox" :value="c" /> {{ c }}
             </label>
           </div>
-          <label v-if="startForm.filterType === 'ids'" class="ec-field">
+          <label v-if="startForm.filterType === 'ids'" class="ui-field">
             ID 列表（每行一个）
-            <textarea v-model="startForm.ids" rows="4" class="ec-mono"></textarea>
+            <textarea v-model="startForm.ids" rows="4" class="ui-textarea ui-mono"></textarea>
           </label>
-          <div class="ec-toolbar">
-            <button class="ec-btn primary" @click="startRun">启动跑批</button>
+          <div class="ui-toolbar">
+            <button class="ui-btn primary" @click="startRun">启动跑批</button>
           </div>
-          <p class="ec-hint">
+          <p class="ui-help">
             {{ startForm.llm === 'real' ? '真实模型跑批会消耗 API 额度；参考经验：并发 2 + 重试 1 更稳。' : 'Fake 干跑用于验证管道。' }}
           </p>
         </div>
 
-        <table class="ec-table">
+        <table class="ui-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -489,26 +622,27 @@ onUnmounted(stopPolling)
           </thead>
           <tbody>
             <tr v-for="r in runs" :key="r.id">
-              <td class="ec-mono">{{ r.id }}</td>
+              <td class="ui-mono">{{ r.id }}</td>
               <td>{{ r.name }}</td>
               <td>
-                <span class="ec-badge" :class="r.status">{{ statusLabel(r.status) }}</span>
+                <span class="ui-badge" :class="runBadgeClass(r.status)">{{ statusLabel(r.status) }}</span>
+                <span v-if="r.verified" class="ui-badge ok">已核验</span>
               </td>
               <td>
-                <div class="ec-progress">
+                <div class="ui-progress">
                   <div
-                    class="ec-progress-inner"
+                    class="ui-progress-inner"
                     :style="{ width: (r.total ? (r.progress / r.total) * 100 : 0) + '%' }"
                   ></div>
                 </div>
-                <span class="ec-muted">{{ r.progress }}/{{ r.total }}</span>
+                <span class="ui-muted">{{ r.progress }}/{{ r.total }}</span>
               </td>
-              <td class="ec-muted">{{ summaryText(r) }}</td>
-              <td class="ec-muted">{{ r.created_at }}</td>
+              <td class="ui-muted">{{ summaryText(r) }}</td>
+              <td class="ui-muted">{{ r.created_at }}</td>
               <td>
-                <button class="ec-link" @click="navigate(`#/eval/runs/${r.id}`)">查看</button>
+                <button class="ui-link" @click="navigate(`#/eval/runs/${r.id}`)">查看</button>
                 <button
-                  class="ec-link danger"
+                  class="ui-link danger"
                   :disabled="r.status === 'queued' || r.status === 'running'"
                   :title="r.status === 'queued' || r.status === 'running' ? '运行中的跑批请先取消再删除' : '删除该跑批'"
                   @click="removeRun(r)"
@@ -518,7 +652,7 @@ onUnmounted(stopPolling)
               </td>
             </tr>
             <tr v-if="!runs.length">
-              <td colspan="7" class="ec-muted">还没有跑批记录</td>
+              <td colspan="7" class="ui-muted">还没有跑批记录</td>
             </tr>
           </tbody>
         </table>
@@ -531,243 +665,31 @@ onUnmounted(stopPolling)
 .ec {
   font-size: 0.95em;
 }
-.ec-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-.ec-tab {
-  padding: 8px 22px;
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  background: #fff;
-  color: #57606a;
-  cursor: pointer;
-  font-size: 0.92em;
-}
-.ec-tab:hover {
-  background: #f6f8fa;
-}
-.ec-tab.on {
-  background: #0969da;
-  color: #fff;
-  border-color: #0969da;
-}
-.ec-card {
-  background: #fff;
-  border: 1px solid #e2e5e9;
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
 .ec-title {
   margin: 0;
-}
-.ec-sub {
-  margin: 18px 0 2px;
-  font-size: 1em;
-  border-top: 1px solid #eef1f4;
-  padding-top: 12px;
-}
-.ec-toolbar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.ec-toolbar input,
-.ec-toolbar select,
-.ec-editor input,
-.ec-editor select,
-.ec-start input,
-.ec-start select {
-  padding: 6px 10px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  font-size: 0.92em;
-}
-.ec-btn {
-  padding: 6px 16px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  background: #fff;
-  color: #24292f;
-  cursor: pointer;
-  font-size: 0.9em;
-}
-.ec-btn:hover {
-  background: #f6f8fa;
-}
-.ec-btn.primary {
-  background: #0969da;
-  border-color: #0969da;
-  color: #fff;
-}
-.ec-btn.primary:hover {
-  background: #0a5fc2;
-}
-.ec-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-  font-size: 0.9em;
-}
-.ec-table th,
-.ec-table td {
-  border-bottom: 1px solid #eef1f4;
-  padding: 8px 10px;
-  text-align: left;
-  vertical-align: top;
-}
-.ec-table th {
-  background: #f6f8fa;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.ec-table tbody tr:hover td {
-  background: #f8fafc;
 }
 .ec-criteria {
   max-width: 240px;
 }
-.ec-chip {
-  display: inline-block;
-  font-size: 0.75em;
-  background: #eef2f7;
-  color: #444;
-  border-radius: 999px;
-  padding: 1px 8px;
-  margin: 1px 2px 1px 0;
-}
-.ec-badge {
-  display: inline-block;
-  font-size: 0.78em;
-  padding: 1px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.ec-badge.ok,
-.ec-badge.done {
-  background: #dafbe1;
-  color: #1a7f37;
-}
-.ec-badge.off,
-.ec-badge.error,
-.ec-badge.timeout {
-  background: #ffeef0;
-  color: #cf222e;
-}
-.ec-badge.running,
-.ec-badge.queued {
-  background: #ddf4ff;
-  color: #0969da;
-}
-.ec-badge.canceled {
-  background: #e6edf3;
-  color: #57606a;
-}
-.ec-badge.muted {
-  background: #e6edf3;
-  color: #57606a;
-}
-.ec-link {
-  background: none;
-  border: none;
-  color: #0969da;
-  cursor: pointer;
-  padding: 0 6px 0 0;
-  font-size: 0.9em;
-}
-.ec-link.danger {
-  color: #cf222e;
-}
-.ec-link:disabled {
-  color: #999;
-  cursor: not-allowed;
-}
-.ec-error {
-  color: #cf222e;
-  font-size: 0.88em;
-}
-.ec-ok {
-  color: #1a7f37;
-  font-size: 0.88em;
-}
-.ec-muted {
-  color: #888;
-  font-size: 0.85em;
-}
-.ec-mono {
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 0.85em;
-}
-.ec-field {
-  display: block;
-  margin-top: 12px;
-  font-size: 0.88em;
-  color: #444;
-}
-.ec-editor textarea,
-.ec-start textarea {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 0.92em;
-  margin-top: 4px;
-}
-.ec-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 12px;
-  margin-bottom: 4px;
-}
-.ec-grid label,
-.ec-start label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.86em;
-  color: #57606a;
-}
-.ec-checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: 6px;
-}
-.ec-check {
-  flex-direction: row !important;
-  align-items: center;
-  gap: 4px !important;
-}
-.ec-progress {
-  width: 90px;
-  height: 6px;
-  background: #e6edf3;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 2px;
-}
-.ec-progress-inner {
-  height: 100%;
-  background: #0969da;
+.ec-actions {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #eef1f4;
 }
 .ec-start {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   background: #fafbfc;
   border: 1px dashed #d0d7de;
   border-radius: 8px;
   padding: 14px 16px;
   margin-top: 12px;
 }
-.ec-hint {
-  color: #888;
-  font-size: 0.85em;
-  margin: 4px 0 0;
+.ui-tabs {
+  margin-bottom: 14px;
+}
+.ui-table {
+  margin-top: 12px;
 }
 </style>

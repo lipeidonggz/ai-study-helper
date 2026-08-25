@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "保存学习计划",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "记个笔记：标题=学习计划，内容=明天上午复习第三章" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "记个笔记：标题=学习计划，内容=明天上午复习第三章"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_add 保存笔记并确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "note_add", "arguments": { "title": "学习计划", "content": "明天上午复习第三章" } }],
-    "answer_contains": ["已保存"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "学习计划",
+          "content": "明天上午复习第三章"
+        }
+      }
+    ],
+    "answer_contains": [
+      "已保存"
+    ],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:57",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用 note_add 工具，参数 title 为\"学习计划\"、content 为\"明天上午复习第三章\"，并向用户明确回复笔记已成功保存。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:57",
+    "annotated_by": "generator"
+  }
 }

@@ -3,13 +3,49 @@
   "category": "tool_call",
   "title": "除法",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "81除以9等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "81除以9等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 9",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "81/9" } }],
-    "answer_contains": ["9"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "81/9"
+        }
+      }
+    ],
+    "answer_contains": [
+      "9"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:18",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用calculator工具计算81/9，基于工具返回结果回答9，不得直接凭知识编造或遗漏工具调用。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:18",
+    "annotated_by": "generator"
+  }
 }

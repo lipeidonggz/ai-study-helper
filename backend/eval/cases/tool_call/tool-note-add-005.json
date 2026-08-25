@@ -3,14 +3,45 @@
   "category": "tool_call",
   "title": "保存待办",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "帮我记一条待办：给客户回电话" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我记一条待办：给客户回电话"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_add 保存待办（标题可自动拟定）并确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "note_add" }],
-    "answer_contains": ["已保存"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [
+      "已保存"
+    ],
     "max_rounds": 1
   },
-  "tags": ["note"],
-  "notes": "标题未指定时模型需自行拟定，tool_calls 只校验工具名"
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "标题未指定时模型需自行拟定，tool_calls 只校验工具名",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:01",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用note_add工具保存待办且确认已记录，标题未指定时自动拟定如“给客户回电话”，不得伪造其他信息。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:01",
+    "annotated_by": "generator"
+  }
 }

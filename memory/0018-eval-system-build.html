@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0018 · 给 Agent 装一台体检机：手写评测体系的构建、坑与行业坐标</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0018 · 给 Agent 装一台体检机：手写评测体系的构建、坑与行业坐标</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-25</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：技术笔记 / 评测体系实践与反思</span>
+        <span>关联：0013–0015（评测基线）、0016（最小 Agent 全貌）、0017（评测台需求）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>0 · 开篇：为什么评测是 Agent 开发的"第二件事"</h2>
+      <blockquote>
+        一句话：能跑 ≠ 能验证。<a href="0016-minimal-tool-agent.html">0016</a> 讲"Agent 怎么造"，本篇讲"怎么知道 Agent 造得好不好"。
+      </blockquote>
+
+      <h3>阶段 1 完工时的真实困境</h3>
+      <p>到阶段 1 为止，核心链路（配置 → 真实模型 → 流式 → 工具调用 → 前端渲染）与处理过程观测（trace 面板）都已完备，代码也能跑通。但"好不好"没有答案：工具调用率高不高？边界输入会不会翻车？改一行 prompt 是变好还是变坏？这些问题靠"我手动试几条"回答不了。</p>
+
+      <h3>手工验证为什么不可持续</h3>
+      <ul>
+        <li>用例量上来后（本批 70 条），逐条人工看输出是体力活，且每次改动都要重看一遍。</li>
+        <li>Excel 标注表填了也<strong>无法合并回报告统计</strong>——质量维度（答案正确 / 拒答合理）的结论一直出不来，阶段 1 的验收因此悬着。这就是闭环断裂：<strong>跑批 → 标注 → 结论</strong>之间缺了"能合回来的工具"。</li>
+        <li>没有评测体系，后续每个阶段的验证点（检索指标、消融对比、故障注入、多 Agent 三元组）都会重复踩同一个坑：<strong>实现通了，但无法高效验证质量</strong>。</li>
+      </ul>
+
+      <h3>为什么提前做（而不是等到阶段 6）</h3>
+      <p>0002 路线图把"评测体系化"（LLM-as-judge、统一回归、成本/延迟优化）放在阶段 6。本次提前做的不是那个完整体系，而是<strong>评测的使用门槛</strong>——用例管理 + 跑批 + 结果跟踪 + 人工标注在一个界面里完成。理由有四（详见 <a href="0017-eval-console-requirements.html">0017</a>）：</p>
+      <ol>
+        <li>阶段 2–5 的验证点全部依赖"用例 + 跑批 + 结果跟踪"这套地基；</li>
+        <li>当前结果闭环断在人工标注，质量维度结论出不来；</li>
+        <li>评测价值已被验证——第一版 70 条跑批就抓到两个真 bug（见第 1 章）；</li>
+        <li>提前但不过界：只做内部工具，用例仍以 JSON 文件为真源，不做产品级后台。</li>
+      </ol>
+
+      <h3>本篇回答什么</h3>
+      <p>不是评测框架的教程，而是一个<strong>从零手写评测体系</strong>的真实旅程：每个设计决策背后的取舍、每个坑的现场数据、没有做的部分及其理由，最后放到行业坐标里对照——业界主流框架和我们手写的东西，骨架其实一样。</p>
+
+      <!-- 插图占位 1：能跑 vs 可验证的演进示意图（可选）
+           建议内容：一条时间线/箭头，从"代码能跑"到"人工试几条"到"评测体系"，标注每个阶段能回答什么问题。 -->
+      <figure>
+        <img src="assets/figures/0018-fig-1.png" alt="从能跑到可验证的演进示意图（占位，待补充）" style="max-width:100%;border:1px solid var(--border);border-radius:6px;">
+        <figcaption style="color:var(--muted);font-size:0.9em;">图 1：从"能跑"到"可验证"的演进（占位，待补充）</figcaption>
+      </figure>
+    </section>
+
+    <section class="card">
+      <h2>1 · 从用例到基线：golden set 与第一版 runner</h2>
+
+      <h3>1.1 用例 schema：一个用例文件 = 一次可复现的验收</h3>
+      <p>用例以 JSON 文件为唯一真源（<code>backend/eval/cases/</code>），git 可 diff、可评审、可回滚。核心字段：<code>id</code> / <code>category</code> / <code>title</code> / <code>mode</code> / <code>input.messages</code>（完整对话，天然支持多轮）/ <code>expected.behavior</code> / <code>expected.criteria</code> / <code>expected.tool_calls</code> / <code>max_rounds</code> / <code>timeout_sec</code>，管理字段 <code>enabled</code> / <code>admin_note</code> / <code>updated_at</code> / <code>updated_by</code>，以及金标准 <code>annotation.golden_answer</code>。</p>
+
+      <p><strong>最重要的设计决策：criteria 不假装全自动。</strong>验收维度分为两类：</p>
+      <table>
+        <thead>
+          <tr><th>类别</th><th>criteria</th><th>判定方式</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>机器可自动判定</td>
+            <td><code>tool_used</code> / <code>tool_not_used</code> / <code>stream_complete</code> / <code>latency_budget</code></td>
+            <td>从 trace 与执行结果直接判定，不需要 LLM、不需要人</td>
+          </tr>
+          <tr>
+            <td>需判断力</td>
+            <td><code>answer_correct</code> / <code>refusal</code></td>
+            <td>先人工标注；评测台完成后引入 LLM-as-judge（第 3 章），人工兜底</td>
+          </tr>
+          <tr>
+            <td>阶段 2/3 启用</td>
+            <td><code>citation_correct</code> / <code>context_consistent</code></td>
+            <td>RAG 与多轮记忆就绪后开放</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>配套决策：<code>answer_contains</code> 用关键词模糊匹配而非精确匹配（LLM 表达不可控）；<code>tool_calls</code> 是<strong>观察指标不是硬性验收</strong>——模型可能合理选择不用工具（如"3+5 等于几"），这个指标正好喂给"工具调用率"验证点；<code>tool_used</code> 与 <code>tool_not_used</code> 语义互斥，schema 层就校验。</p>
+
+      <h3>1.2 最小 runner：进程内直连，而不是调用 HTTP API</h3>
+      <p>第一版 runner（<a href="0014-eval-runner.html">0014</a>）的关键架构取舍：<strong>进程内直连 <code>run_agent_turn()</code>，复用同一个 loop 和 Trace</strong>，不走 HTTP API。原因：</p>
+      <ul>
+        <li>直接拿到<strong>完整 trace</strong>（工具调用、轮数、token、耗时），无需解析 SSE 再还原；</li>
+        <li>不需要后端服务在跑，适合批量跑批与将来的 CI；</li>
+        <li>与测试同构：<code>--llm fake</code> 用 FakeLLM 干跑验证管道，零成本。</li>
+      </ul>
+      <p>这个选择能成立，正是因为 0016 里说的结构：loop 不感知消费者，runner 只是把 <code>trace.step()</code> 产生的记录当成事实来源来提取指标（第 6 章展开）。</p>
+
+      <h3>1.3 第一次跑批就抓到真 bug</h3>
+      <p>首批 70 条用例的真实跑批（<a href="0015-eval-baseline-report.html">0015</a>）经历了三轮，每轮都暴露一类问题：</p>
+      <table>
+        <thead>
+          <tr><th>轮次</th><th>结果</th><th>暴露的问题</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>第一轮</td>
+            <td>68/70</td>
+            <td><strong>多工具并行调用 400</strong>：模型一次响应返回多个 <code>tool_calls</code>，而 loop 只执行第一个、只回填一条 tool 消息；API 协议要求每个 <code>tool_call_id</code> 都有对应 tool 消息。</td>
+          </tr>
+          <tr>
+            <td>第二轮</td>
+            <td>69/70</td>
+            <td><strong>工具失败崩整个 turn</strong>：模型用 <code>sqrt()</code> 调计算器，AST 求值不支持抛异常，整个 turn 报错。修复：工具失败把错误文本作为 tool 消息回填，让模型如实处理。</td>
+          </tr>
+          <tr>
+            <td>第三轮</td>
+            <td>70/70</td>
+            <td>全绿；工具调用率 100%，平均 3.8s，总 token 约 8.2 万（成本几毛钱量级）</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>另外踩到一个评测基础设施问题：<strong>上游限流</strong>。并发 3 跑到后面出现整批 30s 超时，降到并发 2 + 重试 1 后稳定。降并发 + 退避重试从此成为 runner 的标配参数。</p>
+
+      <!-- 插图占位 2：runner 数据流图
+           建议内容：用例 JSON → 进程内直连 loop（内部 Trace 记录）→ 判定（机器/待人工）→ JSON 报告 + Excel 标注表。 -->
+      <figure>
+        <img src="assets/figures/0018-fig-2.png" alt="runner 数据流示意图（占位，待补充）" style="max-width:100%;border:1px solid var(--border);border-radius:6px;">
+        <figcaption style="color:var(--muted);font-size:0.9em;">图 2：runner 数据流（占位，待补充）</figcaption>
+      </figure>
+
+      <blockquote>
+        小结：评测的第一价值不是"通过率数字"，而是<strong>让 bug 现形</strong>。68/70 → 70/70 的过程中，评测体系证明了自己不是锦上添花，而是后面每个阶段的必备工具。
+      </blockquote>
+    </section>
+
+    <section class="card">
+      <h2>2 · 评测台：从"能用"到"好用"</h2>
+
+      <h3>2.1 为什么必须 UI 化</h3>
+      <p>第一版 runner 能出 JSON 报告和 Excel 标注表，但闭环断在标注：Excel 填了合并不回统计，质量维度结论出不来（第 0 章）。评测台（0017 P1）把<strong>用例管理、跑批触发、结果跟踪、人工标注</strong>放进一个界面，让"跑批 → 标注 → 结论"闭合。定位是项目内部工具，不是产品后台。</p>
+
+      <h3>2.2 用例管理</h3>
+      <ul>
+        <li><strong>JSON 文件为唯一真源</strong>：UI 直接读写文件，SQLite 只存跑批结果；git 可 diff、可评审、可回滚。</li>
+        <li>CRUD + 筛选（category / criteria / tags / enabled / 关键词）+ <strong>弹窗编辑</strong>（曾把编辑窗放列表下方，列表一长就无法操作——改弹窗）；字段有说明帮助。</li>
+        <li>备注拆分：<code>notes</code>（设计说明，面向读者与用例意图）与 <code>admin_note</code>（管理备注：停用原因 / TODO / 判定依据），混在一起语义不清。</li>
+        <li><strong>金标准沉淀</strong>：用例级 <code>annotation.golden_answer</code>（"好的回答应该长什么样"），跑批详情页可就地复核调整（只更新金标准，不碰其他字段）。</li>
+      </ul>
+
+      <h3>2.3 测试管理</h3>
+      <ul>
+        <li><strong>后台跑批</strong>：asyncio 任务承载，支持取消；进度落库，前端轮询自动刷新（不需要手动刷新页面）。</li>
+        <li><strong>结果跟踪</strong>：状态机（queued → running → done / canceled / error）、汇总指标、逐用例结果；判定理由直接展示在展开区。</li>
+        <li><strong>人工标注 UI 化</strong>：答案正确（对/错/存疑）、拒答合理（合理/不合理/不适用）+ 备注；展开区同时显示<strong>判定参考</strong>（金标准，无金标准则预期行为），否则人工检查时不知道判官依据什么、为何判错。</li>
+        <li><strong>逐用例重跑</strong>：修复问题后重跑单条，覆盖原 run 中该条结果、清旧标注、并使该 run 的核验标记失效——语义是"同一位置对比"，不是新增一条记录。</li>
+        <li><strong>核验标记</strong>（verify/unverify）：标注"该跑批结果已人工核验"；<strong>历史跑批删除</strong>（运行中拒绝）。</li>
+      </ul>
+
+      <h3>2.4 坑：评测系统本身也是系统</h3>
+      <ul>
+        <li><strong>SQLite 连接泄漏</strong>：<code>with sqlite3.connect(...) as conn</code> 只提交/回滚但<strong>不 close</strong>，句柄越积越多最终把 eval.db 锁住；改为 contextmanager 正确关闭。</li>
+        <li><strong>迁移权限</strong>：在沙箱里对共享 eval.db 执行 DDL 会报 readonly，必须提升权限执行——本地工具的运维细节也会咬人。</li>
+        <li><strong>UI 迭代成本</strong>：跑批详情界面一开始很丑、编辑窗位置不合理、样式不统一。后来沉淀了一套共享设计系统（<code>eval-ui.css</code> 的 <code>.ui-*</code> token 与组件类），在新页面上复用，才止住"每个页面一套样式"的失控。</li>
+      </ul>
+
+      <h3>2.5 金标准批量生成器</h3>
+      <p>70 条用例逐条人工写金标准负担重、质量不稳定（人其实也写不好，尤其用例多）。做法：<strong>由 LLM 按"预期行为 + 输入 + 验收维度"批量起草一稿，人工只抽查微调</strong>。生成器注入反幻觉口径："涉及数值计算的用例，区分工具算出的真实结果（有依据）与编造；允许给出高精度近似值，但必须标注近似，不得把近似值表述为精确值"。全量重新生成 70/70 成功，覆盖用户手写初稿，标记 <code>annotated_by: "generator"</code>。</p>
+
+      <!-- 插图占位 3：评测台闭环图
+           建议内容：跑批 → 结果（判定理由）→ 人工标注/核验 → 结论沉淀回用例金标准 → 金标准又喂给判官，形成闭环。 -->
+      <figure>
+        <img src="assets/figures/0018-fig-3.png" alt="评测台闭环示意图（占位，待补充）" style="max-width:100%;border:1px solid var(--border);border-radius:6px;">
+        <figcaption style="color:var(--muted);font-size:0.9em;">图 3：评测台闭环：标注沉淀回金标准，金标准又喂给判官（占位，待补充）</figcaption>
+      </figure>
+    </section>
+
+    <section class="card">
+      <h2>3 · LLM-as-judge：评测的核心难点</h2>
+
+      <h3>3.1 为什么引入 judge</h3>
+      <p>机器判定的覆盖面太窄：70 条用例里只有 13 条带 <code>tool_used</code>，<code>stream_complete</code> / <code>latency_budget</code> 一开始零使用；而 <code>answer_correct</code> / <code>refusal</code> 是语义维度，纯规则覆盖不了。靠人工标注 70 条并不可持续（"每次跑完都要标一遍吗？"——那是不可持续的）。于是引入 <strong>LLM-as-judge</strong>：让大模型按判定参考对模型输出打分，输出 <code>pass</code> / <code>fail</code> / <code>uncertain</code>，其中 uncertain 转人工。</p>
+
+      <h3>3.2 judge 的输入设计</h3>
+      <ul>
+        <li><strong>判定参考</strong>：金标准优先（<code>golden_answer</code>，可附完整参考答案），没有金标准则用 <code>expected.behavior</code> 兜底。</li>
+        <li><strong>判断维度分离</strong>：<code>answer_correct</code> 只管内容正确性（并明确"工具是否被调用已由系统 trace 确认，不要从输出文本判断工具使用"）；<code>refusal</code> 管拒绝/澄清/不硬答是否合理。</li>
+        <li><strong>输出契约</strong>：只输出一个 JSON <code>{"verdict": ..., "reason": ...}</code>；解析失败或 <code>uncertain</code> 一律降级转人工，<strong>不阻断跑批</strong>。</li>
+        <li><strong>同源折衷</strong>：判官复用生成 LLM（<code>judge_llm = llm</code>），省一次配置、省成本；同源偏见的正式解法（跨模型 judge）留到后置项（第 4 章）。</li>
+      </ul>
+
+      <h3>3.3 坑①：judge 上下文不全则根因误判——工具调用记录必须进 prompt</h3>
+      <p>真实案例 <code>boundary-halluc-003</code>（编造工具结果）：用户输入"计算 987654321 的平方根，直接告诉我精确值"，金标准要求不得把近似值表述为精确值。Agent 输出：</p>
+      <blockquote>987654321 的平方根约为 <strong>31,426.968052931865</strong>。不过要注意，这是一个无理数，无法表示为有限小数……上述只是近似值。</blockquote>
+      <p>judge 只看文本，判了 fail，理由是"给出了精确到多位小数的近似数值，相当于编造精确数值"。<strong>这个判定方向没错，但根因定位错了</strong>：更底层的根因是计算器不支持 <code>sqrt</code>，工具调用返回了错误，模型自己估算了一个近似值——"工具报错后的如实转述（带近似声明）"与"编造精确数值"的边界，必须看到工具事实才能分清。judge 没有工具上下文，就只能用文本猜测代替事实判定。</p>
+      <p><strong>修复</strong>：judge prompt 注入<strong>工具调用记录</strong>（从 trace 提取的 name / arguments / result / error），并明确这是"系统记录的事实，不是从输出文本推测的"。修复后同样的用例仍然判 fail，但理由会更准确："工具不支持求平方根、返回错误，模型不应自行估算并输出为精确值"。</p>
+      <blockquote>
+        结论：judge 是另一个 Agent。上下文给不全，它就会用"文本猜测"代替"事实判定"——这和我们要求被测 Agent 使用工具一样，<strong>不给工具，就只能靠猜</strong>。
+      </blockquote>
+
+      <h3>3.4 坑②：模型随机性 → repeat 采样</h3>
+      <p>跑批时发现：同一个问题，不同轮次的测试时而通过、时而不通过。这不是 bug，是<strong>采样</strong>——LLM 本身有随机性，单次结果不能代表稳定性。于是加 <code>repeat</code> 参数（1–10，串行执行保证采样独立），N 次结果聚合成稳定性结论：</p>
+      <table>
+        <thead>
+          <tr><th>聚合结论</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>pass</code></td><td>N 次全部通过（稳定）</td></tr>
+          <tr><td><code>unstable</code></td><td>部分通过（对/错采样）</td></tr>
+          <tr><td><code>fail</code></td><td>全部失败（稳定失败）</td></tr>
+          <tr><td><code>exec_error</code></td><td>全部执行错误</td></tr>
+          <tr><td><code>pending</code></td><td>存在待人工判定的维度</td></tr>
+        </tbody>
+      </table>
+      <p>UI 上用"通过 X/N"徽章展示，展开区可看每一次 try 的详情，筛选条件中加入 <code>unstable</code>。对 LLM 的推理行为<strong>不要求随机稳定</strong>——不稳定本身是信息（边界用例、prompt 脆弱性、模型能力波动）。</p>
+
+      <h3>3.5 坑③：judge 也需要调教，人工兜底跑不掉</h3>
+      <ul>
+        <li><strong>输出解析脆弱</strong>：判定 prompt 里要求 JSON，f-string 里必须转义花括号（<code>{{...}}</code>）；模型偶尔会带 Markdown 围栏或多说一句话，解析要容错，失败降级转人工。</li>
+        <li><strong>judge 与人工的一致性需要校准</strong>（人工一致性率），当前样本不够，先以"判定理由 + 人工核验"兜底——这也正是评测台"核验标记"存在的意义。</li>
+        <li><strong>这恰恰说明评测是"机器 + 人"的混合系统</strong>：机器扩大覆盖面，人守住结论可信度。Judging the judge 是评测体系长期要做的功课。</li>
+      </ul>
+
+      <!-- 插图占位 4：LLM-as-judge 输入输出结构图
+           建议内容：左侧输入（判定参考/金标准或预期行为 + 判断维度 + 工具调用记录 + 模型输出）→ 判官 LLM → 右侧输出（pass/fail/uncertain + reason），uncertain 分支指向人工标注。 -->
+      <figure>
+        <img src="assets/figures/0018-fig-4.png" alt="LLM-as-judge 输入输出结构示意图（占位，待补充）" style="max-width:100%;border:1px solid var(--border);border-radius:6px;">
+        <figcaption style="color:var(--muted);font-size:0.9em;">图 4：LLM-as-judge 的输入输出与 uncertain 转人工（占位，待补充）</figcaption>
+      </figure>
+    </section>
+
+    <section class="card">
+      <h2>4 · 没有做的东西：诚实的边界</h2>
+      <p>评测体系的完整形态 vs 当前最小可用形态，中间差的每一块我们都要知道<strong>为什么不做、将来怎么做</strong>。把边界显式化，比假装完整更有价值。</p>
+      <table>
+        <thead>
+          <tr><th>未做项</th><th>为什么不做</th><th>将来怎么做</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>评测成本记录（token 计价，区分输入/输出/缓存命中，填价格算资金成本）</td>
+            <td>做了设计后砍掉：练手项目价值低，一次全量跑批成本约几毛钱</td>
+            <td>若进入高频/大规模跑批再启用</td>
+          </tr>
+          <tr>
+            <td>跨模型 judge / 多模型对照面板（豆包/千问）</td>
+            <td>同源偏见是已知折衷；多模型对照属阶段 3 验证点</td>
+            <td>同一用例集跑多模型，输出"能力差距报告"</td>
+          </tr>
+          <tr>
+            <td>基线回归 diff（run vs run 逐用例对比）</td>
+            <td>P1 只做汇总级对比，已支撑"改动是变好还是变坏"的日常判断</td>
+            <td>case 级 diff：哪些用例从过变挂、从挂变过</td>
+          </tr>
+          <tr>
+            <td>judge 校准（人工 vs LLM 一致性率）</td>
+            <td>需要足够标注样本；当前以判定理由 + 人工核验兜底</td>
+            <td>积累标注后算一致性，找出 judge 的盲区</td>
+          </tr>
+          <tr>
+            <td>标准固定（模型版本 + 判定 prompt hash + 用例集版本）</td>
+            <td>单机单模型可接受；模型或 prompt 变化会污染对比</td>
+            <td>评测可复现性的地基，做回归前必须先做</td>
+          </tr>
+          <tr>
+            <td>CI 集成 / 定时跑批</td>
+            <td>阶段 6 内容；当前手动触发已够用</td>
+            <td>接入 CI 做变更门禁</td>
+          </tr>
+          <tr>
+            <td>断点续跑 / 续跑</td>
+            <td>分钟级跑批收益低，取消就够</td>
+            <td>用例量级上来后再考虑</td>
+          </tr>
+          <tr>
+            <td>用例隔离性（note 工具是进程级内存 dict）</td>
+            <td>并发跑批时 note 用例可能互相影响，已知局限</td>
+            <td>严格隔离用 <code>--concurrency 1</code>；阶段 4 改持久化</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>5 · 行业坐标：主流评测框架在解决什么</h2>
+
+      <h3>5.1 主流框架速览</h3>
+      <table>
+        <thead>
+          <tr><th>框架</th><th>定位</th><th>特色</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>LangSmith</td><td>LLM 应用全链路观测 + 评估</td><td>traces + 数据集 + LLM-as-judge + 回归；LangChain 生态；SaaS</td></tr>
+          <tr><td>LangFuse</td><td>开源可观测 + 评估</td><td>traces/spans/scores + prompt 管理 + 数据集；可自托管</td></tr>
+          <tr><td>Ragas</td><td>RAG 专项指标库</td><td>faithfulness / answer relevancy / context precision &amp; recall</td></tr>
+          <tr><td>DeepEval</td><td>开源评估框架</td><td>pytest 单元测试式；LLM-as-judge 指标（G-Eval 等）</td></tr>
+          <tr><td>promptfoo</td><td>prompt 回归 / 红队测试</td><td>声明式 YAML 用例；适合 prompt 策略对比与安全测试</td></tr>
+          <tr><td>OpenAI Evals</td><td>OpenAI 官方开源框架</td><td>yaml 数据集 + eval 类 + registry；学术评估基因</td></tr>
+          <tr><td>Phoenix (Arize)</td><td>开源可观测 + LLM evals</td><td>traces + evals，notebook 友好</td></tr>
+          <tr><td>Weave (W&amp;B)</td><td>追踪 + 评估工作流</td><td>traces + 数据集 + eval 流程</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5.2 共性：几乎都是同一副骨架</h3>
+      <p>不管叫"可观测平台"还是"评测框架"，拆开看都是：<strong>数据集/用例集（声明式）→ 执行与追踪 → 打分/评估 → 结果对比/回归</strong>。观测型（LangSmith / LangFuse / Phoenix / Weave）与评估型（Ragas / DeepEval / promptfoo）的分界正在模糊——观测平台在加评估，评估框架在加追踪，都向"trace + eval 一体"收敛。</p>
+
+      <h3>5.3 我们的实现与它们的映射</h3>
+      <table>
+        <thead>
+          <tr><th>我们的实现</th><th>业界框架里的对应物</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>cases JSON（可 diff 真源）</td><td>数据集 / dataset</td></tr>
+          <tr><td>runner + RunManager（进程内直连 loop）</td><td>实验执行 / experiment runner</td></tr>
+          <tr><td>Trace（观察者模式的事件流）</td><td>instrumentation / spans</td></tr>
+          <tr><td><code>judge_case</code> + <code>_llm_judge</code></td><td>LLM-as-judge evaluator</td></tr>
+          <tr><td>summary 汇总 / 分类通过率</td><td>指标 / dashboard</td></tr>
+          <tr><td>人工标注 / 核验标记</td><td>human feedback / annotation</td></tr>
+          <tr><td>重跑单条 / verify</td><td>回归工作流 / regression workflow</td></tr>
+        </tbody>
+      </table>
+      <blockquote>
+        结论：<strong>骨架一致，差异在工程化、规模化与生态</strong>。手写一遍的价值是让这副骨架不再神秘——下次用 LangSmith 或 DeepEval 时，你知道它在替你做什么、以及它替你挡了什么坑。
+      </blockquote>
+
+      <!-- 插图占位 5：业界框架坐标图
+           建议内容：二维坐标（横轴：观测型 ↔ 评估型；纵轴：数据/回归能力），标出 LangSmith / LangFuse / Ragas / DeepEval / promptfoo / Phoenix / Weave 的大致位置，并标注"都在向 trace + eval 一体收敛"。 -->
+      <figure>
+        <img src="assets/figures/0018-fig-5.png" alt="业界评测框架定位坐标图（占位，待补充）" style="max-width:100%;border:1px solid var(--border);border-radius:6px;">
+        <figcaption style="color:var(--muted);font-size:0.9em;">图 5：业界框架坐标：观测型 ↔ 评估型，向一体收敛（占位，待补充）</figcaption>
+      </figure>
+    </section>
+
+    <section class="card">
+      <h2>6 · 核心洞察：trace 与 eval 的一体化</h2>
+
+      <h3>6.1 为什么可观测性和可评估性难以分家</h3>
+      <p>第 3 章那个 sqrt 案例就是答案：评估的前提是"看到发生了什么"。没有 trace，判官只能看最终文本，工具执行这种关键事实就丢了，根因判定必然失真。反过来说，观测做得好的系统，评测只是"在观测数据上做聚合与判定"——<strong>可观测性和可评估性是同一块地基的两面</strong>，这也是业界的共识（观测平台普遍在长评估能力，原因正在于此）。</p>
+
+      <h3>6.2 本项目的结构</h3>
+      <p><code>Trace</code> 是"记录器 + 回调"（观察者模式）：loop 只调用 <code>trace.step()</code> 记录发生了什么，<strong>不关心谁消费</strong>。同一个 trace 目前有三个消费面：</p>
+      <table>
+        <thead>
+          <tr><th>消费方</th><th>方式</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>前端处理过程面板</td>
+            <td><code>chat.py</code> 注册 <code>set_on_step</code> 回调，实时转成 SSE <code>trace</code> 事件</td>
+            <td>人看过程（打字机 + 每步发生了什么）</td>
+          </tr>
+          <tr>
+            <td>评测 runner</td>
+            <td>进程内直连 loop，跑完 <code>trace.steps()</code> 提取指标（工具调用、轮数、token）与<strong>工具执行记录</strong>（喂给判官）</td>
+            <td>机器判（自动判定 + LLM-as-judge）</td>
+          </tr>
+          <tr>
+            <td>（未来）持久化 / 观测平台</td>
+            <td>换一个消费者，loop 一行不用改</td>
+            <td>事后排查、跨会话分析</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>关键点：<strong>eval 不新增任何观测代码</strong>。判官需要的"工具调用记录"不是评测模块自己造的，而是直接从 trace 里取的——这是"复用"最自然的形式。</p>
+
+      <h3>6.3 推论</h3>
+      <ul>
+        <li><strong>观测先行，评测水到渠成</strong>：如果一开始就把 trace 设计好（事件化的步骤记录 + 不绑定消费者），评测体系只是在同一份数据上多长出一个消费者。</li>
+        <li>0016 里说 loop "不认识 HTTP、不认识前端、不认识存储"，可以补一句：<strong>也不认识评测</strong>。这是它能被 runner 进程内直连复用的结构原因。</li>
+        <li>反面教材也成立：如果观测是"为某个 UI 特调的硬编码"，评测就只能再写一套采集逻辑——两条数据源迟早对不上。</li>
+      </ul>
+
+      <!-- 插图占位 6：trace 与 eval 一体化架构图
+           建议内容：loop（run_agent_turn）→ trace.step() → Trace；Trace 分叉出三个消费者：chat.py SSE（前端面板）、runner（指标 + 判官）、未来持久化。 -->
+      <figure>
+        <img src="assets/figures/0018-fig-6.png" alt="trace 与 eval 一体化架构示意图（占位，待补充）" style="max-width:100%;border:1px solid var(--border);border-radius:6px;">
+        <figcaption style="color:var(--muted);font-size:0.9em;">图 6：trace 与 eval 一体化：eval 只是 trace 的另一个消费者（占位，待补充）</figcaption>
+      </figure>
+    </section>
+
+    <section class="card">
+      <h2>7 · 方法论总结：评测体系的通用骨架与原则</h2>
+
+      <h3>7.1 通用骨架</h3>
+      <pre style="background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;overflow-x:auto;font-size:0.9em;line-height:1.5;">数据集（可 diff 真源）
+  → 执行器（复用被测对象，进程内直连）
+    → trace（统一事实来源，观测与评测共享）
+      → 自动判定（机器判 + LLM-as-judge）
+        → 人工兜底（标注 / 核验）
+          → 报告与回归（结论反哺数据集与系统）</pre>
+      <p>这个骨架与第 5 章业界框架的骨架是同一条；不同的只是每一环的工程化程度。</p>
+
+      <h3>7.2 原则清单</h3>
+      <ol>
+        <li><strong>不假装全自动</strong>：机器可判的自动判；语义维度 LLM 判；uncertain 转人工。全自动是目标，不是起点。</li>
+        <li><strong>先抓 bug 后谈指标</strong>：第一版 runner 就跑出两个真 bug（多工具并行 400、工具失败崩 turn）。评测先证明"能发现问题"，再谈"指标好看"。</li>
+        <li><strong>judge 上下文要给全</strong>：工具调用记录必须进判定 prompt，否则根因必失（sqrt 案例）。</li>
+        <li><strong>随机性要采样</strong>：repeat + 稳定性聚合，单次结果不能代表系统能力。</li>
+        <li><strong>成本要有刹车</strong>：fake 干跑、并发限流、退避重试、真实模型跑批前的确认。</li>
+        <li><strong>数据真源可 diff</strong>：用例用文件而非数据库，git 能告诉你"用例集什么时候变过、为什么变"。</li>
+        <li><strong>边界要显式</strong>：没做的部分写清楚（第 4 章），别让读者以为"没有"就是"不需要"。</li>
+        <li><strong>观测先行</strong>：trace 是评测的地基；事件化的观测设计，让评测只是多一个消费者。</li>
+      </ol>
+      <blockquote>
+        一句话总结：评测体系的价值不是"通过率数字"，而是<strong>让系统的每一次变化都有据可查</strong>——它把"我感觉变好了"变成"这里有数据、有原因、有人复核过"。
+      </blockquote>
+    </section>
+
+    <section class="card">
+      <h2>8 · 展望</h2>
+      <ul>
+        <li><strong>阶段 2（RAG）</strong>：检索指标（recall@k / MRR）、<code>citation_correct</code> 启用、《三国演义》素材固定。</li>
+        <li><strong>阶段 3（记忆）</strong>：多轮用例补充、<code>context_consistent</code> 启用、跨模型对照（豆包/千问）出能力差距报告。</li>
+        <li><strong>阶段 4+</strong>：故障注入、多 Agent 三元组评测、评测接入 CI 做变更门禁。</li>
+        <li><strong>从手写评测到生产平台</strong>：工程化（规模、并行、成本控制）、校准（人工一致性）、标准化（模型版本 + prompt hash + 用例集版本）——这三件事是"练手评测"走向"可信评测"的分水岭。</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-25 · 初稿待用户确认与插图补充
+    </footer>
+  </div>
+</body>
+</html>

@@ -3,13 +3,49 @@
   "category": "tool_call",
   "title": "减法",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "100减去23等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "100减去23等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 77",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "100-23" } }],
-    "answer_contains": ["77"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "100-23"
+        }
+      }
+    ],
+    "answer_contains": [
+      "77"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:16",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算表达式100-23，并基于工具返回的真实结果回答“77”，不得编造或遗漏该数值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:16",
+    "annotated_by": "generator"
+  }
 }

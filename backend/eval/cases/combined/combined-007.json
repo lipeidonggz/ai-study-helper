@@ -3,16 +3,52 @@
   "category": "combined",
   "title": "多问题分步处理",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "今天是几号？同时帮我算一下 365 除以 7 等于多少" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "今天是几号？同时帮我算一下 365 除以 7 等于多少"
+      }
+    ]
+  },
   "expected": {
     "behavior": "分别调用 current_datetime 和 calculator，回答两个问题",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "current_datetime", "arguments": {} },
-      { "name": "calculator", "arguments": { "expression": "365/7" } }
+    "criteria": [
+      "answer_correct",
+      "tool_used"
     ],
-    "answer_contains": ["52"],
+    "tool_calls": [
+      {
+        "name": "current_datetime",
+        "arguments": {}
+      },
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "365/7"
+        }
+      }
+    ],
+    "answer_contains": [
+      "52"
+    ],
     "max_rounds": 2
   },
-  "tags": ["multi-step"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "multi-step"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:06",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "回答必须明确给出当天具体日期且使用current_datetime工具获取，同时通过calculator工具计算365除以7，结果应表述为约52.142857（或标注为近似值），并清晰区分两个问题的独立回答；若工具未调用或结果编造则不符合。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:06",
+    "annotated_by": "generator"
+  }
 }

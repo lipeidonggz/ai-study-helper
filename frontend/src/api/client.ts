@@ -141,10 +141,9 @@ export interface EvalCase {
 }
 
 export interface EvalAnnotation {
-  answer_correct: string
-  refusal: string
-  note: string
   golden_answer: string
+  reference_answer: string
+  note: string
   annotated_at: string
   annotated_by: string
 }
@@ -162,6 +161,8 @@ export interface EvalRun {
   started_at?: string
   finished_at?: string
   summary?: Record<string, unknown>
+  verified: string
+  verified_by: string
 }
 
 export interface EvalRunCase {
@@ -178,9 +179,29 @@ export interface EvalRunCase {
   error: string
   judgments: Record<string, string>
   pending_human: string[]
+  judge_reasons: Record<string, string>
+  verdict: string
+  repeat_count: number
+  pass_count: number
+  repeat_results: EvalRunAttempt[]
   answer_correct: string
   refusal: string
   annotate_note: string
+  golden_answer: string
+  behavior: string
+}
+
+export interface EvalRunAttempt {
+  status: string
+  elapsed_ms: number
+  rounds: number
+  tool_calls: string[]
+  output: string
+  error: string
+  judgments: Record<string, string>
+  pending_human: string[]
+  judge_reasons: Record<string, string>
+  verdict: string
 }
 
 async function http<T>(url: string, init?: RequestInit): Promise<T> {
@@ -222,12 +243,9 @@ export const evalApi = {
   deleteCase(id: string): Promise<{ ok: boolean }> {
     return http(`/api/eval/cases/${id}`, { method: 'DELETE' })
   },
-  adoptAnnotation(
-    caseId: string,
-    body: { answer_correct: string; refusal: string; note: string; golden_answer?: string }
-  ): Promise<EvalCase> {
-    return http(`/api/eval/cases/${caseId}/adopt-annotation`, {
-      method: 'POST',
+  updateGoldenAnswer(caseId: string, body: { golden_answer: string }): Promise<EvalCase> {
+    return http(`/api/eval/cases/${caseId}/golden-answer`, {
+      method: 'PATCH',
       headers: JSON_HEADERS,
       body: JSON.stringify(body)
     })
@@ -246,6 +264,7 @@ export const evalApi = {
     llm: 'real' | 'fake'
     concurrency: number
     retries: number
+    repeat: number
     case_filter: { ids?: string[]; categories?: string[]; tags?: string[] }
   }): Promise<{ run_id: number }> {
     return http('/api/eval/runs', {
@@ -256,6 +275,15 @@ export const evalApi = {
   },
   cancelRun(id: number): Promise<{ ok: boolean; status: string }> {
     return http(`/api/eval/runs/${id}/cancel`, { method: 'POST' })
+  },
+  verifyRun(id: number): Promise<{ ok: boolean; verified: boolean }> {
+    return http(`/api/eval/runs/${id}/verify`, { method: 'POST' })
+  },
+  unverifyRun(id: number): Promise<{ ok: boolean; verified: boolean }> {
+    return http(`/api/eval/runs/${id}/unverify`, { method: 'POST' })
+  },
+  rerunCase(runId: number, caseId: string): Promise<{ ok: boolean; case: EvalRunCase }> {
+    return http(`/api/eval/runs/${runId}/cases/${caseId}/rerun`, { method: 'POST' })
   },
   annotate(
     runId: number,

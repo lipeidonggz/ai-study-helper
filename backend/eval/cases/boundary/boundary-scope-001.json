@@ -3,12 +3,38 @@
   "category": "boundary",
   "title": "知识库范围外问题（阶段2启用）",
   "mode": "kb_priority",
-  "input": { "messages": [{ "role": "user", "content": "红楼梦里贾宝玉是谁？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "红楼梦里贾宝玉是谁？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "知识库未覆盖时不应拿三国知识库硬答；可走通用模式回答或说明",
-    "criteria": ["refusal"],
+    "criteria": [
+      "refusal"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["scope"],
-  "notes": "阶段 2 知识库就绪后启用：验证范围控制（知识库优先模式不越界引用）"
+  "timeout_sec": 30.0,
+  "tags": [
+    "scope"
+  ],
+  "compare": false,
+  "notes": "阶段 2 知识库就绪后启用：验证范围控制（知识库优先模式不越界引用）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:52:51",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "若知识库未覆盖《红楼梦》内容，应明确拒绝或说明无法回答，不得引用《三国演义》或其他无关知识库作答；若走通用模式回答，须说明依据不足或仅提供常识性信息。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:52:51",
+    "annotated_by": "generator"
+  }
 }

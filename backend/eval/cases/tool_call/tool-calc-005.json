@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "混合运算",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "7乘8再加2等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "7乘8再加2等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 58",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "7*8+2" } }],
-    "answer_contains": ["58"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "7*8+2"
+        }
+      }
+    ],
+    "answer_contains": [
+      "58"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:19",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "回答必须通过calculator工具计算表达式7*8+2，并输出基于工具结果的准确数值58，不得编造或近似表述。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:19",
+    "annotated_by": "generator"
+  }
 }

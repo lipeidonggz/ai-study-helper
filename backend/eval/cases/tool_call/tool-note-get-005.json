@@ -3,13 +3,46 @@
   "category": "tool_call",
   "title": "读取不存在的笔记",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "读取笔记：不存在的标题XYZ" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "读取笔记：不存在的标题XYZ"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_get，结果不存在时应如实说明未找到",
-    "criteria": ["answer_correct", "tool_used"],
-    "tool_calls": [{ "name": "note_get", "arguments": { "title": "不存在的标题XYZ" } }],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_get",
+        "arguments": {
+          "title": "不存在的标题XYZ"
+        }
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["note"],
-  "notes": "验证工具结果被正确回填到回答（不编造笔记内容）"
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "验证工具结果被正确回填到回答（不编造笔记内容）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:13",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用note_get且参数title为不存在的标题XYZ；工具返回未找到或无结果时，回答须如实说明该笔记不存在，不得编造任何笔记内容或将其作为事实输出。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:13",
+    "annotated_by": "generator"
+  }
 }

@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "保存菜谱",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "帮我存个菜谱：标题=番茄炒蛋，内容=两个番茄三个鸡蛋" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我存个菜谱：标题=番茄炒蛋，内容=两个番茄三个鸡蛋"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_add 保存笔记并确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "note_add", "arguments": { "title": "番茄炒蛋", "content": "两个番茄三个鸡蛋" } }],
-    "answer_contains": ["已保存"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "番茄炒蛋",
+          "content": "两个番茄三个鸡蛋"
+        }
+      }
+    ],
+    "answer_contains": [
+      "已保存"
+    ],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:04",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "包含\"已保存\"或\"已记录\"等确认表述，且明确提及菜谱标题\"番茄炒蛋\"及内容\"两个番茄三个鸡蛋\"。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:04",
+    "annotated_by": "generator"
+  }
 }

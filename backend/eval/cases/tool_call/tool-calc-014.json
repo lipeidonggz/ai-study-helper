@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "幂与加法组合",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "2的3次方加1等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "2的3次方加1等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 9",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "2**3+1" } }],
-    "answer_contains": ["9"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "2**3+1"
+        }
+      }
+    ],
+    "answer_contains": [
+      "9"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:33",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "最终答案必须依赖calculator工具计算结果，明确输出数值9；不得直接凭记忆或编造其他结果，若工具返回非9值或报错则不得作为事实输出。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:33",
+    "annotated_by": "generator"
+  }
 }

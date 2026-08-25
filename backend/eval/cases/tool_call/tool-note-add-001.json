@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "保存购物清单",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "帮我记一条笔记，标题是购物清单，内容是牛奶、鸡蛋、面包" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我记一条笔记，标题是购物清单，内容是牛奶、鸡蛋、面包"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_add 保存笔记并确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "note_add", "arguments": { "title": "购物清单", "content": "牛奶、鸡蛋、面包" } }],
-    "answer_contains": ["已保存"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "购物清单",
+          "content": "牛奶、鸡蛋、面包"
+        }
+      }
+    ],
+    "answer_contains": [
+      "已保存"
+    ],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:56",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用note_add保存标题为“购物清单”、内容为“牛奶、鸡蛋、面包”的笔记，并明确告知用户保存成功。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:56",
+    "annotated_by": "generator"
+  }
 }

@@ -8,7 +8,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Category = Literal["tool_call", "boundary", "combined", "multi_turn", "kb_qa"]
 Mode = Literal["general", "kb_priority", "tool_enhanced"]
@@ -54,20 +54,28 @@ class Expected(BaseModel):
     answer_contains: list[str] = Field(default_factory=list)  # 答案应包含关键词（模糊匹配）
     max_rounds: int = Field(default=4, ge=1, le=10)  # 预期最大工具轮数（对比实际值）
 
+    @model_validator(mode="after")
+    def _check_criteria_conflicts(self) -> "Expected":
+        """互斥维度校验：tool_used 与 tool_not_used 语义相反，不能同时选。"""
+        criteria = set(self.criteria)
+        if "tool_used" in criteria and "tool_not_used" in criteria:
+            raise ValueError("验收维度互斥：tool_used 与 tool_not_used 不能同时选择")
+        return self
+
 
 class CaseAnnotation(BaseModel):
-    """人工标注结论（金标准）：沉淀到用例后，供后续跑批自动判定/抽检复用。
+    """用例级金标准：描述"好的回答应该长什么样"，不评判任何一次具体输出。
 
-    设计角度：标注结论属于"用例资产"，不是某次跑批的产出——
-    标一遍沉淀到这里，之后每次跑批都不用再人工全量标注。
+    设计角度：用例本身没有系统响应，"答案正确/拒答合理"是对某次跑批输出的
+    执行评价（存于 eval_run_cases），不属于用例属性。用例级只保留期望性内容，
+    供后续跑批自动判定（LLM-as-judge）与人工抽检对照。
     """
 
-    answer_correct: str = ""  # 对/错/存疑（"" 表示未标）
-    refusal: str = ""  # 合理/不合理/不适用（"" 表示未标）
-    note: str = ""  # 标注依据 / 备注
-    golden_answer: str = ""  # 金标准答案要点（LLM-as-judge 与人工对照的依据）
-    annotated_at: str = ""  # 最近沉淀时间
-    annotated_by: str = ""  # 最近沉淀人
+    golden_answer: str = ""  # 金标准答案要点：满分回答应包含的关键事实/口径/要点
+    reference_answer: str = ""  # 完整参考答案（可选）：比要点更精确，供自动判定对照
+    note: str = ""  # 金标准备注：为什么这样定、判定依据
+    annotated_at: str = ""  # 最近更新时间
+    annotated_by: str = ""  # 最近维护人
 
 
 class CaseFile(BaseModel):

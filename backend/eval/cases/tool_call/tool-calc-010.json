@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "小数运算",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "3.5乘以2等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "3.5乘以2等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 7",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "3.5*2" } }],
-    "answer_contains": ["7"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "3.5*2"
+        }
+      }
+    ],
+    "answer_contains": [
+      "7"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:27",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "回答必须通过调用calculator计算表达式“3.5*2”并明确给出结果为7，且不得将任何未基于工具输出的数值表述为精确答案。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:27",
+    "annotated_by": "generator"
+  }
 }

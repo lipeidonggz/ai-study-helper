@@ -3,16 +3,52 @@
   "category": "combined",
   "title": "任务分解",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "我需要一个番茄炒蛋菜谱：先算出 2 人份需要几个番茄（1 人份 2 个），然后保存为笔记" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "我需要一个番茄炒蛋菜谱：先算出 2 人份需要几个番茄（1 人份 2 个），然后保存为笔记"
+      }
+    ]
+  },
   "expected": {
     "behavior": "计算 2×2=4 个番茄，再调用 note_add 保存菜谱",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "calculator", "arguments": { "expression": "2*2" } },
-      { "name": "note_add" }
+    "criteria": [
+      "answer_correct",
+      "tool_used"
     ],
-    "answer_contains": ["4"],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "2*2"
+        }
+      },
+      {
+        "name": "note_add",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [
+      "4"
+    ],
     "max_rounds": 2
   },
-  "tags": ["task-decomposition"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "task-decomposition"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:11",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应完成2×2=4个番茄的计算，调用calculator计算\"2*2\"得到4，再调用note_add保存番茄炒蛋菜谱，且计算数值必须为4，不得伪造或省略工具调用。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:11",
+    "annotated_by": "generator"
+  }
 }

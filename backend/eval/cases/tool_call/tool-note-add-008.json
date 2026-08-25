@@ -3,13 +3,45 @@
   "category": "tool_call",
   "title": "保存提醒",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "记一条提醒：明天早上八点开会" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "记一条提醒：明天早上八点开会"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_add 保存提醒并确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "note_add" }],
-    "answer_contains": ["已保存"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [
+      "已保存"
+    ],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:05",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用note_add保存提醒，且确认内容为“明天早上八点开会”；若工具返回结果，应如实反馈保存成功与否，不得编造未发生的确认信息。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:05",
+    "annotated_by": "generator"
+  }
 }

@@ -3,17 +3,54 @@
   "category": "combined",
   "title": "多轮工具链",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "先计算 100÷4，把结果保存为笔记，然后再读出来" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "先计算 100÷4，把结果保存为笔记，然后再读出来"
+      }
+    ]
+  },
   "expected": {
     "behavior": "calculator 得 25 → note_add 保存 → note_get 读取，完整链路 3 步",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "calculator", "arguments": { "expression": "100/4" } },
-      { "name": "note_add" },
-      { "name": "note_get" }
+    "criteria": [
+      "answer_correct",
+      "tool_used"
     ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "100/4"
+        }
+      },
+      {
+        "name": "note_add",
+        "arguments": {}
+      },
+      {
+        "name": "note_get",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 3
   },
-  "tags": ["multi-step"],
-  "timeout_sec": 60
+  "timeout_sec": 60.0,
+  "tags": [
+    "multi-step"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:03",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答必须依次完成调用calculator计算100/4得到25、调用note_add保存该结果、调用note_get读取并回显25这三步完整链路；若任一工具报错或缺失，不得编造25或任何计算结果，应明确说明工具未成功执行。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:03",
+    "annotated_by": "generator"
+  }
 }

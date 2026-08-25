@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "保存读书笔记",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "记笔记：书名=三国演义，心得=人物塑造很立体" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "记笔记：书名=三国演义，心得=人物塑造很立体"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_add 保存笔记并确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "note_add", "arguments": { "title": "三国演义", "content": "人物塑造很立体" } }],
-    "answer_contains": ["已保存"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "三国演义",
+          "content": "人物塑造很立体"
+        }
+      }
+    ],
+    "answer_contains": [
+      "已保存"
+    ],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:03",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应包含：确认已调用note_add工具保存笔记，且工具参数为title=三国演义、content=人物塑造很立体，并在回复中明确告知用户笔记已成功保存，不遗漏或篡改书目和心得内容。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:03",
+    "annotated_by": "generator"
+  }
 }

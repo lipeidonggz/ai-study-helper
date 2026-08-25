@@ -3,13 +3,44 @@
   "category": "tool_call",
   "title": "当前时间",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "现在几点了？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "现在几点了？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 current_datetime 获取并回答当前时间",
-    "criteria": ["answer_correct", "tool_used"],
-    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "current_datetime",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["datetime"],
-  "compare": true
+  "timeout_sec": 30.0,
+  "tags": [
+    "datetime"
+  ],
+  "compare": true,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:44",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "回答应调用current_datetime工具获取当前日期时间，并以“今天是X年X月X日，现在时间是X时X分”等明确表述直接告知用户；若工具返回错误或异常，须如实说明无法获取，不得编造或模糊回答时间。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:44",
+    "annotated_by": "generator"
+  }
 }

@@ -3,11 +3,13 @@
 接口总览：
   /api/eval/cases            GET 列表（支持筛选） / POST 新建
   /api/eval/cases/{id}       GET / PUT / DELETE
-  /api/eval/cases/{id}/adopt-annotation  POST 把本次标注沉淀回用例（金标准）
+  /api/eval/cases/{id}/golden-answer  PATCH 只更新金标准答案要点（详情页复核用）
   /api/eval/runs             GET 历史跑批 / POST 启动跑批
   /api/eval/runs/{id}        GET 详情（含逐用例结果）
   /api/eval/runs/{id}        DELETE 删除历史跑批（运行中不可删）
   /api/eval/runs/{id}/cancel POST 取消
+  /api/eval/runs/{id}/verify     POST 标记已人工核验 / POST unverify 取消
+  /api/eval/runs/{id}/cases/{case_id}/rerun  POST 重跑单条（覆盖原结果）
   /api/eval/runs/{id}/cases/{case_id}  PATCH 人工标注
   /api/eval/runs/{id}/export GET 导出 JSON
 """
@@ -36,6 +38,7 @@ class RunCreate(BaseModel):
     llm: Literal["real", "fake"] = "real"
     concurrency: int = Field(default=2, ge=1, le=10)
     retries: int = Field(default=1, ge=0, le=5)
+    repeat: int = Field(default=1, ge=1, le=10)  # 每条用例执行次数（稳定性评测）
     case_filter: dict = Field(
         default_factory=lambda: {"ids": [], "categories": [], "tags": []}
     )
@@ -49,13 +52,10 @@ class AnnotateIn(BaseModel):
     note: str = ""
 
 
-class AdoptAnnotationIn(BaseModel):
-    """把一次跑批的人工标注结论沉淀回用例（成为金标准）。"""
+class GoldenAnswerIn(BaseModel):
+    """仅更新用例金标准答案要点（跑批详情复核时就地调整）。"""
 
-    answer_correct: Literal["", "对", "错", "存疑"] = ""
-    refusal: Literal["", "合理", "不合理", "不适用"] = ""
-    note: str = ""
-    golden_answer: str = ""  # 可选：一并更新金标准答案要点；留空则保留原值
+    golden_answer: str = ""
 
 
 def _manager(request: Request):
@@ -132,26 +132,15 @@ def update_case(case_id: str, body: CaseFile, request: Request) -> dict:
     return case_store.get_case(case_id, _cases_dir(request)).model_dump()
 
 
-@router.delete("/cases/{case_id}")
-def delete_case(case_id: str, request: Request) -> dict:
-    if not case_store.delete_case(case_id, _cases_dir(request)):
-        raise HTTPException(404, f"用例不存在：{case_id}")
-    _deps(request).log_store.append("eval", {"action": "case_delete", "id": case_id})
-    return {"ok": True}
-
-
-@router.post("/cases/{case_id}/adopt-annotation")
-def adopt_annotation(case_id: str, body: AdoptAnnotationIn, request: Request) -> dict:
-    """把标注结论沉淀到用例：答案正确/拒答合理/备注写入 case.annotation。"""
+@router.patch("/cases/{case_id}/golden-answer")
+def update_golden_answer(case_id: str, body: GoldenAnswerIn, request: Request) -> dict:
+    """只更新金标准答案要点：跑批详情页人工复核发现判官参考不对时可就地调整。"""
     case = case_store.get_case(case_id, _cases_dir(request))
     if case is None:
         raise HTTPException(404, f"用例不存在：{case_id}")
     ann = case.annotation.model_copy(
         update={
-            "answer_correct": body.answer_correct,
-            "refusal": body.refusal,
-            "note": body.note,
-            "golden_answer": body.golden_answer or case.annotation.golden_answer,
+            "golden_answer": body.golden_answer.strip(),
             "annotated_at": datetime.now().isoformat(timespec="seconds"),
             "annotated_by": "local",
         }
@@ -162,9 +151,17 @@ def adopt_annotation(case_id: str, body: AdoptAnnotationIn, request: Request) ->
         author="local",
     )
     _deps(request).log_store.append(
-        "eval", {"action": "case_adopt_annotation", "id": case_id}
+        "eval", {"action": "case_update_golden_answer", "id": case_id}
     )
     return case_store.get_case(case_id, _cases_dir(request)).model_dump()
+
+
+@router.delete("/cases/{case_id}")
+def delete_case(case_id: str, request: Request) -> dict:
+    if not case_store.delete_case(case_id, _cases_dir(request)):
+        raise HTTPException(404, f"用例不存在：{case_id}")
+    _deps(request).log_store.append("eval", {"action": "case_delete", "id": case_id})
+    return {"ok": True}
 
 
 # —— 跑批管理 ——
@@ -202,6 +199,7 @@ async def start_run(body: RunCreate, request: Request) -> dict:
             llm=body.llm,
             concurrency=body.concurrency,
             retries=body.retries,
+            repeat=body.repeat,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
@@ -213,9 +211,19 @@ def get_run(run_id: int, request: Request) -> dict:
     run = run_store.get_run(_db(request), run_id)
     if run is None:
         raise HTTPException(404, f"跑批不存在：{run_id}")
+    cases = run_store.get_run_cases(_db(request), run_id)
+    # 附上每条用例的判定参考（金标准答案要点 / 预期行为），供详情页人工复核对照
+    for row in cases:
+        case = case_store.get_case(row["case_id"], _cases_dir(request))
+        if case is not None:
+            row["golden_answer"] = case.annotation.golden_answer
+            row["behavior"] = case.expected.behavior
+        else:
+            row["golden_answer"] = ""
+            row["behavior"] = ""
     return {
         "run": run,
-        "cases": run_store.get_run_cases(_db(request), run_id),
+        "cases": cases,
         "active": _manager(request).is_active(run_id),
     }
 
@@ -227,6 +235,34 @@ async def cancel_run(run_id: int, request: Request) -> dict:
         raise HTTPException(404, f"跑批不存在：{run_id}")
     ok = _manager(request).cancel(run_id)
     return {"ok": ok, "status": run_store.get_run(_db(request), run_id)["status"]}
+
+
+@router.post("/runs/{run_id}/verify")
+def verify_run(run_id: int, request: Request) -> dict:
+    """标记跑批结果已人工核验。"""
+    if run_store.get_run(_db(request), run_id) is None:
+        raise HTTPException(404, f"跑批不存在：{run_id}")
+    run_store.mark_verified(_db(request), run_id, by="local")
+    return {"ok": True, "verified": True}
+
+
+@router.post("/runs/{run_id}/unverify")
+def unverify_run(run_id: int, request: Request) -> dict:
+    """取消核验标记。"""
+    if run_store.get_run(_db(request), run_id) is None:
+        raise HTTPException(404, f"跑批不存在：{run_id}")
+    run_store.clear_verified(_db(request), run_id)
+    return {"ok": True, "verified": False}
+
+
+@router.post("/runs/{run_id}/cases/{case_id}/rerun")
+async def rerun_case(run_id: int, case_id: str, request: Request) -> dict:
+    """重跑单条用例：覆盖该条结果、清旧标注、重算 summary。"""
+    try:
+        entry = await _manager(request).rerun_case(run_id, case_id, _deps(request))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True, "case": entry}
 
 
 @router.patch("/runs/{run_id}/cases/{case_id}")

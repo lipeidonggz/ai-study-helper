@@ -3,16 +3,53 @@
   "category": "combined",
   "title": "保存+引用",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "帮我算 6×7 并保存到笔记 口诀，然后引用这条笔记回答我 6×7 是多少" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我算 6×7 并保存到笔记 口诀，然后引用这条笔记回答我 6×7 是多少"
+      }
+    ]
+  },
   "expected": {
     "behavior": "calculator 得 42 → note_add 保存 → 回答时引用笔记内容",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "calculator", "arguments": { "expression": "6*7" } },
-      { "name": "note_add" }
+    "criteria": [
+      "answer_correct",
+      "tool_used"
     ],
-    "answer_contains": ["42"],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "6*7"
+        }
+      },
+      {
+        "name": "note_add",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [
+      "42"
+    ],
     "max_rounds": 2
   },
-  "tags": ["note", "multi-step"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note",
+    "multi-step"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:09",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "回答必须包含调用计算器计算6×7的真实结果42，调用笔记保存功能写入内容，并明确引用该笔记内容作为回答依据；若工具未执行则不得声称已保存，不得编造或高精度近似42之外的数值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:09",
+    "annotated_by": "generator"
+  }
 }

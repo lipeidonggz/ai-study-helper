@@ -3,12 +3,44 @@
   "category": "tool_call",
   "title": "读取学习计划",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "帮我看看之前存的学习计划" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我看看之前存的学习计划"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_get 读取笔记",
-    "criteria": ["answer_correct", "tool_used"],
-    "tool_calls": [{ "name": "note_get" }],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_get",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:08",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应通过调用note_get工具读取笔记内容，并准确陈述获取到的学习计划内容，不得编造或遗漏关键信息；若工具调用失败或无结果，应明确说明无法获取，而非虚构计划内容。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:08",
+    "annotated_by": "generator"
+  }
 }

@@ -3,13 +3,47 @@
   "category": "combined",
   "title": "计算+比较",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "分别计算 12×12 和 13×11，告诉我哪个更大" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "分别计算 12×12 和 13×11，告诉我哪个更大"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算两个乘积（144 和 143）并比较大小",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator" }],
-    "answer_contains": ["144"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [
+      "144"
+    ],
     "max_rounds": 2
   },
-  "tags": ["math", "compare"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "compare"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:52:57",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用 calculator 分别计算 12×12 得到 144 和 13×11 得到 143，并明确比较得出 12×12 的乘积更大（144 > 143）；若使用近似值必须标注，不得编造结果。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:52:57",
+    "annotated_by": "generator"
+  }
 }

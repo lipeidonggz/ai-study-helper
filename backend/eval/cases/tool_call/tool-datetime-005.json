@@ -3,13 +3,44 @@
   "category": "tool_call",
   "title": "指定时区",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "东京现在几点？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "东京现在几点？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 current_datetime 获取当前时间（骨架版忽略时区参数）",
-    "criteria": ["answer_correct", "tool_used"],
-    "tool_calls": [{ "name": "current_datetime", "arguments": {} }],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "current_datetime",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["datetime"],
-  "notes": "骨架版 current_datetime 忽略时区参数，使用系统本地时区；时区处理是后续改进点"
+  "timeout_sec": 30.0,
+  "tags": [
+    "datetime"
+  ],
+  "compare": false,
+  "notes": "骨架版 current_datetime 忽略时区参数，使用系统本地时区；时区处理是后续改进点",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:50",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "答案应调用current_datetime工具且参数为空对象，并依据工具返回的系统本地时间如实回答东京当前时刻；不得在未调用工具或工具无结果时编造时间，不得附加时区转换参数。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:50",
+    "annotated_by": "generator"
+  }
 }

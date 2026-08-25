@@ -3,16 +3,52 @@
   "category": "tool_call",
   "title": "先保存再读取",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "先保存一条笔记：标题=测试，内容=hello，然后立刻把它读出来" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "先保存一条笔记：标题=测试，内容=hello，然后立刻把它读出来"
+      }
+    ]
+  },
   "expected": {
     "behavior": "先调用 note_add 保存，再调用 note_get 读取确认",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "note_add", "arguments": { "title": "测试", "content": "hello" } },
-      { "name": "note_get", "arguments": { "title": "测试" } }
+    "criteria": [
+      "answer_correct"
     ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "测试",
+          "content": "hello"
+        }
+      },
+      {
+        "name": "note_get",
+        "arguments": {
+          "title": "测试"
+        }
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 2
   },
-  "tags": ["multi-step"],
-  "notes": "同一次请求内进程内存共享，应能读到刚保存的笔记"
+  "timeout_sec": 30.0,
+  "tags": [
+    "multi-step"
+  ],
+  "compare": false,
+  "notes": "同一次请求内进程内存共享，应能读到刚保存的笔记",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:40",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "先调用note_add保存标题为“测试”且内容为“hello”的笔记，再调用note_get读取同一标题“测试”，且输出内容必须确认为“hello”，不得虚构或遗漏读取结果。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:40",
+    "annotated_by": "generator"
+  }
 }

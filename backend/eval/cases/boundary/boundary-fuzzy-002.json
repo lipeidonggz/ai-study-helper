@@ -3,11 +3,39 @@
   "category": "boundary",
   "title": "多义词歧义",
   "mode": "general",
-  "input": { "messages": [{ "role": "user", "content": "给我讲讲苹果" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "给我讲讲苹果"
+      }
+    ]
+  },
   "expected": {
     "behavior": "应澄清是水果还是品牌，或覆盖说明，不假装确定用户所指",
-    "criteria": ["answer_correct", "refusal"],
+    "criteria": [
+      "answer_correct",
+      "refusal"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["ambiguity"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "ambiguity"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:52:26",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应明确区分苹果是水果还是苹果公司品牌，不得假定用户所指；对两者的关键特征（如水果种类、营养或公司产品、历史）作简要说明，或直接澄清并请用户确认，绝不可将未指明对象当作确定事实硬答。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:52:26",
+    "annotated_by": "generator"
+  }
 }

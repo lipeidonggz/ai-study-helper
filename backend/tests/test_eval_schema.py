@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-from eval.schema import load_cases
+import pytest
+from pydantic import ValidationError
+
+from eval.schema import CaseFile, CaseInput, Expected, InputMessage, load_cases
 
 CASES_DIR = Path(__file__).resolve().parent.parent / "eval" / "cases"
 
@@ -29,3 +32,16 @@ def test_first_batch_category_counts():
     assert counts["tool_call"] >= 40
     assert counts["boundary"] >= 20
     assert counts["combined"] >= 10
+
+
+def test_mutually_exclusive_criteria_rejected():
+    """tool_used 与 tool_not_used 互斥：同时选择应报校验错误。"""
+    with pytest.raises(ValidationError):
+        CaseFile(
+            id="t-conflict",
+            category="tool_call",
+            title="t",
+            mode="tool_enhanced",
+            input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
+            expected=Expected(behavior="b", criteria=["tool_used", "tool_not_used"]),
+        )

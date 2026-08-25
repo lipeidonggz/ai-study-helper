@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "除不尽的小数",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "100除以3等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "100除以3等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并给出约 33.33 的结果",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "100/3" } }],
-    "answer_contains": ["33"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "100/3"
+        }
+      }
+    ],
+    "answer_contains": [
+      "33"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:30",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator计算100/3，基于工具结果输出约33.33或33.333...等近似值，并明确标注为近似值，不得将近似值表述为精确值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:30",
+    "annotated_by": "generator"
+  }
 }

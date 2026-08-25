@@ -3,14 +3,49 @@
   "category": "combined",
   "title": "计算并解释步骤",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "计算（15+5）×3 的结果，并解释一下运算顺序" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "计算（15+5）×3 的结果，并解释一下运算顺序"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 得到 60，并解释先括号后乘法",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "(15+5)*3" } }],
-    "answer_contains": ["60"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "(15+5)*3"
+        }
+      }
+    ],
+    "answer_contains": [
+      "60"
+    ],
     "max_rounds": 1
   },
-  "tags": ["math", "explain"],
-  "compare": true
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "explain"
+  ],
+  "compare": true,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:52:55",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应包含：调用calculator工具计算表达式(15+5)*3并得到结果60；明确解释运算顺序为先计算括号内的15+5=20，再乘以3得到60；结果60必须来源于工具输出而非编造。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:52:55",
+    "annotated_by": "generator"
+  }
 }

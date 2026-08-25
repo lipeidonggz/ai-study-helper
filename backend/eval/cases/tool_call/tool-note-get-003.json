@@ -3,12 +3,44 @@
   "category": "tool_call",
   "title": "读取待办",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "我记的待办是什么？帮我查一下" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "我记的待办是什么？帮我查一下"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 note_get 读取笔记",
-    "criteria": ["answer_correct", "tool_used"],
-    "tool_calls": [{ "name": "note_get" }],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_get",
+        "arguments": {}
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 1
   },
-  "tags": ["note"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "note"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:54:10",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用note_get工具读取笔记，并在答复中明确呈现所查到的待办内容或说明未找到待办，不得编造或臆测笔记内容；若工具无结果，需如实告知未查到。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:54:10",
+    "annotated_by": "generator"
+  }
 }

@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "幂运算",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "2的10次方是多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "2的10次方是多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 1024",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "2**10" } }],
-    "answer_contains": ["1024"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "2**10"
+        }
+      }
+    ],
+    "answer_contains": [
+      "1024"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:22",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "金标准答案应包含：调用calculator计算2**10，并回答结果为1024，且不得将近似值、编造值作为精确结果。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:22",
+    "annotated_by": "generator"
+  }
 }

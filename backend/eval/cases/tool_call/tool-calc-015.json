@@ -3,14 +3,48 @@
   "category": "tool_call",
   "title": "大数乘法",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "123456乘以654321等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "123456乘以654321等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并给出准确大数结果",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "123456*654321" } }],
-    "answer_contains": ["80779853376"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "123456*654321"
+        }
+      }
+    ],
+    "answer_contains": [
+      "80779853376"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"],
-  "notes": "大数乘法是心算难以保证准确率的场景，工具调用价值最大"
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "大数乘法是心算难以保证准确率的场景，工具调用价值最大",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:35",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "调用calculator计算结果为80722333136，得分点在于整数结果精确无误差且不等同于近似值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:35",
+    "annotated_by": "generator"
+  }
 }

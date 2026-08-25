@@ -9,6 +9,7 @@
 import json
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,11 +22,20 @@ def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def _connect(db_path: Path) -> sqlite3.Connection:
+@contextmanager
+def _connect(db_path: Path):
+    """打开并自动关闭连接（sqlite3 连接对象的 with 只提交不关闭，会泄漏句柄）。"""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db(db_path: Path = DB_PATH) -> None:
@@ -44,7 +54,9 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 error TEXT,
                 created_at TEXT NOT NULL,
                 started_at TEXT,
-                finished_at TEXT
+                finished_at TEXT,
+                verified TEXT NOT NULL DEFAULT '',
+                verified_by TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS eval_run_cases (
                 run_id INTEGER NOT NULL,
@@ -63,6 +75,11 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 judgments TEXT,
                 pending_human TEXT,
                 metrics TEXT,
+                judge_reasons TEXT NOT NULL DEFAULT '{}',
+                verdict TEXT NOT NULL DEFAULT '',
+                repeat_count INTEGER NOT NULL DEFAULT 1,
+                pass_count INTEGER NOT NULL DEFAULT 0,
+                repeat_results TEXT NOT NULL DEFAULT '[]',
                 answer_correct TEXT NOT NULL DEFAULT '',
                 refusal TEXT NOT NULL DEFAULT '',
                 annotate_note TEXT NOT NULL DEFAULT '',
@@ -70,6 +87,27 @@ def init_db(db_path: Path = DB_PATH) -> None:
             );
             """
         )
+        # 存量库迁移：老表没有新列时补列（幂等）
+        run_cols = {r["name"] for r in conn.execute("PRAGMA table_info(eval_runs)")}
+        if "verified" not in run_cols:
+            conn.execute("ALTER TABLE eval_runs ADD COLUMN verified TEXT NOT NULL DEFAULT ''")
+        if "verified_by" not in run_cols:
+            conn.execute("ALTER TABLE eval_runs ADD COLUMN verified_by TEXT NOT NULL DEFAULT ''")
+        case_cols = {r["name"] for r in conn.execute("PRAGMA table_info(eval_run_cases)")}
+        if "verdict" not in case_cols:
+            conn.execute(
+                "ALTER TABLE eval_run_cases ADD COLUMN verdict TEXT NOT NULL DEFAULT ''"
+            )
+        if "judge_reasons" not in case_cols:
+            conn.execute(
+                "ALTER TABLE eval_run_cases ADD COLUMN judge_reasons TEXT NOT NULL DEFAULT '{}'"
+            )
+        if "repeat_count" not in case_cols:
+            conn.execute("ALTER TABLE eval_run_cases ADD COLUMN repeat_count INTEGER NOT NULL DEFAULT 1")
+        if "pass_count" not in case_cols:
+            conn.execute("ALTER TABLE eval_run_cases ADD COLUMN pass_count INTEGER NOT NULL DEFAULT 0")
+        if "repeat_results" not in case_cols:
+            conn.execute("ALTER TABLE eval_run_cases ADD COLUMN repeat_results TEXT NOT NULL DEFAULT '[]'")
 
 
 def create_run(
@@ -139,14 +177,18 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
             INSERT INTO eval_run_cases
                 (run_id, case_id, category, title, mode, input, status,
                  elapsed_ms, rounds, tool_calls, tokens, output, error,
-                 judgments, pending_human, metrics)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 judgments, pending_human, metrics, verdict, judge_reasons,
+                 repeat_count, pass_count, repeat_results)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, case_id) DO UPDATE SET
                 category=excluded.category, title=excluded.title, mode=excluded.mode,
                 input=excluded.input, status=excluded.status, elapsed_ms=excluded.elapsed_ms,
                 rounds=excluded.rounds, tool_calls=excluded.tool_calls, tokens=excluded.tokens,
                 output=excluded.output, error=excluded.error, judgments=excluded.judgments,
-                pending_human=excluded.pending_human, metrics=excluded.metrics
+                pending_human=excluded.pending_human, metrics=excluded.metrics,
+                verdict=excluded.verdict, judge_reasons=excluded.judge_reasons,
+                repeat_count=excluded.repeat_count, pass_count=excluded.pass_count,
+                repeat_results=excluded.repeat_results
             """,
             (
                 run_id,
@@ -165,6 +207,11 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 json.dumps(entry.get("judgments", {}), ensure_ascii=False),
                 json.dumps(entry.get("pending_human", []), ensure_ascii=False),
                 json.dumps(entry.get("metrics", {}), ensure_ascii=False),
+                entry.get("verdict", ""),
+                json.dumps(entry.get("judge_reasons", {}), ensure_ascii=False),
+                entry.get("repeat_count", 1),
+                entry.get("pass_count", 0),
+                json.dumps(entry.get("repeat_results", []), ensure_ascii=False),
             ),
         )
 
@@ -197,8 +244,16 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
 
 def _case_row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
-    for key in ("tool_calls", "tokens", "judgments", "pending_human", "metrics"):
-        if d.get(key):
+    for key in (
+        "tool_calls",
+        "tokens",
+        "judgments",
+        "pending_human",
+        "metrics",
+        "judge_reasons",
+        "repeat_results",
+    ):
+        if key in d and d[key]:
             d[key] = json.loads(d[key])
     return d
 
@@ -213,7 +268,7 @@ def list_runs(db_path: Path, limit: int = 50) -> list[dict]:
     with _connect(db_path) as conn:
         rows = conn.execute(
             "SELECT id, name, status, progress, total, error, created_at, started_at,"
-            " finished_at, summary FROM eval_runs ORDER BY id DESC LIMIT ?",
+            " finished_at, summary, verified, verified_by FROM eval_runs ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
@@ -233,3 +288,33 @@ def delete_run(db_path: Path, run_id: int) -> bool:
         conn.execute("DELETE FROM eval_run_cases WHERE run_id = ?", (run_id,))
         cur = conn.execute("DELETE FROM eval_runs WHERE id = ?", (run_id,))
         return cur.rowcount > 0
+
+
+def mark_verified(db_path: Path, run_id: int, by: str = "local") -> bool:
+    """标记跑批已人工核验，返回是否命中。"""
+    with _lock, _connect(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE eval_runs SET verified = ?, verified_by = ? WHERE id = ?",
+            (_now_iso(), by, run_id),
+        )
+        return cur.rowcount > 0
+
+
+def clear_verified(db_path: Path, run_id: int) -> bool:
+    """清除核验标记（如重跑后核验失效）。"""
+    with _lock, _connect(db_path) as conn:
+        cur = conn.execute(
+            "UPDATE eval_runs SET verified = '', verified_by = '' WHERE id = ?",
+            (run_id,),
+        )
+        return cur.rowcount > 0
+
+
+def clear_case_annotation(db_path: Path, run_id: int, case_id: str) -> None:
+    """清空单条用例的人工标注（重跑产生新输出后旧标注不再适用）。"""
+    with _lock, _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE eval_run_cases SET answer_correct = '', refusal = '', annotate_note = ''"
+            " WHERE run_id = ? AND case_id = ?",
+            (run_id, case_id),
+        )

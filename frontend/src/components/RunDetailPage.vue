@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import { evalApi, type EvalRun, type EvalRunCase } from '../api/client'
 
@@ -9,16 +9,89 @@ const data = ref<{ run: EvalRun; cases: EvalRunCase[]; active: boolean } | null>
 const error = ref('')
 const saving = ref<string>('') // 正在保存标注的 case_id
 const saveMsg = ref('')
-const adopting = ref<string>('') // 正在沉淀金标准的 case_id
-const adoptMsg = ref('')
+const goldenSaving = ref<string>('') // 正在保存金标准的 case_id
+const goldenMsg = ref('')
+const goldenEdits = ref<Record<string, string>>({})
+const rerunning = ref<string>('') // 正在重跑的 case_id
+const rerunMsg = ref('')
+const verifying = ref(false)
+const verifyMsg = ref('')
 const expanded = ref<Set<string>>(new Set())
+const allExpanded = ref(false)
+const filter = ref({ category: '', status: '', verdict: '', q: '' })
 let pollTimer: number | undefined
 
-const allExpanded = ref(false)
+// —— 用例级结论（后端未填时按状态/判定推导，兼容旧跑批） ——
+function rowVerdict(row: EvalRunCase): string {
+  if (row.verdict) return row.verdict
+  if (row.status !== 'ok') return 'exec_error'
+  if (row.pending_human?.length) return 'pending'
+  if (Object.values(row.judgments).includes('fail')) return 'fail'
+  return 'pass'
+}
+
+function verdictLabel(v: string): string {
+  const map: Record<string, string> = {
+    pass: '通过',
+    fail: '未通过',
+    pending: '待人工',
+    unstable: '不稳定',
+    exec_error: '执行失败'
+  }
+  return map[v] ?? '—'
+}
+
+function verdictClass(v: string): string {
+  const map: Record<string, string> = {
+    pass: 'ok',
+    fail: 'error',
+    pending: 'warn',
+    unstable: 'warn',
+    exec_error: 'neutral'
+  }
+  return map[v] ?? 'neutral'
+}
+
+const verdictCounts = computed(() => {
+  const c = { pass: 0, fail: 0, pending: 0, exec_error: 0 }
+  for (const row of data.value?.cases ?? []) {
+    const v = rowVerdict(row)
+    if (v in c) c[v as keyof typeof c]++
+  }
+  return c
+})
+
+const pendingCount = computed(() => verdictCounts.value.pending)
+
+const categories = computed(() => {
+  const set = new Set((data.value?.cases ?? []).map((r) => r.category))
+  return [...set]
+})
+
+const filteredCases = computed(() => {
+  const rows = data.value?.cases ?? []
+  const f = filter.value
+  return rows.filter((r) => {
+    if (f.category && r.category !== f.category) return false
+    if (f.status && r.status !== f.status) return false
+    if (f.verdict && rowVerdict(r) !== f.verdict) return false
+    if (f.q) {
+      const q = f.q.trim().toLowerCase()
+      if (q && !r.case_id.toLowerCase().includes(q) && !(r.title ?? '').toLowerCase().includes(q)) {
+        return false
+      }
+    }
+    return true
+  })
+})
 
 async function refresh() {
   try {
     data.value = await evalApi.getRun(props.runId)
+    for (const row of data.value.cases) {
+      // 判定参考草稿：金标准优先，无则用预期行为；已有草稿则保留（避免轮询覆盖）
+      goldenEdits.value[row.case_id] ??= row.golden_answer || row.behavior
+    }
     stopPolling()
     if (data.value.active) {
       pollTimer = window.setInterval(refresh, 1500)
@@ -65,6 +138,26 @@ async function cancelCurrent() {
   }
 }
 
+async function toggleVerified() {
+  if (!data.value) return
+  verifying.value = true
+  verifyMsg.value = ''
+  try {
+    if (data.value.run.verified) {
+      await evalApi.unverifyRun(data.value.run.id)
+      verifyMsg.value = '已取消核验'
+    } else {
+      await evalApi.verifyRun(data.value.run.id)
+      verifyMsg.value = '已标记核验'
+    }
+    await refresh()
+  } catch (err) {
+    error.value = `操作失败：${err}`
+  } finally {
+    verifying.value = false
+  }
+}
+
 async function saveAnnotation(row: EvalRunCase) {
   if (!data.value) return
   saving.value = row.case_id
@@ -83,21 +176,36 @@ async function saveAnnotation(row: EvalRunCase) {
   }
 }
 
-async function adoptAnnotation(row: EvalRunCase) {
+async function saveGolden(row: EvalRunCase) {
   if (!data.value) return
-  adopting.value = row.case_id
-  adoptMsg.value = ''
+  goldenSaving.value = row.case_id
+  goldenMsg.value = ''
   try {
-    await evalApi.adoptAnnotation(row.case_id, {
-      answer_correct: row.answer_correct,
-      refusal: row.refusal,
-      note: row.annotate_note
+    await evalApi.updateGoldenAnswer(row.case_id, {
+      golden_answer: goldenEdits.value[row.case_id] ?? ''
     })
-    adoptMsg.value = `已沉淀到用例：${row.case_id}`
+    row.golden_answer = goldenEdits.value[row.case_id] ?? ''
+    goldenMsg.value = `已保存到用例 ${row.case_id}，后续跑批生效`
   } catch (err) {
-    error.value = `沉淀失败：${err}`
+    error.value = `保存金标准失败：${err}`
   } finally {
-    adopting.value = ''
+    goldenSaving.value = ''
+  }
+}
+
+async function rerunCase(row: EvalRunCase) {
+  if (!data.value) return
+  if (!confirm(`确认重跑 ${row.case_id}？将覆盖该条结果并清空其人工标注。`)) return
+  rerunning.value = row.case_id
+  rerunMsg.value = ''
+  try {
+    await evalApi.rerunCase(data.value.run.id, row.case_id)
+    rerunMsg.value = `已重跑：${row.case_id}，结果已更新`
+    await refresh()
+  } catch (err) {
+    error.value = `重跑失败：${err}`
+  } finally {
+    rerunning.value = ''
   }
 }
 
@@ -114,6 +222,11 @@ function statusLabel(s: string): string {
   return map[s] ?? s
 }
 
+function execStatusClass(s: string): string {
+  const map: Record<string, string> = { ok: 'ok', timeout: 'warn', error: 'error' }
+  return map[s] ?? 'neutral'
+}
+
 function summaryText(run: EvalRun): string {
   const s = run.summary as Record<string, unknown> | undefined
   if (!s) return '—'
@@ -121,9 +234,6 @@ function summaryText(run: EvalRun): string {
   if (typeof s.total === 'number') parts.push(`共 ${s.total} 条`)
   if (typeof s.avg_elapsed_ms === 'number') parts.push(`均 ${s.avg_elapsed_ms}ms`)
   if (typeof s.total_tokens === 'number') parts.push(`${s.total_tokens} token`)
-  if (s.status && typeof s.status === 'object') {
-    parts.push(JSON.stringify(s.status))
-  }
   return parts.join(' · ') || '—'
 }
 
@@ -139,53 +249,103 @@ onUnmounted(stopPolling)
 
 <template>
   <div class="rd">
-    <header class="rd-bar">
-      <a class="rd-back" href="#/eval">← 返回评测台</a>
+    <header class="ui-bar rd-head">
+      <a class="ui-link" href="#/eval">← 返回评测台</a>
       <h1 v-if="data" class="rd-title">
         Run #{{ data.run.id }} · {{ data.run.name }}
-        <span class="rd-badge" :class="data.run.status">{{ statusLabel(data.run.status) }}</span>
+        <span class="ui-badge" :class="data.run.status === 'done' ? 'ok' : 'neutral'">
+          {{ statusLabel(data.run.status) }}
+        </span>
+        <span v-if="data.run.verified" class="ui-badge ok">已核验</span>
       </h1>
       <div class="rd-actions">
-        <button v-if="data?.active" class="rd-btn danger" @click="cancelCurrent">取消跑批</button>
-        <a v-if="data" class="rd-btn link" :href="evalApi.exportUrl(data.run.id)" target="_blank">
+        <button v-if="data?.active" class="ui-btn danger" @click="cancelCurrent">取消跑批</button>
+        <button
+          v-if="data && !data.active"
+          class="ui-btn"
+          :disabled="verifying"
+          :title="pendingCount ? `还有 ${pendingCount} 条待人工，仍可标记核验` : '标记该跑批结果已人工核验'"
+          @click="toggleVerified"
+        >
+          {{ verifying ? '处理中…' : data.run.verified ? '取消核验' : '标记已核验' }}
+        </button>
+        <a v-if="data" class="ui-btn link" :href="evalApi.exportUrl(data.run.id)" target="_blank">
           导出 JSON
         </a>
       </div>
     </header>
 
-    <p v-if="error" class="rd-error">{{ error }}</p>
+    <p v-if="error" class="ui-error">{{ error }}</p>
 
     <template v-if="data">
-      <p v-if="data.run.error" class="rd-error">错误：{{ data.run.error }}</p>
-      <p class="rd-hint">
+      <p v-if="data.run.error" class="ui-error">错误：{{ data.run.error }}</p>
+      <p class="ui-help">
         进度 {{ data.run.progress }}/{{ data.run.total }} · 汇总：{{ summaryText(data.run) }}
       </p>
 
-      <div class="rd-card">
-        <div class="rd-toolbar">
-          <span class="rd-count">{{ data.cases.length }} 条用例</span>
-          <button class="rd-btn" @click="toggleAll">
+      <div class="ui-stats">
+        <span class="ui-stat ok">通过 <span class="num">{{ verdictCounts.pass }}</span></span>
+        <span class="ui-stat error">未通过 <span class="num">{{ verdictCounts.fail }}</span></span>
+        <span class="ui-stat warn">待人工 <span class="num">{{ verdictCounts.pending }}</span></span>
+        <span class="ui-stat neutral">执行失败 <span class="num">{{ verdictCounts.exec_error }}</span></span>
+        <span class="ui-stat plain">
+          通过率 {{ verdictCounts.pass }}/{{ data.cases.length }}
+          <template v-if="data.cases.length">
+            （{{ Math.round((verdictCounts.pass / data.cases.length) * 100) }}%）
+          </template>
+        </span>
+      </div>
+      <p v-if="verifyMsg" class="ui-ok">{{ verifyMsg }}</p>
+      <p v-if="rerunMsg" class="ui-ok">{{ rerunMsg }}</p>
+      <p v-if="pendingCount" class="ui-help">
+        有 {{ pendingCount }} 条待人工：判官 uncertain 或未判定，可在展开区人工标注。
+      </p>
+
+      <div class="ui-card">
+        <div class="ui-toolbar rd-filters">
+          <select v-model="filter.category" class="ui-select">
+            <option value="">全部类别</option>
+            <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+          </select>
+          <select v-model="filter.status" class="ui-select">
+            <option value="">全部执行状态</option>
+            <option value="ok">执行通过</option>
+            <option value="timeout">超时</option>
+            <option value="error">出错</option>
+          </select>
+          <select v-model="filter.verdict" class="ui-select">
+            <option value="">全部判定结果</option>
+            <option value="pass">通过</option>
+            <option value="fail">未通过</option>
+            <option value="pending">待人工</option>
+            <option value="unstable">不稳定</option>
+            <option value="exec_error">执行失败</option>
+          </select>
+          <input v-model="filter.q" placeholder="搜索 id / 标题" class="ui-input" />
+          <span class="ui-muted rd-filter-count">{{ filteredCases.length }}/{{ data.cases.length }} 条</span>
+          <button class="ui-btn sm" @click="toggleAll">
             {{ allExpanded ? '全部收起' : '全部展开' }}
           </button>
         </div>
 
-        <table class="rd-table">
+        <table class="ui-table">
           <thead>
             <tr>
               <th class="rd-th-expand"></th>
               <th>用例</th>
               <th>类别</th>
-              <th>状态</th>
+              <th>执行状态</th>
+              <th>判定结果</th>
               <th>耗时</th>
               <th>轮数</th>
               <th>工具调用</th>
-              <th>自动判定</th>
               <th>答案正确</th>
               <th>拒答合理</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <template v-for="row in data.cases" :key="row.case_id">
+            <template v-for="row in filteredCases" :key="row.case_id">
               <tr class="rd-row">
                 <td>
                   <button
@@ -203,39 +363,169 @@ onUnmounted(stopPolling)
                 </td>
                 <td>{{ row.category }}</td>
                 <td>
-                  <span class="rd-badge" :class="row.status">{{ statusLabel(row.status) }}</span>
+                  <span class="ui-badge" :class="execStatusClass(row.status)">
+                    {{ statusLabel(row.status) }}
+                  </span>
                 </td>
-                <td class="rd-mono">{{ row.elapsed_ms }}ms</td>
-                <td>{{ row.rounds }}</td>
-                <td class="rd-mono">{{ row.tool_calls.join(', ') || '—' }}</td>
-                <td class="rd-mono">{{ judgmentsText(row.judgments) || '—' }}</td>
                 <td>
-                  <span v-if="row.answer_correct" class="rd-badge" :class="row.answer_correct === '对' ? 'ok' : row.answer_correct === '错' ? 'error' : 'warn'">
+                  <span class="ui-badge" :class="verdictClass(rowVerdict(row))">
+                    {{ verdictLabel(rowVerdict(row)) }}
+                  </span>
+                  <span
+                    v-if="(row.repeat_count ?? 1) > 1"
+                    class="ui-mono rd-pass-rate"
+                    :title="`${row.repeat_count} 次执行中通过 ${row.pass_count} 次`"
+                  >
+                    通过 {{ row.pass_count }}/{{ row.repeat_count }}
+                  </span>
+                </td>
+                <td class="ui-mono">{{ row.elapsed_ms }}ms</td>
+                <td>{{ row.rounds }}</td>
+                <td class="ui-mono">{{ row.tool_calls.join(', ') || '—' }}</td>
+                <td>
+                  <span
+                    v-if="row.answer_correct"
+                    class="ui-badge"
+                    :class="row.answer_correct === '对' ? 'ok' : row.answer_correct === '错' ? 'error' : 'warn'"
+                  >
                     {{ row.answer_correct }}
                   </span>
-                  <span v-else class="rd-muted">—</span>
+                  <span v-else class="ui-muted">—</span>
                 </td>
                 <td>
-                  <span v-if="row.refusal" class="rd-badge" :class="row.refusal === '合理' ? 'ok' : row.refusal === '不合理' ? 'error' : 'warn'">
+                  <span
+                    v-if="row.refusal"
+                    class="ui-badge"
+                    :class="row.refusal === '合理' ? 'ok' : row.refusal === '不合理' ? 'error' : 'warn'"
+                  >
                     {{ row.refusal }}
                   </span>
-                  <span v-else class="rd-muted">—</span>
+                  <span v-else class="ui-muted">—</span>
+                </td>
+                <td>
+                  <button
+                    class="ui-btn sm"
+                    :disabled="rerunning === row.case_id || !!data.active"
+                    :title="data.active ? '跑批运行中，暂不能重跑' : '重跑该用例（覆盖结果并清空标注）'"
+                    @click="rerunCase(row)"
+                  >
+                    {{ rerunning === row.case_id ? '重跑中…' : '重跑' }}
+                  </button>
                 </td>
               </tr>
               <tr v-if="expanded.has(row.case_id)" class="rd-detail-row">
-                <td colspan="10">
+                <td colspan="11">
                   <div class="rd-detail">
+                    <div class="rd-ref">
+                      <div class="rd-ref-head">
+                        <strong>判定参考</strong>
+                        <span class="ui-badge" :class="row.golden_answer ? 'ok' : 'warn'">
+                          {{ row.golden_answer ? '金标准' : '预期行为（无金标准）' }}
+                        </span>
+                        <span class="ui-help-inline">判官以此为标准评判本条输出</span>
+                      </div>
+                      <textarea
+                        v-model="goldenEdits[row.case_id]"
+                        rows="2"
+                        class="ui-textarea"
+                        placeholder="留空则后续以预期行为为参考"
+                      ></textarea>
+                      <div class="rd-ref-actions">
+                        <button
+                          class="ui-btn sm"
+                          :disabled="goldenSaving === row.case_id"
+                          @click="saveGolden(row)"
+                        >
+                          {{ goldenSaving === row.case_id ? '保存中…' : '保存为金标准' }}
+                        </button>
+                        <span v-if="goldenMsg" class="ui-ok">{{ goldenMsg }}</span>
+                        <span class="ui-help-inline">修改对后续跑批生效；当前记录判定不变，可点"重跑"验证。</span>
+                      </div>
+                    </div>
+
                     <div class="rd-grid2">
                       <div class="rd-block">
                         <strong>输入</strong>
                         <pre>{{ row.input }}</pre>
                       </div>
                       <div class="rd-block">
-                        <strong>输出</strong>
-                        <pre>{{ row.output || '（无输出）' }}</pre>
+                        <strong>
+                          输出
+                          <span
+                            v-if="rowVerdict(row) === 'fail'"
+                            class="ui-badge error rd-fail-tag"
+                          >
+                            判官判定未通过
+                          </span>
+                        </strong>
+                        <pre
+                          :class="{ 'rd-output-fail': rowVerdict(row) === 'fail' }"
+                        >{{ row.output || '（无输出）' }}</pre>
+                        <p v-if="rowVerdict(row) === 'fail'" class="ui-help">
+                          请对照上方"判定参考"检查输出：是否缺要点、答错内容或拒绝不合理。
+                          若判官误判，可调整参考后点"重跑"。
+                        </p>
                       </div>
                     </div>
-                    <p v-if="row.error" class="rd-error">错误：{{ row.error }}</p>
+                    <p v-if="row.error" class="ui-error">错误：{{ row.error }}</p>
+                    <p v-if="Object.keys(row.judgments).length" class="ui-muted rd-judgments">
+                      自动判定明细：{{ judgmentsText(row.judgments) }}
+                    </p>
+                    <div v-if="Object.keys(row.judge_reasons ?? {}).length" class="rd-reasons">
+                      <div
+                        v-for="(reason, cr) in row.judge_reasons"
+                        :key="cr"
+                        class="rd-reason"
+                        :class="{ fail: row.judgments[cr] === 'fail' }"
+                      >
+                        <span
+                          class="ui-badge"
+                          :class="row.judgments[cr] === 'pass' ? 'ok' : row.judgments[cr] === 'fail' ? 'error' : 'warn'"
+                        >
+                          {{ cr }}
+                        </span>
+                        <span class="rd-reason-text">{{ reason }}</span>
+                      </div>
+                    </div>
+                    <div
+                      v-if="(row.repeat_count ?? 1) > 1 && row.repeat_results?.length"
+                      class="rd-attempts"
+                    >
+                      <div class="rd-attempts-head">
+                        <strong>本次重复执行明细（{{ row.repeat_results.length }} 次）</strong>
+                      </div>
+                      <div
+                        v-for="(att, ai) in row.repeat_results"
+                        :key="ai"
+                        class="rd-attempt"
+                        :class="{ fail: att.verdict === 'fail' }"
+                      >
+                        <div class="rd-attempt-head">
+                          <span class="rd-attempt-no">#{{ ai + 1 }}</span>
+                          <span class="ui-badge" :class="verdictClass(att.verdict)">
+                            {{ verdictLabel(att.verdict) }}
+                          </span>
+                          <span class="ui-muted">
+                            {{ att.elapsed_ms }}ms · {{ att.tool_calls.join(', ') || '无工具' }}
+                            <template v-if="att.error"> · {{ att.error }}</template>
+                          </span>
+                        </div>
+                        <div
+                          v-for="(reason, cr) in att.judge_reasons ?? {}"
+                          :key="cr"
+                          class="rd-attempt-reason"
+                        >
+                          <span class="ui-badge" :class="att.judgments[cr] === 'pass' ? 'ok' : att.judgments[cr] === 'fail' ? 'error' : 'warn'">
+                            {{ cr }}
+                          </span>
+                          {{ reason }}
+                        </div>
+                        <details class="rd-attempt-output">
+                          <summary>查看本次输出</summary>
+                          <pre>{{ att.output || '（无输出）' }}</pre>
+                        </details>
+                      </div>
+                    </div>
 
                     <div class="rd-annotate">
                       <label>
@@ -260,26 +550,19 @@ onUnmounted(stopPolling)
                         标注备注
                         <input v-model="row.annotate_note" placeholder="可选" />
                       </label>
-                      <button class="rd-btn primary" :disabled="saving === row.case_id" @click="saveAnnotation(row)">
+                      <button class="ui-btn primary" :disabled="saving === row.case_id" @click="saveAnnotation(row)">
                         {{ saving === row.case_id ? '保存中…' : '保存标注' }}
                       </button>
-                      <span v-if="saveMsg" class="rd-ok">{{ saveMsg }}</span>
-                      <button
-                        class="rd-btn"
-                        :disabled="adopting === row.case_id || !row.answer_correct && !row.refusal"
-                        title="把本次标注结论写入用例文件，成为后续跑批的金标准"
-                        @click="adoptAnnotation(row)"
-                      >
-                        {{ adopting === row.case_id ? '沉淀中…' : '沉淀为金标准' }}
-                      </button>
-                      <span v-if="adoptMsg" class="rd-ok">{{ adoptMsg }}</span>
+                      <span v-if="saveMsg" class="ui-ok">{{ saveMsg }}</span>
                     </div>
                   </div>
                 </td>
               </tr>
             </template>
-            <tr v-if="!data.cases.length">
-              <td colspan="10" class="rd-muted">暂无结果（跑批进行中或刚启动）</td>
+            <tr v-if="!filteredCases.length">
+              <td colspan="11" class="ui-muted">
+                {{ data.cases.length ? '没有匹配筛选条件的用例' : '暂无结果（跑批进行中或刚启动）' }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -292,21 +575,8 @@ onUnmounted(stopPolling)
 .rd {
   padding: 8px 0 24px;
 }
-.rd-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
-}
-.rd-back {
-  color: #0969da;
-  text-decoration: none;
-  font-size: 0.92em;
-  white-space: nowrap;
-}
-.rd-back:hover {
-  text-decoration: underline;
+.rd-head {
+  margin-bottom: 10px;
 }
 .rd-title {
   font-size: 1.2em;
@@ -317,47 +587,17 @@ onUnmounted(stopPolling)
   display: flex;
   gap: 8px;
 }
-.rd-card {
-  background: #fff;
-  border: 1px solid #e2e5e9;
-  border-radius: 10px;
-  padding: 12px 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+.rd-filters {
+  margin-bottom: 10px;
 }
-.rd-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+.rd-filters .ui-input {
+  width: 170px;
 }
-.rd-count {
-  color: #57606a;
-  font-size: 0.88em;
-}
-.rd-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9em;
-}
-.rd-table th,
-.rd-table td {
-  border-bottom: 1px solid #eef1f4;
-  padding: 8px 10px;
-  text-align: left;
-  vertical-align: top;
-}
-.rd-table th {
-  background: #f6f8fa;
-  font-weight: 600;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
+.rd-filter-count {
+  margin-left: auto;
 }
 .rd-th-expand {
   width: 34px;
-}
-.rd-row:hover td {
-  background: #f8fafc;
 }
 .rd-expand {
   width: 26px;
@@ -386,88 +626,99 @@ onUnmounted(stopPolling)
   font-size: 0.82em;
   margin-top: 2px;
 }
-.rd-badge {
-  display: inline-block;
-  font-size: 0.76em;
-  padding: 1px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
+.rd-judgments {
+  margin: 8px 0 0;
 }
-.rd-badge.done,
-.rd-badge.ok {
-  background: #dafbe1;
-  color: #1a7f37;
+.rd-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
 }
-.rd-badge.error,
-.rd-badge.timeout {
-  background: #ffeef0;
-  color: #cf222e;
-}
-.rd-badge.running,
-.rd-badge.queued {
-  background: #ddf4ff;
-  color: #0969da;
-}
-.rd-badge.canceled {
-  background: #e6edf3;
-  color: #57606a;
-}
-.rd-badge.warn {
-  background: #fff8c5;
-  color: #9a6700;
-}
-.rd-mono {
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 0.82em;
-}
-.rd-muted {
-  color: #888;
-  font-size: 0.85em;
-}
-.rd-hint {
-  color: #57606a;
-  font-size: 0.88em;
-  margin: 0 0 10px;
-}
-.rd-error {
-  color: #cf222e;
-  font-size: 0.88em;
-}
-.rd-ok {
-  color: #1a7f37;
-  font-size: 0.85em;
-}
-.rd-btn {
-  padding: 6px 14px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  background: #fff;
-  color: #24292f;
-  cursor: pointer;
-  font-size: 0.88em;
-  text-decoration: none;
-  display: inline-block;
-}
-.rd-btn:hover {
+.rd-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   background: #f6f8fa;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-border-2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.84em;
 }
-.rd-btn.primary {
-  background: #0969da;
-  border-color: #0969da;
-  color: #fff;
+.rd-reason.fail {
+  background: #fff7f7;
+  border-left-color: var(--ui-danger-fg);
 }
-.rd-btn.primary:hover {
-  background: #0a5fc2;
+.rd-reason-text {
+  color: var(--ui-text);
+  line-height: 1.5;
 }
-.rd-btn.primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.rd-pass-rate {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78em;
 }
-.rd-btn.danger {
-  color: #cf222e;
+.rd-attempts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--ui-border);
 }
-.rd-btn.link {
-  color: #0969da;
+.rd-attempts-head {
+  font-size: 0.86em;
+  color: var(--ui-text-2);
+}
+.rd-attempt {
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-border-2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fafbfc;
+  font-size: 0.84em;
+}
+.rd-attempt.fail {
+  border-left-color: var(--ui-danger-fg);
+  background: #fff7f7;
+}
+.rd-attempt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rd-attempt-no {
+  font-family: Consolas, 'Courier New', monospace;
+  color: var(--ui-text-2);
+}
+.rd-attempt-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--ui-text);
+  line-height: 1.5;
+}
+.rd-attempt-output {
+  margin-top: 6px;
+}
+.rd-attempt-output summary {
+  cursor: pointer;
+  color: var(--ui-primary);
+  font-size: 0.84em;
+}
+.rd-attempt-output pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 6px 0 0;
 }
 .rd-detail-row td {
   background: #fafbfc;
@@ -475,6 +726,37 @@ onUnmounted(stopPolling)
 }
 .rd-detail {
   padding: 14px 16px;
+}
+.rd-ref {
+  background: #fff;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.rd-ref-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.rd-ref-head strong {
+  font-size: 0.86em;
+}
+.rd-ref-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.rd-output-fail {
+  border-color: #f0b7bc !important;
+  background: #fff7f7 !important;
+}
+.rd-fail-tag {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 .rd-grid2 {
   display: grid;
@@ -513,20 +795,15 @@ onUnmounted(stopPolling)
   font-size: 0.82em;
   color: #57606a;
 }
-.rd-annotate select,
-.rd-annotate input {
-  padding: 5px 8px;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  font-size: 0.92em;
-  min-width: 110px;
-}
 .rd-note {
   flex: 1;
   min-width: 180px;
 }
 .rd-note input {
   width: 100%;
+}
+.rd-annotate select {
+  min-width: 110px;
 }
 @media (max-width: 900px) {
   .rd-grid2 {

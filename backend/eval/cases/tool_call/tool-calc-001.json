@@ -3,15 +3,49 @@
   "category": "tool_call",
   "title": "简单加法",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "3+5等于几？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "3+5等于几？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 8",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "3+5" } }],
-    "answer_contains": ["8"],
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "3+5"
+        }
+      }
+    ],
+    "answer_contains": [
+      "8"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"],
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
   "compare": true,
-  "notes": "实测模型可能直接心算不调工具，tool_calls 作为工具调用率观察指标"
+  "notes": "实测模型可能直接心算不调工具，tool_calls 作为工具调用率观察指标",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:12",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算表达式\"3+5\"，输出精确结果8，不得编造或改为其他数值，工具调用与结果一致即可。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:12",
+    "annotated_by": "generator"
+  }
 }

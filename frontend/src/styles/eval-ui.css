@@ -1,0 +1,447 @@
+/* 评测台统一设计系统：token + 通用组件类，EvalConsole / RunDetailPage / EvalPage 共用。 */
+:root {
+  --ui-primary: #0969da;
+  --ui-primary-hover: #0a5fc2;
+  --ui-text: #1f2328;
+  --ui-text-2: #57606a;
+  --ui-text-3: #8b949e;
+  --ui-border: #e2e5e9;
+  --ui-border-2: #d0d7de;
+  --ui-bg: #f6f8fa;
+  --ui-radius: 8px;
+  --ui-radius-lg: 12px;
+  --ui-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --ui-success-bg: #dafbe1;
+  --ui-success-fg: #1a7f37;
+  --ui-danger-bg: #ffeef0;
+  --ui-danger-fg: #cf222e;
+  --ui-warn-bg: #fff8c5;
+  --ui-warn-fg: #9a6700;
+  --ui-info-bg: #ddf4ff;
+  --ui-info-fg: #0969da;
+  --ui-neutral-bg: #eef2f7;
+  --ui-neutral-fg: #57606a;
+}
+
+/* —— 卡片 —— */
+.ui-card {
+  background: #fff;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--ui-shadow);
+}
+
+/* —— 表格 —— */
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.ui-table th,
+.ui-table td {
+  border-bottom: 1px solid #eef1f4;
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.ui-table th {
+  background: var(--ui-bg);
+  font-weight: 600;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+.ui-table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+/* —— 徽章 —— */
+.ui-badge {
+  display: inline-block;
+  font-size: 0.76em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.ui-badge.ok {
+  background: var(--ui-success-bg);
+  color: var(--ui-success-fg);
+}
+.ui-badge.error {
+  background: var(--ui-danger-bg);
+  color: var(--ui-danger-fg);
+}
+.ui-badge.warn {
+  background: var(--ui-warn-bg);
+  color: var(--ui-warn-fg);
+}
+.ui-badge.info {
+  background: var(--ui-info-bg);
+  color: var(--ui-info-fg);
+}
+.ui-badge.neutral {
+  background: var(--ui-neutral-bg);
+  color: var(--ui-neutral-fg);
+}
+
+/* —— 按钮 —— */
+.ui-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--ui-border-2);
+  border-radius: var(--ui-radius);
+  background: #fff;
+  color: var(--ui-text);
+  cursor: pointer;
+  font-size: 0.88em;
+  line-height: 1.4;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ui-btn:hover {
+  background: var(--ui-bg);
+}
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ui-btn.primary {
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
+  color: #fff;
+}
+.ui-btn.primary:hover {
+  background: var(--ui-primary-hover);
+}
+.ui-btn.danger {
+  color: var(--ui-danger-fg);
+}
+.ui-btn.sm {
+  padding: 3px 10px;
+  font-size: 0.82em;
+}
+.ui-btn.link {
+  border-color: transparent;
+  background: none;
+  color: var(--ui-primary);
+  padding: 2px 6px;
+}
+.ui-btn.link:hover {
+  background: var(--ui-info-bg);
+}
+
+/* —— 输入 / 下拉 —— */
+.ui-input,
+.ui-select {
+  padding: 6px 10px;
+  border: 1px solid var(--ui-border-2);
+  border-radius: var(--ui-radius);
+  font-size: 0.9em;
+  background: #fff;
+  color: var(--ui-text);
+}
+.ui-input:focus,
+.ui-select:focus,
+.ui-textarea:focus {
+  outline: 2px solid #b6d7f7;
+  border-color: var(--ui-primary);
+}
+.ui-textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--ui-border-2);
+  border-radius: var(--ui-radius);
+  font-family: inherit;
+  font-size: 0.92em;
+  box-sizing: border-box;
+}
+
+/* —— 标签页 —— */
+.ui-tabs {
+  display: flex;
+  gap: 6px;
+}
+.ui-tab {
+  padding: 8px 22px;
+  border: 1px solid var(--ui-border-2);
+  border-radius: var(--ui-radius);
+  background: #fff;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  font-size: 0.92em;
+}
+.ui-tab:hover {
+  background: var(--ui-bg);
+}
+.ui-tab.on {
+  background: var(--ui-primary);
+  border-color: var(--ui-primary);
+  color: #fff;
+}
+
+/* —— 布局 —— */
+.ui-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ui-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* —— 文本辅助 —— */
+.ui-muted {
+  color: var(--ui-text-3);
+  font-size: 0.85em;
+}
+.ui-mono {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.85em;
+}
+.ui-error {
+  color: var(--ui-danger-fg);
+  font-size: 0.88em;
+}
+.ui-ok {
+  color: var(--ui-success-fg);
+  font-size: 0.85em;
+}
+.ui-help {
+  color: var(--ui-text-2);
+  font-size: 0.8em;
+  line-height: 1.55;
+  margin: 4px 0 12px;
+}
+.ui-help code {
+  background: var(--ui-bg);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.ui-help-inline {
+  color: var(--ui-text-2);
+  font-size: 0.76em;
+  line-height: 1.4;
+}
+.ui-hint {
+  cursor: help;
+  color: var(--ui-text-3);
+  font-size: 0.9em;
+}
+.ui-link {
+  background: none;
+  border: none;
+  color: var(--ui-primary);
+  cursor: pointer;
+  padding: 0 6px 0 0;
+  font-size: 0.9em;
+  text-decoration: none;
+}
+.ui-link:hover {
+  text-decoration: underline;
+}
+.ui-link.danger {
+  color: var(--ui-danger-fg);
+}
+.ui-link:disabled {
+  color: var(--ui-text-3);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+.ui-chip {
+  display: inline-block;
+  font-size: 0.75em;
+  background: var(--ui-neutral-bg);
+  color: #444;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin: 1px 2px 1px 0;
+}
+
+/* —— 统计条（跑批结论概览） —— */
+.ui-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ui-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--ui-radius);
+  font-size: 0.88em;
+  font-weight: 600;
+}
+.ui-stat .num {
+  font-size: 1.15em;
+}
+.ui-stat.ok {
+  background: var(--ui-success-bg);
+  color: var(--ui-success-fg);
+}
+.ui-stat.error {
+  background: var(--ui-danger-bg);
+  color: var(--ui-danger-fg);
+}
+.ui-stat.warn {
+  background: var(--ui-warn-bg);
+  color: var(--ui-warn-fg);
+}
+.ui-stat.neutral {
+  background: var(--ui-neutral-bg);
+  color: var(--ui-neutral-fg);
+}
+.ui-stat.plain {
+  background: var(--ui-bg);
+  color: var(--ui-text-2);
+  border: 1px solid var(--ui-border);
+  font-weight: 500;
+}
+
+/* —— 弹框 —— */
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 35, 40, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  z-index: 100;
+  overflow-y: auto;
+}
+.ui-modal {
+  background: #fff;
+  border-radius: var(--ui-radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  width: 100%;
+  max-width: 780px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+.ui-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #eef1f4;
+  flex-shrink: 0;
+}
+.ui-modal-head h3 {
+  margin: 0;
+  font-size: 1.05em;
+}
+.ui-modal-close {
+  border: none;
+  background: none;
+  font-size: 1.4em;
+  line-height: 1;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  padding: 2px 10px;
+  border-radius: 6px;
+}
+.ui-modal-close:hover {
+  background: var(--ui-bg);
+}
+.ui-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+/* —— 表单分区 —— */
+.ui-sec {
+  margin: 22px 0 4px;
+  padding-top: 14px;
+  border-top: 1px solid #eef1f4;
+  font-size: 1.02em;
+}
+.ui-modal-body > .ui-sec:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.ui-sec-desc {
+  color: var(--ui-text-2);
+  font-size: 0.85em;
+  line-height: 1.55;
+  margin: 2px 0 12px;
+}
+.ui-field {
+  display: block;
+  margin-top: 12px;
+  font-size: 0.88em;
+  color: #444;
+}
+.ui-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ui-field-row .ui-field {
+  margin-top: 0;
+}
+.ui-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.ui-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.86em;
+  color: var(--ui-text-2);
+}
+.ui-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+}
+.ui-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 4px !important;
+}
+.ui-crit-tag {
+  font-size: 0.7em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-neutral-bg);
+  color: var(--ui-text-2);
+  white-space: nowrap;
+}
+.ui-crit-tag.auto {
+  background: var(--ui-success-bg);
+  color: var(--ui-success-fg);
+}
+.ui-crit-tag.human {
+  background: var(--ui-warn-bg);
+  color: var(--ui-warn-fg);
+}
+.ui-crit-tag.later {
+  background: var(--ui-neutral-bg);
+  color: var(--ui-text-2);
+}
+
+/* —— 进度条 —— */
+.ui-progress {
+  width: 90px;
+  height: 6px;
+  background: var(--ui-neutral-bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ui-progress-inner {
+  height: 100%;
+  background: var(--ui-primary);
+}

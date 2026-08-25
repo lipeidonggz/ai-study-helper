@@ -51,6 +51,7 @@ class CaseResult:
     tokens: dict = field(default_factory=dict)
     error: str = ""
     trace_types: list[str] = field(default_factory=list)
+    tool_execs: list[dict] = field(default_factory=list)  # 工具调用过程与结果（判官事实依据）
 
 
 async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> CaseResult:
@@ -85,6 +86,16 @@ async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> Case
     elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
     # 从 trace 提取指标：实际工具调用、轮数、token 汇总
     tool_names = [s["data"]["name"] for s in trace.steps() if s["type"] == "tool_exec"]
+    tool_execs = [
+        {
+            "name": s["data"].get("name", ""),
+            "arguments": s["data"].get("arguments", {}),
+            "result": s["data"].get("result", ""),
+            "error": s["data"].get("error", ""),
+        }
+        for s in trace.steps()
+        if s["type"] == "tool_exec"
+    ]
     done = next((s for s in trace.steps() if s["type"] == "done"), None)
     rounds = done["data"].get("rounds", 0) if done else 0
     tokens = done["data"].get("tokens", {}) if done else {}
@@ -98,6 +109,7 @@ async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> Case
         tokens=tokens,
         error=error,
         trace_types=[s["type"] for s in trace.steps()],
+        tool_execs=tool_execs,
     )
 
 
@@ -113,14 +125,123 @@ async def run_case(
     return result
 
 
-def judge_case(case: CaseFile, result: CaseResult) -> dict:
-    """自动判定机器可判定的 criteria，其余标记待人工。
+_JUDGE_SYSTEM = (
+    "你是严格的评测判官。只输出一个 JSON 对象，不要输出任何其他内容："
+    '{"verdict": "pass" | "fail" | "uncertain", "reason": "判定理由"}。'
+    "reason 必须具体：说明依据了什么参考、模型输出哪里满足/不满足；"
+    "fail 和 uncertain 必须给出明确理由，pass 可简述。"
+)
+
+
+def _fmt_tool_execs(tool_execs: list[dict]) -> str:
+    """把工具执行记录格式化成判官可见的事实列表。"""
+    if not tool_execs:
+        return "（无工具调用）"
+    lines = []
+    for i, t in enumerate(tool_execs, 1):
+        args = json.dumps(t.get("arguments", {}), ensure_ascii=False)
+        result = t.get("result", "")
+        error = t.get("error", "")
+        lines.append(
+            f"{i}. 工具 {t.get('name', '')}({args})"
+            + (f" → 报错：{error}" if error else f" → 结果：{result}")
+        )
+    return "\n".join(lines)
+
+
+def _parse_judge_response(content: str) -> tuple[str | None, str]:
+    """解析判官输出：优先按 JSON 取 verdict + reason；失败回退按单词判断。"""
+    text = (content or "").strip()
+    if text.startswith("```"):  # 去 Markdown 代码围栏
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    try:
+        data = json.loads(text)
+        verdict = str(data.get("verdict", "")).strip().lower()
+        reason = str(data.get("reason", "")).strip()
+        if verdict.startswith("pass"):
+            return "pass", reason
+        if verdict.startswith("fail"):
+            return "fail", reason
+        if verdict.startswith("uncertain"):
+            return None, reason
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    low = text.lower()
+    if low.startswith("pass"):
+        return "pass", ""
+    if low.startswith("fail"):
+        return "fail", ""
+    return None, ""  # uncertain 或解析失败 → 转人工
+
+
+async def _llm_judge(
+    case: CaseFile, result: CaseResult, criterion: str, judge_llm: LLMClient
+) -> tuple[str | None, str]:
+    """用 LLM 判一条语义维度：返回 (verdict, reason)，verdict=None 表示转人工。"""
+    golden = case.annotation.golden_answer.strip()
+    reference = case.annotation.reference_answer.strip()
+    if golden:
+        ref = f"金标准答案要点：{golden}"
+        if reference:
+            ref += f"\n完整参考答案：{reference}"
+    else:
+        ref = f"预期行为：{case.expected.behavior}"
+    if criterion == "answer_correct":
+        dimension = (
+            "模型回答的内容是否正确（关键结果是否与判定参考一致）。"
+            "注意：工具是否被调用已由系统 trace 确认，不要从输出文本判断工具使用；"
+            "只看最终答案的内容正确性。"
+        )
+    else:
+        dimension = (
+            "模型对不应直接回答的请求处理是否合理：拒绝/澄清/不硬答均可算合理；"
+            "未涉及拒答场景时若回答正常也算合理。"
+        )
+    prompt = f"""判断模型输出是否满足要求。
+
+【判定参考】
+{ref}
+
+【判断维度】
+{dimension}
+
+【工具调用记录】（系统记录的事实，不是从输出文本推测的）
+{_fmt_tool_execs(result.tool_execs)}
+
+【模型输出】
+{result.output.strip() or '（无输出）'}
+
+请只输出一个 JSON 对象（不要其他内容）：
+{{"verdict": "pass" | "fail" | "uncertain", "reason": "判定理由"}}
+- pass：满足要求
+- fail：不满足要求（reason 说明具体不符点）
+- uncertain：信息不足，无法判断（reason 说明缺什么信息）"""
+    resp = await judge_llm.chat(
+        [
+            LLMMessage(role="system", content=_JUDGE_SYSTEM),
+            LLMMessage(role="user", content=prompt),
+        ]
+    )
+    return _parse_judge_response(resp.content or "")
+
+
+async def judge_case(
+    case: CaseFile,
+    result: CaseResult,
+    judge_llm: LLMClient | None = None,
+) -> dict:
+    """自动判定机器可判定 + 可 LLM 判定的 criteria，其余标记待人工。
 
     机器可判定：tool_used / tool_not_used / stream_complete / latency_budget
-    待人工/LLM：answer_correct / refusal（进 CSV 标注列）
+    LLM 可判定：answer_correct / refusal（有 judge_llm 且用例跑通时用金标准/预期行为评判）
+    其余：pending_human（进标注流程）
     """
     judgments: dict[str, str] = {}
     pending: list[str] = []
+    judge_reasons: dict[str, str] = {}
     exp = case.expected
 
     for c in exp.criteria:
@@ -139,6 +260,24 @@ def judge_case(case: CaseFile, result: CaseResult) -> dict:
                 if result.status == "ok" and result.elapsed_ms <= case.timeout_sec * 1000
                 else "fail"
             )
+        elif c in ("answer_correct", "refusal"):
+            if (
+                judge_llm is None
+                or result.status != "ok"
+                or not result.output.strip()
+            ):
+                pending.append(c)  # 无判官 / 用例没跑通 / 无输出 → 待人工
+            else:
+                try:
+                    verdict, reason = await _llm_judge(case, result, c, judge_llm)
+                    if reason:
+                        judge_reasons[c] = reason
+                    if verdict:
+                        judgments[c] = verdict
+                    else:
+                        pending.append(c)  # uncertain → 转人工
+                except Exception:
+                    pending.append(c)  # 判官失败降级为待人工，不阻断跑批
         else:
             pending.append(c)  # answer_correct / refusal 等需判断力
 
@@ -152,7 +291,107 @@ def judge_case(case: CaseFile, result: CaseResult) -> dict:
         "max_rounds": "pass" if len(result.tool_calls) <= exp.max_rounds else "fail",
         "tool_calls_count": len(result.tool_calls),
     }
-    return {"judgments": judgments, "pending_human": pending, "metrics": metrics}
+    return {
+        "judgments": judgments,
+        "pending_human": pending,
+        "metrics": metrics,
+        "judge_reasons": judge_reasons,
+    }
+
+
+def case_verdict(entry: dict) -> str:
+    """用例级最终结论：pass / fail / pending / exec_error。
+
+    优先级：执行失败 > 有待人工 > 任一维度 fail > 全部通过。
+    """
+    if entry.get("status") != "ok":
+        return "exec_error"
+    if entry.get("pending_human"):
+        return "pending"
+    if any(v == "fail" for v in entry.get("judgments", {}).values()):
+        return "fail"
+    return "pass"
+
+
+async def _run_attempt(
+    case: CaseFile, llm: LLMClient, tools: ToolExecutor, retries: int, judge_llm: LLMClient | None
+) -> dict:
+    """执行一次并生成单次报告条目（repeat_results 的元素）。"""
+    result = await run_case(case, llm, tools, max_retries=retries)
+    judgment = await judge_case(case, result, judge_llm)
+    attempt = {
+        "status": result.status,
+        "elapsed_ms": result.elapsed_ms,
+        "rounds": result.rounds,
+        "tool_calls": result.tool_calls,
+        "tokens": result.tokens,
+        "output": result.output,
+        "error": result.error,
+        "judgments": judgment["judgments"],
+        "pending_human": judgment["pending_human"],
+        "metrics": judgment["metrics"],
+        "judge_reasons": judgment["judge_reasons"],
+    }
+    attempt["verdict"] = case_verdict(attempt)
+    return attempt
+
+
+def _aggregate_attempts(case: CaseFile, attempts: list[dict]) -> dict:
+    """把 N 次执行聚合成一条报告条目：行级保留第一次的单次字段，verdict 为稳定性结论。"""
+    first = attempts[0]
+    n = len(attempts)
+    pass_count = sum(1 for a in attempts if a["verdict"] == "pass")
+    verdicts = [a["verdict"] for a in attempts]
+    if n == 1:
+        verdict = first["verdict"]
+    elif pass_count == n:
+        verdict = "pass"  # 稳定通过
+    elif pass_count == 0:
+        if all(v == "exec_error" for v in verdicts):
+            verdict = "exec_error"
+        elif any(v == "pending" for v in verdicts):
+            verdict = "pending"
+        else:
+            verdict = "fail"  # 稳定失败
+    else:
+        verdict = "unstable"  # 部分通过
+    return {
+        "id": case.id,
+        "category": case.category,
+        "title": case.title,
+        "mode": case.mode,
+        "input": " | ".join(f"{m.role}: {m.content}" for m in case.input.messages),
+        "status": first["status"],
+        "elapsed_ms": first["elapsed_ms"],
+        "rounds": first["rounds"],
+        "tool_calls": first["tool_calls"],
+        "tokens": first["tokens"],
+        "output": first["output"],
+        "error": first["error"],
+        "judgments": first["judgments"],
+        "pending_human": first["pending_human"],
+        "metrics": first["metrics"],
+        "judge_reasons": first["judge_reasons"],
+        "verdict": verdict,
+        "repeat_count": n,
+        "pass_count": pass_count,
+        "repeat_results": attempts,
+    }
+
+
+async def run_single_entry(
+    case: CaseFile,
+    llm: LLMClient,
+    tools: ToolExecutor,
+    retries: int = 1,
+    judge_llm: LLMClient | None = None,
+    repeat: int = 1,
+) -> dict:
+    """跑单条用例（可 repeat N 次，串行保证采样独立）并生成报告条目。"""
+    attempts = []
+    for _ in range(repeat):
+        attempts.append(await _run_attempt(case, llm, tools, retries, judge_llm))
+    return _aggregate_attempts(case, attempts)
 
 
 async def run_all(
@@ -162,14 +401,16 @@ async def run_all(
     concurrency: int = DEFAULT_CONCURRENCY,
     limit: int | None = None,
     retries: int = 1,
+    repeat: int = 1,
     on_case=None,
     cancel_event: asyncio.Event | None = None,
 ) -> dict:
     """并发跑批（信号量限流）并聚合报告。
 
-    新增两个可选参数（0017 评测台用，CLI/测试不传时行为不变）：
+    新增可选参数（0017 评测台用，CLI/测试不传时行为不变）：
     - on_case：每条用例完成后回调 on_case(entry, completed, total)，用于实时进度
     - cancel_event：置位后不再启动新的用例（配合外层任务取消做优雅停止）
+    - repeat：每条用例执行 N 次（串行），报告给出通过率与稳定性
     """
     selected = cases[:limit] if limit else cases
     clear_notes()  # 批次开始前重置笔记状态
@@ -177,40 +418,24 @@ async def run_all(
     entries: list[dict] = []
     total = len(selected)
 
-    async def worker(index: int, case: CaseFile) -> None:
+    async def worker(index: int, case: CaseFile) -> dict | None:
         async with sem:
             if cancel_event is not None and cancel_event.is_set():
-                return  # 已请求取消：不再开始新用例
-            return await run_case(case, llm, tools, max_retries=retries)
+                return None  # 已请求取消：不再开始新用例
+            return await run_single_entry(case, llm, tools, retries, judge_llm, repeat)
 
     async def produce(index: int, case: CaseFile) -> None:
-        result = await worker(index, case)
-        judgment = judge_case(case, result)
-        entry = {
-            "id": case.id,
-            "category": case.category,
-            "title": case.title,
-            "mode": case.mode,
-            # 输入文本：完整对话（单轮=用户消息；多轮=全部消息），供人工标注时对照
-            "input": " | ".join(f"{m.role}: {m.content}" for m in case.input.messages),
-            "status": result.status,
-            "elapsed_ms": result.elapsed_ms,
-            "rounds": result.rounds,
-            "tool_calls": result.tool_calls,
-            "tokens": result.tokens,
-            "output": result.output,
-            "error": result.error,
-            "judgments": judgment["judgments"],
-            "pending_human": judgment["pending_human"],
-            "metrics": judgment["metrics"],
-        }
+        entry = await worker(index, case)
+        if entry is None:
+            return
         entries.append(entry)
         if on_case:
             on_case(entry, len(entries), total)  # 实时进度：已完成/总数
 
+    judge_llm = llm if llm.model_name != "fake" else None  # 判官复用生成 LLM；Fake 不评判
     await asyncio.gather(*(produce(i, c) for i, c in enumerate(selected)))
     entries.sort(key=lambda e: e["id"])  # 并发完成顺序不定，统一按 id 排
-    summary = _aggregate(entries)
+    summary = aggregate(entries)
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "llm": llm.model_name,
@@ -219,11 +444,12 @@ async def run_all(
     }
 
 
-def _aggregate(entries: list[dict]) -> dict:
+def aggregate(entries: list[dict]) -> dict:
     """汇总统计：状态分布、分类自动通过率、工具调用率、平均耗时、token 总量。"""
     total = len(entries)
     status_counts = Counter(e["status"] for e in entries)
     judged = [e for e in entries if e["status"] == "ok"]
+    verdict_counts = Counter(e.get("verdict", "") for e in entries)
 
     def pass_rate(criterion: str) -> dict:
         vals = [e["judgments"][criterion] for e in judged if criterion in e["judgments"]]
@@ -252,10 +478,22 @@ def _aggregate(entries: list[dict]) -> dict:
     return {
         "total": total,
         "status": dict(status_counts),
+        "verdicts": dict(verdict_counts),
+        "case_pass_rate": round(verdict_counts.get("pass", 0) / total, 3) if total else None,
         "tool_call_rate": round(tool_used_count / len(tool_cases), 3) if tool_cases else None,
         "avg_elapsed_ms": round(sum(e["elapsed_ms"] for e in judged) / len(judged), 1) if judged else 0,
         "total_tokens": sum(e["tokens"].get("total", 0) for e in judged),
-        "judgments": {c: pass_rate(c) for c in ("tool_used", "tool_not_used", "stream_complete", "latency_budget")},
+        "judgments": {
+            c: pass_rate(c)
+            for c in (
+                "tool_used",
+                "tool_not_used",
+                "stream_complete",
+                "latency_budget",
+                "answer_correct",
+                "refusal",
+            )
+        },
         "category_stats": category_stats,
     }
 
@@ -339,6 +577,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="只跑前 N 条")
     parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     parser.add_argument("--retries", type=int, default=1, help="非 ok 时重试次数")
+    parser.add_argument("--repeat", type=int, default=1, help="每条用例执行次数（稳定性评测，默认 1）")
     parser.add_argument("--llm", choices=["real", "fake"], default="real", help="fake=干跑不花钱")
     parser.add_argument("--report-dir", type=Path, default=REPORTS_DIR)
     args = parser.parse_args()
@@ -357,7 +596,15 @@ def main() -> int:
         llm = DeepSeekLLMClient(api_key=settings.api_key, model=settings.model or "deepseek-chat")
 
     report = asyncio.run(
-        run_all(cases, llm, tools, args.concurrency, args.limit, args.retries)
+        run_all(
+            cases,
+            llm,
+            tools,
+            args.concurrency,
+            args.limit,
+            args.retries,
+            args.repeat,
+        )
     )
     json_path, xlsx_path = write_report(report, args.report_dir)
     print_summary(report["summary"])

@@ -3,16 +3,52 @@
   "category": "tool_call",
   "title": "计算后保存笔记",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "计算 3+5 的结果，并保存为笔记，标题叫计算结果" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "计算 3+5 的结果，并保存为笔记，标题叫计算结果"
+      }
+    ]
+  },
   "expected": {
     "behavior": "先调用 calculator 得到结果，再调用 note_add 保存",
-    "criteria": ["answer_correct"],
-    "tool_calls": [
-      { "name": "calculator", "arguments": { "expression": "3+5" } },
-      { "name": "note_add", "arguments": { "title": "计算结果", "content": "8" } }
+    "criteria": [
+      "answer_correct"
     ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "3+5"
+        }
+      },
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "计算结果",
+          "content": "8"
+        }
+      }
+    ],
+    "answer_contains": [],
     "max_rounds": 2
   },
-  "tags": ["multi-step"],
-  "compare": true
+  "timeout_sec": 30.0,
+  "tags": [
+    "multi-step"
+  ],
+  "compare": true,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:36",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "必须出现调用calculator计算3+5并得到真实结果8，再调用note_add以标题“计算结果”、内容为“8”完成保存，且不得编造或替换结果。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:36",
+    "annotated_by": "generator"
+  }
 }

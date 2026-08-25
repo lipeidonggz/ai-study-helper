@@ -13,7 +13,7 @@ from app.agent.llm import DeepSeekLLMClient, FakeLLMClient, LLMClient
 from app.tools.executor import ToolExecutor
 from app.tools.registry import default_registry
 from eval import case_store, run_store
-from eval.runner import run_all
+from eval.runner import aggregate, run_all, run_single_entry
 from eval.schema import CaseFile
 
 
@@ -68,6 +68,7 @@ class RunManager:
         llm: str = "real",
         concurrency: int = 2,
         retries: int = 1,
+        repeat: int = 1,
     ) -> int:
         """创建跑批记录并启动后台任务，返回 run_id。"""
         cases = select_cases(case_filter, self.cases_dir)
@@ -79,10 +80,11 @@ class RunManager:
             "llm": llm,
             "concurrency": concurrency,
             "retries": retries,
+            "repeat": repeat,
         }
         run_id = run_store.create_run(self._db_path, name, config, total=len(cases))
         task = asyncio.create_task(
-            self._execute(run_id, deps, cases, llm, concurrency, retries)
+            self._execute(run_id, deps, cases, llm, concurrency, retries, repeat)
         )
         self._tasks[run_id] = task
         return run_id
@@ -95,6 +97,7 @@ class RunManager:
         llm: str,
         concurrency: int,
         retries: int,
+        repeat: int,
     ) -> None:
         """后台执行体：跑批 → 逐条落库 → 汇总收尾。"""
         run_store.update_run(self._db_path, run_id, status="running", started=True)
@@ -115,6 +118,7 @@ class RunManager:
                 tools,
                 concurrency=concurrency,
                 retries=retries,
+                repeat=repeat,
                 on_case=on_case,
                 cancel_event=cancel_event,
             )
@@ -151,6 +155,35 @@ class RunManager:
             return False
         task.cancel()
         return True
+
+    async def rerun_case(self, run_id: int, case_id: str, deps) -> dict:
+        """重跑单条用例：覆盖原结果、清旧标注、重算 summary。
+
+        语义（用户确认）：修复问题后重跑验证，覆盖原 run 中该条，便于对比同一位置；
+        运行中的跑批禁止重跑；重跑会使该 run 的核验状态失效。
+        """
+        run = run_store.get_run(self._db_path, run_id)
+        if run is None:
+            raise ValueError(f"跑批不存在：{run_id}")
+        if self.is_active(run_id):
+            raise ValueError("跑批运行中，不能重跑单条用例")
+        case = case_store.get_case(case_id, self.cases_dir)
+        if case is None:
+            raise ValueError(f"用例不存在：{case_id}")
+        config = run.get("config") or {}
+        llm_kind = config.get("llm", "real")
+        retries = int(config.get("retries", 1))
+        repeat = int(config.get("repeat", 1))
+        client = build_llm(deps, llm_kind)
+        tools = ToolExecutor(default_registry())
+        judge_llm = client if llm_kind == "real" else None
+        entry = await run_single_entry(case, client, tools, retries, judge_llm, repeat)
+        run_store.insert_case_result(self._db_path, run_id, entry)
+        run_store.clear_case_annotation(self._db_path, run_id, case_id)
+        run_store.clear_verified(self._db_path, run_id)  # 结果变了，核验失效
+        rows = run_store.get_run_cases(self._db_path, run_id)
+        run_store.update_run(self._db_path, run_id, summary=aggregate(rows))
+        return entry
 
     def is_active(self, run_id: int) -> bool:
         task = self._tasks.get(run_id)

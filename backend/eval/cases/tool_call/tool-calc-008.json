@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "取模运算",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "17除以5的余数是多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "17除以5的余数是多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 2",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "17%5" } }],
-    "answer_contains": ["2"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "17%5"
+        }
+      }
+    ],
+    "answer_contains": [
+      "2"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:24",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应包含通过calculator工具计算17%5并得出余数2，明确表述“17除以5的余数是2”；不得编造其他数值或将近似值当作精确值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:24",
+    "annotated_by": "generator"
+  }
 }

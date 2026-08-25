@@ -3,13 +3,48 @@
   "category": "tool_call",
   "title": "连续加法",
   "mode": "tool_enhanced",
-  "input": { "messages": [{ "role": "user", "content": "1加2加3加4加5等于多少？" }] },
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "1加2加3加4加5等于多少？"
+      }
+    ]
+  },
   "expected": {
     "behavior": "调用 calculator 计算并回答 15",
-    "criteria": ["answer_correct"],
-    "tool_calls": [{ "name": "calculator", "arguments": { "expression": "1+2+3+4+5" } }],
-    "answer_contains": ["15"],
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "1+2+3+4+5"
+        }
+      }
+    ],
+    "answer_contains": [
+      "15"
+    ],
     "max_rounds": 1
   },
-  "tags": ["basic", "math"]
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-25T10:53:28",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "金标准答案要点：必须调用 calculator 工具计算表达式“1+2+3+4+5”，并依据工具返回的真实结果准确回答“15”，不得编造或给出其他数值；若工具未返回有效结果，应明确说明无法计算，不得虚构答案。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-25T10:53:28",
+    "annotated_by": "generator"
+  }
 }
