@@ -136,6 +136,12 @@
             <td>给 Agent 装一台体检机：手写评测体系的构建、坑与行业坐标（技术笔记初稿）</td>
             <td><span class="badge">初稿</span></td>
           </tr>
+          <tr>
+            <td><a href="0019-agent-security-practice.html">0019</a></td>
+            <td>2026-08-25</td>
+            <td>Agent 安全实践：评测驱动的修复与分层防御（计算器精确性 / 输出护栏 / 注入调优 / 两条架构原则）</td>
+            <td><span class="badge">已完成</span></td>
+          </tr>
         </tbody>
       </table>
     </section>
@@ -144,8 +150,8 @@
       <h2>当前状态</h2>
       <ul>
         <li>阶段：阶段 1 进行中——真实评测基线已出（68/70，见 0015）</li>
-        <li>最近进展：最小 Agent 全貌笔记（0016）；评测台 P1 已实现（用例管理 / 跑批跟踪 / 人工标注 UI）；评测强化：LLM-as-judge（金标准优先 + 判定理由 + 工具上下文）、repeat 稳定性采样、金标准批量生成（70/70）、运行核验/重跑/删除；评测体系实践笔记初稿（0018）</li>
-        <li>下一步：确认 0018 笔记初稿并补插图 → 提交未提交的工作（judge/repeat/金标准生成/UI 设计系统）→ 补 stream_complete / latency_budget criteria → 《三国演义》素材 → prompt 策略对比</li>
+        <li>最近进展：评测驱动安全修复闭环（计算器精确性语义、输出护栏 PromptLeakGuard、提示词分层加固、inject-005 维度对齐）；两条架构原则沉淀（凭证不进 LLM 上下文、评测是抽样证据）；安全实践记录 0019</li>
+        <li>下一步：确认 0018 笔记初稿并补插图（可补"评测驱动的后续修复"收尾）→ 补 stream_complete / latency_budget criteria → 《三国演义》素材 → prompt 策略对比</li>
         <li>约定速览：记录一律用 HTML；值得记录时 Codex 会主动提醒</li>
       </ul>
     </section>

@@ -21,6 +21,7 @@ import time  # 工具执行耗时计时
 from typing import AsyncIterator
 
 from app.agent.context import assemble, system_prompt  # 上下文组装与系统提示
+from app.agent.guardrail import BLOCK_MESSAGE, PromptLeakGuard  # 输出护栏（防系统提示泄露）
 from app.agent.llm import LLMClient, LLMEvent, LLMMessage, ToolCall
 from app.agent.trace import Trace, event_to_dict, messages_to_dicts  # 处理过程记录器
 from app.tools.executor import ToolExecutor
@@ -55,6 +56,11 @@ async def run_agent_turn(
             "context",
             {"system_prompt": system_prompt(mode), "message_count": len(messages)},
         )
+
+    # 输出护栏：增量检测输出是否泄露系统提示原文；命中即截断替换。
+    # 挂在 loop 内是因为 loop 是文本产出的唯一出口——chat.py 与评测 runner
+    # 复用同一个 loop，线上与评测的护栏行为天然一致。
+    guard = PromptLeakGuard(mode)
 
     tool_call_count = 0  # 累计工具调用次数（用于结束统计）
     total_tokens = {"prompt": 0, "completion": 0, "total": 0}  # 累计 token 用量
@@ -107,6 +113,15 @@ async def run_agent_turn(
             if trace:
                 trace.step("event", {"event": event_to_dict(event)})  # 每个流式事件都记录
             if event.type == "text" and event.text:
+                if guard.check(event.text):
+                    # 输出已包含系统提示原文：截断本轮，改为固定拒绝文案
+                    if trace:
+                        trace.step(
+                            "guardrail",
+                            {"action": "block", "fragments": guard.leaked_fragments()},
+                        )
+                    yield BLOCK_MESSAGE
+                    return
                 yield event.text  # 文本增量：立即推给前端（打字机效果）
             elif event.type == "tool_call":
                 tool_events.append(event)  # 工具调用：先攒着，流结束后统一处理

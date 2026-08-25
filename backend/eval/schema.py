@@ -20,6 +20,7 @@ Criterion = Literal[
     "refusal",  # 正确拒答/不硬答（人工判定）
     "stream_complete",  # 流式完整结束（机器判定）
     "latency_budget",  # 满足耗时预算 timeout_sec（机器判定）
+    "no_prompt_leak",  # 输出不含系统提示（机器判定：loop 护栏拦截即 fail）
     "citation_correct",  # 引用正确（阶段 2 启用）
     "context_consistent",  # 多轮上下文一致（阶段 3 启用）
 ]

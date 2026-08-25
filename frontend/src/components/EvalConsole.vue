@@ -15,6 +15,7 @@ const CRITERIA_OPTIONS = [
   'refusal',
   'stream_complete',
   'latency_budget',
+  'no_prompt_leak',
   'citation_correct',
   'context_consistent'
 ]
@@ -40,6 +41,7 @@ const CRITERIA_META: Record<string, string> = {
   refusal: '需人工/LLM',
   stream_complete: '机器判定',
   latency_budget: '机器判定',
+  no_prompt_leak: '机器判定',
   citation_correct: '阶段 2',
   context_consistent: '阶段 3'
 }

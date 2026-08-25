@@ -6,13 +6,22 @@
 
 安全说明：计算器用 AST 解析实现"安全求值"，绝不使用 eval——
 eval 会执行任意代码；AST 方案只允许数字和四则运算，其他一律拒绝。
+
+精确性语义（2026-08-25 修复 boundary-halluc-003 根因）：
+- "结果是否精确"由工具层确定性判定，不让模型猜（模型判断依据是不可控黑盒）
+- 四则运算用 Fraction 做精确有理数运算：10/3 返回 10/3（精确），不存在近似
+- 幂/开方：整数指数精确；分数指数判定是否为完全幂——完全幂精确，否则
+  明确标注"近似值：精确值为无理数或无法用有限小数表示"
+- 返回值自带精确性声明，模型的任务退化为"如实转述工具声明"
 """
 
 import ast  # 把表达式解析成语法树，然后只允许白名单节点
 import datetime as _dt  # 日期时间（下划线前缀，避免与工具名冲突）
+import math  # 无理数近似的浮点计算
 import operator as _op  # 运算符节点 → Python 内置运算函数的映射
+from fractions import Fraction  # 精确有理数：避免 float 的二进制近似
 
-# 允许的运算符白名单：语法树节点类型 -> 对应的计算函数
+# 允许的运算符白名单：语法树节点类型 -> 对应的计算函数（Pow 单独处理）
 _BIN_OPS = {
     ast.Add: _op.add,
     ast.Sub: _op.sub,
@@ -20,31 +29,135 @@ _BIN_OPS = {
     ast.Div: _op.truediv,
     ast.FloorDiv: _op.floordiv,
     ast.Mod: _op.mod,
-    ast.Pow: _op.pow,
 }
 
 
-def _safe_eval(expr: str) -> float:
-    """只允许数字与四则运算/幂/取模的表达式求值。"""
+def _integer_root(n: int, q: int) -> int | None:
+    """判定 n 是否为完全 q 次幂：是则返回整数根，否则返回 None。
 
-    def evaluate(n):
-        """递归求值一个语法树节点。"""
-        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
-            return n.value  # 数字节点：直接返回
-        if isinstance(n, ast.BinOp) and type(n.op) in _BIN_OPS:
-            # 二元运算：先递归算左右两边，再按运算符计算
-            return _BIN_OPS[type(n.op)](evaluate(n.left), evaluate(n.right))
-        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.UAdd, ast.USub)):
-            value = evaluate(n.operand)
-            return value if isinstance(n.op, ast.UAdd) else -value  # 一元正负号
-        raise ValueError("不支持的表达式")  # 其他任何节点一律拒绝
+    用整数二分，无浮点误差；这是"精确性判定"的确定性基础。
+    """
+    if n < 0:
+        if q % 2 == 0:
+            return None  # 负数没有偶次实数根
+        r = _integer_root(-n, q)
+        return -r if r is not None else None
+    if n == 0:
+        return 0
+    # hi 取"比真实根大"的最小 2 的幂：hi ** q >= n 恒成立
+    hi = 1 << ((n.bit_length() + q - 1) // q)
+    lo = 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        p = mid ** q
+        if p == n:
+            return mid
+        if p < n:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return None
 
-    return evaluate(ast.parse(expr, mode="eval").body)
+
+def _sqrt(value: Fraction) -> tuple[Fraction | float, bool]:
+    """平方根：完全平方 → (精确根, True)；否则 → (浮点近似, False)。"""
+    if value < 0:
+        raise ValueError("不支持负数的平方根")
+    rn = _integer_root(value.numerator, 2)
+    rd = _integer_root(value.denominator, 2)
+    if rn is not None and rd is not None:
+        return Fraction(rn, rd), True
+    return math.sqrt(float(value)), False
+
+
+def _pow(base: Fraction, exp: Fraction) -> tuple[Fraction | float, bool]:
+    """幂运算：
+    - 整数指数 → Fraction 精确运算
+    - 分数指数 p/q → (base ** p) 开 q 次根；完全幂则精确，否则近似
+    """
+    if exp.denominator == 1:
+        try:
+            return base ** exp.numerator, True
+        except ZeroDivisionError:
+            raise ValueError("不支持 0 的负次幂")
+    if base < 0:
+        raise ValueError("不支持负数的分数次幂")
+    p, q = exp.numerator, exp.denominator
+    try:
+        radicand = base ** p  # Fraction：p 可为负，Fraction 支持负指数
+    except ZeroDivisionError:
+        raise ValueError("不支持 0 的负次幂")
+    rn = _integer_root(radicand.numerator, q)
+    rd = _integer_root(radicand.denominator, q)
+    if rn is not None and rd is not None:
+        return Fraction(rn, rd), True
+    return float(radicand) ** (1.0 / q), False
+
+
+def _evaluate(n) -> tuple[Fraction | float, bool]:
+    """递归求值一个语法树节点，返回 (值, 是否精确)。
+
+    精确性是工具层的确定性判定结果，是模型转述的唯一事实依据。
+    """
+
+    if (
+        isinstance(n, ast.Constant)
+        and isinstance(n.value, (int, float))
+        and not isinstance(n.value, bool)  # bool 是 int 子类，但语义上不是数字
+    ):
+        # Fraction(str(v))：十进制小数精确转有理数（0.5 → 1/2），
+        # 避免 Fraction(float) 的二进制近似（0.1 会变成巨大分数）
+        return Fraction(str(n.value)), True
+    if isinstance(n, ast.BinOp) and type(n.op) in _BIN_OPS:
+        left, lex = _evaluate(n.left)
+        right, rex = _evaluate(n.right)
+        return _BIN_OPS[type(n.op)](left, right), lex and rex
+    if isinstance(n, ast.BinOp) and type(n.op) is ast.Pow:
+        base, _ = _evaluate(n.left)
+        exp, _ = _evaluate(n.right)
+        return _pow(base, exp)
+    if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.UAdd, ast.USub)):
+        value, exact = _evaluate(n.operand)
+        return (value if isinstance(n.op, ast.UAdd) else -value), exact
+    if isinstance(n, ast.Call):
+        # 白名单函数：目前只有 sqrt（必须恰好一个位置参数，不允许关键字参数）
+        if (
+            isinstance(n.func, ast.Name)
+            and n.func.id == "sqrt"
+            and len(n.args) == 1
+            and not n.keywords
+        ):
+            value, _ = _evaluate(n.args[0])
+            return _sqrt(value)
+        raise ValueError("不支持的函数调用")
+    raise ValueError("不支持的表达式")  # 其他任何节点一律拒绝
+
+
+def _format_value(value: Fraction, exact: bool) -> str:
+    """把结果格式化成可读文本：精确时输出整数/最简分数，近似时输出 12 位小数。"""
+    if exact:
+        if value.denominator == 1:
+            return str(value.numerator)
+        return f"{value.numerator}/{value.denominator}"
+    return f"{float(value):.12f}"
 
 
 def _calculate(expression: str) -> str:
-    """计算器工具的实现：安全求值后转成字符串返回。"""
-    return str(_safe_eval(expression))
+    """计算器工具的实现：安全求值，返回带精确性声明的结果。
+
+    例：
+      "3+5"                 → "3+5 = 8（精确）"
+      "10/3"                → "10/3 = 10/3（精确）"
+      "sqrt(144)"           → "sqrt(144) = 12（精确）"
+      "sqrt(987654321)"     → "sqrt(987654321) ≈ 31426.968052931865（近似值：精确值为无理数或无法用有限小数表示）"
+    """
+    value, exact = _evaluate(ast.parse(expression, mode="eval").body)
+    if exact:
+        return f"{expression} = {_format_value(value, exact)}（精确）"
+    return (
+        f"{expression} ≈ {_format_value(value, exact)}"
+        "（近似值：精确值为无理数或无法用有限小数表示）"
+    )
 
 
 def _now(timezone: str = "Asia/Shanghai") -> str:
@@ -80,7 +193,7 @@ def builtin_specs() -> list[dict]:
     return [
         {
             "name": "calculator",
-            "description": "安全计算数学表达式（支持 + - * / // % ** 与括号）",
+            "description": "安全计算数学表达式（支持 + - * / // % ** 与括号，支持 sqrt()；结果自带精确/近似声明）",
             "parameters": {
                 "type": "object",
                 "properties": {"expression": {"type": "string", "description": "数学表达式"}},

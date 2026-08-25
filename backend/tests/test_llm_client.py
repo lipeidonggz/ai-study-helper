@@ -314,13 +314,13 @@ def test_loop_tool_error_does_not_crash():
             if self._calls == 1:
                 yield LLMEvent(
                     type="tool_call",
-                    tool_call=ToolCall(name="calculator", arguments={"expression": "sqrt(9)"}, id="call_x"),
-                    tool_calls=[ToolCall(name="calculator", arguments={"expression": "sqrt(9)"}, id="call_x")],
+                    tool_call=ToolCall(name="calculator", arguments={"expression": "sqrt(-1)"}, id="call_x"),
+                    tool_calls=[ToolCall(name="calculator", arguments={"expression": "sqrt(-1)"}, id="call_x")],
                     raw_tool_calls=[
                         {
                             "id": "call_x",
                             "type": "function",
-                            "function": {"name": "calculator", "arguments": '{"expression": "sqrt(9)"}'},
+                            "function": {"name": "calculator", "arguments": '{"expression": "sqrt(-1)"}'},
                         }
                     ],
                 )
