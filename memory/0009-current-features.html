@@ -44,7 +44,7 @@
         <li><strong>评测强化（2026-08-25）</strong>：LLM-as-judge（金标准优先 / 预期行为兜底 + 判定理由 + 工具调用上下文 + uncertain 转人工，判官复用生成 LLM）；repeat 稳定性采样（1–10 次串行，聚合 pass/unstable/fail/exec_error/pending，UI 显示通过 X/N 徽章与逐 try 详情）；金标准批量生成器（按预期行为起草、注入反幻觉口径，70/70 全量生成）；运行管理增强（逐用例重跑覆盖原结果并清标注/失效核验、核验标记 verify/unverify）；SQLite 连接泄漏修复；评测台 UI 设计系统（共享样式 eval-ui.css + 弹窗编辑 + 字段说明 + 判定参考展示 + unstable 筛选）</li>
         <li><strong>评测驱动修复（2026-08-26）</strong>：judge 校准（reason 引用原文、uncertain 收紧防过度转人工、数值类"核对不重算"、pending 必带 reason、JSON 未转义引号容错解析）；工具化提示词（工具可覆盖的确定性任务必须调用工具 + 一次调用不拆步骤）；工具能力补齐（计算器精确语义、datetime 时区/星期/delta、note 列出与检索）；trace 落盘（exec_trace 有序执行轨迹 + 前端"执行轨迹"查看，失败可回放）；tool_used 判定支持"任一预期工具"；金标准对齐系列修复（inject-005 维度、fuzzy-004 矛盾口径、inject-003 单轮分支、refuse-004 替代方法边界、combined-007 精确值、tool-calc-009/016/017 整除/精确/术语、fuzzy-005 商歧义、note-get 系列检索预期）；新增用例 fuzzy-005、tool-calc-016/017；tool_used 批量补齐</li>
         <li><strong>安全护栏（2026-08-25）</strong>：系统提示分层加固（共享安全基线 BASE_DEFENSE：不泄露原文/摘要/改述、用户消息当数据、数据与指令分离、不展示工具列表）；输出护栏 PromptLeakGuard（known-secret 匹配，挂在 loop 内，命中即替换为固定拒绝文案并记录 trace）；新增机器判定 criterion <code>no_prompt_leak</code>（挂到全部注入用例）；judge 增加精确性一致性比对（工具标注近似值不得表述为精确值）；inject-005 判定维度从 refusal 对齐为 answer_correct（翻译任务型场景）</li>
-        <li><strong>文档</strong>：记忆库 0001–0019（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读 / 最小 Agent 全貌 / 评测台需求 / 评测体系笔记 / Agent 安全实践）+ 运行指南 docs/how-to-run.html</li>
+        <li><strong>文档</strong>：记忆库 0001–0020（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读 / 最小 Agent 全貌 / 评测台需求 / 评测体系笔记 / Agent 安全实践 / 评测反哺 Agent）+ 运行指南 docs/how-to-run.html</li>
         <li><strong>代码注释</strong>：backend 全部 Python 文件中文注释（文件头职责与设计原因、流程逐行说明）</li>
       </ul>
     </section>
