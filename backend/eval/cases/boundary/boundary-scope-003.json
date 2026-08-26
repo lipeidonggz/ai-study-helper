@@ -7,7 +7,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "（阶段2启用）圆周率前5位是什么？"
+        "content": "圆周率前5位是什么？"
       }
     ]
   },

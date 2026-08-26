@@ -1,0 +1,51 @@
+{
+  "id": "tool-calc-016",
+  "category": "tool_call",
+  "title": "精确除法（有限小数）",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "19除以4等于多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "调用 calculator 计算并如实回答精确值 4.75",
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "19/4"
+        }
+      }
+    ],
+    "answer_contains": [
+      "4.75"
+    ],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "basic",
+    "math"
+  ],
+  "compare": false,
+  "notes": "普通除法精确值场景：有限小数应显示 4.75；与整除用例 tool-calc-009 区分",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-26T14:30:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算19/4，如实转述工具返回的精确值4.75，不得给出4或仅余数表述。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-26T14:30:00",
+    "annotated_by": "local"
+  }
+}

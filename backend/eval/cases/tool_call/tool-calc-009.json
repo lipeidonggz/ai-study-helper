@@ -1,20 +1,21 @@
 {
   "id": "tool-calc-009",
   "category": "tool_call",
-  "title": "整数除法",
+  "title": "整除",
   "mode": "tool_enhanced",
   "input": {
     "messages": [
       {
         "role": "user",
-        "content": "19除以4，商是多少？"
+        "content": "19 除以 4 的整数商是多少？"
       }
     ]
   },
   "expected": {
     "behavior": "调用 calculator 计算整数商并回答 4",
     "criteria": [
-      "answer_correct"
+      "answer_correct",
+      "tool_used"
     ],
     "tool_calls": [
       {
@@ -35,16 +36,16 @@
     "math"
   ],
   "compare": false,
-  "notes": "",
+  "notes": "整除场景：输入用“整数商”明确语义，避免“整除”的术语歧义（整除关系 vs 整除运算）与“商”的歧义（与 boundary-fuzzy-005 区分）",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:26",
+    "updated_at": "2026-08-26T14:30:00",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "工具计算结果为19//4=4，回答须明确商为4，不得给出小数或余数表述。",
+    "golden_answer": "满分回答应调用calculator工具计算19//4，如实转述整除结果4（可补充余数为3），不得混淆为精确值4.75。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:26",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-26T13:53:52",
+    "annotated_by": "local"
   }
 }

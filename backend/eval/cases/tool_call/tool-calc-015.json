@@ -14,7 +14,8 @@
   "expected": {
     "behavior": "调用 calculator 计算并给出准确大数结果",
     "criteria": [
-      "answer_correct"
+      "answer_correct",
+      "tool_used"
     ],
     "tool_calls": [
       {

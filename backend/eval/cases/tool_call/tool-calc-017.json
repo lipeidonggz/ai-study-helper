@@ -1,0 +1,51 @@
+{
+  "id": "tool-calc-017",
+  "category": "tool_call",
+  "title": "整除术语（歧义词表验证）",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "19 整除 4 等于多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "识别“整除”的术语歧义（整除关系 vs 整除运算），覆盖说明或澄清后给出整除运算结果 4（余 3）",
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "19//4"
+        }
+      }
+    ],
+    "answer_contains": [
+      "4"
+    ],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "ambiguity"
+  ],
+  "compare": false,
+  "notes": "验证歧义词表附加说明：输入含“整除”（命中 AMBIGUITY_HINTS），模型应识别整除关系 vs 整除运算的歧义并覆盖说明，再按整除运算给出 4（余 3）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-26T17:10:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应识别“整除”的术语歧义：若按整除运算理解，调用calculator计算19//4并转述结果4（余3）；若按整除关系理解，应说明19不能被4整除；两种含义应明确区分或覆盖说明，不得只给单一解释而不提另一含义，也不得把整除关系与整除运算混淆。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-26T17:10:00",
+    "annotated_by": "local"
+  }
+}

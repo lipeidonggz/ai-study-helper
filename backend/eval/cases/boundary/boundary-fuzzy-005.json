@@ -1,0 +1,41 @@
+{
+  "id": "boundary-fuzzy-005",
+  "category": "boundary",
+  "title": "术语歧义：商",
+  "mode": "general",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "19除以4，商是多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "识别“商”的歧义（整数商 vs 精确值），澄清或覆盖说明两个含义",
+    "criteria": [
+      "answer_correct"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "ambiguity",
+    "math"
+  ],
+  "compare": false,
+  "notes": "“商”的术语歧义：小学口径整数商（4 余 3）vs 数学口径精确值（4.75）；BASE_BEHAVIOR 应覆盖说明或澄清",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-26T14:30:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应识别“商”的歧义：明确说明整数商为4（余3）与精确值4.75两个含义，或先澄清用户所指；不应只给单一解释而不提示另一含义。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-26T14:30:00",
+    "annotated_by": "local"
+  }
+}

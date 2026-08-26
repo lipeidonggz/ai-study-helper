@@ -189,6 +189,7 @@ export interface EvalRunCase {
   annotate_note: string
   golden_answer: string
   behavior: string
+  trace?: ExecTraceEvent[]
 }
 
 export interface EvalRunAttempt {
@@ -202,6 +203,13 @@ export interface EvalRunAttempt {
   pending_human: string[]
   judge_reasons: Record<string, string>
   verdict: string
+  trace?: ExecTraceEvent[]
+}
+
+/** 执行轨迹事件（后端 exec_trace：round / text / tool_exec / guardrail / done）。 */
+export interface ExecTraceEvent {
+  type: string
+  [key: string]: unknown
 }
 
 async function http<T>(url: string, init?: RequestInit): Promise<T> {

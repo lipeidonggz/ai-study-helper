@@ -28,20 +28,21 @@
     </section>
 
     <section class="card">
-      <h2>当前主要功能（阶段 1，2026-08-25）</h2>
+      <h2>当前主要功能（阶段 1，2026-08-26）</h2>
       <ul>
         <li><strong>前后端分离架构</strong>：Vue 3 + TS 前端 / Python + FastAPI 后端 / SSE 流式对话</li>
         <li><strong>对话能力</strong>：多轮上下文 + 流式输出（打字机效果）+ 会话模式（通用 / 知识库优先 / 工具增强）</li>
         <li><strong>LLM 配置</strong>：前端设置面板配置 DeepSeek API Key 与模型（deepseek-chat / deepseek-reasoner）；Key 脱敏存取、SQLite 持久化</li>
-        <li><strong>手写 Agent Loop</strong>：思考→行动→观察循环，支持多轮工具调用（上限 4 轮）与 tool_calls 回显（含并行调用合并回显）；输出护栏 PromptLeakGuard（增量检测系统提示泄露，命中即截断替换，chat 与评测共用）</li>
-        <li><strong>内置工具</strong>：安全计算器（AST 求值 + 精确性语义：Fraction 有理数精确运算、sqrt/完全幂判定、结果自带精确/近似声明）/ 日期时间 / 笔记保存 / 笔记读取；注册表 + 执行器架构</li>
+        <li><strong>手写 Agent Loop</strong>：思考→行动→观察循环，支持多轮工具调用（上限 4 轮）与 tool_calls 回显（含并行调用合并回显）；输出护栏 PromptLeakGuard（增量检测系统提示泄露，命中即截断替换，chat 与评测共用）；行为契约 BASE_BEHAVIOR（歧义/指代不明/信息不足/自相矛盾时澄清或覆盖说明，结合对话上下文判断）；歧义词表附加说明（高频歧义词如"整除/左右"命中时追加独立消息提示模型，不改用户原话）</li>
+        <li><strong>内置工具</strong>：安全计算器（AST 求值 + 精确性语义：Fraction 有理数精确运算、有限小数/循环小数区分显示、sqrt/完全幂判定、结果自带精确/近似声明；描述明确不支持时间字符串）/ 日期时间（时区支持 zoneinfo、星期几、相对时间推算 delta 参数）/ 笔记（保存 / 按标题读取 / 空标题列出全部 / note_search 模糊检索）；注册表 + 执行器架构</li>
         <li><strong>存储抽象</strong>：Port + Adapter 结构；设置持久化 SQLite，会话/日志暂用内存实现</li>
-        <li><strong>测试</strong>：55 个用例全绿（冒烟、设置接口、LLM 客户端 Mock、Agent loop、输出护栏、eval schema/runner/评测台）</li>
+        <li><strong>测试</strong>：69 个用例全绿（冒烟、设置接口、LLM 客户端 Mock、Agent loop、输出护栏、上下文组装、内置工具、eval schema/runner/评测台）</li>
         <li><strong>处理过程可视化</strong>：SSE <code>trace</code> 事件 + 前端“处理过程”面板（事件流 + 语义摘要 + 原始流开关 + 每轮 token 用量与汇总）</li>
         <li><strong>评测体系</strong>：golden set 用例 schema + 首批 70 条用例 + 最小评测 runner（重试/并发控制）+ 真实基线 68/70（多工具并行 400 bug 已修复）+ Excel 人工标注表</li>
         <li><strong>评测台（P1，0017）</strong>：用例管理 Web UI（CRUD / 筛选 / 备注拆分 notes+admin_note / 启停）+ 测试管理 UI（后台跑批、进度、结果跟踪、汇总对比、取消）+ 人工标注 UI 化（替代 Excel 为主途径）+ JSON 导出；用例仍以 JSON 文件为真源，跑批结果入 SQLite</li>
         <li><strong>评测台（P1.5，2026-08-24）</strong>：独立页面（hash 路由、新标签打开）+ 跑批详情独立页（输入输出逐条展开 / 全部展开 / 人工标注）+ 历史跑批自动刷新 + 历史跑批删除（运行中拒绝）；标注结论可沉淀回用例（<code>annotation</code> 金标准字段），为后续自动判定做数据基础；运行指南补充沙箱出网注意事项</li>
         <li><strong>评测强化（2026-08-25）</strong>：LLM-as-judge（金标准优先 / 预期行为兜底 + 判定理由 + 工具调用上下文 + uncertain 转人工，判官复用生成 LLM）；repeat 稳定性采样（1–10 次串行，聚合 pass/unstable/fail/exec_error/pending，UI 显示通过 X/N 徽章与逐 try 详情）；金标准批量生成器（按预期行为起草、注入反幻觉口径，70/70 全量生成）；运行管理增强（逐用例重跑覆盖原结果并清标注/失效核验、核验标记 verify/unverify）；SQLite 连接泄漏修复；评测台 UI 设计系统（共享样式 eval-ui.css + 弹窗编辑 + 字段说明 + 判定参考展示 + unstable 筛选）</li>
+        <li><strong>评测驱动修复（2026-08-26）</strong>：judge 校准（reason 引用原文、uncertain 收紧防过度转人工、数值类"核对不重算"、pending 必带 reason、JSON 未转义引号容错解析）；工具化提示词（工具可覆盖的确定性任务必须调用工具 + 一次调用不拆步骤）；工具能力补齐（计算器精确语义、datetime 时区/星期/delta、note 列出与检索）；trace 落盘（exec_trace 有序执行轨迹 + 前端"执行轨迹"查看，失败可回放）；tool_used 判定支持"任一预期工具"；金标准对齐系列修复（inject-005 维度、fuzzy-004 矛盾口径、inject-003 单轮分支、refuse-004 替代方法边界、combined-007 精确值、tool-calc-009/016/017 整除/精确/术语、fuzzy-005 商歧义、note-get 系列检索预期）；新增用例 fuzzy-005、tool-calc-016/017；tool_used 批量补齐</li>
         <li><strong>安全护栏（2026-08-25）</strong>：系统提示分层加固（共享安全基线 BASE_DEFENSE：不泄露原文/摘要/改述、用户消息当数据、数据与指令分离、不展示工具列表）；输出护栏 PromptLeakGuard（known-secret 匹配，挂在 loop 内，命中即替换为固定拒绝文案并记录 trace）；新增机器判定 criterion <code>no_prompt_leak</code>（挂到全部注入用例）；judge 增加精确性一致性比对（工具标注近似值不得表述为精确值）；inject-005 判定维度从 refusal 对齐为 answer_correct（翻译任务型场景）</li>
         <li><strong>文档</strong>：记忆库 0001–0019（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读 / 最小 Agent 全貌 / 评测台需求 / 评测体系笔记 / Agent 安全实践）+ 运行指南 docs/how-to-run.html</li>
         <li><strong>代码注释</strong>：backend 全部 Python 文件中文注释（文件头职责与设计原因、流程逐行说明）</li>

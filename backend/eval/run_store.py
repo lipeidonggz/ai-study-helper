@@ -80,6 +80,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 repeat_count INTEGER NOT NULL DEFAULT 1,
                 pass_count INTEGER NOT NULL DEFAULT 0,
                 repeat_results TEXT NOT NULL DEFAULT '[]',
+                trace TEXT NOT NULL DEFAULT '[]',
                 answer_correct TEXT NOT NULL DEFAULT '',
                 refusal TEXT NOT NULL DEFAULT '',
                 annotate_note TEXT NOT NULL DEFAULT '',
@@ -108,6 +109,8 @@ def init_db(db_path: Path = DB_PATH) -> None:
             conn.execute("ALTER TABLE eval_run_cases ADD COLUMN pass_count INTEGER NOT NULL DEFAULT 0")
         if "repeat_results" not in case_cols:
             conn.execute("ALTER TABLE eval_run_cases ADD COLUMN repeat_results TEXT NOT NULL DEFAULT '[]'")
+        if "trace" not in case_cols:
+            conn.execute("ALTER TABLE eval_run_cases ADD COLUMN trace TEXT NOT NULL DEFAULT '[]'")
 
 
 def create_run(
@@ -178,8 +181,8 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 (run_id, case_id, category, title, mode, input, status,
                  elapsed_ms, rounds, tool_calls, tokens, output, error,
                  judgments, pending_human, metrics, verdict, judge_reasons,
-                 repeat_count, pass_count, repeat_results)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 repeat_count, pass_count, repeat_results, trace)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, case_id) DO UPDATE SET
                 category=excluded.category, title=excluded.title, mode=excluded.mode,
                 input=excluded.input, status=excluded.status, elapsed_ms=excluded.elapsed_ms,
@@ -188,7 +191,7 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 pending_human=excluded.pending_human, metrics=excluded.metrics,
                 verdict=excluded.verdict, judge_reasons=excluded.judge_reasons,
                 repeat_count=excluded.repeat_count, pass_count=excluded.pass_count,
-                repeat_results=excluded.repeat_results
+                repeat_results=excluded.repeat_results, trace=excluded.trace
             """,
             (
                 run_id,
@@ -212,6 +215,7 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 entry.get("repeat_count", 1),
                 entry.get("pass_count", 0),
                 json.dumps(entry.get("repeat_results", []), ensure_ascii=False),
+                json.dumps(entry.get("trace", []), ensure_ascii=False),
             ),
         )
 
@@ -252,6 +256,7 @@ def _case_row_to_dict(row: sqlite3.Row) -> dict:
         "metrics",
         "judge_reasons",
         "repeat_results",
+        "trace",
     ):
         if key in d and d[key]:
             d[key] = json.loads(d[key])

@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "调用 current_datetime 获取当前时间（骨架版忽略时区参数）",
+    "behavior": "调用 current_datetime 并传入东京时区，获取东京当前时间",
     "criteria": [
       "answer_correct",
       "tool_used"
@@ -20,7 +20,9 @@
     "tool_calls": [
       {
         "name": "current_datetime",
-        "arguments": {}
+        "arguments": {
+          "timezone": "Asia/Tokyo"
+        }
       }
     ],
     "answer_contains": [],
@@ -31,13 +33,13 @@
     "datetime"
   ],
   "compare": false,
-  "notes": "骨架版 current_datetime 忽略时区参数，使用系统本地时区；时区处理是后续改进点",
+  "notes": "时区已支持（zoneinfo）：模型应传入 timezone=Asia/Tokyo，工具返回东京时间（JST），模型如实转述即可",
   "enabled": true,
   "admin_note": "",
   "updated_at": "2026-08-25T10:53:50",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "答案应调用current_datetime工具且参数为空对象，并依据工具返回的系统本地时间如实回答东京当前时刻；不得在未调用工具或工具无结果时编造时间，不得附加时区转换参数。",
+    "golden_answer": "答案应调用current_datetime工具并传入东京时区（timezone=Asia/Tokyo），依据工具返回的东京时间如实回答东京当前时刻；不得在未调用工具或工具无结果时编造时间，不得自行推算时区转换（时区转换由工具完成）。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:50",

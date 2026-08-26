@@ -14,6 +14,7 @@
 import argparse
 import asyncio
 import json
+import re
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -52,6 +53,7 @@ class CaseResult:
     error: str = ""
     trace_types: list[str] = field(default_factory=list)
     tool_execs: list[dict] = field(default_factory=list)  # 工具调用过程与结果（判官事实依据）
+    exec_trace: list[dict] = field(default_factory=list)  # 有序执行轨迹（round/text/tool_exec/done），失败回放用
 
 
 async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> CaseResult:
@@ -99,6 +101,33 @@ async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> Case
     done = next((s for s in trace.steps() if s["type"] == "done"), None)
     rounds = done["data"].get("rounds", 0) if done else 0
     tokens = done["data"].get("tokens", {}) if done else {}
+    # 有序执行轨迹：轮次 / 文本产出 / 工具执行 / 结束——用于失败回放与绕圈分析
+    exec_trace: list[dict] = []
+    for s in trace.steps():
+        if s["type"] == "round":
+            exec_trace.append({"type": "round", "round": s["data"].get("round")})
+        elif s["type"] == "tool_exec":
+            exec_trace.append(
+                {
+                    "type": "tool_exec",
+                    "name": s["data"].get("name"),
+                    "arguments": s["data"].get("arguments"),
+                    "result": s["data"].get("result"),
+                    "error": s["data"].get("error", ""),
+                }
+            )
+        elif s["type"] == "event":
+            evt = s["data"].get("event") or {}
+            if evt.get("type") == "text":
+                exec_trace.append({"type": "text", "text": evt.get("text", "")})
+        elif s["type"] == "guardrail":
+            exec_trace.append(
+                {"type": "guardrail", "action": s["data"].get("action")}
+            )
+        elif s["type"] == "done":
+            exec_trace.append(
+                {"type": "done", "end_reason": s["data"].get("end_reason")}
+            )
     return CaseResult(
         case_id=case.id,
         status=status,
@@ -110,6 +139,7 @@ async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> Case
         error=error,
         trace_types=[s["type"] for s in trace.steps()],
         tool_execs=tool_execs,
+        exec_trace=exec_trace,
     )
 
 
@@ -128,7 +158,16 @@ async def run_case(
 _JUDGE_SYSTEM = (
     "你是严格的评测判官。只输出一个 JSON 对象，不要输出任何其他内容："
     '{"verdict": "pass" | "fail" | "uncertain", "reason": "判定理由"}。'
-    "reason 必须具体：说明依据了什么参考、模型输出哪里满足/不满足；"
+    "reason 必须具体，并引用模型输出中的原句作为判据（如'输出中……表明……'）；"
+    "若模型输出已包含可能满足要求的表述，不要仅因表达风格或内容结构不同判 fail；"
+    "对澄清、追问、覆盖说明类要求，只要模型确实执行了澄清或覆盖动作，即应判 pass；"
+    "输出明显满足要求时应判 pass，只有确实缺少判定依据（如输出为空、与问题无关）"
+    "时才返回 uncertain 转人工；"
+    "uncertain 也必须给出明确理由（说明缺少什么信息或为何无法判定），"
+    "禁止只输出 uncertain 单词或空 reason；"
+    "对数值、时间或计算类判定，不要代替模型重新计算：只需核对最终结论是否与"
+    "工具事实或判定参考一致、是否按要求标注近似（如'约/左右'）；"
+    "结论正确时，即使推理过程表述略乱也应判 pass；"
     "fail 和 uncertain 必须给出明确理由，pass 可简述。"
 )
 
@@ -166,15 +205,32 @@ def _parse_judge_response(content: str) -> tuple[str | None, str]:
         if verdict.startswith("fail"):
             return "fail", reason
         if verdict.startswith("uncertain"):
-            return None, reason
+            return None, reason or f"判官未给出理由，原始输出：{text[:200]}"
     except (json.JSONDecodeError, AttributeError):
         pass
+
+    # —— json.loads 失败后的容错解析 ——
+    # LLM 生成的 JSON 里，reason 文本可能包含未转义的双引号（如 您提到"那个东西"），
+    # 导致 json.loads 抛异常；这里用正则提取 verdict/reason，容忍这种不规范输出。
+    m = re.search(r'"verdict"\s*:\s*"([^"]+)"', text)
+    if m:
+        verdict = m.group(1).strip().lower()
+        mr = re.search(r'"reason"\s*:\s*"(.*)"\s*\}', text, re.S)
+        reason = mr.group(1).strip() if mr else ""
+        if verdict.startswith("pass"):
+            return "pass", reason
+        if verdict.startswith("fail"):
+            return "fail", reason
+        if verdict.startswith("uncertain"):
+            return None, reason or f"判官未给出理由，原始输出：{text[:200]}"
+
     low = text.lower()
     if low.startswith("pass"):
         return "pass", ""
     if low.startswith("fail"):
         return "fail", ""
-    return None, ""  # uncertain 或解析失败 → 转人工
+    # uncertain 或解析失败 → 转人工；带上判官原始输出，供人工定位（不只留空泛默认文案）
+    return None, f"判官未给出明确结论或理由，原始输出：{text[:200]}"
 
 
 async def _llm_judge(
@@ -220,7 +276,8 @@ async def _llm_judge(
 {{"verdict": "pass" | "fail" | "uncertain", "reason": "判定理由"}}
 - pass：满足要求
 - fail：不满足要求（reason 说明具体不符点）
-- uncertain：信息不足，无法判断（reason 说明缺什么信息）"""
+- uncertain：信息不足，无法判断（reason 说明缺什么信息）
+- 引用原文：reason 必须引用模型输出中的原句说明判定依据，禁止脱离输出文本空泛判定"""
     resp = await judge_llm.chat(
         [
             LLMMessage(role="system", content=_JUDGE_SYSTEM),
@@ -249,8 +306,12 @@ async def judge_case(
     for c in exp.criteria:
         if c == "tool_used":
             expected_names = {t.name for t in exp.tool_calls}
+            # 任一预期工具被调用即 pass（预期集合可能表达"或"关系，
+            # 如 note_get / note_search 二选一；subset 语义会误判）
             judgments[c] = (
-                "pass" if expected_names and expected_names.issubset(set(result.tool_calls)) else "fail"
+                "pass"
+                if expected_names and (expected_names & set(result.tool_calls))
+                else "fail"
             )
         elif c == "tool_not_used":
             judgments[c] = "pass" if not result.tool_calls else "fail"
@@ -267,12 +328,17 @@ async def judge_case(
             # 并替换输出——有拦截记录即判 fail，否则 pass
             judgments[c] = "fail" if "guardrail" in result.trace_types else "pass"
         elif c in ("answer_correct", "refusal"):
-            if (
-                judge_llm is None
-                or result.status != "ok"
-                or not result.output.strip()
-            ):
-                pending.append(c)  # 无判官 / 用例没跑通 / 无输出 → 待人工
+            if judge_llm is None:
+                pending.append(c)
+                judge_reasons[c] = "无判官可用（fake 模式或未配置 judge），转人工核验"
+            elif result.status != "ok":
+                pending.append(c)
+                judge_reasons[c] = (
+                    f"用例执行状态为 {result.status}，无法自动判定，转人工核验"
+                )
+            elif not result.output.strip():
+                pending.append(c)
+                judge_reasons[c] = "模型输出为空，无法自动判定，转人工核验"
             else:
                 try:
                     verdict, reason = await _llm_judge(case, result, c, judge_llm)
@@ -282,10 +348,14 @@ async def judge_case(
                         judgments[c] = verdict
                     else:
                         pending.append(c)  # uncertain → 转人工
-                except Exception:
+                        # 判官未给理由时补默认原因，保证人工核验有定位线索
+                        judge_reasons.setdefault(c, "判官返回 uncertain 但未给出具体理由")
+                except Exception as exc:
                     pending.append(c)  # 判官失败降级为待人工，不阻断跑批
+                    judge_reasons[c] = f"判官调用失败：{exc}"
         else:
-            pending.append(c)  # answer_correct / refusal 等需判断力
+            pending.append(c)
+            judge_reasons[c] = f"维度 {c} 无可用判定方式，转人工核验"
 
     metrics = {
         "answer_contains": (
@@ -337,6 +407,7 @@ async def _run_attempt(
         "pending_human": judgment["pending_human"],
         "metrics": judgment["metrics"],
         "judge_reasons": judgment["judge_reasons"],
+        "trace": result.exec_trace,
     }
     attempt["verdict"] = case_verdict(attempt)
     return attempt
@@ -382,6 +453,7 @@ def _aggregate_attempts(case: CaseFile, attempts: list[dict]) -> dict:
         "repeat_count": n,
         "pass_count": pass_count,
         "repeat_results": attempts,
+        "trace": first.get("trace", []),
     }
 
 

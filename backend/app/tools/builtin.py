@@ -19,7 +19,10 @@ import ast  # 把表达式解析成语法树，然后只允许白名单节点
 import datetime as _dt  # 日期时间（下划线前缀，避免与工具名冲突）
 import math  # 无理数近似的浮点计算
 import operator as _op  # 运算符节点 → Python 内置运算函数的映射
+import re  # delta 相对时间解析
+from decimal import Decimal  # 有限小数的精确十进制字符串
 from fractions import Fraction  # 精确有理数：避免 float 的二进制近似
+from zoneinfo import ZoneInfo  # IANA 时区转换（Windows 需 tzdata 包）
 
 # 允许的运算符白名单：语法树节点类型 -> 对应的计算函数（Pow 单独处理）
 _BIN_OPS = {
@@ -133,11 +136,31 @@ def _evaluate(n) -> tuple[Fraction | float, bool]:
     raise ValueError("不支持的表达式")  # 其他任何节点一律拒绝
 
 
+def _is_terminating_decimal(value: Fraction) -> bool:
+    """判定最简分数能否写成有限小数：分母质因子只有 2 和 5（Fraction 已保证最简）。"""
+    d = value.denominator
+    while d % 2 == 0:
+        d //= 2
+    while d % 5 == 0:
+        d //= 5
+    return d == 1
+
+
 def _format_value(value: Fraction, exact: bool) -> str:
-    """把结果格式化成可读文本：精确时输出整数/最简分数，近似时输出 12 位小数。"""
+    """把结果格式化成可读文本：
+    - 精确且整数 → 整数（如 8）
+    - 精确且可转有限小数（分母质因子只有 2/5）→ 有限小数（如 19/4 → 4.75）
+    - 精确且无限循环小数 → 最简分数（如 10/3 → 10/3）
+    - 近似 → 12 位小数
+    """
     if exact:
         if value.denominator == 1:
             return str(value.numerator)
+        if _is_terminating_decimal(value):
+            # Decimal 精确转十进制字符串，避免 float 对大分母的精度损失
+            return format(
+                Decimal(value.numerator) / Decimal(value.denominator), "f"
+            )
         return f"{value.numerator}/{value.denominator}"
     return f"{float(value):.12f}"
 
@@ -160,9 +183,51 @@ def _calculate(expression: str) -> str:
     )
 
 
-def _now(timezone: str = "Asia/Shanghai") -> str:
-    del timezone  # 骨架版：使用系统本地时区；时区处理后续完善
-    return _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+def _parse_delta(delta: str) -> _dt.timedelta:
+    """解析相对时间字符串，如 '+2h30m' / '-1h' / '+30m' / '+45s'。"""
+    total = _dt.timedelta()
+    for m in re.finditer(r"([+-]?\d+)\s*([hms])", delta):
+        n = int(m.group(1))
+        unit = m.group(2)
+        if unit == "h":
+            total += _dt.timedelta(hours=n)
+        elif unit == "m":
+            total += _dt.timedelta(minutes=n)
+        else:
+            total += _dt.timedelta(seconds=n)
+    return total
+
+
+def _now(timezone: str = "Asia/Shanghai", delta: str = "") -> str:
+    try:
+        tz = ZoneInfo(timezone) if timezone else None
+    except Exception:
+        tz = None  # 未知/无效时区回退系统本地时区
+    if tz is None:
+        now = _dt.datetime.now().astimezone()
+    else:
+        now = _dt.datetime.now(tz)  # 指定时区的 aware 时间（astimezone() 无参会转回系统时区）
+    note = ""
+    if delta.strip():
+        now = now + _parse_delta(delta)  # 相对时间推算（时钟事实，工具确定性给出）
+        note = f"（相对当前时间 {delta} 推算）"
+    # 星期几是日历事实（确定性），工具直接给出，避免模型用知识猜或用计算器瞎算
+    # （tool-datetime-003 教训：工具不给星期时模型可能绕圈或虚假转述）
+    return (
+        f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}（{_WEEKDAYS_CN[now.weekday()]}）"
+        f"{note}"
+    )
+
+
+_WEEKDAYS_CN = [
+    "星期一",
+    "星期二",
+    "星期三",
+    "星期四",
+    "星期五",
+    "星期六",
+    "星期日",
+]
 
 
 _notes: dict[str, str] = {}  # 笔记暂存进程内存（后续由 SQLite 持久化）
@@ -183,9 +248,22 @@ def _note_add(title: str, content: str) -> str:
     return f"已保存笔记：{title}"
 
 
-def _note_get(title: str) -> str:
-    """读取笔记工具的实现。"""
+def _note_get(title: str = "") -> str:
+    """读取笔记工具的实现：title 为空时列出全部笔记（用户模糊查询时的确定性兜底）。"""
+    if not title.strip():
+        if not _notes:
+            return "（暂无笔记）"
+        return "\n".join(f"{k}: {v}" for k, v in _notes.items())
     return _notes.get(title, f"未找到笔记：{title}")
+
+
+def _note_search(keyword: str) -> str:
+    """模糊检索笔记：匹配标题或内容包含关键词的笔记（检索是工具的职责，不让模型猜）。"""
+    kw = keyword.strip()
+    if not kw:
+        return "请提供检索关键词"
+    hits = [f"{k}: {v}" for k, v in _notes.items() if kw in k or kw in v]
+    return "\n".join(hits) if hits else f"未找到包含「{kw}」的笔记"
 
 
 def builtin_specs() -> list[dict]:
@@ -193,7 +271,7 @@ def builtin_specs() -> list[dict]:
     return [
         {
             "name": "calculator",
-            "description": "安全计算数学表达式（支持 + - * / // % ** 与括号，支持 sqrt()；结果自带精确/近似声明）",
+            "description": "安全计算纯数学表达式（支持 + - * / // % ** 与括号，支持 sqrt()；结果自带精确/近似声明）。仅支持数学表达式，不支持时间/日期字符串（如'16:29 + 2:30'），时间推算请用 current_datetime 的 delta 参数",
             "parameters": {
                 "type": "object",
                 "properties": {"expression": {"type": "string", "description": "数学表达式"}},
@@ -203,11 +281,12 @@ def builtin_specs() -> list[dict]:
         },
         {
             "name": "current_datetime",
-            "description": "获取当前日期和时间",
+            "description": "获取当前日期、时间和星期几；支持相对时间推算（delta 参数，如 '+2h30m' 表示 2 小时 30 分钟后）",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "timezone": {"type": "string", "description": "时区，默认 Asia/Shanghai"}
+                    "timezone": {"type": "string", "description": "时区，默认 Asia/Shanghai"},
+                    "delta": {"type": "string", "description": "相对时间推算，如 '+2h30m'（正数未来/负数过去），留空返回当前时间"}
                 },
             },
             "handler": _now,
@@ -227,12 +306,21 @@ def builtin_specs() -> list[dict]:
         },
         {
             "name": "note_get",
-            "description": "读取一条笔记",
+            "description": "按标题精确读取一条笔记；title 留空时列出全部笔记",
             "parameters": {
                 "type": "object",
                 "properties": {"title": {"type": "string", "description": "笔记标题"}},
-                "required": ["title"],
             },
             "handler": _note_get,
+        },
+        {
+            "name": "note_search",
+            "description": "模糊检索笔记：按关键词匹配标题或内容，返回所有相关笔记（不知道确切标题时用本工具）",
+            "parameters": {
+                "type": "object",
+                "properties": {"keyword": {"type": "string", "description": "检索关键词（匹配标题或内容）"}},
+                "required": ["keyword"],
+            },
+            "handler": _note_search,
         },
     ]

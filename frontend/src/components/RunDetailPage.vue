@@ -52,6 +52,29 @@ function verdictClass(v: string): string {
   return map[v] ?? 'neutral'
 }
 
+// —— 执行轨迹渲染：把后端落盘的 exec_trace 转成可读文本（失败回放/绕圈分析用） ——
+function traceText(trace: any[] | undefined): string {
+  if (!trace?.length) return '（无执行轨迹）'
+  return trace
+    .map((t) => {
+      if (t.type === 'round') return `── 第 ${t.round} 轮 ──`
+      if (t.type === 'text') {
+        const text = String(t.text ?? '').replace(/\s+/g, ' ').slice(0, 100)
+        return `  文本: ${text}`
+      }
+      if (t.type === 'tool_exec') {
+        const args = JSON.stringify(t.arguments ?? {})
+        const result = String(t.result ?? '').replace(/\s+/g, ' ').slice(0, 100)
+        const err = t.error ? ` [错误: ${t.error}]` : ''
+        return `  工具调用: ${t.name}(${args}) → ${result}${err}`
+      }
+      if (t.type === 'guardrail') return `  ⛔ 护栏拦截: ${t.action}`
+      if (t.type === 'done') return `  ✓ 结束: ${t.end_reason}`
+      return `  ${t.type}: ${JSON.stringify(t)}`
+    })
+    .join('\n')
+}
+
 const verdictCounts = computed(() => {
   const c = { pass: 0, fail: 0, pending: 0, exec_error: 0 }
   for (const row of data.value?.cases ?? []) {
@@ -487,6 +510,10 @@ onUnmounted(stopPolling)
                         <span class="rd-reason-text">{{ reason }}</span>
                       </div>
                     </div>
+                    <details v-if="(row.trace ?? []).length" class="rd-trace">
+                      <summary>执行轨迹（{{ (row.trace ?? []).length }} 步）</summary>
+                      <pre>{{ traceText(row.trace) }}</pre>
+                    </details>
                     <div
                       v-if="(row.repeat_count ?? 1) > 1 && row.repeat_results?.length"
                       class="rd-attempts"
@@ -523,6 +550,10 @@ onUnmounted(stopPolling)
                         <details class="rd-attempt-output">
                           <summary>查看本次输出</summary>
                           <pre>{{ att.output || '（无输出）' }}</pre>
+                        </details>
+                        <details v-if="(att.trace ?? []).length" class="rd-trace">
+                          <summary>执行轨迹</summary>
+                          <pre>{{ traceText(att.trace) }}</pre>
                         </details>
                       </div>
                     </div>

@@ -45,7 +45,7 @@
   "updated_at": "2026-08-25T10:53:06",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答必须明确给出当天具体日期且使用current_datetime工具获取，同时通过calculator工具计算365除以7，结果应表述为约52.142857（或标注为近似值），并清晰区分两个问题的独立回答；若工具未调用或结果编造则不符合。",
+    "golden_answer": "回答必须明确给出当天具体日期且使用current_datetime工具获取，同时通过calculator工具计算365除以7，结果应如实转述工具返回的精确值365/7（或52又1/7），可补充近似值（如约52.14），并清晰区分两个问题的独立回答；若工具未调用或结果编造则不符合。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:06",

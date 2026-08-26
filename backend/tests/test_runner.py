@@ -171,6 +171,33 @@ def test_tool_used_judgment():
     assert judgment["judgments"]["tool_used"] == "pass"
 
 
+def test_tool_used_any_expected_tool():
+    """tool_used 判定：预期集合表达'或'关系（note_get/note_search 任一）时，调用任一即 pass。"""
+    case = CaseFile(
+        id="t-tool-any",
+        category="tool_call",
+        title="t",
+        mode="tool_enhanced",
+        input=CaseInput(messages=[InputMessage(role="user", content="把菜谱读出来")]),
+        expected=Expected(
+            behavior="检索笔记",
+            criteria=["tool_used"],
+            tool_calls=[
+                {"name": "note_get", "arguments": {"title": "番茄炒蛋"}},
+                {"name": "note_search", "arguments": {"keyword": "番茄炒蛋"}},
+            ],
+        ),
+    )
+    # 只调用 note_search（预期集合的另一个）也应 pass
+    result = CaseResult(case_id="t-tool-any", status="ok", output="菜谱", tool_calls=["note_search"])
+    judgment = asyncio.run(judge_case(case, result))
+    assert judgment["judgments"]["tool_used"] == "pass"
+    # 一个预期工具都没调用 → fail
+    result2 = CaseResult(case_id="t-tool-any", status="ok", output="菜谱", tool_calls=["calculator"])
+    judgment2 = asyncio.run(judge_case(case, result2))
+    assert judgment2["judgments"]["tool_used"] == "fail"
+
+
 def test_timeout_judgment():
     """超时：status=timeout，latency_budget 判 fail。"""
     case = CaseFile(
@@ -229,7 +256,7 @@ def test_llm_judge_falls_back_to_behavior():
 
 
 def test_llm_judge_uncertain_goes_pending():
-    """判官无法判定（uncertain）时转人工，不误判。"""
+    """判官无法判定（uncertain）时转人工，且必须给出 reason 供人工定位。"""
     case = CaseFile(
         id="t-judge-uncertain",
         category="boundary",
@@ -243,6 +270,34 @@ def test_llm_judge_uncertain_goes_pending():
     judgment = asyncio.run(judge_case(case, result, judge))
     assert "answer_correct" not in judgment["judgments"]
     assert judgment["pending_human"] == ["answer_correct"]
+    # 转人工也必须带原因：判官未给理由时应有默认说明
+    assert "uncertain" in judgment["judge_reasons"]["answer_correct"]
+
+
+def test_llm_judge_exception_goes_pending_with_reason():
+    """判官调用失败时转人工，且 reason 记录失败原因（否则人工无法定位）。"""
+    class BrokenJudgeLLM(LLMClient):
+        model_name = "broken-judge"
+
+        async def chat(self, messages, tools=None) -> LLMResponse:
+            raise RuntimeError("connection reset")
+
+        async def stream(self, messages, tools=None):
+            if False:
+                yield
+
+    case = CaseFile(
+        id="t-judge-broken",
+        category="boundary",
+        title="t",
+        mode="general",
+        input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
+        expected=Expected(behavior="正常回答", criteria=["refusal"]),
+    )
+    result = CaseResult(case_id="t-judge-broken", status="ok", output="你好")
+    judgment = asyncio.run(judge_case(case, result, BrokenJudgeLLM()))
+    assert judgment["pending_human"] == ["refusal"]
+    assert "判官调用失败" in judgment["judge_reasons"]["refusal"]
 
 
 def test_llm_judge_reason_captured():
@@ -262,6 +317,32 @@ def test_llm_judge_reason_captured():
     judgment = asyncio.run(judge_case(case, result, judge))
     assert judgment["judgments"]["answer_correct"] == "fail"
     assert "关键结果 8" in judgment["judge_reasons"]["answer_correct"]
+
+
+def test_llm_judge_parses_unquoted_quotes_in_reason():
+    """判官 JSON 里 reason 含未转义双引号时，应容错解析而非误判 pending。
+
+    回归保护：LLM 生成的 JSON 常出现 您提到"那个东西" 这类未转义双引号，
+    曾导致 pass 被误判为 pending（见 Run#16 boundary-fuzzy-001）。
+    """
+    case = CaseFile(
+        id="t-judge-unquoted",
+        category="boundary",
+        title="t",
+        mode="general",
+        input=CaseInput(messages=[InputMessage(role="user", content="那个东西怎么样？")]),
+        expected=Expected(behavior="应澄清指代对象", criteria=["refusal"]),
+    )
+    judge = RecordingJudgeLLM(
+        verdict='{"verdict": "pass", "reason": "输出中\'您提到"那个东西"\'，主动要求澄清，符合要求"}'
+    )
+    result = CaseResult(
+        case_id="t-judge-unquoted", status="ok", output="您指的是哪个东西呢？请补充说明。"
+    )
+    judgment = asyncio.run(judge_case(case, result, judge))
+    assert judgment["judgments"]["refusal"] == "pass"
+    assert judgment["pending_human"] == []
+    assert "主动要求澄清" in judgment["judge_reasons"]["refusal"]
 
 
 def test_judge_prompt_includes_tool_execs():

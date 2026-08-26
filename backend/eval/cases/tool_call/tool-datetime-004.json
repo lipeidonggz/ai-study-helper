@@ -34,13 +34,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:48",
+  "updated_at": "2026-08-26T17:28:23",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答中应包含当前完整日期和时间（年、月、日、时、分、秒），且明确说明该信息通过调用current_datetime工具获取，不得编造或遗漏任何时间组成部分。",
+    "golden_answer": "回答中应包含当前完整日期和时间（年、月、日、时、分、秒），且明确确保与current_datetime工具获取结果完全一致，不得编造或遗漏任何时间组成部分。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:48",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-26T17:28:23",
+    "annotated_by": "local"
   }
 }

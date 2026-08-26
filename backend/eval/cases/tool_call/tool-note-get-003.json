@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "调用 note_get 读取笔记",
+    "behavior": "调用 note_get（列出全部）或 note_search（检索待办）读取笔记",
     "criteria": [
       "answer_correct",
       "tool_used"
@@ -21,6 +21,12 @@
       {
         "name": "note_get",
         "arguments": {}
+      },
+      {
+        "name": "note_search",
+        "arguments": {
+          "keyword": "待办"
+        }
       }
     ],
     "answer_contains": [],
@@ -37,7 +43,7 @@
   "updated_at": "2026-08-25T10:54:10",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用note_get工具读取笔记，并在答复中明确呈现所查到的待办内容或说明未找到待办，不得编造或臆测笔记内容；若工具无结果，需如实告知未查到。",
+    "golden_answer": "满分回答应调用note_get（标题留空列出全部）或note_search（检索\"待办\"）读取笔记，并在答复中明确呈现所查到的待办内容或说明未找到待办，不得编造或臆测笔记内容；若工具无结果，需如实告知未查到。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:10",
