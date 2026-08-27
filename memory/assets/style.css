@@ -152,6 +152,25 @@ li { margin: 4px 0; }
   color: #333;
 }
 
+/* 案例表（0020 评测反哺笔记）：每个案例一张两列表格 */
+.case-table {
+  margin: 10px 0 22px;
+}
+
+.case-table th {
+  width: 92px;
+  white-space: nowrap;
+  text-align: right;
+  vertical-align: top;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.9em;
+}
+
+.case-table td {
+  vertical-align: top;
+}
+
 footer.page-foot {
   margin-top: 48px;
   padding-top: 14px;
