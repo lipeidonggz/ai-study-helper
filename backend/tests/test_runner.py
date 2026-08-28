@@ -10,6 +10,7 @@ from app.tools.registry import default_registry
 from eval.runner import (
     CaseResult,
     _aggregate_attempts,
+    aggregate,
     judge_case,
     run_all,
     run_case,
@@ -111,6 +112,83 @@ class RecordingJudgeLLM(LLMClient):
     async def stream(self, messages, tools=None):
         if False:
             yield  # 判官只用 chat，stream 占位
+
+
+class NoteChainLLM(LLMClient):
+    """单次 attempt 内：note_add → note_get → 转述读取结果（验证 attempt 级并行与笔记隔离）。"""
+
+    model_name = "fake"  # 复用 run_all 判官开关：Fake 不评判
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        return LLMResponse(content="")
+
+    async def stream(self, messages, tools=None):
+        tool_msgs = [m for m in messages if m.role == "tool"]
+        if not tool_msgs:  # 还没写过：先 note_add
+            yield LLMEvent(
+                type="tool_call",
+                tool_call=ToolCall(
+                    name="note_add",
+                    arguments={"title": "购物清单", "content": "牛奶、鸡蛋、面包"},
+                    id="call_add",
+                ),
+                raw_tool_calls=[
+                    {
+                        "id": "call_add",
+                        "type": "function",
+                        "function": {
+                            "name": "note_add",
+                            "arguments": '{"title": "购物清单", "content": "牛奶、鸡蛋、面包"}',
+                        },
+                    }
+                ],
+            )
+            yield LLMEvent(type="done")
+        elif len(tool_msgs) == 1:  # 写过了：再 note_get
+            yield LLMEvent(
+                type="tool_call",
+                tool_call=ToolCall(name="note_get", arguments={"title": "购物清单"}, id="call_get"),
+                raw_tool_calls=[
+                    {
+                        "id": "call_get",
+                        "type": "function",
+                        "function": {"name": "note_get", "arguments": '{"title": "购物清单"}'},
+                    }
+                ],
+            )
+            yield LLMEvent(type="done")
+        else:  # 读取完成：转述最后一次工具结果
+            yield LLMEvent(type="text", text=f"读到：{tool_msgs[-1].content}")
+            yield LLMEvent(type="done")
+
+
+def test_run_all_attempt_parallel_note_chain():
+    """run_all repeat 并行：每个 attempt 独立跑通"写后读"，聚合 repeat_count 正确。"""
+    case = CaseFile(
+        id="t-note-chain",
+        category="tool_call",
+        title="t",
+        mode="tool_enhanced",
+        input=CaseInput(messages=[InputMessage(role="user", content="记笔记并读取")]),
+        expected=Expected(
+            behavior="先写后读",
+            criteria=["answer_correct"],
+            tool_calls=[
+                {"name": "note_add", "arguments": {}},
+                {"name": "note_get", "arguments": {}},
+            ],
+        ),
+    )
+    report = asyncio.run(
+        run_all([case], NoteChainLLM(), ToolExecutor(default_registry()), concurrency=3, repeat=3)
+    )
+    entries = report["cases"]
+    assert len(entries) == 1
+    assert entries[0]["repeat_count"] == 3
+    assert entries[0]["status"] == "ok"
+    # 每个 attempt 都应转述到读取结果（写后读在同一 attempt 内成立、互相独立）
+    for att in entries[0]["repeat_results"]:
+        assert att["output"] == "读到：牛奶、鸡蛋、面包"
 
 
 def test_fake_dry_run(tmp_path):
@@ -415,6 +493,29 @@ def test_aggregate_attempts_stability():
         [_attempt("fail"), _attempt("pending", pending_human=["answer_correct"])],
     )
     assert e["verdict"] == "pending"
+
+
+def test_aggregate_pending_cases():
+    """汇总统计：任一 attempt 有待人工的用例都应计入 pending_cases（详情页/列表页待人工数）。"""
+    case = CaseFile(
+        id="t-pending-cases",
+        category="tool_call",
+        title="t",
+        mode="tool_enhanced",
+        input=CaseInput(messages=[InputMessage(role="user", content="3+5等于几？")]),
+        expected=Expected(behavior="b", criteria=["answer_correct"]),
+    )
+    e_pass = _aggregate_attempts(case, [_attempt("pass"), _attempt("pass")])
+    e_mixed = _aggregate_attempts(
+        case,
+        [_attempt("pass"), _attempt("pending", pending_human=["answer_correct"])],
+    )
+    e_all_pending = _aggregate_attempts(
+        case, [_attempt("pending", pending_human=["answer_correct"])]
+    )
+    s = aggregate([e_pass, e_mixed, e_all_pending])
+    assert s["pending_cases"] == 2  # 混合（unstable）与全 pending 都算待人工
+    assert s["verdicts"] == {"pass": 1, "unstable": 1, "pending": 1}
 
 
 def test_retry_on_transient_error():

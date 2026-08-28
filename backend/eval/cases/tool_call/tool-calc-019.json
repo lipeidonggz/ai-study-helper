@@ -1,0 +1,51 @@
+{
+  "id": "tool-calc-019",
+  "category": "tool_call",
+  "title": "大数整除",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "199999343 整除 4，商是多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "调用 calculator 计算整数商并回答 49999835",
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "199999343//4"
+        }
+      }
+    ],
+    "answer_contains": [
+      "49999835"
+    ],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "scale"
+  ],
+  "compare": false,
+  "notes": "规模阶梯：大数整除（199999343//4=49999835 余 3），模型心算极易错，验证必须工具化的场景（与 tool-calc-009/018 对照）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-27T17:00:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算199999343//4，如实转述整除结果49999835（可补余数3），不得心算编造或混淆为精确值49999835.75。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-27T17:00:00",
+    "annotated_by": "local"
+  }
+}

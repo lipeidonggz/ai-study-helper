@@ -9,6 +9,8 @@
 import asyncio
 from pathlib import Path
 
+import httpx
+
 from app.agent.llm import DeepSeekLLMClient, FakeLLMClient, LLMClient
 from app.tools.executor import ToolExecutor
 from app.tools.registry import default_registry
@@ -17,15 +19,20 @@ from eval.runner import aggregate, run_all, run_single_entry
 from eval.schema import CaseFile
 
 
-def build_llm(deps, kind: str) -> LLMClient:
-    """按 kind 构建 LLM 客户端；real 且未配 Key 时抛明确错误。"""
+def build_llm(deps, kind: str, http_client: httpx.AsyncClient | None = None) -> LLMClient:
+    """按 kind 构建 LLM 客户端；real 且未配 Key 时抛明确错误。
+
+    http_client：可注入共享连接池（跑批用）；None 时每次调用自建连接（chat 等低频路径）。
+    """
     if kind == "fake":
         return FakeLLMClient()
     settings = deps.settings_store.get_llm_settings()
     if not settings.api_key:
         raise ValueError("未配置大模型 API Key，无法执行真实跑批")
     return DeepSeekLLMClient(
-        api_key=settings.api_key, model=settings.model or "deepseek-chat"
+        api_key=settings.api_key,
+        model=settings.model or "deepseek-chat",
+        http_client=http_client,
     )
 
 
@@ -69,6 +76,7 @@ class RunManager:
         concurrency: int = 2,
         retries: int = 1,
         repeat: int = 1,
+        variant: str = "baseline",
     ) -> int:
         """创建跑批记录并启动后台任务，返回 run_id。"""
         cases = select_cases(case_filter, self.cases_dir)
@@ -81,10 +89,13 @@ class RunManager:
             "concurrency": concurrency,
             "retries": retries,
             "repeat": repeat,
+            "variant": variant,
         }
         run_id = run_store.create_run(self._db_path, name, config, total=len(cases))
         task = asyncio.create_task(
-            self._execute(run_id, deps, cases, llm, concurrency, retries, repeat)
+            self._execute(
+                run_id, deps, cases, llm, concurrency, retries, repeat, variant
+            )
         )
         self._tasks[run_id] = task
         return run_id
@@ -98,18 +109,35 @@ class RunManager:
         concurrency: int,
         retries: int,
         repeat: int,
+        variant: str,
     ) -> None:
         """后台执行体：跑批 → 逐条落库 → 汇总收尾。"""
         run_store.update_run(self._db_path, run_id, status="running", started=True)
         cancel_event = asyncio.Event()
+        # 真实跑批共享一个连接池：50 路并发下连接可复用，避免每次 LLM 调用都做 TLS 握手
+        shared_http: httpx.AsyncClient | None = None
         try:
-            client = build_llm(deps, llm)
+            if llm == "real":
+                shared_http = httpx.AsyncClient(
+                    timeout=120,
+                    limits=httpx.Limits(
+                        max_connections=200, max_keepalive_connections=200
+                    ),
+                )
+            client = build_llm(deps, llm, shared_http)
             tools = ToolExecutor(default_registry())
 
-            def on_case(_entry: dict, completed: int, total: int) -> None:
-                run_store.insert_case_result(self._db_path, run_id, _entry)
-                run_store.update_run(
-                    self._db_path, run_id, progress=completed, total=total
+            async def on_case(_entry: dict, completed: int, total: int) -> None:
+                # 落库挪到线程池：SQLite 提交带 fsync，阻塞事件循环会卡死 50 路流式响应
+                await asyncio.to_thread(
+                    run_store.insert_case_result, self._db_path, run_id, _entry
+                )
+                await asyncio.to_thread(
+                    run_store.update_run,
+                    self._db_path,
+                    run_id,
+                    progress=completed,
+                    total=total,
                 )
 
             report = await run_all(
@@ -121,6 +149,7 @@ class RunManager:
                 repeat=repeat,
                 on_case=on_case,
                 cancel_event=cancel_event,
+                variant=variant,
             )
             run_store.update_run(
                 self._db_path,
@@ -147,6 +176,8 @@ class RunManager:
             )
         finally:
             self._tasks.pop(run_id, None)
+            if shared_http is not None:
+                await shared_http.aclose()  # 跑批结束关闭连接池，防止连接泄漏
 
     def cancel(self, run_id: int) -> bool:
         """取消跑批；任务不存在或已结束返回 False。"""
@@ -174,10 +205,13 @@ class RunManager:
         llm_kind = config.get("llm", "real")
         retries = int(config.get("retries", 1))
         repeat = int(config.get("repeat", 1))
+        variant = str(config.get("variant", "baseline"))
         client = build_llm(deps, llm_kind)
         tools = ToolExecutor(default_registry())
         judge_llm = client if llm_kind == "real" else None
-        entry = await run_single_entry(case, client, tools, retries, judge_llm, repeat)
+        entry = await run_single_entry(
+            case, client, tools, retries, judge_llm, repeat, variant
+        )
         run_store.insert_case_result(self._db_path, run_id, entry)
         run_store.clear_case_annotation(self._db_path, run_id, case_id)
         run_store.clear_verified(self._db_path, run_id)  # 结果变了，核验失效

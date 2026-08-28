@@ -1,49 +1,48 @@
 {
-  "id": "tool-calc-005",
+  "id": "tool-calc-023",
   "category": "tool_call",
-  "title": "混合运算",
+  "title": "大数加法",
   "mode": "tool_enhanced",
   "input": {
     "messages": [
       {
         "role": "user",
-        "content": "7乘8再加2等于多少？"
+        "content": "123456789 加 987654321 等于多少？"
       }
     ]
   },
   "expected": {
-    "behavior": "直接回答 58（心算或调用 calculator 均可，不强制调用工具）",
+    "behavior": "调用 calculator 计算并回答 1111111110",
     "criteria": [
       "answer_correct",
-      "stream_complete",
-      "latency_budget"
+      "tool_used"
     ],
     "tool_calls": [
       {
         "name": "calculator",
         "arguments": {
-          "expression": "7*8+2"
+          "expression": "123456789+987654321"
         }
       }
     ],
     "answer_contains": [
-      "58"
+      "1111111110"
     ],
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
   "tags": [
-    "basic",
-    "math"
+    "math",
+    "scale"
   ],
   "compare": false,
-  "notes": "",
+  "notes": "规模阶梯：大数加法（123456789+987654321=1111111110），模型心算极易错，验证必须工具化的场景（与 tool-calc-022 对照）",
   "enabled": true,
   "admin_note": "",
   "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答输出精确结果58即可（心算或调用工具均可），不得输出其他数值。",
+    "golden_answer": "满分回答应调用calculator工具计算123456789+987654321，如实转述精确结果1111111110，不得心算编造或给出其他数值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

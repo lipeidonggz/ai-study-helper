@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并如实回答精确值 4.75",
+    "behavior": "直接回答精确值 4.75（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "普通除法精确值场景：有限小数应显示 4.75；与整除用例 tool-calc-009 区分",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-26T14:30:00",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算19/4，如实转述工具返回的精确值4.75，不得给出4或仅余数表述。",
+    "golden_answer": "最终回答输出精确值4.75即可（心算或调用工具均可），不得给出4或仅余数表述。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-26T14:30:00",
+    "annotated_at": "2026-08-28T09:06:46",
     "annotated_by": "local"
   }
 }

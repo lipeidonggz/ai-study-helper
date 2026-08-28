@@ -15,7 +15,9 @@
     "behavior": "调用 calculator 得出 81，纠正 89 的错误前提",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

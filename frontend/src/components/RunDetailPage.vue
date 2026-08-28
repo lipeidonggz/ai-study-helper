@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import { evalApi, type EvalRun, type EvalRunCase } from '../api/client'
+import {
+  evalApi,
+  type EvalRun,
+  type EvalRunCase,
+  type EvalRunAttempt,
+  type ExecTraceEvent
+} from '../api/client'
 
 const props = defineProps<{ runId: number }>()
 
@@ -18,6 +24,8 @@ const verifying = ref(false)
 const verifyMsg = ref('')
 const expanded = ref<Set<string>>(new Set())
 const allExpanded = ref(false)
+// 轻量轮询下，展开过的用例全量数据缓存（repeat_results / trace），轮询刷新后合并回行内
+const detailCache = ref<Record<string, { repeat_results: EvalRunAttempt[]; trace: ExecTraceEvent[] }>>({})
 const filter = ref({ category: '', status: '', verdict: '', q: '' })
 let pollTimer: number | undefined
 
@@ -84,7 +92,14 @@ const verdictCounts = computed(() => {
   return c
 })
 
-const pendingCount = computed(() => verdictCounts.value.pending)
+const pendingCount = computed(() => {
+  // 待人工 = 任一 attempt 需要人工标注的用例（判官 uncertain / 未判定），
+  // 旧跑批没有 pending_attempts 列时回退看行级 pending_human
+  const rows = data.value?.cases ?? []
+  return rows.filter(
+    (row) => (row.pending_attempts ?? 0) > 0 || (row.pending_human?.length ?? 0) > 0
+  ).length
+})
 
 const categories = computed(() => {
   const set = new Set((data.value?.cases ?? []).map((r) => r.category))
@@ -110,14 +125,21 @@ const filteredCases = computed(() => {
 
 async function refresh() {
   try {
-    data.value = await evalApi.getRun(props.runId)
+    // 轻量模式：列表/轮询不携带 repeat_results 与 trace（repeat 20 时是 MB 级）
+    data.value = await evalApi.getRun(props.runId, true)
     for (const row of data.value.cases) {
       // 判定参考草稿：金标准优先，无则用预期行为；已有草稿则保留（避免轮询覆盖）
       goldenEdits.value[row.case_id] ??= row.golden_answer || row.behavior
+      // 把已加载的展开明细合并回轻量行，避免轮询把展开区"清空"
+      const cached = detailCache.value[row.case_id]
+      if (cached) {
+        row.repeat_results = cached.repeat_results
+        row.trace = cached.trace
+      }
     }
     stopPolling()
     if (data.value.active) {
-      pollTimer = window.setInterval(refresh, 1500)
+      pollTimer = window.setInterval(refresh, 5000)
     }
   } catch (err) {
     error.value = `加载失败：${err}`
@@ -137,10 +159,28 @@ function toggleCase(caseId: string) {
     next.delete(caseId)
   } else {
     next.add(caseId)
+    void ensureCaseDetail(caseId) // 展开时按需拉全量（repeat_results / trace）
   }
   expanded.value = next
   allExpanded.value =
     !!data.value && data.value.cases.length > 0 && next.size === data.value.cases.length
+}
+
+async function ensureCaseDetail(caseId: string) {
+  if (!data.value || detailCache.value[caseId]) return
+  const row = data.value.cases.find((r) => r.case_id === caseId)
+  if (!row) return
+  try {
+    const full = await evalApi.getRunCase(data.value.run.id, caseId)
+    detailCache.value[caseId] = {
+      repeat_results: full.repeat_results,
+      trace: full.trace ?? []
+    }
+    row.repeat_results = full.repeat_results
+    row.trace = full.trace ?? []
+  } catch (err) {
+    error.value = `加载用例明细失败：${err}`
+  }
 }
 
 function toggleAll() {
@@ -224,7 +264,11 @@ async function rerunCase(row: EvalRunCase) {
   try {
     await evalApi.rerunCase(data.value.run.id, row.case_id)
     rerunMsg.value = `已重跑：${row.case_id}，结果已更新`
+    delete detailCache.value[row.case_id] // 结果变了，旧缓存作废
     await refresh()
+    if (expanded.value.has(row.case_id)) {
+      await ensureCaseDetail(row.case_id) // 展开中则拉新全量
+    }
   } catch (err) {
     error.value = `重跑失败：${err}`
   } finally {
@@ -260,6 +304,24 @@ function summaryText(run: EvalRun): string {
   return parts.join(' · ') || '—'
 }
 
+function fmtTime(iso?: string): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
+}
+
+function fmtDuration(start?: string, end?: string): string {
+  if (!start) return '—'
+  const s = new Date(start).getTime()
+  const e = end ? new Date(end).getTime() : Date.now()
+  if (Number.isNaN(s) || Number.isNaN(e)) return '—'
+  const sec = Math.round(Math.max(0, e - s) / 1000)
+  if (sec < 60) return `${sec}秒`
+  const m = Math.floor(sec / 60)
+  const r = sec % 60
+  return r ? `${m}分${r}秒` : `${m}分`
+}
+
 function judgmentsText(j: Record<string, string>): string {
   return Object.entries(j)
     .map(([k, v]) => `${k}:${v === 'pass' ? '过' : '挂'}`)
@@ -273,7 +335,7 @@ onUnmounted(stopPolling)
 <template>
   <div class="rd">
     <header class="ui-bar rd-head">
-      <a class="ui-link" href="#/eval">← 返回评测台</a>
+      <a class="ui-link" href="#/eval/runs">← 返回评测台</a>
       <h1 v-if="data" class="rd-title">
         Run #{{ data.run.id }} · {{ data.run.name }}
         <span class="ui-badge" :class="data.run.status === 'done' ? 'ok' : 'neutral'">
@@ -305,11 +367,14 @@ onUnmounted(stopPolling)
       <p class="ui-help">
         进度 {{ data.run.progress }}/{{ data.run.total }} · 汇总：{{ summaryText(data.run) }}
       </p>
+      <p class="ui-help">
+        开始 {{ fmtTime(data.run.started_at) }} · 结束 {{ fmtTime(data.run.finished_at) }} · 耗时 {{ fmtDuration(data.run.started_at, data.run.finished_at) }}
+      </p>
 
       <div class="ui-stats">
         <span class="ui-stat ok">通过 <span class="num">{{ verdictCounts.pass }}</span></span>
         <span class="ui-stat error">未通过 <span class="num">{{ verdictCounts.fail }}</span></span>
-        <span class="ui-stat warn">待人工 <span class="num">{{ verdictCounts.pending }}</span></span>
+        <span class="ui-stat warn">待人工 <span class="num">{{ pendingCount }}</span></span>
         <span class="ui-stat neutral">执行失败 <span class="num">{{ verdictCounts.exec_error }}</span></span>
         <span class="ui-stat plain">
           通过率 {{ verdictCounts.pass }}/{{ data.cases.length }}
@@ -355,6 +420,7 @@ onUnmounted(stopPolling)
           <thead>
             <tr>
               <th class="rd-th-expand"></th>
+              <th>序号</th>
               <th>用例</th>
               <th>类别</th>
               <th>执行状态</th>
@@ -380,6 +446,7 @@ onUnmounted(stopPolling)
                     ▸
                   </button>
                 </td>
+                <td class="ui-mono">{{ data?.cases.indexOf(row) + 1 }}</td>
                 <td>
                   <div class="rd-case-id">{{ row.case_id }}</div>
                   <div class="rd-case-title">{{ row.title }}</div>
@@ -437,7 +504,7 @@ onUnmounted(stopPolling)
                 </td>
               </tr>
               <tr v-if="expanded.has(row.case_id)" class="rd-detail-row">
-                <td colspan="11">
+                <td colspan="12">
                   <div class="rd-detail">
                     <div class="rd-ref">
                       <div class="rd-ref-head">
@@ -591,7 +658,7 @@ onUnmounted(stopPolling)
               </tr>
             </template>
             <tr v-if="!filteredCases.length">
-              <td colspan="11" class="ui-muted">
+              <td colspan="12" class="ui-muted">
                 {{ data.cases.length ? '没有匹配筛选条件的用例' : '暂无结果（跑批进行中或刚启动）' }}
               </td>
             </tr>

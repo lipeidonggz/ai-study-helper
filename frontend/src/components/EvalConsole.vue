@@ -1,13 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
-import { evalApi, type EvalCase, type EvalRun } from '../api/client'
+import { evalApi, type EvalCase, type EvalRun, type EvalRunCase } from '../api/client'
 import { navigate } from '../router'
 
-const tab = ref<'cases' | 'runs'>('cases')
+// 从跑批详情返回（#/eval/runs）时自动选中"测试管理"，否则默认"用例管理"
+const tab = ref<'cases' | 'runs'>(window.location.hash.startsWith('#/eval/runs') ? 'runs' : 'cases')
 
 // —— 用例管理 ——
 const CATEGORIES = ['tool_call', 'boundary', 'combined', 'multi_turn', 'kb_qa']
+const PROMPT_VARIANT_OPTIONS = [
+  { value: 'baseline', label: '基线（当前默认）' },
+  { value: 'no_behavior', label: '无行为契约（消融）' },
+  { value: 'cot', label: 'CoT 分步思考' },
+  { value: 'minimal', label: '极简（无契约无防御）' }
+]
+
+function variantLabel(v: unknown): string {
+  const key = String(v ?? '')
+  return PROMPT_VARIANT_OPTIONS.find((o) => o.value === key)?.label ?? key
+}
 const CRITERIA_OPTIONS = [
   'answer_correct',
   'tool_used',
@@ -217,12 +229,29 @@ async function removeCase(c: EvalCase) {
 const runs = ref<EvalRun[]>([])
 const runError = ref('')
 const showStart = ref(false)
+const showMatrix = ref(false) // 对照矩阵视图
+const selRunIds = ref<number[]>([])
+const baseRunId = ref<number | null>(null)
+const showJudgeGroup = ref(false)
+const matrixView = ref<'run' | 'case'>('run') // 矩阵视图：run 级指标 / 用例级对照
+const caseDiff = ref<
+  {
+    id: string
+    title: string
+    changed: boolean
+    cells: Record<number, EvalRunCase>
+  }[]
+>([])
+const caseDiffLoading = ref(false)
+const caseDiffOnlyChanged = ref(false)
+const caseDetail = ref<{ id: string; title: string; cells: Record<number, EvalRunCase> } | null>(null)
 const startForm = ref({
   name: '',
   llm: 'real' as 'real' | 'fake',
-  concurrency: 2,
+  concurrency: 50,
   retries: 1,
-  repeat: 1,
+  repeat: 20,
+  prompt_variant: 'baseline',
   filterType: 'all' as 'all' | 'categories' | 'ids',
   categories: [] as string[],
   ids: ''
@@ -232,6 +261,181 @@ let pollTimer: number | undefined
 async function loadRuns() {
   runs.value = await evalApi.listRuns()
   syncPolling()
+}
+
+function toggleRunSel(id: number) {
+  const i = selRunIds.value.indexOf(id)
+  if (i >= 0) selRunIds.value.splice(i, 1)
+  else selRunIds.value.push(id)
+}
+
+function openMatrix() {
+  showMatrix.value = true
+  matrixView.value = 'run'
+  // 默认选中 baseline 变体的最近 run + 其他变体的最近 run；基准 = 选中的 baseline
+    const byVariant = new Map<string, number>()
+    for (const r of runs.value) {
+      const v = String(r.config?.variant ?? 'baseline')
+      if (!byVariant.has(v)) byVariant.set(v, r.id)
+    }
+    selRunIds.value = [...byVariant.values()]
+    const base = runs.value.find((r) => String(r.config?.variant ?? 'baseline') === 'baseline')
+  baseRunId.value = base?.id ?? selRunIds.value[0] ?? null
+}
+
+const selectedRuns = computed(() => {
+  const map = new Map(runs.value.map((r) => [r.id, r]))
+  return selRunIds.value.map((id) => map.get(id)).filter((r): r is NonNullable<typeof r> => !!r)
+})
+
+async function loadCaseDiff() {
+  if (!selRunIds.value.length) return
+  caseDiffLoading.value = true
+  try {
+    const data = await Promise.all(selRunIds.value.map((id) => evalApi.getRun(id)))
+    const byCase = new Map<string, { id: string; title: string; cells: Record<number, EvalRunCase> }>()
+    for (let i = 0; i < data.length; i++) {
+      const runId = selRunIds.value[i]
+      for (const c of data[i].cases) {
+        let row = byCase.get(c.case_id)
+        if (!row) {
+          row = { id: c.case_id, title: c.title, cells: {} }
+          byCase.set(c.case_id, row)
+        }
+        row.cells[runId] = c
+      }
+    }
+    const rows = [...byCase.values()].map((row) => {
+      const set = new Set(Object.values(row.cells).map((x) => x.verdict))
+      return { ...row, changed: set.size > 1 }
+    })
+    rows.sort((a, b) => {
+      if (a.changed !== b.changed) return a.changed ? -1 : 1
+      return a.id.localeCompare(b.id)
+    })
+    caseDiff.value = rows
+  } finally {
+    caseDiffLoading.value = false
+  }
+}
+
+function switchMatrixView(v: 'run' | 'case') {
+  matrixView.value = v
+  if (v === 'case') loadCaseDiff()
+}
+
+function openCaseDetail(row: { id: string; title: string; cells: Record<number, EvalRunCase> }) {
+  caseDetail.value = row
+}
+
+function closeCaseDetail() {
+  caseDetail.value = null
+}
+
+// 执行轨迹 → 可读文本（弹窗内展示用，与跑批详情页一致）
+function traceText(trace: unknown[] | undefined): string {
+  if (!trace?.length) return '（无执行轨迹）'
+  return trace
+    .map((t) => {
+      const x = t as Record<string, unknown>
+      if (x.type === 'round') return `── 第 ${x.round} 轮 ──`
+      if (x.type === 'text') return `  文本: ${String(x.text ?? '').replace(/\s+/g, ' ').slice(0, 100)}`
+      if (x.type === 'tool_exec') {
+        const args = JSON.stringify(x.arguments ?? {})
+        const result = String(x.result ?? '').replace(/\s+/g, ' ').slice(0, 100)
+        const err = x.error ? ` [错误: ${x.error}]` : ''
+        return `  工具调用: ${x.name}(${args}) → ${result}${err}`
+      }
+      if (x.type === 'guardrail') return `  ⛔ 护栏拦截: ${x.action}`
+      if (x.type === 'done') return `  ✓ 结束: ${x.end_reason}`
+      return `  ${x.type}: ${JSON.stringify(x)}`
+    })
+    .join('\n')
+}
+
+const visibleCaseRows = computed(() =>
+  caseDiffOnlyChanged.value ? caseDiff.value.filter((r) => r.changed) : caseDiff.value
+)
+
+function verdictLabel(v: string): string {
+  const map: Record<string, string> = {
+    pass: '通过',
+    fail: '未通过',
+    pending: '待人工',
+    unstable: '不稳定',
+    exec_error: '执行失败'
+  }
+  return map[v] ?? '—'
+}
+
+function verdictClass(v: string): string {
+  const map: Record<string, string> = {
+    pass: 'ok',
+    fail: 'error',
+    pending: 'warn',
+    unstable: 'warn',
+    exec_error: 'neutral'
+  }
+  return map[v] ?? 'neutral'
+}
+
+// 矩阵行：选中的 run + summary + 相对基准的差值
+const matrixRows = computed(() => {
+  const map = new Map(runs.value.map((r) => [r.id, r]))
+  const base = baseRunId.value != null ? map.get(baseRunId.value) : null
+  const baseS = base?.summary ?? {}
+  return selRunIds.value
+    .map((id) => map.get(id))
+    .filter((r): r is NonNullable<typeof r> => !!r)
+    .map((r) => {
+      const s = r.summary ?? {}
+      const vs = base && base.id !== r.id ? baseS : null
+      return { run: r, s, vs }
+    })
+})
+
+function pct(v: unknown): string {
+  return typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : '—'
+}
+
+function verdictCount(s: Record<string, unknown>, key: string): number {
+  const v = s.verdicts
+  if (v && typeof v === 'object') return Number((v as Record<string, unknown>)[key] ?? 0)
+  return 0
+}
+
+function judgeRate(s: Record<string, unknown>, key: string): number | null {
+  const j = s.judgments
+  if (j && typeof j === 'object') {
+    const item = (j as Record<string, unknown>)[key] as Record<string, unknown> | undefined
+    if (item && typeof item.pass_rate === 'number') return item.pass_rate
+  }
+  return null
+}
+
+// 差值单元格：{text, cls}；up=绿 down=红；invert=true 表示"越小越好"
+function diff(cur: unknown, base: unknown, invert = false): { text: string; cls: string } {
+  if (typeof cur !== 'number' || typeof base !== 'number') return { text: '', cls: '' }
+  const d = cur - base
+  if (Math.abs(d) < 1e-9) return { text: '', cls: '' }
+  const good = invert ? d < 0 : d > 0
+  return {
+    text: `${d > 0 ? '+' : ''}${d.toFixed(1)}`,
+    cls: good ? 'up' : 'down'
+  }
+}
+
+function diffPctPts(cur: unknown, base: unknown): { text: string; cls: string } {
+  if (typeof cur !== 'number' || typeof base !== 'number') return { text: '', cls: '' }
+  return diff(cur * 100, base * 100)
+}
+
+function diffPctRel(cur: unknown, base: unknown, invert = false): { text: string; cls: string } {
+  if (typeof cur !== 'number' || typeof base !== 'number' || base === 0) return { text: '', cls: '' }
+  const d = ((cur - base) / base) * 100
+  if (Math.abs(d) < 0.05) return { text: '', cls: '' }
+  const good = invert ? d < 0 : d > 0
+  return { text: `${d > 0 ? '+' : ''}${d.toFixed(0)}%`, cls: good ? 'up' : 'down' }
 }
 
 function hasActiveRun(): boolean {
@@ -280,6 +484,7 @@ async function startRun() {
       concurrency: startForm.value.concurrency,
       retries: startForm.value.retries,
       repeat: startForm.value.repeat,
+      prompt_variant: startForm.value.prompt_variant,
       case_filter: filter
     })
     showStart.value = false
@@ -335,6 +540,48 @@ function summaryText(run: EvalRun): string {
     parts.push(JSON.stringify(s.status))
   }
   return parts.join(' · ') || '—'
+}
+
+function runVerdictCount(run: EvalRun, key: string): number {
+  const verdicts = (run.summary as Record<string, unknown> | undefined)?.verdicts as
+    | Record<string, unknown>
+    | undefined
+  const n = verdicts?.[key]
+  return typeof n === 'number' ? n : 0
+}
+
+function runPendingCases(run: EvalRun): number {
+  const s = run.summary as Record<string, unknown> | undefined
+  const pc = s?.pending_cases
+  if (typeof pc === 'number') return pc
+  return runVerdictCount(run, 'pending') // 旧跑批无 pending_cases，回退全 pending 用例数
+}
+
+function pctText(count: number, total: number): string {
+  if (!total) return '—'
+  return `${count}（${Math.round((count / total) * 100)}%）`
+}
+
+function fmtTime(iso?: string): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
+}
+
+function fmtDuration(start?: string, end?: string): string {
+  if (!start) return '—'
+  const s = new Date(start).getTime()
+  const e = end ? new Date(end).getTime() : Date.now()
+  if (Number.isNaN(s) || Number.isNaN(e)) return '—'
+  const sec = Math.round(Math.max(0, e - s) / 1000)
+  if (sec < 60) return `${sec}秒`
+  const m = Math.floor(sec / 60)
+  const r = sec % 60
+  return r ? `${m}分${r}秒` : `${m}分`
+}
+
+function firstCell(cd: { cells: Record<number, EvalRunCase> }): EvalRunCase | undefined {
+  return Object.values(cd.cells)[0]
 }
 
 onMounted(async () => {
@@ -567,6 +814,7 @@ function onKeydown(e: KeyboardEvent) {
           <button class="ui-btn primary" @click="showStart = !showStart">
             {{ showStart ? '收起' : '新建跑批' }}
           </button>
+          <button class="ui-btn" @click="openMatrix">对照矩阵</button>
         </div>
         <p v-if="runError" class="ui-error">{{ runError }}</p>
 
@@ -579,10 +827,17 @@ function onKeydown(e: KeyboardEvent) {
                 <option value="fake">Fake（干跑不花钱）</option>
               </select>
             </label>
-            <label>并发<input v-model.number="startForm.concurrency" type="number" min="1" max="10" class="ui-input" /></label>
+            <label>提示词变体
+              <select v-model="startForm.prompt_variant" class="ui-select">
+                <option v-for="o in PROMPT_VARIANT_OPTIONS" :key="o.value" :value="o.value">
+                  {{ o.label }}
+                </option>
+              </select>
+            </label>
+            <label>并发<input v-model.number="startForm.concurrency" type="number" min="1" max="2500" class="ui-input" /></label>
             <label>重试<input v-model.number="startForm.retries" type="number" min="0" max="5" class="ui-input" /></label>
             <label>重复次数
-              <input v-model.number="startForm.repeat" type="number" min="1" max="10" class="ui-input" />
+              <input v-model.number="startForm.repeat" type="number" min="1" max="100" class="ui-input" />
               <span class="ui-help-inline">每条跑 N 次，看稳定性（成本 ×N）</span>
             </label>
             <label>范围
@@ -610,7 +865,248 @@ function onKeydown(e: KeyboardEvent) {
           </p>
         </div>
 
-        <table class="ui-table">
+        <div v-if="showMatrix" class="ec-matrix">
+          <div class="ui-toolbar">
+            <button class="ui-btn" @click="showMatrix = false">← 返回列表</button>
+            <button class="ui-btn" :class="{ on: matrixView === 'run' }" @click="switchMatrixView('run')">run 级指标</button>
+            <button class="ui-btn" :class="{ on: matrixView === 'case' }" @click="switchMatrixView('case')">用例级对照</button>
+            <template v-if="matrixView === 'run'">
+              <label>基准 run：
+                <select v-model.number="baseRunId" class="ui-select">
+                  <option v-for="r in runs" :key="r.id" :value="r.id">#{{ r.id }} {{ r.name }}</option>
+                </select>
+              </label>
+              <label class="ui-check">
+                <input type="checkbox" v-model="showJudgeGroup" /> 判定组
+              </label>
+            </template>
+            <template v-else>
+              <label class="ui-check">
+                <input type="checkbox" v-model="caseDiffOnlyChanged" /> 只看变化
+              </label>
+            </template>
+          </div>
+          <table v-if="matrixView === 'run'" class="ui-table ec-matrix-table">
+            <thead>
+              <tr>
+                <th>run</th>
+                <th>通过率</th>
+                <th>unstable</th>
+                <th>fail</th>
+                <th>工具调用率</th>
+                <th>耗时</th>
+                <th>token</th>
+                <template v-if="showJudgeGroup">
+                  <th>answer</th><th>refusal</th><th>stream</th><th>latency</th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in matrixRows" :key="m.run.id" :class="{ 'ec-matrix-base': m.run.id === baseRunId }">
+                <td>
+                  <label class="ui-check">
+                    <input type="checkbox" :checked="selRunIds.includes(m.run.id)" @change="toggleRunSel(m.run.id)" />
+                  </label>
+                  #{{ m.run.id }} {{ m.run.name }}
+                  <span v-if="m.run.id === baseRunId" class="ui-badge ok">基准</span>
+                </td>
+                <td>
+                  {{ pct(m.s.case_pass_rate) }}
+                  <span v-if="m.vs" class="ec-diff" :class="diffPctPts(m.s.case_pass_rate, m.vs.case_pass_rate).cls">
+                    {{ diffPctPts(m.s.case_pass_rate, m.vs.case_pass_rate).text }}
+                  </span>
+                </td>
+                <td>
+                  {{ verdictCount(m.s, 'unstable') }}
+                  <span v-if="m.vs" class="ec-diff" :class="diff(verdictCount(m.s, 'unstable'), verdictCount(m.vs, 'unstable'), true).cls">
+                    {{ diff(verdictCount(m.s, 'unstable'), verdictCount(m.vs, 'unstable'), true).text }}
+                  </span>
+                </td>
+                <td>
+                  {{ verdictCount(m.s, 'fail') }}
+                  <span v-if="m.vs" class="ec-diff" :class="diff(verdictCount(m.s, 'fail'), verdictCount(m.vs, 'fail'), true).cls">
+                    {{ diff(verdictCount(m.s, 'fail'), verdictCount(m.vs, 'fail'), true).text }}
+                  </span>
+                </td>
+                <td>
+                  {{ pct(m.s.tool_call_rate) }}
+                  <span v-if="m.vs" class="ec-diff" :class="diffPctPts(m.s.tool_call_rate, m.vs.tool_call_rate).cls">
+                    {{ diffPctPts(m.s.tool_call_rate, m.vs.tool_call_rate).text }}
+                  </span>
+                </td>
+                <td>
+                  {{ typeof m.s.avg_elapsed_ms === 'number' ? Math.round(m.s.avg_elapsed_ms) + 'ms' : '—' }}
+                  <span v-if="m.vs" class="ec-diff" :class="diffPctRel(m.s.avg_elapsed_ms, m.vs.avg_elapsed_ms, true).cls">
+                    {{ diffPctRel(m.s.avg_elapsed_ms, m.vs.avg_elapsed_ms, true).text }}
+                  </span>
+                </td>
+                <td>
+                  {{ typeof m.s.total_tokens === 'number' ? m.s.total_tokens : '—' }}
+                  <span v-if="m.vs" class="ec-diff" :class="diffPctRel(m.s.total_tokens, m.vs.total_tokens, true).cls">
+                    {{ diffPctRel(m.s.total_tokens, m.vs.total_tokens, true).text }}
+                  </span>
+                </td>
+                <template v-if="showJudgeGroup">
+                  <td>{{ pct(judgeRate(m.s, 'answer_correct')) }}</td>
+                  <td>{{ pct(judgeRate(m.s, 'refusal')) }}</td>
+                  <td>{{ pct(judgeRate(m.s, 'stream_complete')) }}</td>
+                  <td>{{ pct(judgeRate(m.s, 'latency_budget')) }}</td>
+                </template>
+              </tr>
+              <tr v-if="!matrixRows.length">
+                <td :colspan="showJudgeGroup ? 11 : 7" class="ui-muted">勾选上方的 run 参与对照（打开矩阵时已默认选中各变体的最新 run）</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="matrixView === 'run'" class="ui-help">
+            绿=优于基准，红=劣于基准；基准行不显示差值。耗时/token 越小越好（反向配色）。点击 run 名可跳转详情。
+          </p>
+
+          <div v-if="matrixView === 'case'" class="ec-casediff">
+            <p v-if="caseDiffLoading" class="ui-muted">加载用例数据中……</p>
+            <table v-else class="ui-table ec-matrix-table">
+              <thead>
+                <tr>
+                  <th>用例</th>
+                  <th v-for="r in selectedRuns" :key="r.id">
+                    #{{ r.id }} {{ variantLabel(r.config?.variant ?? 'baseline') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in visibleCaseRows"
+                  :key="row.id"
+                  :class="{ 'ec-case-changed': row.changed, 'ec-case-clickable': true }"
+                  @click="openCaseDetail(row)"
+                >
+                  <td>
+                    <strong>{{ row.id }}</strong>
+                    <div class="ui-muted">{{ row.title }}</div>
+                  </td>
+                  <td v-for="r in selectedRuns" :key="r.id">
+                    <span class="ui-badge" :class="verdictClass(row.cells[r.id]?.verdict ?? '')">
+                      {{ verdictLabel(row.cells[r.id]?.verdict ?? '') }}
+                    </span>
+                    <span class="ui-muted">
+                      {{ row.cells[r.id]?.pass_count ?? '—' }}/{{ row.cells[r.id]?.repeat_count ?? '—' }}
+                    </span>
+                  </td>
+                </tr>
+                <tr v-if="!visibleCaseRows.length">
+                  <td :colspan="selectedRuns.length + 1" class="ui-muted">
+                    {{ caseDiffLoading ? '加载中' : '没有用例数据（先在上方勾选参与对照的 run）' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="ui-help">
+              行高亮 = 该用例在各 run 间的判定不一致（变化优先排序）；单元格 = 该 run 下的判定 + 通过 X/N。勾选"只看变化"过滤全绿行。
+            </p>
+          </div>
+
+          <div v-if="caseDetail" class="ec-modal-mask" @click.self="closeCaseDetail">
+            <div class="ec-modal">
+              <div class="ec-modal-head">
+                <strong>{{ caseDetail.id }} · {{ caseDetail.title }}</strong>
+                <button class="ui-btn sm" @click="closeCaseDetail">关闭</button>
+              </div>
+              <div class="ec-modal-body">
+                <div v-if="firstCell(caseDetail)" class="ec-modal-meta">
+                  <details open>
+                    <summary>用户输入</summary>
+                    <pre class="ec-modal-pre">{{ firstCell(caseDetail)?.input || '（无输入）' }}</pre>
+                  </details>
+                  <details>
+                    <summary>金标准</summary>
+                    <pre class="ec-modal-pre">{{ firstCell(caseDetail)?.golden_answer || firstCell(caseDetail)?.behavior || '（无金标准）' }}</pre>
+                  </details>
+                </div>
+                <div v-for="r in selectedRuns" :key="r.id" class="ec-modal-run">
+                  <div class="ec-modal-run-head">
+                    <strong>#{{ r.id }} {{ variantLabel(r.config?.variant ?? 'baseline') }}</strong>
+                    <span class="ui-badge" :class="verdictClass(caseDetail.cells[r.id]?.verdict ?? '')">
+                      {{ verdictLabel(caseDetail.cells[r.id]?.verdict ?? '') }}
+                    </span>
+                    <span class="ui-muted">
+                      {{ caseDetail.cells[r.id]?.pass_count ?? '—' }}/{{ caseDetail.cells[r.id]?.repeat_count ?? '—' }}
+                    </span>
+                  </div>
+                  <details open>
+                    <summary>输出</summary>
+                    <pre class="ec-modal-pre">{{ caseDetail.cells[r.id]?.output || '（无输出）' }}</pre>
+                  </details>
+                  <details>
+                    <summary>判定理由</summary>
+                    <div
+                      v-for="(reason, cr) in caseDetail.cells[r.id]?.judge_reasons ?? {}"
+                      :key="cr"
+                      class="ec-modal-reason"
+                    >
+                      <span
+                        class="ui-badge"
+                        :class="caseDetail.cells[r.id]?.judgments?.[cr] === 'pass' ? 'ok' : caseDetail.cells[r.id]?.judgments?.[cr] === 'fail' ? 'error' : 'warn'"
+                      >
+                        {{ cr }}
+                      </span>
+                      {{ reason }}
+                    </div>
+                    <div v-if="!Object.keys(caseDetail.cells[r.id]?.judge_reasons ?? {}).length" class="ui-muted">
+                      （无判定理由）
+                    </div>
+                  </details>
+                  <details>
+                    <summary>执行轨迹</summary>
+                    <pre class="ec-modal-pre">{{ traceText(caseDetail.cells[r.id]?.trace) }}</pre>
+                  </details>
+                  <details>
+                    <summary>重复执行明细（{{ (caseDetail.cells[r.id]?.repeat_results ?? []).length }} 次）</summary>
+                    <div
+                      v-for="(att, ai) in caseDetail.cells[r.id]?.repeat_results ?? []"
+                      :key="ai"
+                      class="ec-modal-attempt"
+                    >
+                      <div class="ec-modal-attempt-head">
+                        <span class="ui-muted">#{{ ai + 1 }}</span>
+                        <span class="ui-badge" :class="verdictClass(att.verdict)">{{ verdictLabel(att.verdict) }}</span>
+                        <span class="ui-muted">{{ att.tool_calls?.join(', ') || '无工具' }}</span>
+                        <span v-if="att.error" class="ui-muted"> · {{ att.error }}</span>
+                      </div>
+                      <details>
+                        <summary>输出</summary>
+                        <pre class="ec-modal-pre">{{ att.output || '（无输出）' }}</pre>
+                      </details>
+                      <details>
+                        <summary>判定理由</summary>
+                        <div
+                          v-for="(reason, cr) in att.judge_reasons ?? {}"
+                          :key="cr"
+                          class="ec-modal-reason"
+                        >
+                          <span
+                            class="ui-badge"
+                            :class="att.judgments?.[cr] === 'pass' ? 'ok' : att.judgments?.[cr] === 'fail' ? 'error' : 'warn'"
+                          >
+                            {{ cr }}
+                          </span>
+                          {{ reason }}
+                        </div>
+                        <div v-if="!Object.keys(att.judge_reasons ?? {}).length" class="ui-muted">（无判定理由）</div>
+                      </details>
+                      <details>
+                        <summary>执行轨迹</summary>
+                        <pre class="ec-modal-pre">{{ traceText(att.trace) }}</pre>
+                      </details>
+                    </div>
+                    <div v-if="!(caseDetail.cells[r.id]?.repeat_results ?? []).length" class="ui-muted">（无重复执行记录）</div>
+                  </details>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <table v-if="!showMatrix" class="ui-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -618,14 +1114,27 @@ function onKeydown(e: KeyboardEvent) {
               <th>状态</th>
               <th>进度</th>
               <th>汇总</th>
-              <th>创建时间</th>
+              <th>通过用例数</th>
+              <th>待人工数</th>
+              <th>未通过数</th>
+              <th>开始时间</th>
+              <th>结束时间</th>
+              <th>耗时</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in runs" :key="r.id">
               <td class="ui-mono">{{ r.id }}</td>
-              <td>{{ r.name }}</td>
+              <td>
+                <button class="ui-link" @click="navigate(`#/eval/runs/${r.id}`)">{{ r.name }}</button>
+                <span
+                  v-if="(r.config?.variant ?? 'baseline') !== 'baseline'"
+                  class="ui-badge warn"
+                >
+                  变体:{{ variantLabel(r.config?.variant ?? 'baseline') }}
+                </span>
+              </td>
               <td>
                 <span class="ui-badge" :class="runBadgeClass(r.status)">{{ statusLabel(r.status) }}</span>
                 <span v-if="r.verified" class="ui-badge ok">已核验</span>
@@ -640,7 +1149,14 @@ function onKeydown(e: KeyboardEvent) {
                 <span class="ui-muted">{{ r.progress }}/{{ r.total }}</span>
               </td>
               <td class="ui-muted">{{ summaryText(r) }}</td>
-              <td class="ui-muted">{{ r.created_at }}</td>
+              <td class="ui-mono">{{ pctText(runVerdictCount(r, 'pass'), r.total) }}</td>
+              <td class="ui-mono">{{ pctText(runPendingCases(r), r.total) }}</td>
+              <td class="ui-mono">
+                {{ pctText(runVerdictCount(r, 'fail') + runVerdictCount(r, 'exec_error'), r.total) }}
+              </td>
+              <td class="ui-muted">{{ fmtTime(r.started_at || r.created_at) }}</td>
+              <td class="ui-muted">{{ fmtTime(r.finished_at) }}</td>
+              <td class="ui-mono">{{ fmtDuration(r.started_at, r.finished_at) }}</td>
               <td>
                 <button class="ui-link" @click="navigate(`#/eval/runs/${r.id}`)">查看</button>
                 <button
@@ -654,7 +1170,7 @@ function onKeydown(e: KeyboardEvent) {
               </td>
             </tr>
             <tr v-if="!runs.length">
-              <td colspan="7" class="ui-muted">还没有跑批记录</td>
+              <td colspan="12" class="ui-muted">还没有跑批记录</td>
             </tr>
           </tbody>
         </table>

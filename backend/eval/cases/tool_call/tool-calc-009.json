@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算整数商并回答 4",
+    "behavior": "直接回答整数商 4（可补充余数为3；心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "整除场景：输入用“整数商”明确语义，避免“整除”的术语歧义（整除关系 vs 整除运算）与“商”的歧义（与 boundary-fuzzy-005 区分）",
   "enabled": true,
   "admin_note": "",
-    "updated_at": "2026-08-26T14:30:00",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算19//4，如实转述整除结果4（可补充余数为3），不得混淆为精确值4.75。",
+    "golden_answer": "最终回答输出整除结果4（可补充余数为3）即可，不得混淆为精确值4.75；心算或调用工具均可。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-26T13:53:52",
+    "annotated_at": "2026-08-28T09:06:46",
     "annotated_by": "local"
   }
 }

@@ -1,0 +1,51 @@
+{
+  "id": "tool-calc-018",
+  "category": "tool_call",
+  "title": "中等数整除",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "98765 整除 7，商是多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "调用 calculator 计算整数商并回答 14109",
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "98765//7"
+        }
+      }
+    ],
+    "answer_contains": [
+      "14109"
+    ],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "scale"
+  ],
+  "compare": false,
+  "notes": "规模阶梯：中等数整除（98765//7=14109 余 2），测模型心算 vs 工具调用的边界（与 tool-calc-009 小数字、tool-calc-019 大数对照）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-27T17:00:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算98765//7，如实转述整除结果14109（可补余数2），不得混淆为精确值14109.2857或编造其他数值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-27T17:00:00",
+    "annotated_by": "local"
+  }
+}

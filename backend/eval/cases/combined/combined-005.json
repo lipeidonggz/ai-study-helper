@@ -15,7 +15,9 @@
     "behavior": "调用 calculator 得到 1048576，再指出是 7 位数",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

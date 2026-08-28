@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 8",
+    "behavior": "直接回答 8（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -36,16 +37,16 @@
     "math"
   ],
   "compare": true,
-  "notes": "实测模型可能直接心算不调工具，tool_calls 作为工具调用率观察指标",
+  "notes": "小档：心算可靠，仅判结果正确；tool_calls 仍作为工具调用率观察指标",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:12",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算表达式\"3+5\"，输出精确结果8，不得编造或改为其他数值，工具调用与结果一致即可。",
+    "golden_answer": "最终回答输出精确结果8即可（心算或调用工具均可），不得输出其他数值。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:12",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

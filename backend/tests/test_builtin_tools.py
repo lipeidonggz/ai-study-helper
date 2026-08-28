@@ -94,6 +94,8 @@ def test_parse_delta():
     assert _parse_delta("+2h30m") == _dt.timedelta(hours=2, minutes=30)
     assert _parse_delta("-1h") == _dt.timedelta(hours=-1)
     assert _parse_delta("+45s") == _dt.timedelta(seconds=45)
+    assert _parse_delta("+10d") == _dt.timedelta(days=10)  # 天单位（combo-004 修复）
+    assert _parse_delta("+1d2h30m") == _dt.timedelta(days=1, hours=2, minutes=30)
     assert _parse_delta("") == _dt.timedelta()
 
 
@@ -124,11 +126,11 @@ def test_now_with_timezone():
 
 def test_note_get_lists_all_when_title_empty():
     """note_get 空标题应列出全部笔记（模糊查询的确定性兜底）。"""
-    from app.tools.builtin import _note_get, _notes, clear_notes
+    from app.tools.builtin import _note_add, _note_get, clear_notes
 
     clear_notes()
-    _notes["待办"] = "买牛奶"
-    _notes["读书"] = "读三国"
+    _note_add("待办", "买牛奶")
+    _note_add("读书", "读三国")
     result = _note_get("")
     assert "待办" in result and "买牛奶" in result
     assert "读书" in result
@@ -136,11 +138,35 @@ def test_note_get_lists_all_when_title_empty():
 
 def test_note_search_fuzzy():
     """note_search 应按关键词模糊匹配标题或内容。"""
-    from app.tools.builtin import _note_search, _notes, clear_notes
+    from app.tools.builtin import _note_add, _note_search, clear_notes
 
     clear_notes()
-    _notes["待办"] = "买牛奶"
-    _notes["读书"] = "读三国演义"
+    _note_add("待办", "买牛奶")
+    _note_add("读书", "读三国演义")
     assert "待办" in _note_search("牛奶")  # 内容匹配
     assert "读书" in _note_search("读书")  # 标题匹配
     assert "未找到" in _note_search("不存在的词")
+
+
+def test_note_isolated_per_context():
+    """笔记按执行上下文（asyncio task）隔离：一个 attempt 写的笔记，另一个 attempt 看不到。"""
+    import asyncio
+
+    from app.tools.builtin import _note_add, _note_get, reset_notes
+
+    async def writer():
+        reset_notes()
+        _note_add("购物清单", "牛奶")
+        return _note_get("购物清单")
+
+    async def reader():
+        reset_notes()
+        return _note_get("购物清单")
+
+    async def scenario():
+        w, r = await asyncio.gather(asyncio.create_task(writer()), asyncio.create_task(reader()))
+        return w, r
+
+    w, r = asyncio.run(scenario())
+    assert w == "牛奶"  # 写者读到自己的笔记
+    assert "未找到" in r  # 读者看不到写者的笔记（上下文隔离）

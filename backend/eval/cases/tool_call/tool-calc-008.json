@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 2",
+    "behavior": "直接回答余数 2（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:24",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应包含通过calculator工具计算17%5并得出余数2，明确表述“17除以5的余数是2”；不得编造其他数值或将近似值当作精确值。",
+    "golden_answer": "最终回答明确给出「17除以5的余数是2」即可（心算或调用工具均可），不得编造其他数值或将近似值当作精确值。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:24",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

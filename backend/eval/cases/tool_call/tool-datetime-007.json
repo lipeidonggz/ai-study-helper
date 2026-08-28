@@ -15,7 +15,9 @@
     "behavior": "调用 current_datetime 获取并回答时分",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

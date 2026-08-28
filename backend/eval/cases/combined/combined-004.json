@@ -15,7 +15,9 @@
     "behavior": "先 note_add 保存，再 note_get 读取验证内容一致",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 9",
+    "behavior": "直接回答 9（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:18",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用calculator工具计算81/9，基于工具返回结果回答9，不得直接凭知识编造或遗漏工具调用。",
+    "golden_answer": "最终回答输出精确结果9即可（心算或调用工具均可），不得输出其他数值。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:18",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

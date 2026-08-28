@@ -130,6 +130,7 @@ def test_eval_api_full_flow(tmp_path):
                 "name": "console fake run",
                 "llm": "fake",
                 "concurrency": 1,
+                "repeat": 1,
                 "case_filter": {"ids": ["console-003"]},
             },
         )
@@ -147,6 +148,14 @@ def test_eval_api_full_flow(tmp_path):
         assert status == "done", detail
         assert detail["run"]["progress"] == 1
         assert detail["cases"][0]["case_id"] == "console-003"
+
+        # 轻量模式：列表/轮询不带重复明细与轨迹；单条接口可按需取回全量
+        light = client.get(f"/api/eval/runs/{run_id}?light=1").json()
+        assert light["cases"][0]["repeat_results"] == []
+        assert light["cases"][0]["trace"] == []
+        full = client.get(f"/api/eval/runs/{run_id}/cases/console-003").json()
+        assert full["case_id"] == "console-003"
+        assert len(full["repeat_results"]) == 1
 
         # 人工标注 + 校验落库
         resp = client.patch(

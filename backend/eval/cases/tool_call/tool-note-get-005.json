@@ -15,7 +15,9 @@
     "behavior": "调用 note_get，结果不存在时应如实说明未找到",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

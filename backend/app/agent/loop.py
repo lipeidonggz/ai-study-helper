@@ -37,6 +37,7 @@ async def run_agent_turn(
     tools: ToolExecutor | None = None,
     history: list[LLMMessage] | None = None,
     trace: Trace | None = None,
+    variant: str = "baseline",
 ) -> AsyncIterator[str]:
     """执行一轮完整的 Agent 对话，逐块产出最终文本。
 
@@ -46,21 +47,26 @@ async def run_agent_turn(
     :param tools: 工具执行器（模型决定用工具时由它执行）
     :param history: 之前的对话消息（多轮记忆；当前调用方还没传）
     :param trace: 处理过程记录器（可空）；传入后每个关键节点都会记录步骤
+    :param variant: 提示词变体（prompt 策略对照，默认基线）
     """
     history = history or []  # 没有历史就给空列表
-    messages = assemble(mode, history, user_message)  # 组装上下文
+    messages = assemble(mode, history, user_message, variant)  # 组装上下文
 
     # —— 记录：上下文组装结果 ——
     if trace:
         trace.step(
             "context",
-            {"system_prompt": system_prompt(mode), "message_count": len(messages)},
+            {
+                "system_prompt": system_prompt(mode, variant),
+                "message_count": len(messages),
+                "variant": variant,
+            },
         )
 
     # 输出护栏：增量检测输出是否泄露系统提示原文；命中即截断替换。
     # 挂在 loop 内是因为 loop 是文本产出的唯一出口——chat.py 与评测 runner
     # 复用同一个 loop，线上与评测的护栏行为天然一致。
-    guard = PromptLeakGuard(mode)
+    guard = PromptLeakGuard(mode, variant)
 
     tool_call_count = 0  # 累计工具调用次数（用于结束统计）
     total_tokens = {"prompt": 0, "completion": 0, "total": 0}  # 累计 token 用量

@@ -16,6 +16,7 @@ eval 会执行任意代码；AST 方案只允许数字和四则运算，其他�
 """
 
 import ast  # 把表达式解析成语法树，然后只允许白名单节点
+import contextvars  # 按执行上下文（asyncio task）隔离笔记存储——repeat 并行化的前提
 import datetime as _dt  # 日期时间（下划线前缀，避免与工具名冲突）
 import math  # 无理数近似的浮点计算
 import operator as _op  # 运算符节点 → Python 内置运算函数的映射
@@ -184,12 +185,14 @@ def _calculate(expression: str) -> str:
 
 
 def _parse_delta(delta: str) -> _dt.timedelta:
-    """解析相对时间字符串，如 '+2h30m' / '-1h' / '+30m' / '+45s'。"""
+    """解析相对时间字符串，如 '+10d' / '+2h30m' / '-1h' / '+30m' / '+45s'（d=天）。"""
     total = _dt.timedelta()
-    for m in re.finditer(r"([+-]?\d+)\s*([hms])", delta):
+    for m in re.finditer(r"([+-]?\d+)\s*([dhms])", delta):
         n = int(m.group(1))
         unit = m.group(2)
-        if unit == "h":
+        if unit == "d":
+            total += _dt.timedelta(days=n)
+        elif unit == "h":
             total += _dt.timedelta(hours=n)
         elif unit == "m":
             total += _dt.timedelta(minutes=n)
@@ -230,31 +233,48 @@ _WEEKDAYS_CN = [
 ]
 
 
-_notes: dict[str, str] = {}  # 笔记暂存进程内存（后续由 SQLite 持久化）
+_notes_ctx: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    "note_store", default=None
+)
+
+
+def _notes() -> dict[str, str]:
+    """取当前执行上下文的笔记存储；首次访问时创建独立空 dict（避免共享默认值）。"""
+    store = _notes_ctx.get()
+    if store is None:
+        store = {}
+        _notes_ctx.set(store)
+    return store
 
 
 def clear_notes() -> None:
-    """清空笔记（评测/测试用例隔离用）。
+    """清空当前上下文的笔记（跑批开始前的兜底清理）。"""
+    _notes().clear()
 
-    注意：笔记是进程级共享状态；评测并发跑批时 note 用例可能互相影响，
-    需要严格隔离请用 --concurrency 1。
+
+def reset_notes() -> None:
+    """为当前执行上下文重置一份全新笔记存储。
+
+    contextvars 按 asyncio task 隔离：评测 repeat 并行化后，每个 attempt 是独立 task，
+    各自从空笔记开始——repeat 是真正独立的样本（旧实现是进程级共享 dict，会串味）。
     """
-    _notes.clear()
+    _notes_ctx.set({})
 
 
 def _note_add(title: str, content: str) -> str:
     """保存笔记工具的实现。"""
-    _notes[title] = content
+    _notes()[title] = content
     return f"已保存笔记：{title}"
 
 
 def _note_get(title: str = "") -> str:
     """读取笔记工具的实现：title 为空时列出全部笔记（用户模糊查询时的确定性兜底）。"""
+    store = _notes()
     if not title.strip():
-        if not _notes:
+        if not store:
             return "（暂无笔记）"
-        return "\n".join(f"{k}: {v}" for k, v in _notes.items())
-    return _notes.get(title, f"未找到笔记：{title}")
+        return "\n".join(f"{k}: {v}" for k, v in store.items())
+    return store.get(title, f"未找到笔记：{title}")
 
 
 def _note_search(keyword: str) -> str:
@@ -262,7 +282,7 @@ def _note_search(keyword: str) -> str:
     kw = keyword.strip()
     if not kw:
         return "请提供检索关键词"
-    hits = [f"{k}: {v}" for k, v in _notes.items() if kw in k or kw in v]
+    hits = [f"{k}: {v}" for k, v in _notes().items() if kw in k or kw in v]
     return "\n".join(hits) if hits else f"未找到包含「{kw}」的笔记"
 
 
@@ -286,7 +306,7 @@ def builtin_specs() -> list[dict]:
                 "type": "object",
                 "properties": {
                     "timezone": {"type": "string", "description": "时区，默认 Asia/Shanghai"},
-                    "delta": {"type": "string", "description": "相对时间推算，如 '+2h30m'（正数未来/负数过去），留空返回当前时间"}
+                    "delta": {"type": "string", "description": "相对时间推算，如 '+10d'（天）或 '+2h30m'（小时/分钟），正数未来/负数过去，留空返回当前时间"}
                 },
             },
             "handler": _now,

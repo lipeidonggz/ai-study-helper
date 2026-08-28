@@ -14,7 +14,10 @@
   "expected": {
     "behavior": "调用 note_add 保存笔记并确认",
     "criteria": [
-      "answer_correct"
+      "answer_correct",
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

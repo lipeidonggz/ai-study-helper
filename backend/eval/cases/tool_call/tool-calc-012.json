@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并给出约 33.33 的结果",
+    "behavior": "直接回答约 33.33（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:30",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator计算100/3，基于工具结果输出约33.33或33.333...等近似值，并明确标注为近似值，不得将近似值表述为精确值。",
+    "golden_answer": "最终回答输出约33.33或33.333...等近似值并明确标注为近似值即可（心算或调用工具均可），不得将近似值表述为精确值。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:30",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

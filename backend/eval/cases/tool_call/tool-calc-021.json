@@ -1,0 +1,51 @@
+{
+  "id": "tool-calc-021",
+  "category": "tool_call",
+  "title": "大数乘法",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "123456789 乘以 987654321 等于多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 121932631112635269",
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "123456789*987654321"
+        }
+      }
+    ],
+    "answer_contains": [
+      "121932631112635269"
+    ],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "scale"
+  ],
+  "compare": false,
+  "notes": "规模阶梯：大数乘法（123456789*987654321=121932631112635269），模型心算几乎必错，验证必须工具化的场景（与 tool-calc-020 对照）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-27T17:00:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算123456789*987654321，如实转述精确结果121932631112635269，不得心算编造或给出其他数值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-27T17:00:00",
+    "annotated_by": "local"
+  }
+}

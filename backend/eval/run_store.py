@@ -111,6 +111,11 @@ def init_db(db_path: Path = DB_PATH) -> None:
             conn.execute("ALTER TABLE eval_run_cases ADD COLUMN repeat_results TEXT NOT NULL DEFAULT '[]'")
         if "trace" not in case_cols:
             conn.execute("ALTER TABLE eval_run_cases ADD COLUMN trace TEXT NOT NULL DEFAULT '[]'")
+        if "pending_attempts" not in case_cols:
+            # 需要人工标注的 attempt 数（详情页"待人工"统计用，避免前端解析大 JSON）
+            conn.execute(
+                "ALTER TABLE eval_run_cases ADD COLUMN pending_attempts INTEGER NOT NULL DEFAULT 0"
+            )
 
 
 def create_run(
@@ -181,8 +186,8 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 (run_id, case_id, category, title, mode, input, status,
                  elapsed_ms, rounds, tool_calls, tokens, output, error,
                  judgments, pending_human, metrics, verdict, judge_reasons,
-                 repeat_count, pass_count, repeat_results, trace)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 repeat_count, pass_count, repeat_results, trace, pending_attempts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, case_id) DO UPDATE SET
                 category=excluded.category, title=excluded.title, mode=excluded.mode,
                 input=excluded.input, status=excluded.status, elapsed_ms=excluded.elapsed_ms,
@@ -191,7 +196,8 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 pending_human=excluded.pending_human, metrics=excluded.metrics,
                 verdict=excluded.verdict, judge_reasons=excluded.judge_reasons,
                 repeat_count=excluded.repeat_count, pass_count=excluded.pass_count,
-                repeat_results=excluded.repeat_results, trace=excluded.trace
+                repeat_results=excluded.repeat_results, trace=excluded.trace,
+                pending_attempts=excluded.pending_attempts
             """,
             (
                 run_id,
@@ -216,6 +222,11 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 entry.get("pass_count", 0),
                 json.dumps(entry.get("repeat_results", []), ensure_ascii=False),
                 json.dumps(entry.get("trace", []), ensure_ascii=False),
+                sum(
+                    1
+                    for a in entry.get("repeat_results", [])
+                    if a.get("pending_human")
+                ),
             ),
         )
 
@@ -273,7 +284,8 @@ def list_runs(db_path: Path, limit: int = 50) -> list[dict]:
     with _connect(db_path) as conn:
         rows = conn.execute(
             "SELECT id, name, status, progress, total, error, created_at, started_at,"
-            " finished_at, summary, verified, verified_by FROM eval_runs ORDER BY id DESC LIMIT ?",
+            " finished_at, summary, verified, verified_by, config"
+            " FROM eval_runs ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]

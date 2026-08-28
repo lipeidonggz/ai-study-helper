@@ -66,37 +66,65 @@ def _ambiguity_hint(user_message: str) -> str:
     )
 
 
-SYSTEM_PROMPTS = {
-    "general": "你是通用 AI 助手，使用中文回答。" + BASE_BEHAVIOR + BASE_DEFENSE,
+# 各模式的"身份句"（能力承诺），与行为契约/安全基线/工具规则分开组合
+_IDENTITY = {
+    "general": "你是通用 AI 助手，使用中文回答。",
     "kb_priority": (
         "你是通用 AI 助手。回答时优先使用个人知识库中的资料，并给出引用来源。"
-        + BASE_BEHAVIOR
-        + BASE_DEFENSE
     ),
     "tool_enhanced": (
         "你是通用 AI 助手。工具可覆盖的确定性任务（如计算、日期时间、笔记存取）"
         "必须调用对应工具获取结果，不得依赖自行估算或记忆；"
         "完成一个任务只需一次工具调用，不要在中间步骤上拆分重复调用；"
         "工具无法覆盖的任务再正常回答。"
-        + TOOL_RESULT_RULES
-        + BASE_BEHAVIOR
-        + BASE_DEFENSE
     ),
 }
 
+# 提示词变体注册表（主动式验证，2026-08-27）：
+# 每个变体 = 在身份句基础上增删组合片段，用于 prompt 策略对照（同一用例集跑不同变体）。
+# - baseline：当前默认（身份 + 行为契约 + 工具规则 + 防御基线）
+# - no_behavior：去掉行为契约——验证 BASE_BEHAVIOR 的贡献（消融）
+# - cot：加"先分步思考"——测 CoT 对准确率/稳定性的影响
+# - minimal：极简（身份 + 工具规则）——看防御条款/行为契约的"代价"
+PROMPT_VARIANTS: dict[str, dict] = {
+    "baseline": {"extra": "", "drop": []},
+    "no_behavior": {"extra": "", "drop": ["behavior"]},
+    # 2026-08-28：基线（baseline）还原为"任何时候无 CoT"，cot 作为独立变体用于对照——
+    # 重新做 prompt 调优时以原始基线为起点
+    "cot": {"extra": "回答复杂问题时，先分步思考再给出结论。", "drop": []},
+    "minimal": {"extra": "", "drop": ["behavior", "defense"]},
+}
 
-def system_prompt(mode: str) -> str:
-    """按模式取系统提示；未知模式回退到通用提示（防御性兜底）。"""
-    return SYSTEM_PROMPTS.get(mode, SYSTEM_PROMPTS["general"])
+
+def system_prompt(mode: str, variant: str = "baseline") -> str:
+    """按模式与变体组合系统提示；未知模式回退通用、未知变体回退基线（防御性兜底）。"""
+    identity = _IDENTITY.get(mode, _IDENTITY["general"])
+    cfg = PROMPT_VARIANTS.get(variant, PROMPT_VARIANTS["baseline"])
+    drop = set(cfg.get("drop", []))
+    parts = [identity]
+    if "behavior" not in drop:
+        parts.append(BASE_BEHAVIOR)
+    if mode == "tool_enhanced":
+        parts.append(TOOL_RESULT_RULES)
+    if "defense" not in drop:
+        parts.append(BASE_DEFENSE)
+    if cfg.get("extra"):
+        parts.append(cfg["extra"])
+    return "".join(parts)
 
 
-def assemble(mode: str, history: list[LLMMessage], user_message: str) -> list[LLMMessage]:
+def assemble(
+    mode: str,
+    history: list[LLMMessage],
+    user_message: str,
+    variant: str = "baseline",
+) -> list[LLMMessage]:
     """组装完整消息列表：系统提示放最前（优先级最高），历史随后，当前消息最后。
 
     骨架版说明：检索注入与 token 预算控制在阶段 2 加入。
     """
     messages = [
-        LLMMessage(role="system", content=system_prompt(mode)),
+        LLMMessage(role="system", content=system_prompt(mode, variant)),
         *history,
         LLMMessage(role="user", content=user_message),
     ]

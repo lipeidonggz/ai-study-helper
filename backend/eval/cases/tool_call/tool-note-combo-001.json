@@ -1,0 +1,62 @@
+{
+  "id": "tool-note-combo-001",
+  "category": "tool_call",
+  "title": "笔记写后读（链式工具调用）",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我记一条笔记：标题=购物清单，内容=牛奶、鸡蛋、面包；然后读取这条笔记，确认内容"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "先调用 note_add 保存笔记，再调用 note_get 读取，并如实转述读取到的内容",
+    "criteria": [
+      "answer_correct",
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
+    ],
+    "tool_calls": [
+      {
+        "name": "note_add",
+        "arguments": {
+          "title": "购物清单",
+          "content": "牛奶、鸡蛋、面包"
+        }
+      },
+      {
+        "name": "note_get",
+        "arguments": {
+          "title": "购物清单"
+        }
+      }
+    ],
+    "answer_contains": [
+      "牛奶",
+      "鸡蛋",
+      "面包"
+    ],
+    "max_rounds": 2
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "note",
+    "chain"
+  ],
+  "compare": false,
+  "notes": "单请求链式场景：验证写后读在同一 attempt 内完成（note 存储按 attempt 隔离，repeat 是独立样本）。tool_used 为任一预期工具命中即 pass，两个工具都调用由判官按金标准把关。",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-28T10:27:17",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应先用note_add保存标题=购物清单、内容=牛奶、鸡蛋、面包的笔记，再用note_get读取该笔记并如实转述内容（牛奶、鸡蛋、面包）；若读取结果为空须如实说明，不得编造笔记内容。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-28T10:27:17",
+    "annotated_by": "local"
+  }
+}

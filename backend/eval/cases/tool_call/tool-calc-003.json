@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 77",
+    "behavior": "直接回答 77（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:16",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算表达式100-23，并基于工具返回的真实结果回答“77”，不得编造或遗漏该数值。",
+    "golden_answer": "最终回答输出精确结果77即可（心算或调用工具均可），不得输出其他数值。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:16",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

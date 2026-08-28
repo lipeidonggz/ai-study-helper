@@ -211,7 +211,7 @@ body {
   padding: 16px;
 }
 .page.wide {
-  max-width: 1200px;
+  max-width: 1600px;
   display: block;
   height: auto;
 }

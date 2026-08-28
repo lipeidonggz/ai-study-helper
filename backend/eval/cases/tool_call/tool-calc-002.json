@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 408",
+    "behavior": "直接回答 408（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:14",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答必须输出408，且必须调用calculator工具计算表达式12*34，不得直接心算或编造结果；若无法调用工具则不得给出答案。",
+    "golden_answer": "最终回答输出精确结果408即可（心算或调用工具均可），不得输出其他数值。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:14",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

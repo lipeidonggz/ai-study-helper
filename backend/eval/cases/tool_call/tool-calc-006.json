@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 92",
+    "behavior": "直接回答 92，并体现先算括号内(12+34)再乘以2的运算顺序（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:21",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答必须给出精确结果92，并明确体现先计算(12+34)再乘以2的运算顺序；若采用工具调用，需使用calculator且表达式为(12+34)*2，不得编造或近似表述；回答中应直接输出数值92，无需额外解释。",
+    "golden_answer": "最终回答必须给出精确结果92，并明确体现先计算(12+34)再乘以2的运算顺序；心算或调用工具均可，不得编造或近似表述。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:21",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

@@ -163,6 +163,7 @@ export interface EvalRun {
   summary?: Record<string, unknown>
   verified: string
   verified_by: string
+  config?: Record<string, unknown>
 }
 
 export interface EvalRunCase {
@@ -179,6 +180,7 @@ export interface EvalRunCase {
   error: string
   judgments: Record<string, string>
   pending_human: string[]
+  pending_attempts?: number
   judge_reasons: Record<string, string>
   verdict: string
   repeat_count: number
@@ -218,13 +220,27 @@ async function http<T>(url: string, init?: RequestInit): Promise<T> {
     let detail = ''
     try {
       const json = await resp.json()
-      detail = json.detail ?? ''
+      detail = fmtDetail(json.detail)
     } catch {
       // 非 JSON 错误体，忽略
     }
     throw new Error(`${resp.status}${detail ? ' ' + detail : ''}`)
   }
   return resp.json() as Promise<T>
+}
+
+/** 把 FastAPI 错误体的 detail（可能是数组）格式化成可读文本，避免 [object Object]。 */
+function fmtDetail(detail: unknown): string {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) =>
+        d && typeof d === 'object' && 'msg' in d
+          ? String((d as { msg: unknown }).msg)
+          : JSON.stringify(d)
+      )
+      .join('；')
+  }
+  return typeof detail === 'string' ? detail : JSON.stringify(detail)
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
@@ -264,8 +280,11 @@ export const evalApi = {
   deleteRun(id: number): Promise<{ ok: boolean }> {
     return http(`/api/eval/runs/${id}`, { method: 'DELETE' })
   },
-  getRun(id: number): Promise<{ run: EvalRun; cases: EvalRunCase[]; active: boolean }> {
-    return http(`/api/eval/runs/${id}`)
+  getRun(id: number, light = false): Promise<{ run: EvalRun; cases: EvalRunCase[]; active: boolean }> {
+    return http(`/api/eval/runs/${id}${light ? '?light=1' : ''}`)
+  },
+  getRunCase(runId: number, caseId: string): Promise<EvalRunCase> {
+    return http(`/api/eval/runs/${runId}/cases/${caseId}`)
   },
   startRun(body: {
     name: string
@@ -273,6 +292,7 @@ export const evalApi = {
     concurrency: number
     retries: number
     repeat: number
+    prompt_variant: string
     case_filter: { ids?: string[]; categories?: string[]; tags?: string[] }
   }): Promise<{ run_id: number }> {
     return http('/api/eval/runs', {

@@ -8,11 +8,12 @@
 用法（backend 目录下）：
   python -m eval.runner --llm fake              # 干跑验证管道（不花钱）
   python -m eval.runner --limit 10              # 真实模型跑前 10 条
-  python -m eval.runner --concurrency 1         # 串行（note 用例严格隔离）
+  python -m eval.runner --concurrency 1         # 串行跑（note 已按 attempt 隔离，默认并发也安全）
 """
 
 import argparse
 import asyncio
+import inspect
 import json
 import re
 import time
@@ -25,7 +26,7 @@ from app.agent.llm import DeepSeekLLMClient, FakeLLMClient, LLMClient, LLMMessag
 from app.agent.loop import run_agent_turn
 from app.agent.trace import Trace
 from app.di import build_deps
-from app.tools.builtin import clear_notes
+from app.tools.builtin import clear_notes, reset_notes
 from app.tools.executor import ToolExecutor
 from app.tools.registry import default_registry
 from eval.schema import CaseFile, load_cases
@@ -56,7 +57,12 @@ class CaseResult:
     exec_trace: list[dict] = field(default_factory=list)  # 有序执行轨迹（round/text/tool_exec/done），失败回放用
 
 
-async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> CaseResult:
+async def _run_once(
+    case: CaseFile,
+    llm: LLMClient,
+    tools: ToolExecutor,
+    variant: str = "baseline",
+) -> CaseResult:
     """跑单条用例一次：组装输入（最后一条为当前消息，前面为历史）、超时控制、收集指标。"""
     messages = case.input.messages
     user_message = messages[-1].content  # 当前用户消息
@@ -74,6 +80,7 @@ async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> Case
             tools=tools,
             history=history,
             trace=trace,
+            variant=variant,
         ):
             chunks.append(chunk)
 
@@ -144,11 +151,15 @@ async def _run_once(case: CaseFile, llm: LLMClient, tools: ToolExecutor) -> Case
 
 
 async def run_case(
-    case: CaseFile, llm: LLMClient, tools: ToolExecutor, max_retries: int = 1
+    case: CaseFile,
+    llm: LLMClient,
+    tools: ToolExecutor,
+    max_retries: int = 1,
+    variant: str = "baseline",
 ) -> CaseResult:
     """跑单条用例，非 ok 时退避重试（吸收 DeepSeek 临时限流/慢响应）。"""
     for attempt in range(max_retries + 1):
-        result = await _run_once(case, llm, tools)
+        result = await _run_once(case, llm, tools, variant)
         if result.status == "ok" or attempt == max_retries:
             return result
         await asyncio.sleep(5 * (attempt + 1))  # 退避后重试
@@ -390,10 +401,16 @@ def case_verdict(entry: dict) -> str:
 
 
 async def _run_attempt(
-    case: CaseFile, llm: LLMClient, tools: ToolExecutor, retries: int, judge_llm: LLMClient | None
+    case: CaseFile,
+    llm: LLMClient,
+    tools: ToolExecutor,
+    retries: int,
+    judge_llm: LLMClient | None,
+    variant: str = "baseline",
 ) -> dict:
     """执行一次并生成单次报告条目（repeat_results 的元素）。"""
-    result = await run_case(case, llm, tools, max_retries=retries)
+    reset_notes()  # 每个 attempt 独立笔记上下文：repeat 是独立样本，互不串味
+    result = await run_case(case, llm, tools, max_retries=retries, variant=variant)
     judgment = await judge_case(case, result, judge_llm)
     attempt = {
         "status": result.status,
@@ -464,11 +481,14 @@ async def run_single_entry(
     retries: int = 1,
     judge_llm: LLMClient | None = None,
     repeat: int = 1,
+    variant: str = "baseline",
 ) -> dict:
     """跑单条用例（可 repeat N 次，串行保证采样独立）并生成报告条目。"""
     attempts = []
     for _ in range(repeat):
-        attempts.append(await _run_attempt(case, llm, tools, retries, judge_llm))
+        attempts.append(
+            await _run_attempt(case, llm, tools, retries, judge_llm, variant)
+        )
     return _aggregate_attempts(case, attempts)
 
 
@@ -482,37 +502,54 @@ async def run_all(
     repeat: int = 1,
     on_case=None,
     cancel_event: asyncio.Event | None = None,
+    variant: str = "baseline",
 ) -> dict:
     """并发跑批（信号量限流）并聚合报告。
 
     新增可选参数（0017 评测台用，CLI/测试不传时行为不变）：
     - on_case：每条用例完成后回调 on_case(entry, completed, total)，用于实时进度
     - cancel_event：置位后不再启动新的用例（配合外层任务取消做优雅停止）
-    - repeat：每条用例执行 N 次（串行），报告给出通过率与稳定性
+    - repeat：每条用例执行 N 次（attempt 级并行、互相独立），报告给出通过率与稳定性
     """
     selected = cases[:limit] if limit else cases
-    clear_notes()  # 批次开始前重置笔记状态
+    clear_notes()  # 批次开始前重置笔记状态（兜底）
     sem = asyncio.Semaphore(concurrency)
-    entries: list[dict] = []
     total = len(selected)
+    judge_llm = llm if llm.model_name != "fake" else None  # 判官复用生成 LLM；Fake 不评判
 
-    async def worker(index: int, case: CaseFile) -> dict | None:
+    # attempt 级并行：repeat 不再在 case 内串行，每个 (case, idx) 是独立任务进信号量池。
+    # 并发 50 + 20 用例 × repeat 20 → 400 个 attempt 按 50 路跑，吞吐真正吃满并发。
+    # 落库时机：某个 case 的全部 attempt 都完成时立即聚合并触发 on_case——
+    # 跑批过程中进度/结果持续滚动，不会像"全部 gather 完再落库"那样界面空白到结束。
+    per_case: dict[str, list[dict | None]] = {c.id: [None] * repeat for c in selected}
+    remaining: dict[str, int] = {c.id: repeat for c in selected}
+    entries_by_id: dict[str, dict] = {}
+
+    async def attempt_task(case: CaseFile, idx: int) -> None:
         async with sem:
             if cancel_event is not None and cancel_event.is_set():
-                return None  # 已请求取消：不再开始新用例
-            return await run_single_entry(case, llm, tools, retries, judge_llm, repeat)
-
-    async def produce(index: int, case: CaseFile) -> None:
-        entry = await worker(index, case)
-        if entry is None:
-            return
-        entries.append(entry)
+                entry = None  # 已请求取消：不再调度新 attempt
+            else:
+                entry = await _run_attempt(case, llm, tools, retries, judge_llm, variant)
+        # 以下为同步段（无 await），单线程事件循环内写共享 dict 无竞态
+        per_case[case.id][idx] = entry
+        remaining[case.id] -= 1
+        if remaining[case.id] != 0:
+            return  # 该 case 还有 attempt 未完成，等最后一个
+        attempts = [a for a in per_case[case.id] if a is not None]
+        if not attempts:
+            return  # 该 case 的 attempt 全部被取消，跳过
+        agg = _aggregate_attempts(case, attempts)
+        entries_by_id[case.id] = agg
         if on_case:
-            on_case(entry, len(entries), total)  # 实时进度：已完成/总数
+            cb = on_case(agg, len(entries_by_id), total)  # 实时进度：已完成/总数
+            if inspect.isawaitable(cb):
+                await cb  # 回调可能是协程（评测台落库用 to_thread 避免阻塞事件循环）
 
-    judge_llm = llm if llm.model_name != "fake" else None  # 判官复用生成 LLM；Fake 不评判
-    await asyncio.gather(*(produce(i, c) for i, c in enumerate(selected)))
-    entries.sort(key=lambda e: e["id"])  # 并发完成顺序不定，统一按 id 排
+    await asyncio.gather(*(attempt_task(c, i) for c in selected for i in range(repeat)))
+
+    entries = [entries_by_id[c.id] for c in selected if c.id in entries_by_id]
+    entries.sort(key=lambda e: e["id"])  # 统一按 id 排（报告顺序稳定）
     summary = aggregate(entries)
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -553,10 +590,17 @@ def aggregate(entries: list[dict]) -> dict:
 
     tool_cases = [e for e in judged if e["category"] == "tool_call"]
     tool_used_count = sum(1 for e in tool_cases if e["tool_calls"])
+    # 需要人工标注的用例数：任一 attempt 有待人工（判官 uncertain / 未判定）即算
+    pending_cases = sum(
+        1
+        for e in entries
+        if any(a.get("pending_human") for a in e.get("repeat_results", []))
+    )
     return {
         "total": total,
         "status": dict(status_counts),
         "verdicts": dict(verdict_counts),
+        "pending_cases": pending_cases,
         "case_pass_rate": round(verdict_counts.get("pass", 0) / total, 3) if total else None,
         "tool_call_rate": round(tool_used_count / len(tool_cases), 3) if tool_cases else None,
         "avg_elapsed_ms": round(sum(e["elapsed_ms"] for e in judged) / len(judged), 1) if judged else 0,

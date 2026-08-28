@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 7",
+    "behavior": "直接回答 7（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:27",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答必须通过调用calculator计算表达式“3.5*2”并明确给出结果为7，且不得将任何未基于工具输出的数值表述为精确答案。",
+    "golden_answer": "最终回答输出精确结果7即可（心算或调用工具均可），不得将未计算的数值表述为精确答案。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:27",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

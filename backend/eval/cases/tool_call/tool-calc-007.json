@@ -12,10 +12,11 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算并回答 1024",
+    "behavior": "直接回答 1024（心算或调用 calculator 均可，不强制调用工具）",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {
@@ -39,13 +40,13 @@
   "notes": "",
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:22",
+  "updated_at": "2026-08-28T09:06:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "金标准答案应包含：调用calculator计算2**10，并回答结果为1024，且不得将近似值、编造值作为精确结果。",
+    "golden_answer": "最终回答输出精确结果1024即可（心算或调用工具均可），不得将近似值或编造值作为精确结果。",
     "reference_answer": "",
     "note": "",
-    "annotated_at": "2026-08-25T10:53:22",
-    "annotated_by": "generator"
+    "annotated_at": "2026-08-28T09:06:46",
+    "annotated_by": "local"
   }
 }

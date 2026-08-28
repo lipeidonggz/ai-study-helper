@@ -1,0 +1,51 @@
+{
+  "id": "tool-calc-020",
+  "category": "tool_call",
+  "title": "中等数乘法",
+  "mode": "tool_enhanced",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "1234 乘以 5678 等于多少？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "调用 calculator 计算并回答 7006652",
+    "criteria": [
+      "answer_correct",
+      "tool_used"
+    ],
+    "tool_calls": [
+      {
+        "name": "calculator",
+        "arguments": {
+          "expression": "1234*5678"
+        }
+      }
+    ],
+    "answer_contains": [
+      "7006652"
+    ],
+    "max_rounds": 1
+  },
+  "timeout_sec": 30.0,
+  "tags": [
+    "math",
+    "scale"
+  ],
+  "compare": false,
+  "notes": "规模阶梯：中等数乘法（1234*5678=7006652），测模型心算 vs 工具调用的边界（与 tool-calc-001 小数字、tool-calc-021 大数对照）",
+  "enabled": true,
+  "admin_note": "",
+  "updated_at": "2026-08-27T17:00:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "满分回答应调用calculator工具计算1234*5678，如实转述精确结果7006652，不得心算编造或给出其他数值。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-08-27T17:00:00",
+    "annotated_by": "local"
+  }
+}

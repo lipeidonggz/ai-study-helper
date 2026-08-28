@@ -36,9 +36,10 @@ class RunCreate(BaseModel):
 
     name: str = ""
     llm: Literal["real", "fake"] = "real"
-    concurrency: int = Field(default=2, ge=1, le=10)
+    concurrency: int = Field(default=50, ge=1, le=2500)
     retries: int = Field(default=1, ge=0, le=5)
-    repeat: int = Field(default=1, ge=1, le=10)  # 每条用例执行次数（稳定性评测）
+    repeat: int = Field(default=20, ge=1, le=100)  # 每条用例执行次数（稳定性评测）
+    prompt_variant: str = "baseline"  # 提示词变体（主动式验证：baseline/no_behavior/cot/minimal）
     case_filter: dict = Field(
         default_factory=lambda: {"ids": [], "categories": [], "tags": []}
     )
@@ -200,6 +201,7 @@ async def start_run(body: RunCreate, request: Request) -> dict:
             concurrency=body.concurrency,
             retries=body.retries,
             repeat=body.repeat,
+            variant=body.prompt_variant,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))
@@ -207,7 +209,7 @@ async def start_run(body: RunCreate, request: Request) -> dict:
 
 
 @router.get("/runs/{run_id}")
-def get_run(run_id: int, request: Request) -> dict:
+def get_run(run_id: int, request: Request, light: bool = False) -> dict:
     run = run_store.get_run(_db(request), run_id)
     if run is None:
         raise HTTPException(404, f"跑批不存在：{run_id}")
@@ -221,11 +223,32 @@ def get_run(run_id: int, request: Request) -> dict:
         else:
             row["golden_answer"] = ""
             row["behavior"] = ""
+        if light:
+            # 轻量模式：列表/轮询只读摘要，重复执行明细与轨迹太重（repeat 20 时是 MB 级），
+            # 展开用例时再由单条接口按需取全量
+            row["repeat_results"] = []
+            row["trace"] = []
     return {
         "run": run,
         "cases": cases,
         "active": _manager(request).is_active(run_id),
     }
+
+
+@router.get("/runs/{run_id}/cases/{case_id}")
+def get_run_case(run_id: int, case_id: str, request: Request) -> dict:
+    """单条用例完整记录（含 repeat_results / trace），详情展开时按需拉取。"""
+    run = run_store.get_run(_db(request), run_id)
+    if run is None:
+        raise HTTPException(404, f"跑批不存在：{run_id}")
+    rows = run_store.get_run_cases(_db(request), run_id)
+    row = next((r for r in rows if r["case_id"] == case_id), None)
+    if row is None:
+        raise HTTPException(404, f"该跑批中不存在用例：{case_id}")
+    case = case_store.get_case(case_id, _cases_dir(request))
+    row["golden_answer"] = case.annotation.golden_answer if case else ""
+    row["behavior"] = case.expected.behavior if case else ""
+    return row
 
 
 @router.post("/runs/{run_id}/cancel")

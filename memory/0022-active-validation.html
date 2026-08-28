@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0022 · 主动式验证：prompt 策略对比（进行中）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0022 · 主动式验证：prompt 策略对比（进行中）</h1>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-08-27</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：主动式验证 / 实验进行中</span>
+        <span>状态：<strong>cot 已固化 + 退化复测确认 + 并发验证完成</strong>（Run#29 新基线、Run#30 复测、探针 + Run#31 并发压测）</span>
+        <span>关联：0021（阶段 1 基线）、0002（阶段 1 验证点）、0016/0018/0020（系列）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>背景：从反应式调校进入主动式验证</h2>
+      <p>阶段 1 基线定稿（<a href="0021-stage1-baseline.html">0021</a>）后，进入 0002 路线图阶段 1 的验证点：prompt 策略对比、采样参数扫描、结构化输出可靠性、loop 消融。这标志着调校模式从<strong>反应式</strong>（评测发现问题 → 修复）转向<strong>主动式</strong>（按行业经验清单系统扫描关键变量）。</p>
+      <h3>两种调校模式的区分</h3>
+      <table>
+        <thead>
+          <tr><th></th><th>反应式（已做）</th><th>主动式（现在）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>触发</td><td>评测暴露问题</td><td>路线图/行业经验清单</td></tr>
+          <tr><td>对象</td><td>具体 bug 行为</td><td>关键变量（prompt/温度）</td></tr>
+          <tr><td>目标</td><td>消灭已知的坏</td><td>排除未知的次优</td></tr>
+          <tr><td>类比</td><td>门诊看病</td><td>定期体检</td></tr>
+        </tbody>
+      </table>
+      <p>先后逻辑：反应式先行产基准（基线 Run#21），主动式在基线上做变量对比；主动式结论改变系统后回到基线回归（循环）。</p>
+    </section>
+
+    <section class="card">
+      <h2>实现：prompt 变体机制 + 对照矩阵</h2>
+      <h3>后端</h3>
+      <ul>
+        <li><code>context.py</code>：提示词拆成可组合片段（身份 / 行为契约 / 工具规则 / 防御基线）+ <code>PROMPT_VARIANTS</code> 变体注册表（baseline / no_behavior / cot / minimal）；<code>system_prompt(mode, variant)</code> 按变体组合；</li>
+        <li><code>loop.py</code> / <code>guardrail.py</code>：<code>variant</code> 贯穿（护栏片段随变体匹配）；</li>
+        <li><code>runner.py</code> / <code>run_manager.py</code>：<code>--prompt-variant</code> 透传，run config 落库 <code>variant</code>；</li>
+        <li><code>eval API</code>：<code>RunCreate.prompt_variant</code>；repeat 上限放开到 100（样本量实验用）。</li>
+      </ul>
+      <h3>前端（评测台）</h3>
+      <ul>
+        <li>启动表单"提示词变体"下拉；run 列表变体徽章；</li>
+        <li><strong>对照矩阵</strong>：run 级指标（多 run 并排，基准高亮 + 差值绿升红降，判定组可展开）；</li>
+        <li><strong>用例级对照</strong>：行=用例、列=run，判定徽章 + 通过 X/N，变化行高亮且变化优先排序，"只看变化"过滤；</li>
+        <li><strong>用例详情弹窗</strong>：点击用例行，按 run 分块展示输出 / 判定理由 / 执行轨迹 / 5 次执行明细（repeat_results 每次 try 完整现场）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>首轮数据（repeat 5 全量，Run#21–24）</h2>
+      <table>
+        <thead>
+          <tr><th>变体</th><th>pass率</th><th>unstable</th><th>工具调用率</th><th>answer_correct</th><th>refusal</th><th>耗时</th><th>token</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>baseline</td><td>83.3%</td><td>12</td><td>97.6%</td><td>96.6%</td><td>100%</td><td>2494ms</td><td>146k</td></tr>
+          <tr><td>no_behavior</td><td>84.7%</td><td>11</td><td>97.6%</td><td><strong>100%</strong></td><td>93.3%</td><td>2436ms</td><td>137k</td></tr>
+          <tr><td>minimal</td><td>84.7%</td><td>11</td><td><strong>100%</strong></td><td>96.6%</td><td>93.3%</td><td>2839ms</td><td><strong>125k</strong></td></tr>
+          <tr><td><strong>cot</strong></td><td><strong>91.7%</strong></td><td><strong>6</strong></td><td><strong>100%</strong></td><td>98.3%</td><td>100%</td><td>2852ms</td><td>147k</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>首轮发现（repeat 5，样本量不足，待 repeat 20 确认）</h2>
+      <h3>1. CoT 是"免费午餐"但有双面性</h3>
+      <ul>
+        <li>整体：pass 率 +8.4 个百分点、unstable 减半、token 几乎不涨——改善倾向明显；</li>
+        <li><strong>双面性</strong>：对 tool-calc-001（3+5），CoT 触发"答完验算"→ 调工具确认（工具化尾巴被压）；对 tool-calc-007（2^10），CoT 让模型"思考即计算"（分步思考时就算出答案）→ 觉得不需要工具 → 心算 fail。CoT 同时增强"反思-验证"与"自我计算"两个倾向；</li>
+        <li>结论：cot 对工具化的影响不是单向的，需更大样本确认净效果。</li>
+      </ul>
+      <h3>2. 防御/契约条款的"账"</h3>
+      <ul>
+        <li>minimal 退化集中在安全类（fuzzy-004 矛盾、inject-004 解锁咒语、refuse-005 拒答）——去掉防御基线后安全边界松（refusal 100%→93.3%）；</li>
+        <li>token 成本：防御基线 + 行为契约约占 14%（minimal 125k vs baseline 146k）；</li>
+        <li>结论：防御条款的收益在"拒答质量"（安全侧），代价是 token + 少量正确率——生产取舍的依据。</li>
+      </ul>
+      <h3>3. 样本量问题</h3>
+      <p>repeat 5 对"找 bug"够，对"证明 A 优于 B"不够（每个用例通过率估计噪声大）。prompt 策略对比是需要样本量的实验——故进行 repeat 20 子集对照。</p>
+    </section>
+
+    <section class="card">
+      <h2>repeat 20 子集对照（Run#25/26，10 条差异用例）</h2>
+      <table>
+        <thead>
+          <tr><th>用例</th><th>baseline</th><th>cot</th><th>变化</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>tool-calc-001</td><td>12/20</td><td>15/20</td><td>+3</td></tr>
+          <tr><td>tool-calc-008</td><td>15/20</td><td>17/20</td><td>+2</td></tr>
+          <tr><td>tool-calc-011</td><td>18/20</td><td>20/20</td><td>+2</td></tr>
+          <tr><td>tool-calc-007</td><td>19/20</td><td>20/20</td><td>+1</td></tr>
+          <tr><td>tool-calc-013</td><td>19/20</td><td>20/20</td><td>+1</td></tr>
+          <tr><td>tool-calc-015</td><td>19/20</td><td>20/20</td><td>+1</td></tr>
+          <tr><td>combined-001</td><td>20/20</td><td>20/20</td><td>0</td></tr>
+          <tr><td>tool-combo-001</td><td>19/20</td><td>19/20</td><td>0</td></tr>
+          <tr><td>tool-calc-017</td><td>17/20</td><td>15/20</td><td>-2</td></tr>
+          <tr><td>tool-combo-004</td><td>16/20</td><td>14/20</td><td>-2</td></tr>
+          <tr><td><strong>合计</strong></td><td><strong>174/200 (87%)</strong></td><td><strong>180/200 (90%)</strong></td><td><strong>+6</strong></td></tr>
+        </tbody>
+      </table>
+      <h3>repeat 20 结论</h3>
+      <ul>
+        <li><strong>cot 是弱正向（+3%），不是 repeat 5 显示的 +8.4%</strong>——小样本夸大了效果；方向两轮一致（改善），幅度温和；</li>
+        <li>改善集中在工具化尾巴（001/008/011/013/015 提高 1~3/20），是"降频"不是"消除"（001 仍 15/20）；</li>
+        <li>tool-calc-007 在 repeat 5 显示的"退化"是采样噪声（repeat 20 为 19/20→20/20，cot 反而更好）；</li>
+        <li>tool-calc-017 的退化是真的（17→15），根因是 cot 的"思考即计算"（覆盖说明时心算不调工具），幅度小且 answer 全对——接受，记录为已知退化点；</li>
+        <li>tool-combo-004 的退化是<strong>工具 bug 误判</strong>：<code>_parse_delta</code> 不支持天数单位 "d"，<code>+10d</code> 被忽略导致工具返回当前日期——已修复（支持 d/混合单位），修复后 combo-004 5/5。这是评测用 20 次采样抓到工具盲区（此前只测过 h/m）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>规模阶梯（tool-calc-018~021，小/中/大 × 整除/乘法）</h2>
+      <p>为验证"模型心算可靠区 vs 不可靠区"边界新增 4 条用例（98765//7、199999343//4、1234×5678、123456789×987654321），baseline 与 cot 各 repeat 20。</p>
+      <ul>
+        <li><strong>结果：全部 20/20</strong>——中大数场景模型稳定调用工具且算对，没有出现"大数心算算错"的风险区；</li>
+        <li><strong>模型天然按规模分层</strong>：小数字（19//4）觉得"太简单"→ 心算（可靠）；中大数"知道"自己算不可靠 → 自动调工具；</li>
+        <li><strong>B 框架（按复杂度分层 tool_used 语义）暂缓</strong>：原始动因（防大数算错）不成立，剩余价值仅是"小数字心算的验收口径合理化"，优先级低；</li>
+        <li>规模阶梯 4 条保留为<strong>回归哨兵</strong>：换模型/提示词时，若大数开始心算算错会立即报警。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>计算用例规模阶梯重构（2026-08-28）</h2>
+      <p>以乘法系列（tool-calc-002/020/021，小/中/大三档）为规则，把计算类用例系统化：加/减/乘/除四个基本运算族各配 小/中/大 三档；幂、取模、小数、混合、括号等特殊场景保留为单档小用例。</p>
+      <h3>新增 6 条中/大档用例</h3>
+      <table>
+        <thead>
+          <tr><th>用例</th><th>运算</th><th>表达式</th><th>答案</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>tool-calc-022</td><td>加法·中</td><td>1234+5678</td><td>6912</td></tr>
+          <tr><td>tool-calc-023</td><td>加法·大</td><td>123456789+987654321</td><td>1111111110</td></tr>
+          <tr><td>tool-calc-024</td><td>减法·中</td><td>10000−2345</td><td>7655</td></tr>
+          <tr><td>tool-calc-025</td><td>减法·大</td><td>123456789−98765432</td><td>24691357</td></tr>
+          <tr><td>tool-calc-026</td><td>除法·中</td><td>12345/8</td><td>1543.125</td></tr>
+          <tr><td>tool-calc-027</td><td>除法·大</td><td>123456789/16</td><td>7716049.3125</td></tr>
+        </tbody>
+      </table>
+      <h3>小档口径调整：去掉 tool_used 硬约束</h3>
+      <ul>
+        <li>16 条小档用例（tool-calc-001~014、016、017）criteria 去掉 tool_used，仅判结果正确（心算或调工具均可）；</li>
+        <li>同步改写 behavior 与金标准：旧文案"必须调用工具、不得心算"会让 LLM 判官把心算正确答案误判为 fail（Run#30 的 tool-calc-006 已实证），必须连同口径一起改；</li>
+        <li>意义：<strong>B 框架（tool_used 按复杂度分层）以"用例分层"形式落地</strong>——不改判定逻辑，改用例口径；小档=心算可靠区（只验结果），中/大档=工具依赖区（强制工具）；</li>
+        <li>回归哨兵从 4 条扩展为 4 族 × 3 档共 12 条（加/减/乘/除）：换模型/提示词时，"大数开始心算算错"或"小数开始拒绝给答案"都会立即暴露。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>cot 固化后新基线（Run#29，76 用例 repeat 5）</h2>
+      <p>把 cot 的"回答复杂问题时先分步思考再给出结论"并入 tool_enhanced 身份句后全量回归（PROMPT_VARIANTS 的 cot 变体保留为空选项）。</p>
+      <table>
+        <thead>
+          <tr><th>指标</th><th>Run#29（cot 固化）</th><th>Run#21（旧基线）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>case_pass_rate</td><td><strong>85.5%</strong>（pass 65 / unstable 11 / fail 0）</td><td>83.3%（unstable 12）</td></tr>
+          <tr><td>tool_used</td><td>94.6%</td><td>97.6%</td></tr>
+          <tr><td>answer_correct</td><td>95.2%</td><td>96.6%</td></tr>
+          <tr><td>refusal</td><td>100%</td><td>100%</td></tr>
+          <tr><td>avg_elapsed</td><td>2364ms</td><td>2494ms</td></tr>
+          <tr><td>跑批耗时（并发 2）</td><td>11m47s</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Run#29 四条约退化用例复测（Run#30，repeat 20）</h2>
+      <table>
+        <thead>
+          <tr><th>用例</th><th>Run#29（repeat 5）</th><th>Run#30（repeat 20）</th><th>结论</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>tool-calc-012</td><td>4/5</td><td>20/20</td><td>采样噪声</td></tr>
+          <tr><td>tool-datetime-005</td><td>4/5</td><td>20/20</td><td>采样噪声</td></tr>
+          <tr><td>tool-note-add-006</td><td>4/5</td><td>20/20</td><td>采样噪声</td></tr>
+          <tr><td>tool-calc-006</td><td>3/5</td><td>19/20</td><td>非退化：唯一 fail 是"未调工具"（tool_used），答案全对</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>tool-calc-006 失败现场：1 轮心算输出"92。计算过程：(12+34)×2 = 46×2 = 92。"，answer_correct=pass、tool_used=fail——属于已知"简单计算心算可靠"族（同 tool-calc-001），19/20 说明该量级心算稳定，无需改提示词；</li>
+        <li><strong>judge 排查体验问题</strong>：LLM 判定的指标（answer_correct）有 reason，规则判定（tool_used）失败时不产出 reason，导致"理由说一致却判 fail"的困惑——可给规则判定补 reason（待办，可选）；</li>
+        <li>结论：<strong>Run#29 无真实退化</strong>，cot 固化放心。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>并发与限流排查（探针 + Run#31）</h2>
+      <h3>结论先行</h3>
+      <p>慢不是 Key 被限流，是<strong>吞吐算术</strong>：总请求量 × 单次耗时 ÷ 并发。DeepSeek 不公开 RPM/TPM，也没有配额查看页面；实测无 429、无速率响应头。</p>
+      <h3>证据链</h3>
+      <ul>
+        <li><strong>配额页不存在</strong>：官方文档只有并发上限（v4-flash 2500/账号，超过才 429）；错误码页笼统提"TPM/RPM 达上限"但全站无数值、无查看入口；控制台仅有余额 / 用量（platform.deepseek.com/usage）/ API Keys / 充值；声称"密钥详情有 QPS/RPM/TPM 表格"的文章为 SEO 幻觉内容，不可信；</li>
+        <li><strong>轻量探针</strong>（2 并发 60s）：590 请求全 200、0 个 429，p50 0.16s / p95 0.32s，响应头无 x-ratelimit-*；</li>
+        <li><strong>Run#31</strong>（10 用例 × repeat 10，并发 10，1m07s）：100 次执行 + 100 次判定全 ok、0 超时；单次执行中位从并发 2 的 2.2s 升到 ~4.0s，吞吐约为并发 2 的 3 倍（1.49 vs 0.49 runs/s）；</li>
+        <li><strong>历史结论已过期</strong>：0015/0018 记的"并发 3 → 整批 30s 超时（越靠后越严重）"在现环境不复现（当时无 429，形态更像持续重负载下 time-to-first-token 拉长）。</li>
+      </ul>
+      <h3>量级参考</h3>
+      <ul>
+        <li>并发 2：76 用例 × repeat 20 ≈ 35–40 分钟；Run#29（repeat 5）11m47s；</li>
+        <li>并发 10：全量 repeat 20 预计 15–20 分钟。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>性能优化与并发定档（2026-08-28）</h2>
+      <h3>四步优化</h3>
+      <ol>
+        <li><strong>LLM 客户端连接池</strong>：eval 跑批共享一个 httpx.AsyncClient（Limits 200/200），不再每次调用新建 TLS 连接（上千次调用 → 几十条复用连接）；微基准 8 次小请求 9.11s → 7.09s；</li>
+        <li><strong>落库移出事件循环</strong>：on_case 的 SQLite 写入改 asyncio.to_thread，事件循环不再被 fsync 卡死（曾把单次 attempt 拖到 ~39s，修复后回到 ~2s）；WAL 试过但撤回（Windows 多进程下偶发 CANTOPEN）；</li>
+        <li><strong>详情页轮询瘦身</strong>：轮询 1.5s→5s + getRun?light=1（不带 repeat_results/trace），展开用例时按需取单条全量并缓存——轮询负载 327KB → 12KB（约 1/27）；</li>
+        <li><strong>attempt 级并行 + note 隔离</strong>：repeat 从"case 内串行"改为"每个 (case, idx) 独立任务进信号量池"，并发 50 真正生效；笔记存储从进程级 dict 改为 contextvars 按 attempt 隔离（顺带修掉串行时代 repeat 串味）；新增链式用例 tool-note-combo-001（单请求内写后读）。</li>
+      </ol>
+      <h3>实测效果</h3>
+      <ul>
+        <li>83 用例 × repeat 20 + 并发 50：<strong>约 2 分钟</strong>（此前并发 2 预估 35–40 分钟）；</li>
+        <li>进度回归：attempt 并行化初版用 gather 一把梭导致界面空白到结束，已改为"每 case 全部 attempt 完成即增量落库"，进度持续滚动；</li>
+        <li>默认参数定档：并发 50、repeat 20（前后端默认值；repeat 上限 100、并发上限放开到 2500）。</li>
+      </ul>
+      <h3>重要发现：DeepSeek 并发上限随余额动态调整</h3>
+      <p>文档宣传的 2500 只是理论值。Run#37（并发 50）几乎全挂，429 原文：<em>"Your current concurrency is 6, which exceeds your concurrency limit of 5 based on your remaining balance. Please top up your balance to restore your concurrency."</em>——余额不足时服务端把账号并发压到极低（5），充值后恢复。教训：真实限额藏在 429 文案里而不是配额页；大批量跑批前先确认余额档位。</p>
+      <h3>prompt 调优重开</h3>
+      <p>基线还原为"任何时候无 cot"（从 tool_enhanced 身份句移除"先分步思考"），cot 恢复为独立变体用于对照——以原始基线重新做 prompt 调优。注意：Run#29 那轮"新基线"是 cot 固化后的，与新基线不可直接比。</p>
+      <h3>评测台 UI 增强（2026-08-28）</h3>
+      <ul>
+        <li>跑批详情：每条用例序号列；顶部开始/结束/耗时；待人工统计修复（任一 attempt 待人工即计入——新增 pending_attempts 列 + 汇总 pending_cases，旧数据回退行级 pending_human）；</li>
+        <li>历史跑批列表：名称可点击进详情；新增"通过用例数 / 待人工数 / 未通过数（含比例）"列；页面宽度 1200 → 1600px；</li>
+        <li>返回评测台自动选中"测试管理"；用例级对照弹框展示用户输入与金标准；"5 次执行明细"改为动态次数；</li>
+        <li>错误信息可读性：FastAPI 校验错误 detail 数组转成可读文本（不再显示 [object Object]）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>决策与待办</h2>
+      <h3>已决策</h3>
+      <ul>
+        <li>cot：首轮弱正向结论<strong>已回退重开</strong>——基线还原为无 cot，cot 作为独立变体重新对照（2026-08-28）；</li>
+        <li>方法论调整：<strong>repeat 5 降级为粗筛</strong>，并发定档后对比一律 repeat 20（repeat 5 的采样噪声浪费过排查：tool-calc-007 与四条约退化用例均为假信号）；</li>
+        <li>并发定档：<strong>默认并发 50、repeat 20</strong>（attempt 级并行落地后实测 83×20 约 2 分钟）；</li>
+        <li>性能四项（连接池 / to_thread 落库 / 轻量轮询 / attempt 级并行）<strong>已全部落地</strong>；</li>
+        <li>余额限流：DeepSeek 并发上限随余额动态调整——大批量跑批前先确认余额档位，遇余额型 429 先充值；</li>
+        <li>小档计算"心算不调工具"：接受并固化为用例口径（16 条小档去掉 tool_used 硬约束）；</li>
+        <li>B 框架（tool_used 按复杂度分层）：<strong>以用例分层形式落地</strong>（2026-08-28）——小档仅判结果正确、中/大档强制工具，不再改判定逻辑；</li>
+        <li>loop 消融：方法论已理解，实操推迟到高级技巧引入后（阶段 2/3 的 RAG/记忆/规划各做真消融）。</li>
+      </ul>
+      <h3>待办</h3>
+      <ol>
+        <li>用无 cot 新基线全量 repeat 20 跑一轮，作为重开调优的对照基准（含计算用例重构后的回归观察：小档答案正确率、中/大档工具调用率与哨兵行为）；</li>
+        <li>同步更新 0017"并发 2 + 重试"文案与 0015/0018 限流经验（已过时）；</li>
+        <li>runner 可识别余额型 429（"based on your remaining balance"）并提示/自动降并发（可选）；</li>
+        <li>规则判定补 reason（tool_used 等失败时输出原因，改善排查体验，可选）；</li>
+        <li>温度扫描（runner 加 temperature 透传）；</li>
+        <li>结构化输出可靠性统计（从 trace 统计 tool_calls/judge JSON 解析失败率，作为格式遵循指标）；</li>
+        <li>阶段 2 RAG（《三国演义》素材 + 检索管线）。</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-08-27 · 更新至 2026-08-28：性能优化四项 + 并发定档（50/20）+ 余额动态限流发现 + 基线还原无 cot 重开调优 + 评测台 UI 增强
+    </footer>
+  </div>
+</body>
+</html>

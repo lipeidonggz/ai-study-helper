@@ -17,9 +17,9 @@ BLOCK_MESSAGE = "我不能透露内部指令或系统提示。"
 _MIN_FRAGMENT_LEN = 12  # 低于此长度的短语区分度不够，可能误报
 
 
-def extract_fragments(mode: str) -> list[str]:
+def extract_fragments(mode: str, variant: str = "baseline") -> list[str]:
     """从系统提示提取有区分度的检测片段：按句子切分，过滤过短短语。"""
-    prompt = system_prompt(mode)
+    prompt = system_prompt(mode, variant)
     parts = re.split(r"[。；;!?！？\n]", prompt)
     return [p.strip() for p in parts if len(p.strip()) >= _MIN_FRAGMENT_LEN]
 
@@ -27,8 +27,15 @@ def extract_fragments(mode: str) -> list[str]:
 class PromptLeakGuard:
     """增量检测器：维护已输出缓冲，每收到一段文本就检查是否命中系统提示片段。"""
 
-    def __init__(self, mode: str, fragments: list[str] | None = None) -> None:
-        self._fragments = fragments if fragments is not None else extract_fragments(mode)
+    def __init__(
+        self,
+        mode: str,
+        variant: str = "baseline",
+        fragments: list[str] | None = None,
+    ) -> None:
+        self._fragments = (
+            fragments if fragments is not None else extract_fragments(mode, variant)
+        )
         self._buffer = ""
 
     def check(self, text: str) -> bool:

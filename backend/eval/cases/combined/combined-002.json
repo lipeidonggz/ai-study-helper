@@ -15,7 +15,9 @@
     "behavior": "调用 calculator 计算两个乘积（144 和 143）并比较大小",
     "criteria": [
       "answer_correct",
-      "tool_used"
+      "tool_used",
+      "stream_complete",
+      "latency_budget"
     ],
     "tool_calls": [
       {

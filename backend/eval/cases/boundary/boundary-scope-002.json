@@ -26,8 +26,8 @@
   ],
   "compare": false,
   "notes": "阶段 2 启用：验证引用溯源不越界",
-  "enabled": true,
-  "admin_note": "",
+  "enabled": false,
+  "admin_note": "阶段 2 启用（知识库就绪后启用）：无知识库环境下模型用常识比较必然 fail，避免污染基线",
   "updated_at": "2026-08-25T10:52:52",
   "updated_by": "local",
   "annotation": {
