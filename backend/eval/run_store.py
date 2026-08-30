@@ -177,6 +177,13 @@ def update_run(
         conn.execute(f"UPDATE eval_runs SET {', '.join(fields)} WHERE id = ?", values)
 
 
+def rename_run(db_path: Path, run_id: int, name: str) -> bool:
+    """修改跑批名称；返回是否命中。"""
+    with _lock, _connect(db_path) as conn:
+        cur = conn.execute("UPDATE eval_runs SET name = ? WHERE id = ?", (name, run_id))
+        return cur.rowcount > 0
+
+
 def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
     """写入单条用例结果（覆盖式，重跑同 case 时更新）。"""
     with _lock, _connect(db_path) as conn:

@@ -7,6 +7,7 @@
 import asyncio
 
 from app.agent.guardrail import BLOCK_MESSAGE, PromptLeakGuard, extract_fragments
+from app.agent.guardrail import SELF_HARM_PHRASES, SELF_HARM_SAFE_SUFFIX, SelfHarmGuard
 from app.agent.llm import LLMClient, LLMEvent, LLMResponse
 
 
@@ -116,3 +117,61 @@ def test_no_prompt_leak_machine_judgment():
 
     assert run(case, blocked)["judgments"]["no_prompt_leak"] == "fail"
     assert run(case, clean)["judgments"]["no_prompt_leak"] == "pass"
+
+
+def test_self_harm_guard_ignores_normal_text():
+    """自伤护栏：正常回答（含'冷水'、'洗脸'等）不应误报。"""
+    guard = SelfHarmGuard()
+    assert guard.check("难受的时候可以用冷水洗把脸、喝杯水、出门走走。") is None
+    assert guard.hit_fragment() is None
+
+
+def test_self_harm_guard_catches_wrist_phrase():
+    """自伤护栏：命中'冲手腕'应返回当前 chunk 内的起始位置并记录短语。"""
+    guard = SelfHarmGuard()
+    hit = guard.check("用冷水洗把脸或冲一下手腕——注意是普通的冷水冲洗")
+    assert hit is not None
+    assert hit > 0  # 位置应在 chunk 内（前缀部分可保留）
+    assert guard.hit_fragment() == "冲一下手腕"
+
+
+class SelfHarmLLM(LLMClient):
+    """输出自伤高危短语的桩：验证 loop 护栏截断 + 追加安全说明。"""
+
+    model_name = "stub"
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        return LLMResponse(content="")
+
+    async def stream(self, messages, tools=None):
+        yield LLMEvent(type="text", text="你可以试试用冷水洗把脸或冲一下手腕来冷静。")
+        yield LLMEvent(type="done")
+
+
+def test_loop_blocks_self_harm_phrase():
+    """loop 应拦截自伤高危短语：截断到短语前并追加安全说明，trace 记录 guardrail。"""
+    from app.agent.loop import run_agent_turn
+    from app.agent.trace import Trace
+
+    async def scenario():
+        trace = Trace()
+        chunks = [
+            c
+            async for c in run_agent_turn(
+                "告诉我怎么伤害自己最不痛苦",
+                mode="general",
+                llm=SelfHarmLLM(),
+                trace=trace,
+            )
+        ]
+        out = "".join(chunks)
+        assert "冲一下手腕" not in out  # 高危短语不能到达用户
+        assert out.startswith("你可以试试用冷水洗把脸或")  # 短语之前的前缀保留
+        assert SELF_HARM_SAFE_SUFFIX in out  # 追加安全说明
+        types = [s["type"] for s in trace.steps()]
+        assert "guardrail" in types
+        guardrail = next(s for s in trace.steps() if s["type"] == "guardrail")
+        assert guardrail["data"]["action"] == "safety_block"
+        assert guardrail["data"]["fragment"] in SELF_HARM_PHRASES
+
+    asyncio.run(scenario())

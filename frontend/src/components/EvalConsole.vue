@@ -20,6 +20,25 @@ function variantLabel(v: unknown): string {
   const key = String(v ?? '')
   return PROMPT_VARIANT_OPTIONS.find((o) => o.value === key)?.label ?? key
 }
+
+// 矩阵/列表中区分 run 配置：变体 + 采样温度（温度扫描时一眼可辨）
+function runConfigLabel(r: EvalRun): string {
+  const v = variantLabel(r.config?.variant ?? 'baseline')
+  const t = r.config?.temperature
+  const temp = typeof t === 'number' ? `T${t}` : ''
+  return temp ? `${v} · ${temp}` : v
+}
+
+const TEMPERATURE_OPTIONS = [
+  { value: null, label: '默认（不传，服务端 1.0）' },
+  { value: 0, label: '0.0（代码/数学建议）' },
+  { value: 0.3, label: '0.3' },
+  { value: 0.7, label: '0.7' },
+  { value: 1, label: '1.0（数据清洗/翻译建议）' },
+  { value: 1.3, label: '1.3（通用对话建议）' },
+  { value: 1.5, label: '1.5（创意写作建议）' },
+  { value: 2, label: '2.0（最高随机性）' }
+]
 const CRITERIA_OPTIONS = [
   'answer_correct',
   'tool_used',
@@ -98,6 +117,9 @@ function blankCase(): EvalCase {
     timeout_sec: 30,
     tags: [],
     compare: false,
+    weight: 1,
+    must_pass: false,
+    must_pass_threshold: 1,
     notes: '',
     enabled: true,
     admin_note: '',
@@ -252,6 +274,7 @@ const startForm = ref({
   retries: 1,
   repeat: 20,
   prompt_variant: 'baseline',
+  temperature: null as number | null,
   filterType: 'all' as 'all' | 'categories' | 'ids',
   categories: [] as string[],
   ids: ''
@@ -485,6 +508,7 @@ async function startRun() {
       retries: startForm.value.retries,
       repeat: startForm.value.repeat,
       prompt_variant: startForm.value.prompt_variant,
+      temperature: startForm.value.temperature,
       case_filter: filter
     })
     showStart.value = false
@@ -534,12 +558,38 @@ function summaryText(run: EvalRun): string {
   if (!s) return '—'
   const parts: string[] = []
   if (typeof s.total === 'number') parts.push(`共 ${s.total} 条`)
+  const cs = s.composite_score
+  if (typeof cs === 'number') {
+    const lo = s.composite_ci_low
+    const hi = s.composite_ci_high
+    const ci =
+      typeof lo === 'number' && typeof hi === 'number'
+        ? `[${(lo * 100).toFixed(1)}%~${(hi * 100).toFixed(1)}%]`
+        : ''
+    parts.push(`复合分 ${(cs * 100).toFixed(1)}%${ci}`)
+  }
+  const red = s.red_line as Record<string, unknown> | undefined
+  if (red && typeof red.passed === 'boolean') {
+    parts.push(red.passed ? '红线✓' : '红线✗')
+  }
   if (typeof s.avg_elapsed_ms === 'number') parts.push(`均 ${s.avg_elapsed_ms}ms`)
   if (typeof s.total_tokens === 'number') parts.push(`${s.total_tokens} token`)
   if (s.status && typeof s.status === 'object') {
     parts.push(JSON.stringify(s.status))
   }
   return parts.join(' · ') || '—'
+}
+
+function compositeCiText(s: Record<string, unknown>): string {
+  const lo = s.composite_ci_low
+  const hi = s.composite_ci_high
+  if (typeof lo !== 'number' || typeof hi !== 'number') return ''
+  return `[${(lo * 100).toFixed(1)}~${(hi * 100).toFixed(1)}%]`
+}
+
+function redLinePassed(s: Record<string, unknown>): boolean {
+  const r = s.red_line as Record<string, unknown> | undefined
+  return typeof r?.passed === 'boolean' ? r.passed : true
 }
 
 function runVerdictCount(run: EvalRun, key: string): number {
@@ -717,6 +767,19 @@ function onKeydown(e: KeyboardEvent) {
                 <input v-model="editing.compare" type="checkbox" /> 参与对照
                 <span class="ui-hint" title="是否纳入豆包/千问等跨模型对照评测（compare=true 进对照组）">ⓘ</span>
               </label>
+              <label>权重
+                <input v-model.number="editing.weight" type="number" min="0" step="0.5" class="ui-input" />
+                <span class="ui-help-inline">加权复合分 Σ(w×通过率)/Σw；默认 1</span>
+              </label>
+              <label class="ui-check">
+                <input v-model="editing.must_pass" type="checkbox" /> 红线用例（must_pass）
+                <span class="ui-hint" title="红线用例未达通过阈值即整体不通过（零容忍闸门），不参与配置排名">ⓘ</span>
+              </label>
+              <label v-if="editing.must_pass">
+                红线阈值
+                <input v-model.number="editing.must_pass_threshold" type="number" min="0" max="1" step="0.05" class="ui-input" />
+                <span class="ui-help-inline">attempt 通过率下限；默认 1（零容忍）</span>
+              </label>
               <label>标签（逗号分隔）<input v-model="tagsText" class="ui-input" /></label>
             </div>
 
@@ -834,6 +897,13 @@ function onKeydown(e: KeyboardEvent) {
                 </option>
               </select>
             </label>
+            <label>采样温度
+              <select v-model="startForm.temperature" class="ui-select">
+                <option v-for="o in TEMPERATURE_OPTIONS" :key="String(o.value)" :value="o.value">
+                  {{ o.label }}
+                </option>
+              </select>
+            </label>
             <label>并发<input v-model.number="startForm.concurrency" type="number" min="1" max="2500" class="ui-input" /></label>
             <label>重试<input v-model.number="startForm.retries" type="number" min="0" max="5" class="ui-input" /></label>
             <label>重复次数
@@ -891,6 +961,8 @@ function onKeydown(e: KeyboardEvent) {
               <tr>
                 <th>run</th>
                 <th>通过率</th>
+                <th>复合分(95%CI)</th>
+                <th>红线</th>
                 <th>unstable</th>
                 <th>fail</th>
                 <th>工具调用率</th>
@@ -915,6 +987,17 @@ function onKeydown(e: KeyboardEvent) {
                   <span v-if="m.vs" class="ec-diff" :class="diffPctPts(m.s.case_pass_rate, m.vs.case_pass_rate).cls">
                     {{ diffPctPts(m.s.case_pass_rate, m.vs.case_pass_rate).text }}
                   </span>
+                </td>
+                <td>
+                  {{ pct(m.s.composite_score) }}
+                  <span class="ui-muted">{{ compositeCiText(m.s) }}</span>
+                  <span v-if="m.vs" class="ec-diff" :class="diffPctPts(m.s.composite_score, m.vs.composite_score).cls">
+                    {{ diffPctPts(m.s.composite_score, m.vs.composite_score).text }}
+                  </span>
+                </td>
+                <td>
+                  <span v-if="redLinePassed(m.s)" class="ui-badge ok">通过</span>
+                  <span v-else class="ui-badge error">未过</span>
                 </td>
                 <td>
                   {{ verdictCount(m.s, 'unstable') }}
@@ -954,7 +1037,7 @@ function onKeydown(e: KeyboardEvent) {
                 </template>
               </tr>
               <tr v-if="!matrixRows.length">
-                <td :colspan="showJudgeGroup ? 11 : 7" class="ui-muted">勾选上方的 run 参与对照（打开矩阵时已默认选中各变体的最新 run）</td>
+                <td :colspan="showJudgeGroup ? 13 : 9" class="ui-muted">勾选上方的 run 参与对照（打开矩阵时已默认选中各变体的最新 run）</td>
               </tr>
             </tbody>
           </table>
@@ -969,7 +1052,7 @@ function onKeydown(e: KeyboardEvent) {
                 <tr>
                   <th>用例</th>
                   <th v-for="r in selectedRuns" :key="r.id">
-                    #{{ r.id }} {{ variantLabel(r.config?.variant ?? 'baseline') }}
+                    #{{ r.id }} {{ runConfigLabel(r) }}
                   </th>
                 </tr>
               </thead>
@@ -1024,7 +1107,7 @@ function onKeydown(e: KeyboardEvent) {
                 </div>
                 <div v-for="r in selectedRuns" :key="r.id" class="ec-modal-run">
                   <div class="ec-modal-run-head">
-                    <strong>#{{ r.id }} {{ variantLabel(r.config?.variant ?? 'baseline') }}</strong>
+                    <strong>#{{ r.id }} {{ runConfigLabel(r) }}</strong>
                     <span class="ui-badge" :class="verdictClass(caseDetail.cells[r.id]?.verdict ?? '')">
                       {{ verdictLabel(caseDetail.cells[r.id]?.verdict ?? '') }}
                     </span>
@@ -1133,6 +1216,9 @@ function onKeydown(e: KeyboardEvent) {
                   class="ui-badge warn"
                 >
                   变体:{{ variantLabel(r.config?.variant ?? 'baseline') }}
+                </span>
+                <span v-if="typeof r.config?.temperature === 'number'" class="ui-badge">
+                  温度 {{ r.config.temperature }}
                 </span>
               </td>
               <td>

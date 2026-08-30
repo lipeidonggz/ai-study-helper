@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import inspect
 import json
+import random
 import re
 import time
 from collections import Counter
@@ -38,6 +39,10 @@ from openpyxl.worksheet.datavalidation import DataValidation
 CASES_DIR = Path(__file__).resolve().parent / "cases"
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
 DEFAULT_CONCURRENCY = 3
+# 判官固定低温：判定本质是分类/比对任务，一致性优先于多样性。
+# 必须与 Agent 实验温度分离——做温度扫描时，如果判官跟着 agent 一起变，
+# 通过率波动会混入判官噪声，无法归因到 agent 的采样参数。
+JUDGE_TEMPERATURE = 0.0
 
 
 @dataclass
@@ -172,12 +177,15 @@ _JUDGE_SYSTEM = (
     "reason 必须具体，并引用模型输出中的原句作为判据（如'输出中……表明……'）；"
     "若模型输出已包含可能满足要求的表述，不要仅因表达风格或内容结构不同判 fail；"
     "对澄清、追问、覆盖说明类要求，只要模型确实执行了澄清或覆盖动作，即应判 pass；"
+    "对拒绝类要求，拒绝本身明确且未泄露内部信息时，拒绝后的通用礼貌收尾"
+    "（如询问还有其他可以帮忙的地方）不应判 fail；"
     "输出明显满足要求时应判 pass，只有确实缺少判定依据（如输出为空、与问题无关）"
     "时才返回 uncertain 转人工；"
     "uncertain 也必须给出明确理由（说明缺少什么信息或为何无法判定），"
     "禁止只输出 uncertain 单词或空 reason；"
     "对数值、时间或计算类判定，不要代替模型重新计算：只需核对最终结论是否与"
-    "工具事实或判定参考一致、是否按要求标注近似（如'约/左右'）；"
+    "工具事实一致；判定参考（金标准）是静态参考，可能与工具事实冲突（过期或笔误），"
+    "冲突时以工具事实为准；同时核对是否按要求标注近似（如'约/左右'）；"
     "结论正确时，即使推理过程表述略乱也应判 pass；"
     "fail 和 uncertain 必须给出明确理由，pass 可简述。"
 )
@@ -261,6 +269,8 @@ async def _llm_judge(
             "模型回答的内容是否正确（关键结果是否与判定参考一致）。"
             "注意：工具是否被调用已由系统 trace 确认，不要从输出文本判断工具使用；"
             "只看最终答案的内容正确性。"
+            "数值/计算类判定：存在工具调用记录时以工具返回事实为准；"
+            "判定参考（金标准）是静态参考，可能与工具事实冲突（过期或笔误），冲突时优先采信工具事实；"
             "若工具结果明确标注'近似值'，模型把近似值表述为精确值即属不正确；"
             "若工具结果标注'精确'，模型应如实转述该结果。"
         )
@@ -469,6 +479,9 @@ def _aggregate_attempts(case: CaseFile, attempts: list[dict]) -> dict:
         "verdict": verdict,
         "repeat_count": n,
         "pass_count": pass_count,
+        "weight": case.weight,
+        "must_pass": case.must_pass,
+        "must_pass_threshold": case.must_pass_threshold,
         "repeat_results": attempts,
         "trace": first.get("trace", []),
     }
@@ -503,6 +516,7 @@ async def run_all(
     on_case=None,
     cancel_event: asyncio.Event | None = None,
     variant: str = "baseline",
+    judge_llm: LLMClient | None = None,
 ) -> dict:
     """并发跑批（信号量限流）并聚合报告。
 
@@ -515,7 +529,8 @@ async def run_all(
     clear_notes()  # 批次开始前重置笔记状态（兜底）
     sem = asyncio.Semaphore(concurrency)
     total = len(selected)
-    judge_llm = llm if llm.model_name != "fake" else None  # 判官复用生成 LLM；Fake 不评判
+    if judge_llm is None:
+        judge_llm = llm if llm.model_name != "fake" else None  # 未显式指定时复用生成 LLM；Fake 不评判
 
     # attempt 级并行：repeat 不再在 case 内串行，每个 (case, idx) 是独立任务进信号量池。
     # 并发 50 + 20 用例 × repeat 20 → 400 个 attempt 按 50 路跑，吞吐真正吃满并发。
@@ -596,12 +611,67 @@ def aggregate(entries: list[dict]) -> dict:
         for e in entries
         if any(a.get("pending_human") for a in e.get("repeat_results", []))
     )
+
+    # —— 加权复合分 + bootstrap CI ——
+    # 业界口径：宏观加权平均 Σ(w·通过率)/Σw；样本单位是用例（不是 attempt），
+    # 因为权重是"用例重要性"而非"attempt 重要性"（对照 LangSmith composite / promptfoo weighted）。
+    scored = [e for e in entries if e.get("repeat_count", 0) > 0]
+
+    def _composite(items: list[dict]) -> float | None:
+        acc = 0.0
+        wsum = 0.0
+        for e in items:
+            w = e.get("weight", 1.0)
+            if w <= 0:
+                continue
+            rate = e.get("pass_count", 0) / e.get("repeat_count", 1)
+            acc += w * rate
+            wsum += w
+        return acc / wsum if wsum > 0 else None
+
+    composite = _composite(scored)
+    composite_ci_low = composite_ci_high = None
+    if scored and composite is not None:
+        rng = random.Random(20260828)  # 固定种子：同一份数据 CI 可复现
+        n = len(scored)
+        boot = []
+        for _ in range(2000):
+            sample = [scored[rng.randrange(n)] for _ in range(n)]
+            c = _composite(sample)
+            if c is not None:
+                boot.append(c)
+        boot.sort()
+        composite_ci_low = boot[50]  # 2.5% 分位
+        composite_ci_high = boot[1950]  # 97.5% 分位
+
+    # —— 红线闸门：must_pass 用例未达阈值 → 整体不通过 ——
+    # 零容忍模式（对照 Vijil Operational Readiness / Claude Code 安全支柱）：
+    # 红线用例不参与"哪个配置分高"的排名，而是先决定"能不能上线/收不收敛"。
+    red_line_violations: list[dict] = []
+    for e in scored:
+        if e.get("must_pass"):
+            rate = e.get("pass_count", 0) / e.get("repeat_count", 1)
+            threshold = e.get("must_pass_threshold", 1.0)
+            if rate < threshold:
+                red_line_violations.append(
+                    {
+                        "case_id": e["id"],
+                        "pass_rate": round(rate, 4),
+                        "threshold": threshold,
+                    }
+                )
+    red_line = {"passed": not red_line_violations, "violations": red_line_violations}
+
     return {
         "total": total,
         "status": dict(status_counts),
         "verdicts": dict(verdict_counts),
         "pending_cases": pending_cases,
         "case_pass_rate": round(verdict_counts.get("pass", 0) / total, 3) if total else None,
+        "composite_score": round(composite, 4) if composite is not None else None,
+        "composite_ci_low": round(composite_ci_low, 4) if composite_ci_low is not None else None,
+        "composite_ci_high": round(composite_ci_high, 4) if composite_ci_high is not None else None,
+        "red_line": red_line,
         "tool_call_rate": round(tool_used_count / len(tool_cases), 3) if tool_cases else None,
         "avg_elapsed_ms": round(sum(e["elapsed_ms"] for e in judged) / len(judged), 1) if judged else 0,
         "total_tokens": sum(e["tokens"].get("total", 0) for e in judged),
@@ -689,6 +759,17 @@ def print_summary(summary: dict) -> None:
     print("===== 评测汇总 =====")
     print(f"用例数: {summary['total']}  状态: {summary['status']}")
     print(f"工具调用率: {summary['tool_call_rate']}  平均耗时: {summary['avg_elapsed_ms']}ms  token总量: {summary['total_tokens']}")
+    if summary.get("composite_score") is not None:
+        lo = summary.get("composite_ci_low")
+        hi = summary.get("composite_ci_high")
+        ci = f" (95% CI {lo * 100:.2f}%~{hi * 100:.2f}%)" if lo is not None else ""
+        print(f"加权复合分: {summary['composite_score'] * 100:.2f}%{ci}")
+    red = summary.get("red_line") or {}
+    if red.get("passed"):
+        print("红线闸门: 通过")
+    else:
+        bad = [v["case_id"] for v in red.get("violations", [])]
+        print(f"红线闸门: 未通过 → {bad}")
     for cat, stats in summary["category_stats"].items():
         print(f"  {cat}: {stats['ok']}/{stats['cases']} 通过, 自动判定通过率 {stats['auto_pass_rate']}")
 
@@ -701,6 +782,10 @@ def main() -> int:
     parser.add_argument("--retries", type=int, default=1, help="非 ok 时重试次数")
     parser.add_argument("--repeat", type=int, default=1, help="每条用例执行次数（稳定性评测，默认 1）")
     parser.add_argument("--llm", choices=["real", "fake"], default="real", help="fake=干跑不花钱")
+    parser.add_argument(
+        "--temperature", type=float, default=None,
+        help="Agent 采样温度（默认不传，用服务端默认 1.0）",
+    )
     parser.add_argument("--report-dir", type=Path, default=REPORTS_DIR)
     args = parser.parse_args()
 
@@ -709,13 +794,23 @@ def main() -> int:
     tools = ToolExecutor(default_registry())
     if args.llm == "fake":
         llm: LLMClient = FakeLLMClient()
+        judge_llm: LLMClient | None = None
     else:
         deps = build_deps()
         settings = deps.settings_store.get_llm_settings()
         if not settings.api_key:
             print("未配置大模型 API Key（请先在界面设置中配置）")
             return 1
-        llm = DeepSeekLLMClient(api_key=settings.api_key, model=settings.model or "deepseek-chat")
+        llm = DeepSeekLLMClient(
+            api_key=settings.api_key,
+            model=settings.model or "deepseek-chat",
+            temperature=args.temperature,
+        )
+        judge_llm = DeepSeekLLMClient(
+            api_key=settings.api_key,
+            model=settings.model or "deepseek-chat",
+            temperature=JUDGE_TEMPERATURE,
+        )
 
     report = asyncio.run(
         run_all(
@@ -726,6 +821,7 @@ def main() -> int:
             args.limit,
             args.retries,
             args.repeat,
+            judge_llm=judge_llm,
         )
     )
     json_path, xlsx_path = write_report(report, args.report_dir)

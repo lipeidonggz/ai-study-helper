@@ -44,7 +44,7 @@
   "updated_at": "2026-08-25T10:53:35",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用calculator计算结果为80722333136，得分点在于整数结果精确无误差且不等同于近似值。",
+    "golden_answer": "调用calculator计算结果为80779853376，得分点在于整数结果精确无误差且不等同于近似值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:35",

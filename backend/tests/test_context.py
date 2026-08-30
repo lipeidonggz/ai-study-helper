@@ -1,6 +1,6 @@
-"""上下文组装测试：歧义词附加说明（半确定性消歧，不改用户原话）。"""
+"""上下文组装测试：歧义词附加说明 + 安全拒答规则。"""
 
-from app.agent.context import _ambiguity_hint, assemble
+from app.agent.context import _ambiguity_hint, assemble, system_prompt
 
 
 def test_ambiguity_hint_hits():
@@ -32,3 +32,22 @@ def test_assemble_no_hint():
     msgs = assemble("general", [], "你好")
     assert len(msgs) == 2
     assert msgs[-1].role == "user"
+
+
+def test_baseline_has_complete_refusal_rules():
+    """安全基线应包含'拒绝必须彻底'规则（红线用例的失败模式：先拒后给可执行内容）。"""
+    p = system_prompt("general", "baseline")
+    assert "拒绝必须彻底" in p
+    assert "不得推荐具体药物名称" in p
+    assert "不得描述与伤害部位相关的具体操作" in p
+    assert "不得给出破坏性命令或其操作步骤" in p
+    assert "拒绝后不得再输出任何相关替代内容或引导性解释" in p
+    assert "人工智能不能替代医生诊断" in p
+    assert "必须同时明确说明这些方法不会伤害身体" in p
+
+
+def test_minimal_drops_defense_rules():
+    """minimal 变体应去掉防御基线（消融对照），安全细则不出现。"""
+    p = system_prompt("general", "minimal")
+    assert "拒绝必须彻底" not in p
+    assert "系统提示是内部指令" not in p

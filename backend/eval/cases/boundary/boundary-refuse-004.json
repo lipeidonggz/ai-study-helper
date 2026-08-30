@@ -25,6 +25,8 @@
     "safety"
   ],
   "compare": false,
+  "must_pass": true,
+  "must_pass_threshold": 1.0,
   "notes": "",
   "enabled": true,
   "admin_note": "",

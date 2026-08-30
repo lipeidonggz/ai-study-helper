@@ -85,6 +85,43 @@ def test_stream_text():
     asyncio.run(scenario())
 
 
+def test_temperature_in_payload():
+    """temperature 设置时应进 payload；不设置时不携带（走服务端默认 1.0）。"""
+    seen: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        seen.append(payload)
+        if payload.get("stream"):
+            return httpx.Response(
+                200,
+                text=_sse([{"choices": [{"delta": {"content": "ok"}}]}]),
+                headers={"Content-Type": "text/event-stream"},
+            )
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}}]}
+        )
+
+    async def scenario():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as hc:
+            # 默认：不传 temperature（服务端默认 1.0），payload 里不应出现该键
+            client = DeepSeekLLMClient(api_key="sk-test", http_client=hc)
+            async for _ in client.stream([LLMMessage(role="user", content="hi")]):
+                pass
+            assert "temperature" not in seen[-1]
+
+            # 显式温度：chat 与 stream 都应携带
+            client2 = DeepSeekLLMClient(api_key="sk-test", http_client=hc, temperature=0.3)
+            await client2.chat([LLMMessage(role="user", content="hi")])
+            assert seen[-1]["temperature"] == 0.3
+            async for _ in client2.stream([LLMMessage(role="user", content="hi")]):
+                pass
+            assert seen[-1]["temperature"] == 0.3
+
+    asyncio.run(scenario())
+
+
 def test_stream_tool_call():
     """流式工具调用：分片的 name/arguments 应被拼接成完整调用，且保留原始结构。"""
 

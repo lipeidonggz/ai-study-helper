@@ -157,6 +157,13 @@ def test_eval_api_full_flow(tmp_path):
         assert full["case_id"] == "console-003"
         assert len(full["repeat_results"]) == 1
 
+        # 重命名跑批
+        resp = client.patch(f"/api/eval/runs/{run_id}", json={"name": "重命名后的跑批"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["name"] == "重命名后的跑批"
+        renamed = client.get(f"/api/eval/runs/{run_id}").json()["run"]
+        assert renamed["name"] == "重命名后的跑批"
+
         # 人工标注 + 校验落库
         resp = client.patch(
             f"/api/eval/runs/{run_id}/cases/console-003",

@@ -123,12 +123,14 @@ class DeepSeekLLMClient(LLMClient):
         model: str = "deepseek-chat",
         base_url: str = "https://api.deepseek.com",
         http_client: httpx.AsyncClient | None = None,
+        temperature: float | None = None,
     ) -> None:
         self._api_key = api_key
         self._model = model
         self.model_name = model  # 便于 trace 展示当前模型
         self._base_url = base_url.rstrip("/")  # 去掉末尾斜杠，拼接 URL 更安全
         self._http_client = http_client  # 测试注入用；None 则每次调用自建
+        self._temperature = temperature  # 采样温度；None=不传（用服务端默认 1.0）
 
     def _headers(self) -> dict:
         """构造认证请求头：把 API Key 放进 Authorization（OpenAI 兼容标准）。"""
@@ -156,6 +158,8 @@ class DeepSeekLLMClient(LLMClient):
             "messages": self._to_api_messages(messages),
             "stream": False,  # 非流式：等完整结果再返回
         }
+        if self._temperature is not None:
+            payload["temperature"] = self._temperature  # 显式温度才传，否则服务端默认
         if tools:
             payload["tools"] = tools  # 告诉模型"你可以用这些工具"
         created = self._http_client is None
@@ -212,6 +216,8 @@ class DeepSeekLLMClient(LLMClient):
             "stream": True,  # 开启流式
             "stream_options": {"include_usage": True},  # 让流式响应也返回 token 用量
         }
+        if self._temperature is not None:
+            payload["temperature"] = self._temperature
         if tools:
             payload["tools"] = tools
         created = self._http_client is None

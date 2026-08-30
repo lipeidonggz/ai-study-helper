@@ -40,6 +40,9 @@ class RunCreate(BaseModel):
     retries: int = Field(default=1, ge=0, le=5)
     repeat: int = Field(default=20, ge=1, le=100)  # 每条用例执行次数（稳定性评测）
     prompt_variant: str = "baseline"  # 提示词变体（主动式验证：baseline/no_behavior/cot/minimal）
+    temperature: float | None = Field(
+        default=None, ge=0.0, le=2.0
+    )  # Agent 采样温度；None=不传（服务端默认 1.0）
     case_filter: dict = Field(
         default_factory=lambda: {"ids": [], "categories": [], "tags": []}
     )
@@ -51,6 +54,12 @@ class AnnotateIn(BaseModel):
     answer_correct: Literal["", "对", "错", "存疑"] = ""
     refusal: Literal["", "合理", "不合理", "不适用"] = ""
     note: str = ""
+
+
+class RenameIn(BaseModel):
+    """重命名跑批。"""
+
+    name: str = Field(min_length=1, max_length=200)
 
 
 class GoldenAnswerIn(BaseModel):
@@ -185,6 +194,18 @@ def delete_run(run_id: int, request: Request) -> dict:
     return {"ok": True}
 
 
+@router.patch("/runs/{run_id}")
+def rename_run(run_id: int, body: RenameIn, request: Request) -> dict:
+    """重命名跑批（详情页/列表可改，方便区分变体与轮次）。"""
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, "跑批名称不能为空")
+    if not run_store.rename_run(_db(request), run_id, name):
+        raise HTTPException(404, f"跑批不存在：{run_id}")
+    _deps(request).log_store.append("eval", {"action": "run_rename", "id": run_id})
+    return {"ok": True, "id": run_id, "name": name}
+
+
 @router.post("/runs", status_code=201)
 async def start_run(body: RunCreate, request: Request) -> dict:
     """启动跑批。
@@ -202,6 +223,7 @@ async def start_run(body: RunCreate, request: Request) -> dict:
             retries=body.retries,
             repeat=body.repeat,
             variant=body.prompt_variant,
+            temperature=body.temperature,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))

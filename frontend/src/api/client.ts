@@ -132,6 +132,9 @@ export interface EvalCase {
   timeout_sec: number
   tags: string[]
   compare: boolean
+  weight: number
+  must_pass: boolean
+  must_pass_threshold: number
   notes: string
   enabled: boolean
   admin_note: string
@@ -280,6 +283,13 @@ export const evalApi = {
   deleteRun(id: number): Promise<{ ok: boolean }> {
     return http(`/api/eval/runs/${id}`, { method: 'DELETE' })
   },
+  renameRun(runId: number, name: string): Promise<{ ok: boolean; id: number; name: string }> {
+    return http(`/api/eval/runs/${runId}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name })
+    })
+  },
   getRun(id: number, light = false): Promise<{ run: EvalRun; cases: EvalRunCase[]; active: boolean }> {
     return http(`/api/eval/runs/${id}${light ? '?light=1' : ''}`)
   },
@@ -293,6 +303,7 @@ export const evalApi = {
     retries: number
     repeat: number
     prompt_variant: string
+    temperature: number | null
     case_filter: { ids?: string[]; categories?: string[]; tags?: string[] }
   }): Promise<{ run_id: number }> {
     return http('/api/eval/runs', {

@@ -20,6 +20,8 @@ const goldenMsg = ref('')
 const goldenEdits = ref<Record<string, string>>({})
 const rerunning = ref<string>('') // 正在重跑的 case_id
 const rerunMsg = ref('')
+const renaming = ref(false) // 正在保存跑批名称
+const editingName = ref('') // 标题行内编辑的输入值（空=非编辑态）
 const verifying = ref(false)
 const verifyMsg = ref('')
 const expanded = ref<Set<string>>(new Set())
@@ -276,6 +278,26 @@ async function rerunCase(row: EvalRunCase) {
   }
 }
 
+function startEditName() {
+  editingName.value = data.value?.run.name ?? ''
+}
+
+async function saveName() {
+  if (!data.value) return
+  const name = editingName.value.trim()
+  if (!name) return
+  renaming.value = true
+  try {
+    const res = await evalApi.renameRun(data.value.run.id, name)
+    data.value.run.name = res.name
+    editingName.value = ''
+  } catch (err) {
+    error.value = `重命名失败：${err}`
+  } finally {
+    renaming.value = false
+  }
+}
+
 function statusLabel(s: string): string {
   const map: Record<string, string> = {
     queued: '排队中',
@@ -337,7 +359,23 @@ onUnmounted(stopPolling)
     <header class="ui-bar rd-head">
       <a class="ui-link" href="#/eval/runs">← 返回评测台</a>
       <h1 v-if="data" class="rd-title">
-        Run #{{ data.run.id }} · {{ data.run.name }}
+        Run #{{ data.run.id }} ·
+        <template v-if="editingName !== ''">
+          <input
+            v-model="editingName"
+            class="ui-input rd-name-input"
+            :disabled="renaming"
+            @keyup.enter="saveName"
+          />
+          <button class="ui-btn sm" :disabled="renaming" @click="saveName">
+            {{ renaming ? '保存中…' : '保存' }}
+          </button>
+          <button class="ui-btn sm" @click="editingName = ''">取消</button>
+        </template>
+        <template v-else>
+          {{ data.run.name }}
+          <button class="ui-link" title="重命名跑批" @click="startEditName">✎</button>
+        </template>
         <span class="ui-badge" :class="data.run.status === 'done' ? 'ok' : 'neutral'">
           {{ statusLabel(data.run.status) }}
         </span>
@@ -680,6 +718,10 @@ onUnmounted(stopPolling)
   font-size: 1.2em;
   margin: 0;
   flex: 1;
+}
+.rd-name-input {
+  width: 280px;
+  margin: 0 6px;
 }
 .rd-actions {
   display: flex;
