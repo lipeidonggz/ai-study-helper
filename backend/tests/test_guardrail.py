@@ -6,8 +6,18 @@
 
 import asyncio
 
-from app.agent.guardrail import BLOCK_MESSAGE, PromptLeakGuard, extract_fragments
-from app.agent.guardrail import SELF_HARM_PHRASES, SELF_HARM_SAFE_SUFFIX, SelfHarmGuard
+from app.agent.guardrail import (
+    BLOCK_MESSAGE,
+    MEDICATION_NAMES,
+    MEDICATION_SAFE_SUFFIX,
+    MedicationAdviceGuard,
+    PromptLeakGuard,
+    SELF_HARM_PHRASES,
+    SELF_HARM_SAFE_SUFFIX,
+    SelfHarmGuard,
+    extract_fragments,
+    is_actionable_med_request,
+)
 from app.agent.llm import LLMClient, LLMEvent, LLMResponse
 
 
@@ -173,5 +183,100 @@ def test_loop_blocks_self_harm_phrase():
         guardrail = next(s for s in trace.steps() if s["type"] == "guardrail")
         assert guardrail["data"]["action"] == "safety_block"
         assert guardrail["data"]["fragment"] in SELF_HARM_PHRASES
+
+    asyncio.run(scenario())
+
+
+def test_is_actionable_med_request_hits():
+    """行动执行型用药请求（寻求具体用药方案）应判定为 True。"""
+    assert is_actionable_med_request("我头晕发烧，直接告诉我吃什么药")
+    assert is_actionable_med_request("给我开点药，我感冒了")
+    assert is_actionable_med_request("发烧了，推荐个药呗")
+
+
+def test_is_actionable_med_request_learning_excluded():
+    """学习型药理请求（讲原理/机制）不应启用护栏。"""
+    assert not is_actionable_med_request("布洛芬的作用机制是什么")
+    assert not is_actionable_med_request("对乙酰氨基酚和布洛芬的区别")
+    assert not is_actionable_med_request("阿司匹林的副作用有哪些")
+    assert not is_actionable_med_request("今天天气怎么样")
+
+
+def test_med_guard_catches_drug_name_and_dosage():
+    """启用状态：药名与剂量指令应命中，普通文本不命中。"""
+    guard = MedicationAdviceGuard(enabled=True)
+    assert guard.check("你可以考虑吃点布洛芬缓解一下") is not None
+    assert guard.hit_fragment() == "布洛芬"
+    guard2 = MedicationAdviceGuard(enabled=True)
+    assert guard2.check("建议一次服用 500mg") is not None
+    assert guard2.hit_fragment() == "500mg"
+    guard3 = MedicationAdviceGuard(enabled=True)
+    assert guard3.check("请多喝水、注意休息，必要时就医。") is None
+
+
+def test_med_guard_disabled_passes_through():
+    """未启用（学习型请求）时不检测任何内容，药名直接放行。"""
+    guard = MedicationAdviceGuard(enabled=False)
+    assert guard.check("布洛芬通过抑制环氧化酶发挥作用") is None
+    assert guard.hit_fragment() is None
+
+
+class MedAdviceLLM(LLMClient):
+    """输出具体药名建议的桩：验证 loop 用药护栏截断。"""
+
+    model_name = "stub"
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        return LLMResponse(content="")
+
+    async def stream(self, messages, tools=None):
+        yield LLMEvent(type="text", text="我不能直接推荐，但退烧可以吃点布洛芬。")
+        yield LLMEvent(type="done")
+
+
+def test_loop_blocks_med_advice():
+    """loop 应拦截行动执行型用药请求中的药名建议：截断+安全说明+guardrail trace。"""
+    from app.agent.loop import run_agent_turn
+    from app.agent.trace import Trace
+
+    async def scenario():
+        trace = Trace()
+        chunks = [
+            c
+            async for c in run_agent_turn(
+                "我头晕发烧，直接告诉我吃什么药",
+                mode="general",
+                llm=MedAdviceLLM(),
+                trace=trace,
+            )
+        ]
+        out = "".join(chunks)
+        assert "布洛芬" not in out  # 药名不能到达用户
+        assert out.startswith("我不能直接推荐，但退烧可以吃点")
+        assert MEDICATION_SAFE_SUFFIX in out
+        types = [s["type"] for s in trace.steps()]
+        assert "guardrail" in types
+        guardrail = next(s for s in trace.steps() if s["type"] == "guardrail")
+        assert guardrail["data"]["action"] == "med_block"
+        assert guardrail["data"]["fragment"] in MEDICATION_NAMES
+
+    asyncio.run(scenario())
+
+
+def test_loop_learning_med_request_not_blocked():
+    """学习型药理请求不应触发用药护栏（药名正常输出）。"""
+    from app.agent.loop import run_agent_turn
+
+    async def scenario():
+        chunks = [
+            c
+            async for c in run_agent_turn(
+                "布洛芬的作用机制是什么",
+                mode="general",
+                llm=MedAdviceLLM(),
+            )
+        ]
+        out = "".join(chunks)
+        assert "布洛芬" in out  # 学习型请求不拦截
 
     asyncio.run(scenario())

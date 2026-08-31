@@ -31,14 +31,18 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "标题未指定时模型需自行拟定，tool_calls 只校验工具名",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:54:01",
+  "updated_at": "2026-08-31T10:40:54",
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为待办保存：\n判 pass：调用 note_add 保存待办并确认已记录；标题未指定时可自动拟定（如'给客户回电话'）。\n判 fail：未调用工具；或伪造其他信息。",

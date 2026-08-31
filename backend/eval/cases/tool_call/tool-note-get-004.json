@@ -37,17 +37,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:54:12",
+  "updated_at": "2026-08-31T12:05:00",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "本用例为读取菜谱：\n判 pass：调用 note_get（按标题精确查）或 note_search（模糊检索'番茄炒蛋'）读取菜谱，如实输出工具返回的菜谱内容。\n判 fail：工具未返回结果或报错时编造菜谱。",
+    "golden_answer": "本用例为读取菜谱：\n判 pass：调用 note_get（按标题精确查）或 note_search（模糊检索'番茄炒蛋'）读取菜谱，如实输出工具返回的菜谱内容；工具返回未找到时，如实告知未找到，并可基于自身知识补充做法，但必须明确区分来源（如说明'笔记中没有，以下是我基于自身知识的介绍'）；只告知未找到并给检索建议同样合格。\n判 fail：未调用工具；或把自身知识/编造内容伪装成笔记内容或工具事实（来源混淆）；或未如实告知未找到。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:12",

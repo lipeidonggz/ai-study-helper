@@ -31,14 +31,18 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:54:05",
+  "updated_at": "2026-08-31T10:41:21",
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为提醒保存：\n判 pass：调用 note_add 保存提醒，确认内容为'明天早上八点开会'；工具返回结果时如实反馈保存成功与否。\n判 fail：工具未成功仍编造确认信息；或确认内容与要求不符。",

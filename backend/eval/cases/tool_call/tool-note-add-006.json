@@ -34,14 +34,18 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:54:03",
+  "updated_at": "2026-08-31T10:41:00",
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为笔记保存：\n判 pass：确认已调用 note_add 保存笔记，工具参数为 title=三国演义、content=人物塑造很立体，并在回复中明确告知保存成功，不遗漏或篡改书目和心得内容。\n判 fail：未调用工具；或遗漏/篡改书目与心得内容；或未确认保存结果。",

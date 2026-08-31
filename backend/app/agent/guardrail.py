@@ -1,4 +1,4 @@
-"""输出护栏：PromptLeakGuard（系统提示泄露）+ SelfHarmGuard（自伤高危短语）。
+"""输出护栏：PromptLeakGuard（系统提示泄露）+ SelfHarmGuard（自伤高危短语）+ MedicationAdviceGuard（用药建议）。
 
 设计角度（2026-08-25）：
 - 提示注入无法 100% 防住（业界共识是分层防御），输出护栏是最后一道
@@ -13,6 +13,17 @@ SelfHarmGuard（2026-08-28）：自伤场景高危短语护栏。
   与 PromptLeakGuard 同为分层防御的最后一道确定性兜底
 - 拦截策略：命中即截断当前 chunk 到短语前，追加安全说明，终止本轮
 - 词表刻意小而高信号：只收"几乎只会出现在自伤场景"的短语，控制误报
+
+MedicationAdviceGuard（2026-08-31）：行动执行型用药请求的可执行建议护栏。
+- 为什么需要：refuse-005（红线，must_pass）全量 20repeat 下仍 19/20——
+  提示词"拒绝必须彻底"已强化（不得推荐或提及药名、举例形式也不行），
+  chat 模型在"解释为什么不能推荐"时仍偶发滑向"如对乙酰氨基酚/布洛芬"+
+  可执行建议（连续两轮全量各漏 1/20）——提示词已接近天花板，上确定性兜底。
+- 与 SelfHarmGuard 的关键区别：**条件启用**——输入侧判定为"行动执行型用药
+  请求"时才检测；学习型药理请求（"布洛芬怎么起作用"）不启用，避免误伤正常学习。
+- 拦截目标：不枚举无限药名，拦"药名（窄高频名单）+ 剂型/剂量指令"两类信号；
+  名单随评测失败样本生长（与歧义词表同维护逻辑），漏网靠提示词兜底。
+- 取舍：学习助手定位下注入+拦截足够；金融/医疗严苛场景需要代码层强制校验。
 """
 
 import re
@@ -37,6 +48,35 @@ SELF_HARM_SAFE_SUFFIX = (
     "我不能提供任何涉及身体部位的具体操作描述。"
     "如果你正在经历痛苦，请立即联系信任的人或拨打心理援助热线"
     "（如 12356），或到就近医院寻求专业帮助。你的安全是最重要的。"
+)
+
+# 行动执行型用药请求的输入判定（半确定性，与歧义词表同思路）：
+# 正向句式（寻求具体用药方案）命中且不含学习型信号时判定为 True。
+# 句式只收强信号（"吃什么药"等），覆盖高频表达；漏判回到提示词兜底。
+MEDICATION_ACTIONABLE_PATTERNS = (
+    re.compile(r"吃什么药|用什么药|吃啥药|该吃.{0,4}药|给我.{0,6}药|推荐.{0,6}药|开药|用药建议|直接告诉.{0,4}药"),
+)
+# 学习型负向信号：请求在"讲原理/机制/成分"时是学习型，不启用护栏
+MEDICATION_LEARNING_WORDS = (
+    "原理", "机制", "为什么", "怎么起作用", "作用机理", "成分", "副作用", "禁忌", "区别", "比较", "注意事项",
+)
+
+# 窄高频药名名单（拒绝场景下出现即违规；随评测失败样本生长，不求穷尽）
+MEDICATION_NAMES: tuple[str, ...] = (
+    "布洛芬", "对乙酰氨基酚", "扑热息痛", "阿司匹林", "阿莫西林", "头孢",
+    "泰诺", "芬必得", "美林", "感冒灵", "板蓝根", "快克", "感康",
+    "蒙脱石散", "黄连素", "藿香正气", "双黄连", "吗丁啉",
+)
+
+# 剂型/剂量指令模式：明确给出可执行用药形式（拒绝场景下出现即违规）
+MEDICATION_DOSAGE_PATTERNS = (
+    re.compile(r"\d+\s*(?:mg|ml|克|毫克|片|粒)"),
+    re.compile(r"(?:片|胶囊|颗粒|口服液|混悬液|滴剂|糖浆)"),
+)
+
+MEDICATION_SAFE_SUFFIX = (
+    "我不能提供具体用药建议。请及时就医或咨询药师，"
+    "让专业人员根据你的具体情况判断用药方案。"
 )
 
 
@@ -93,4 +133,52 @@ class SelfHarmGuard:
 
     def hit_fragment(self) -> str | None:
         """返回命中的短语（供 trace 记录）。"""
+        return self._hit
+
+
+def is_actionable_med_request(user_message: str) -> bool:
+    """判定是否为行动执行型用药请求：正向句式命中且不含学习型信号。"""
+    if not any(p.search(user_message) for p in MEDICATION_ACTIONABLE_PATTERNS):
+        return False
+    if any(w in user_message for w in MEDICATION_LEARNING_WORDS):
+        return False
+    return True
+
+
+class MedicationAdviceGuard:
+    """用药建议护栏：仅在行动执行型用药请求的输出流中启用（条件启用）。
+
+    命中"高频药名 / 剂型 / 剂量指令"即截断到命中前并追加安全说明；
+    enabled=False 时完全不检测（学习型药理请求不经过本护栏）。
+    """
+
+    def __init__(self, enabled: bool, names: tuple[str, ...] | None = None) -> None:
+        self._enabled = enabled
+        self._names = names or MEDICATION_NAMES
+        self._buffer = ""
+        self._hit: str | None = None
+
+    def check(self, text: str) -> int | None:
+        """追加一段文本并返回命中位置（当前 chunk 内）；未命中或未启用返回 None。"""
+        if not self._enabled:
+            return None
+        self._buffer += text
+        # 1) 剂型/剂量指令模式
+        for pat in MEDICATION_DOSAGE_PATTERNS:
+            m = pat.search(self._buffer)
+            if m:
+                self._hit = m.group(0)
+                in_chunk = m.start() - (len(self._buffer) - len(text))
+                return max(in_chunk, 0)
+        # 2) 高频药名（可能跨 chunk）
+        for name in self._names:
+            idx = self._buffer.find(name)
+            if idx >= 0:
+                self._hit = name
+                in_chunk = idx - (len(self._buffer) - len(text))
+                return max(in_chunk, 0)
+        return None
+
+    def hit_fragment(self) -> str | None:
+        """返回命中的药名/模式（供 trace 记录）。"""
         return self._hit

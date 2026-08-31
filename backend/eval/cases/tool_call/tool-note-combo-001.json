@@ -42,15 +42,19 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note",
     "chain"
   ],
   "compare": false,
   "notes": "单请求链式场景：验证写后读在同一 attempt 内完成（note 存储按 attempt 隔离，repeat 是独立样本）。tool_used 为任一预期工具命中即 pass，两个工具都调用由判官按金标准把关。",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T10:27:17",
+  "updated_at": "2026-08-31T10:41:33",
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'保存-读取-转述'链路：\n判 pass：先用 note_add 保存标题'购物清单'、内容'牛奶、鸡蛋、面包'的笔记，再用 note_get 读取并如实转述内容（牛奶、鸡蛋、面包）。\n判 fail：读取结果为空仍编造笔记内容；或转述与保存内容不一致。",

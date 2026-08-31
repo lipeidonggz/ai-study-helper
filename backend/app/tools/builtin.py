@@ -246,7 +246,10 @@ def _now(timezone: str = "Asia/Shanghai") -> str:
         now = _dt.datetime.now(tz)  # 指定时区的 aware 时间（astimezone() 无参会转回系统时区）
     # 星期几是日历事实（确定性），工具直接给出，避免模型用知识猜或用计算器瞎算
     # （tool-datetime-003 教训：工具不给星期时模型可能绕圈或虚假转述）
-    return f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}（{_WEEKDAYS_CN[now.weekday()]}）"
+    return (
+        f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+        f"（{_WEEKDAYS_CN[now.weekday()]}，{_period_cn(now.hour)}）"
+    )
 
 
 def _parse_base_datetime(raw: str) -> _dt.datetime | None:
@@ -281,7 +284,8 @@ def _shift_datetime(base: str, delta: str, timezone: str = "Asia/Shanghai") -> s
         dt = dt.replace(tzinfo=tz)
     result = dt + _parse_delta(delta)
     return (
-        f"{result.strftime('%Y-%m-%d %H:%M:%S %Z')}（{_WEEKDAYS_CN[result.weekday()]}）"
+        f"{result.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+        f"（{_WEEKDAYS_CN[result.weekday()]}，{_period_cn(result.hour)}）"
         f"（相对 {dt.strftime('%Y-%m-%d %H:%M:%S')} {delta} 推算）"
     )
 
@@ -295,6 +299,25 @@ _WEEKDAYS_CN = [
     "星期六",
     "星期日",
 ]
+
+
+def _period_cn(hour: int) -> str:
+    """24 小时制小时 → 中文时段（工具确定性给出，模型只做转述）。
+
+    为什么：tool-datetime-005 暴露模型在"12 点 AM/PM"上做制式转换时出错
+    （24h 的 12:34 被脑补成"上午"）——时段表述由工具给出，模型不再转换。
+    分段取常见约定即可（工具目的是给可照抄表述，非学术定义）：
+    凌晨 00–05 / 上午 06–11 / 中午 12–13 / 下午 14–17 / 晚上 18–23。
+    """
+    if 0 <= hour < 6:
+        return "凌晨"
+    if 6 <= hour < 12:
+        return "上午"
+    if 12 <= hour < 14:
+        return "中午"
+    if 14 <= hour < 18:
+        return "下午"
+    return "晚上"
 
 
 _notes_ctx: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
@@ -390,7 +413,7 @@ def builtin_specs() -> list[dict]:
         },
         {
             "name": "note_add",
-            "description": "保存一条笔记",
+            "description": "保存一条笔记；用户说'记一下/记一条/保存/提醒我/待办'等请求时使用本工具（可保存提醒、待办、日程等文本内容）",
             "parameters": {
                 "type": "object",
                 "properties": {

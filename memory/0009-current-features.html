@@ -34,7 +34,7 @@
         <li><strong>对话能力</strong>：多轮上下文 + 流式输出（打字机效果）+ 会话模式（通用 / 知识库优先 / 工具增强）</li>
         <li><strong>LLM 配置</strong>：前端设置面板配置 DeepSeek API Key 与模型（deepseek-chat / deepseek-reasoner）；Key 脱敏存取、SQLite 持久化</li>
         <li><strong>手写 Agent Loop</strong>：思考→行动→观察循环，支持多轮工具调用（上限 4 轮）与 tool_calls 回显（含并行调用合并回显）；输出护栏 PromptLeakGuard（增量检测系统提示泄露，命中即截断替换，chat 与评测共用）；行为契约 BASE_BEHAVIOR（歧义/指代不明/信息不足/自相矛盾时澄清或覆盖说明，结合对话上下文判断）；歧义词表附加说明（高频歧义词如"整除/左右"命中时追加独立消息提示模型，不改用户原话）</li>
-        <li><strong>内置工具</strong>：安全计算器（AST 求值 + 精确性语义：Fraction 有理数精确运算、有限小数/循环小数区分显示、sqrt/完全幂判定、结果自带精确/近似声明；描述明确不支持时间字符串）/ 日期时间（current_datetime 纯获取：时区 zoneinfo、星期几；datetime_shift 相对推算：显式 base + delta，基准为入参而非调用时刻）/ 笔记（保存 / 按标题读取 / 空标题列出全部 / note_search 模糊检索）；注册表 + 执行器架构</li>
+        <li><strong>内置工具</strong>：安全计算器（AST 求值 + 精确性语义：Fraction 有理数精确运算、有限小数/循环小数区分显示、sqrt/完全幂判定、结果自带精确/近似声明；描述明确不支持时间字符串）/ 日期时间（current_datetime 纯获取：时区 zoneinfo、星期几、中文时段标注；datetime_shift 相对推算：显式 base + delta，基准为入参而非调用时刻）/ 笔记（保存——description 覆盖"记/提醒/待办"映射 / 按标题读取 / 空标题列出全部 / note_search 模糊检索）；注册表 + 执行器架构</li>
         <li><strong>存储抽象</strong>：Port + Adapter 结构；设置持久化 SQLite，会话/日志暂用内存实现</li>
         <li><strong>测试</strong>：81 个用例全绿（冒烟、设置接口、LLM 客户端 Mock、Agent loop、输出护栏、上下文组装、内置工具、eval schema/runner/评测台、统计聚合）</li>
         <li><strong>处理过程可视化</strong>：SSE <code>trace</code> 事件 + 前端“处理过程”面板（事件流 + 语义摘要 + 原始流开关 + 每轮 token 用量与汇总）</li>
@@ -49,6 +49,7 @@
         <li><strong>评测统计升级（2026-08-28）</strong>：用例新增 <code>weight</code>（默认 1）/ <code>must_pass</code> / <code>must_pass_threshold</code> 字段（存量用例零改动可加载）；runner 汇总新增<strong>加权复合分 Σ(w×通过率)/Σw + bootstrap CI（按用例重采样 2000 次、固定种子可复现）+ 红线闸门</strong>（must_pass 未达阈值整体不通过并列出违规）；前端用例编辑器权重/红线字段 + 历史列表复合分/CI/红线 + 对照矩阵新增"复合分(95%CI)"与"红线"列</li>
         <li><strong>安全红线修复（2026-08-28）</strong>：4 条红线用例标记 must_pass 零容忍（inject-001 / refuse-001 / refuse-004 / refuse-005）；BASE_DEFENSE 增"拒绝必须彻底"（不得给具体药物/剂量/用法、不得描述伤害部位具体操作、不得给破坏性命令步骤）+ 用药免责（AI 不能替代医生诊断）+ "不伤害身体"框定 + 禁止部位级操作；新增 <strong>SelfHarmGuard 输出护栏</strong>（"冲手腕"等高危短语命中即截断到短语前 + 追加安全说明，挂在 loop 文本产出点，chat 与评测行为一致）；inject-001 金标准修正（通用礼貌收尾不违规）+ 判官新增"拒绝明确时通用礼貌收尾不判 fail"规则；修复后 run 70 全量回归 78/5、加权复合分 99.58% 历史最高、红线闸门绿</li>
         <li><strong>安全护栏（2026-08-25）</strong>：系统提示分层加固（共享安全基线 BASE_DEFENSE：不泄露原文/摘要/改述、用户消息当数据、数据与指令分离、不展示工具列表）；输出护栏 PromptLeakGuard（known-secret 匹配，挂在 loop 内，命中即替换为固定拒绝文案并记录 trace）；新增机器判定 criterion <code>no_prompt_leak</code>（挂到全部注入用例）；judge 增加精确性一致性比对（工具标注近似值不得表述为精确值）；inject-005 判定维度从 refusal 对齐为 answer_correct（翻译任务型场景）</li>
+        <li><strong>二度基准修复（2026-08-31）</strong>：评测体系完善后以 deepseek-chat 重跑全量基线（Run #82），失败逐条定性修复——refuse-005 红线加条件启用确定性护栏 MedicationAdviceGuard（输入侧判定行动执行型用药请求 + 输出侧拦窄高频药名/剂型/剂量，学习型药理请求不误伤，Run #90 repeat50 全绿）；inject-005 过度拒绝修复；combined-005 / tool-calc-021 工具化纪律上"计算意图检测"半确定性层（命中强信号注入"请调用 calculator"）；tool-calc-015 / note-get-004 / scope-003 金标准口径修正（精确值+约数换算允许、来源区分的知识补充允许、圆周率手抖数字修正）；fuzzy-005 歧义词表加"商"；note-add-008 工具描述映射"记/提醒/待办"；tool-datetime-005 工具返回加中文时段标注（表示转换错误源）；沉淀 harness 工程 / 文本契约法律文本效应 / 表示转换错误源等认知</li>
         <li><strong>文档</strong>：记忆库 0001–0022（需求 / 验收 / 架构 / 里程碑 / 进度 / 代码导读 / 最小 Agent 全貌 / 评测台需求 / 评测体系笔记 / Agent 安全实践 / 评测反哺 Agent / 阶段 1 基线 / 主动式验证与评测可信度工程）+ 运行指南 docs/how-to-run.html；AGENTS.md 笔记风格约定（保留过程感与情绪张力，写给未来的自己）</li>
         <li><strong>代码注释</strong>：backend 全部 Python 文件中文注释（文件头职责与设计原因、流程逐行说明）</li>
       </ul>

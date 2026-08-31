@@ -45,10 +45,10 @@
   "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-31T09:45:31",
+  "updated_at": "2026-08-31T11:52:00",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "本用例为大数乘法：\n判 pass：调用 calculator 计算并转述精确整数结果 80779853376，明确其精确无误差。\n判 fail：结果错误，或把精确值说明为近似值。",
+    "golden_answer": "本用例为大数乘法：\n判 pass：调用 calculator 计算并转述精确整数结果 80779853376；在给出精确值的基础上，附加量级换算（如'约 808 亿'）帮助理解不构成错误。\n判 fail：未给出精确值而只给近似/估算结果；或精确结果错误；或把工具标注的近似值表述为精确值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:35",

@@ -34,14 +34,18 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:54:04",
+  "updated_at": "2026-08-31T10:41:16",
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为菜谱保存：\n判 pass：包含'已保存'或'已记录'等确认表述，并明确提及菜谱标题'番茄炒蛋'及内容'两个番茄三个鸡蛋'。\n判 fail：未确认保存；或标题/内容缺失或错误。",

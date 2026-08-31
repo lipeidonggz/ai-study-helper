@@ -31,14 +31,18 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "笔记存进程内存，跨请求不共享；本条主要验证调用行为，结果为未找到也算合理",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:54:07",
+  "updated_at": "2026-08-31T10:41:42",
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为按标题读取笔记：\n判 pass：调用 note_get 且参数 title='购物清单'；工具返回未找到时如实告知未找到该笔记。\n判 fail：编造笔记内容；或未如实告知未找到。",

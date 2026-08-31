@@ -6,7 +6,7 @@
 
 import pytest
 
-from app.tools.builtin import _calculate, _now, _parse_delta, _shift_datetime
+from app.tools.builtin import _calculate, _now, _parse_delta, _period_cn, _shift_datetime
 import datetime as _dt
 
 
@@ -123,6 +123,30 @@ def test_shift_datetime_accepts_date_only():
     """base 只给日期（无时刻）也能推算，按 00:00:00 起算。"""
     plus = _shift_datetime(base="2026-08-31", delta="+10d")
     assert "2026-09-10" in plus
+
+
+def test_period_cn():
+    """中文时段分段：12 点是中午、0 点是凌晨（防 12 点 AM/PM 制式混淆）。"""
+    assert _period_cn(0) == "凌晨"
+    assert _period_cn(5) == "凌晨"
+    assert _period_cn(6) == "上午"
+    assert _period_cn(12) == "中午"
+    assert _period_cn(13) == "中午"
+    assert _period_cn(14) == "下午"
+    assert _period_cn(23) == "晚上"
+
+
+def test_now_includes_period():
+    """current_datetime 返回应含中文时段标注（模型可照抄，无需制式转换）。"""
+    now = _now()
+    assert "，" in now
+    assert any(p in now for p in ("凌晨", "上午", "中午", "下午", "晚上"))
+
+
+def test_shift_datetime_includes_period():
+    """datetime_shift 推算结果同样带中文时段标注。"""
+    plus = _shift_datetime(base="2026-08-31 23:59:59", delta="+10d")
+    assert "，晚上" in plus
 
 
 def test_now_with_timezone():
