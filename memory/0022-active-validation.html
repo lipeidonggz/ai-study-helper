@@ -26,7 +26,7 @@
 
     <section class="card">
       <h2>背景：从反应式调校进入主动式验证</h2>
-      <p>阶段 1 基线定稿（<a href="0021-stage1-baseline.html">0021</a>）后，进入 0002 路线图阶段 1 的验证点：prompt 策略对比、采样参数扫描、结构化输出可靠性、loop 消融。这标志着调校模式从<strong>反应式</strong>（评测发现问题 → 修复）转向<strong>主动式</strong>（按行业经验清单系统扫描关键变量）。</p>
+      <p>阶段 1 基线定稿（<a href="0021-stage1-baseline.html">0021</a>）后，进入 0002 路线图阶段 1 的验证点：prompt 策略对比、采样参数扫描、结构化输出可靠性、loop 消融（注：loop 消融验证点后续判定<strong>不需要做</strong>，原因见"已决策"）。这标志着调校模式从<strong>反应式</strong>（评测发现问题 → 修复）转向<strong>主动式</strong>（按行业经验清单系统扫描关键变量）。</p>
       <h3>两种调校模式的区分</h3>
       <table>
         <thead>
@@ -67,7 +67,7 @@
         <li><strong>温度定档：已完成</strong>（2026-08-31）——1.0 vs 2.0 交叉复跑后定案 1.0：2.0 在 deepseek-chat + 复杂 Agent 提示词下失控（发散胡话、一半用例超时），判不可用，详见"温度定档"小节；</li>
         <li><strong>prompt 策略精简重扫</strong>：baseline vs cot 两变体，在定档温度下做（排除变量耦合）；</li>
         <li><strong>结构化输出可靠性统计：已完成</strong>（2026-08-31）——#95/96/97/98 四全量 run 共 6800 attempts：judge JSON 解析失败 0、判官转人工 0、工具调用错误 0、stream/latency 100%，格式遵循满格，详见"结构化输出可靠性统计"小节；</li>
-        <li><strong>loop 消融</strong>：推迟到阶段 2/3（RAG/记忆/规划各做真消融）。</li>
+        <li><strong>loop 消融：不需要做</strong>（取消独立验证点）——最简 loop 每环节均为链路必需、无可消融对象；高级技巧引入后以组件级消融（RAG/记忆/规划）形式做，原因见"已决策"。</li>
       </ol>
       <h3>分层重做原则与终止条件</h3>
       <ul>
@@ -155,7 +155,7 @@
         <li><strong>judge JSON 完全解析失败率：0/344 次（0%）</strong>——判官输出全部可解析，无一条掉进"判官未给出明确结论"兜底分支；判官转人工 0（pending_human 全空，自动化判定率 100%，无 uncertain）；</li>
         <li><strong>工具调用解析/执行错误：0/6800 attempts</strong>——所有 tool_calls 参数解析与执行成功（配合工具调用率 100%）；stream_complete / latency_budget 100%（#98）；超时 0（2.0 失控属温度配置问题，非格式问题）；</li>
         <li><strong>盲区（评测体系改进点，可选）</strong>：目前只记录 judge 的"解析结果"，没记录"解析路径"——LLM 输出的是规范 JSON 还是 JSON 不规范被正则容错救回，不可区分；"0% 完全解析失败"低估了格式灰色地带。若要精确格式遵循统计，给 _parse_judge_response 加 json_ok 标记落 trace，下次跑批自然记录，无需为此重跑；</li>
-        <li><strong>二轮收官</strong>：基线回归（#95 84/85）→ 推理增强排除（cot/reasoner）→ 温度定档（1.0）→ 结构化输出可靠性（满格）全部完成；loop 消融按计划推迟到阶段 2/3 做真消融。</li>
+        <li><strong>二轮收官</strong>：基线回归（#95 84/85）→ 推理增强排除（cot/reasoner）→ 温度定档（1.0）→ 结构化输出可靠性（满格）全部完成；loop 消融判定<strong>不需要做</strong>（最简 loop 无消融对象，高级技巧引入后以组件级消融形式做）。</li>
       </ul>
       <h4>三条新原则</h4>
       <ul>
@@ -810,7 +810,7 @@
         <li>余额限流：DeepSeek 并发上限随余额动态调整——大批量跑批前先确认余额档位，遇余额型 429 先充值；</li>
         <li>小档计算"心算不调工具"：接受并固化为用例口径（16 条小档去掉 tool_used 硬约束）；</li>
         <li>B 框架（tool_used 按复杂度分层）：<strong>以用例分层形式落地</strong>（2026-08-28）——小档仅判结果正确、中/大档强制工具，不再改判定逻辑；</li>
-        <li>loop 消融：方法论已理解，实操推迟到高级技巧引入后（阶段 2/3 的 RAG/记忆/规划各做真消融）。</li>
+        <li><strong>loop 消融：判定不需要做</strong>（2026-08-31）——当前 loop 为最简实现（思考→行动→观察），每个环节都是链路必需，去掉任何一环系统不成立，没有可消融的候选；消融的意义在于衡量"可替换/可调整环节"对准确性/延时/成本的贡献，最简 loop 不存在这种环节；高级技巧（RAG/ReWOO/记忆/规划）引入后消融对象自然出现，届时以组件级消融形式做（RAG 消融 / 记忆消融 / 规划消融），不再单列"loop 消融"验证点。</li>
         <li>日期推算工具拆分（2026-08-31）：current_datetime 纯化（移除 delta）+ 新增 datetime_shift（显式 base + delta）；tool-combo-004 / combined-003 改两步链，金标准明确"未经 datetime_shift 推算即 fail"；Run #80→#81 验证漂移风险消除。</li>
       </ul>
       <h3>待办</h3>
