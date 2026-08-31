@@ -37,17 +37,21 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "multi-step"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:06",
+  "updated_at": "2026-08-31T09:01:31",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答必须明确给出当天具体日期且使用current_datetime工具获取，同时通过calculator工具计算365除以7，结果应如实转述工具返回的精确值365/7（或52又1/7），可补充近似值（如约52.14），并清晰区分两个问题的独立回答；若工具未调用或结果编造则不符合。",
+    "golden_answer": "本用例为日期与除法双问题：\n判 pass：调用 current_datetime 明确给出当天具体日期，调用 calculator 计算 365/7 并如实转述工具返回的精确值 365/7（或 52 又 1/7），可补充近似值（如约 52.14，保留小数位数不要求限定为2位）；两个问题独立清晰回答。\n判 fail：工具未调用；或日期/计算结果与工具结果不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:06",

@@ -34,17 +34,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:59",
+  "updated_at": "2026-08-31T10:39:11",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应通过调用note_add工具提交标题为“项目灵感”、内容为“用 RAG 做知识问答”的笔记，并在用户界面明确确认保存成功，且不得遗漏或篡改标题与内容。",
+    "golden_answer": "本用例为笔记保存：\n判 pass：调用 note_add 提交标题'项目灵感'、内容'用 RAG 做知识问答'的笔记，并在回复中明确确认保存成功，不遗漏或篡改标题与内容。\n判 fail：未调用工具；或遗漏/篡改标题与内容；或未确认保存结果。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:59",

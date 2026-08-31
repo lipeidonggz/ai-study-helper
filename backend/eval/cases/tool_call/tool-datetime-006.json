@@ -29,17 +29,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "datetime"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:51",
+  "updated_at": "2026-08-31T10:38:23",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答必须经过调用current_datetime工具获取真实当前日期后再输出，且月份、日期、年份需与工具返回结果完全一致，不得编造或猜测。",
+    "golden_answer": "本用例为当前日期（完全一致口径）：\n判 pass：调用 current_datetime 获取真实当前日期后再输出，月份、日期、年份与工具返回结果完全一致。\n判 fail：未调用工具编造/猜测；或与工具结果不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:51",

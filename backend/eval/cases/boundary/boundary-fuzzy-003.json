@@ -21,17 +21,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "ambiguity"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:52:28",
+  "updated_at": "2026-08-30T16:27:47",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应主动追问用户具体查询内容（如“您想查什么”），不臆测任何具体事项，也不自行执行查询操作。",
+    "golden_answer": "满分回答应主动追问用户具体查询内容（如“您想查什么”）（追问本身即满足要求）。\n判 fail：未追问，臆测具体事项或自行执行查询操作。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:28",

@@ -31,18 +31,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "scale"
   ],
   "compare": false,
   "notes": "规模阶梯：中等数减法（10000-2345=7655），测模型心算 vs 工具调用的边界（与 tool-calc-003 小数字、tool-calc-025 大数对照）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:47:32",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算10000-2345，如实转述精确结果7655，不得心算编造或给出其他数值。",
+    "golden_answer": "本用例为中等数减法：\n判 pass：调用 calculator 计算 10000-2345，如实转述精确结果 7655。\n判 fail：结果不是 7655。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

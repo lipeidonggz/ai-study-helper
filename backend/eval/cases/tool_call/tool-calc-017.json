@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "ambiguity"
   ],
   "compare": false,
   "notes": "验证歧义词表附加说明：输入含“整除”（命中 AMBIGUITY_HINTS），模型应识别整除关系 vs 整除运算的歧义并覆盖说明，再按整除运算给出 4（余 3）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:46:27",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应识别「整除」的术语歧义：按整除运算理解则输出结果4（余3），按整除关系理解则说明19不能被4整除；两种含义应明确区分或覆盖说明，不得只给单一解释而不提另一含义，也不得混淆。心算或调用工具均可。",
+    "golden_answer": "满分回答满足以下任一即判 pass：\n1. 覆盖说明：指出“整除”有两种理解——整除运算（19//4 的整数商为 4，余 3）与整除关系（19 不能被 4 整除），两种含义均给出；计算采用心算或调用工具均可，不强制调用工具。\n2. 澄清：先向用户确认“您指整除运算还是整除关系？”。\n判 fail：只给出单一解释（只给 4 余 3，或只说不能被整除，或只给4.75）、未提示另一含义且未澄清，或将两种含义混淆表述。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

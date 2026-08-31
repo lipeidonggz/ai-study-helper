@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "calculator 得 42 → note_add 保存 → 回答时引用笔记内容",
+    "behavior": "算出 42（心算或 calculator 均可）→ note_add 保存 → 回答时引用笔记内容",
     "criteria": [
       "answer_correct",
       "tool_used",
@@ -20,12 +20,6 @@
       "latency_budget"
     ],
     "tool_calls": [
-      {
-        "name": "calculator",
-        "arguments": {
-          "expression": "6*7"
-        }
-      },
       {
         "name": "note_add",
         "arguments": {}
@@ -37,18 +31,22 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note",
     "multi-step"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:09",
+  "updated_at": "2026-08-31T09:11:36",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答必须包含调用计算器计算6×7的真实结果42，调用笔记保存功能写入内容，并明确引用该笔记内容作为回答依据；若工具未执行则不得声称已保存，不得编造或高精度近似42之外的数值。",
+    "golden_answer": "本用例为'计算-保存-引用'链路：\n判 pass：给出 6×7=42（心算或调用 calculator 均可），调用 note_add 保存内容，回答时明确引用该笔记内容作为依据。\n判 fail：未调用 note_add；或给出 42 之外的数值/把高精度近似当作精确结果；或未引用笔记。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:09",

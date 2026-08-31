@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "basic",
     "math"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:45:10",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答输出精确结果7即可（心算或调用工具均可），不得将未计算的数值表述为精确答案。",
+    "golden_answer": "本用例为简单减法：\n判 pass：输出精确结果 7或者7.0或者7.00等等价表示方式（心算或调用工具均可）。\n判 fail：输出非 7 的数值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

@@ -8,6 +8,7 @@ import {
   type EvalRunAttempt,
   type ExecTraceEvent
 } from '../api/client'
+import { fmtTokens } from '../utils/format'
 
 const props = defineProps<{ runId: number }>()
 
@@ -322,7 +323,7 @@ function summaryText(run: EvalRun): string {
   const parts: string[] = []
   if (typeof s.total === 'number') parts.push(`共 ${s.total} 条`)
   if (typeof s.avg_elapsed_ms === 'number') parts.push(`均 ${s.avg_elapsed_ms}ms`)
-  if (typeof s.total_tokens === 'number') parts.push(`${s.total_tokens} token`)
+  if (typeof s.total_tokens === 'number') parts.push(`${fmtTokens(s.total_tokens)} token`)
   return parts.join(' · ') || '—'
 }
 
@@ -404,6 +405,9 @@ onUnmounted(stopPolling)
       <p v-if="data.run.error" class="ui-error">错误：{{ data.run.error }}</p>
       <p class="ui-help">
         进度 {{ data.run.progress }}/{{ data.run.total }} · 汇总：{{ summaryText(data.run) }}
+      </p>
+      <p class="ui-help">
+        模型 {{ data.run.config?.model ?? '—（未记录）' }} · Repeat {{ data.run.config?.repeat ?? '—' }}
       </p>
       <p class="ui-help">
         开始 {{ fmtTime(data.run.started_at) }} · 结束 {{ fmtTime(data.run.finished_at) }} · 耗时 {{ fmtDuration(data.run.started_at, data.run.finished_at) }}

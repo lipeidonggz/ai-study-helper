@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "调用 current_datetime 获取今天日期，再用 calculator 或推理得出 10 天后的日期",
+    "behavior": "调用 current_datetime 获取今天日期；再调用 datetime_shift（base=工具返回的今天，delta='+10d'）得到 10 天后的日期并如实输出",
     "criteria": [
       "answer_correct",
       "tool_used",
@@ -23,23 +23,33 @@
       {
         "name": "current_datetime",
         "arguments": {}
+      },
+      {
+        "name": "datetime_shift",
+        "arguments": {
+          "delta": "+10d"
+        }
       }
     ],
     "answer_contains": [],
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "multi-step"
   ],
   "compare": false,
   "notes": "验证多轮执行：观察 + 推理的组合",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:42",
+  "updated_at": "2026-08-31T10:17:38",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "金标准答案应包含：明确调用current_datetime获取今天日期并输出；基于今天的实际日期计算出10天后的具体日期（如2026年X月X日），并指出该日期由工具结果加天数推算得出；若计算涉及近似或工具异常，需明确标注，不得将推算日期表述为未经工具依据的精确值。",
+    "golden_answer": "本用例为'日期获取-推算'链路：\n判 pass：调用 current_datetime 获取今天日期并如实输出；调用 datetime_shift（以工具返回的今天为 base、delta='+10d'）得到 10 天后的日期，输出与工具推算结果一致。\n判 fail：未调用工具而编造今天日期；或 10 天后的日期未经 datetime_shift 工具推算；或输出与工具推算结果不一致；或将未经工具依据的日期表述为精确值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:42",

@@ -77,6 +77,20 @@ class SlowLLM(LLMClient):
         yield LLMEvent(type="done")
 
 
+class SlightlySlowLLM(LLMClient):
+    """比预算慢、但比硬超时快：用于验证软/硬超时拆分。"""
+
+    model_name = "slightly-slow"
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        return LLMResponse(content="")
+
+    async def stream(self, messages, tools=None):
+        await asyncio.sleep(0.05)
+        yield LLMEvent(type="text", text="ok")
+        yield LLMEvent(type="done")
+
+
 class FlakyLLM(LLMClient):
     """第一次调用抛错，第二次正常（用于验证重试）。"""
 
@@ -101,19 +115,39 @@ class RecordingJudgeLLM(LLMClient):
 
     model_name = "stub-judge"
 
-    def __init__(self, verdict: str = "pass") -> None:
+    def __init__(self, verdict: str = "pass", usage: dict | None = None) -> None:
         self.verdict = verdict
+        self._usage = usage or {}
         self.last_prompt = ""
         self.system_prompt = ""
 
     async def chat(self, messages, tools=None) -> LLMResponse:
         self.last_prompt = messages[-1].content
         self.system_prompt = messages[0].content if messages else ""
-        return LLMResponse(content=self.verdict)
+        return LLMResponse(content=self.verdict, usage=self._usage)
 
     async def stream(self, messages, tools=None):
         if False:
             yield  # 判官只用 chat，stream 占位
+
+
+class FlakyJudgeLLM(LLMClient):
+    """判官桩：第一次调用抛空字符串异常（模拟瞬时失败），第二次正常。"""
+
+    model_name = "stub-flaky"
+
+    def __init__(self) -> None:
+        self._calls = 0
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        self._calls += 1
+        if self._calls == 1:
+            raise ConnectionResetError("")  # str() 为空，验证失败原因的类型名兜底
+        return LLMResponse(content="pass")
+
+    async def stream(self, messages, tools=None):
+        if False:
+            yield
 
 
 class NoteChainLLM(LLMClient):
@@ -279,7 +313,7 @@ def test_tool_used_any_expected_tool():
 
 
 def test_timeout_judgment():
-    """超时：status=timeout，latency_budget 判 fail。"""
+    """硬超时：超过 hard_timeout_sec 时 status=timeout，latency_budget 判 fail。"""
     case = CaseFile(
         id="t-timeout",
         category="combined",
@@ -288,11 +322,32 @@ def test_timeout_judgment():
         input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
         expected=Expected(behavior="b", criteria=["latency_budget"]),
         timeout_sec=0.05,
+        hard_timeout_sec=0.05,
     )
     result = asyncio.run(run_case(case, SlowLLM(), ToolExecutor(default_registry())))
     assert result.status == "timeout"
     judgment = asyncio.run(judge_case(case, result))
     assert judgment["judgments"]["latency_budget"] == "fail"
+
+
+def test_soft_vs_hard_timeout_split():
+    """软/硬超时拆分：慢但未超硬上限 → status=ok、latency_budget=fail、其余维度照常判定。"""
+    case = CaseFile(
+        id="t-split-timeout",
+        category="combined",
+        title="t",
+        mode="general",
+        input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
+        expected=Expected(behavior="b", criteria=["latency_budget"]),
+        timeout_sec=0.01,  # 软预算：0.05s 的响应超过它
+        hard_timeout_sec=1.0,  # 硬超时：不中断
+    )
+    result = asyncio.run(
+        run_case(case, SlightlySlowLLM(), ToolExecutor(default_registry()))
+    )
+    assert result.status == "ok"  # 硬超时未触发
+    judgment = asyncio.run(judge_case(case, result))
+    assert judgment["judgments"]["latency_budget"] == "fail"  # 但超了软预算
 
 
 def test_llm_judge_uses_golden_over_behavior():
@@ -380,6 +435,24 @@ def test_llm_judge_exception_goes_pending_with_reason():
     assert "判官调用失败" in judgment["judge_reasons"]["refusal"]
 
 
+def test_llm_judge_retries_transient_failure():
+    """判官瞬时失败应重试而非直接转 pending（run 72 判官抖动造成假回归的回归保护）。"""
+    case = CaseFile(
+        id="t-judge-flaky",
+        category="boundary",
+        title="t",
+        mode="general",
+        input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
+        expected=Expected(behavior="正常回答", criteria=["answer_correct"]),
+    )
+    judge = FlakyJudgeLLM()
+    result = CaseResult(case_id="t-judge-flaky", status="ok", output="你好")
+    judgment = asyncio.run(judge_case(case, result, judge))
+    assert judgment["judgments"]["answer_correct"] == "pass"
+    assert judgment["pending_human"] == []
+    assert judge._calls == 2  # 第一次失败 + 重试成功
+
+
 def test_llm_judge_reason_captured():
     """判官输出 JSON（verdict+reason）时，理由应被记录并随判定返回。"""
     case = CaseFile(
@@ -397,6 +470,37 @@ def test_llm_judge_reason_captured():
     judgment = asyncio.run(judge_case(case, result, judge))
     assert judgment["judgments"]["answer_correct"] == "fail"
     assert "关键结果 8" in judgment["judge_reasons"]["answer_correct"]
+
+
+def test_llm_judge_usage_recorded():
+    """判官调用应记录 token 用量（成本统计：此前判官完全不记账）。"""
+    case = CaseFile(
+        id="t-judge-usage",
+        category="boundary",
+        title="t",
+        mode="general",
+        input=CaseInput(messages=[InputMessage(role="user", content="hi")]),
+        expected=Expected(behavior="正常回答", criteria=["answer_correct"]),
+    )
+    judge = RecordingJudgeLLM(
+        verdict="pass",
+        usage={
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "prompt_cache_hit_tokens": 7,
+            "prompt_cache_miss_tokens": 3,
+        },
+    )
+    result = CaseResult(case_id="t-judge-usage", status="ok", output="你好")
+    judgment = asyncio.run(judge_case(case, result, judge))
+    assert judgment["judge_tokens"] == {
+        "prompt": 10,
+        "completion": 5,
+        "total": 15,
+        "cache_hit": 7,
+        "cache_miss": 3,
+    }
 
 
 def test_llm_judge_parses_unquoted_quotes_in_reason():
@@ -476,6 +580,8 @@ def test_judge_system_has_refusal_politeness_rule():
     asyncio.run(judge_case(case, result, judge))
     assert "通用礼貌收尾" in judge.system_prompt
     assert "不应判 fail" in judge.system_prompt
+    assert "无需先判任务类型" in judge.system_prompt  # 任务类型 taxonomy 降级为兜底，不以预分类为前置
+    assert "按产品定位兜底" in judge.system_prompt  # 金标准未明确姿态时才套产品定位
 
 
 def _attempt(verdict: str, **kw) -> dict:
@@ -518,6 +624,55 @@ def test_aggregate_attempts_stability():
         [_attempt("fail"), _attempt("pending", pending_human=["answer_correct"])],
     )
     assert e["verdict"] == "pending"
+
+
+def test_aggregate_tokens_summed_across_attempts():
+    """token 汇总应跨全部 attempt 求和（此前只取第一次，repeat 20 低估 20 倍）。"""
+    case = CaseFile(
+        id="t-tokens",
+        category="tool_call",
+        title="t",
+        mode="tool_enhanced",
+        input=CaseInput(messages=[InputMessage(role="user", content="3+5等于几？")]),
+        expected=Expected(behavior="b", criteria=["tool_used"]),
+    )
+    e = _aggregate_attempts(
+        case,
+        [
+            _attempt(
+                "pass",
+                tokens={
+                    "prompt": 100,
+                    "completion": 50,
+                    "total": 150,
+                    "cache_hit": 60,
+                    "cache_miss": 40,
+                },
+            ),
+            _attempt(
+                "pass",
+                tokens={
+                    "prompt": 200,
+                    "completion": 100,
+                    "total": 300,
+                    "cache_hit": 150,
+                    "cache_miss": 50,
+                },
+            ),
+        ],
+    )
+    assert e["tokens"] == {
+        "prompt": 300,
+        "completion": 150,
+        "total": 450,
+        "cache_hit": 210,
+        "cache_miss": 90,
+    }
+    s = aggregate([e])
+    assert s["total_tokens"] == 450
+    assert s["total_input_cache_hit"] == 210
+    assert s["total_input_cache_miss"] == 90
+    assert s["total_output"] == 150
 
 
 def test_aggregate_pending_cases():

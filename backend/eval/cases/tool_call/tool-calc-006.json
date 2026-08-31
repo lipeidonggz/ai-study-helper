@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "basic",
     "math"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:11:56",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答必须给出精确结果92，并明确体现先计算(12+34)再乘以2的运算顺序；心算或调用工具均可，不得编造或近似表述。",
+    "golden_answer": "本用例为带括号的混合运算：\n判 pass：输出精确结果 92，并明确体现先计算 (12+34) 再乘以 2 的运算顺序（心算或调用工具均可）。\n判 fail：结果不是 92；或未体现运算顺序。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

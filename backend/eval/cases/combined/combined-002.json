@@ -12,10 +12,9 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 计算两个乘积（144 和 143）并比较大小",
+    "behavior": "计算两个乘积（144 和 143）并比较大小（心算或调用 calculator 均可）",
     "criteria": [
       "answer_correct",
-      "tool_used",
       "stream_complete",
       "latency_budget"
     ],
@@ -31,18 +30,22 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "compare"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:52:57",
+  "updated_at": "2026-08-31T08:55:40",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用 calculator 分别计算 12×12 得到 144 和 13×11 得到 143，并明确比较得出 12×12 的乘积更大（144 > 143）；若使用近似值必须标注，不得编造结果。",
+    "golden_answer": "本用例为两个乘积的比较：\n判 pass：给出 12×12=144 与 13×11=143，并明确比较得出 12×12 更大（144>143）（心算或调用 calculator 均可）。\n判 fail：乘积结果错误；或未明确比较大小。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:57",

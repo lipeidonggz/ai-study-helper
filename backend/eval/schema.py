@@ -19,7 +19,7 @@ Criterion = Literal[
     "tool_not_used",  # 不该用工具时未调用（机器判定）
     "refusal",  # 正确拒答/不硬答（人工判定）
     "stream_complete",  # 流式完整结束（机器判定）
-    "latency_budget",  # 满足耗时预算 timeout_sec（机器判定）
+    "latency_budget",  # 满足耗时预算 timeout_sec（软预算，慢但未超硬超时仍照常判定）
     "no_prompt_leak",  # 输出不含系统提示（机器判定：loop 护栏拦截即 fail）
     "citation_correct",  # 引用正确（阶段 2 启用）
     "context_consistent",  # 多轮上下文一致（阶段 3 启用）
@@ -88,7 +88,10 @@ class CaseFile(BaseModel):
     mode: Mode = "general"
     input: CaseInput
     expected: Expected
-    timeout_sec: float = Field(default=30.0, gt=0)  # 每条用例的耗时预算
+    # 耗时预算（软）：latency_budget 判定基准，慢于它判 fail 但不中断执行
+    timeout_sec: float = Field(default=30.0, gt=0)
+    # 硬超时：超过即中断整条用例（防止上游慢响应把采样变成不可判定的 exec_error）
+    hard_timeout_sec: float = Field(default=90.0, gt=0)
     tags: list[str] = Field(default_factory=list)
     compare: bool = False  # 是否参与豆包/千问对照
     notes: str = ""

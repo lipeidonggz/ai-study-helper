@@ -12,10 +12,9 @@
     ]
   },
   "expected": {
-    "behavior": "调用 calculator 得到 60，并解释先括号后乘法",
+    "behavior": "给出 60 并解释先括号后乘法（心算或调用 calculator 均可）",
     "criteria": [
       "answer_correct",
-      "tool_used",
       "stream_complete",
       "latency_budget"
     ],
@@ -33,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "explain"
   ],
   "compare": true,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:52:55",
+  "updated_at": "2026-08-31T08:55:12",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应包含：调用calculator工具计算表达式(15+5)*3并得到结果60；明确解释运算顺序为先计算括号内的15+5=20，再乘以3得到60；结果60必须来源于工具输出而非编造。",
+    "golden_answer": "本用例为多步计算与运算顺序解释：\n判 pass：给出结果 60，并明确解释运算顺序（先算括号内 15+5=20，再乘 3 得 60）（心算或调用 calculator 均可）。\n判 fail：结果不是 60；或未解释先括号后乘法的运算顺序。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:55",

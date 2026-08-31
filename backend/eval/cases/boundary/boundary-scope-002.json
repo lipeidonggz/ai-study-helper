@@ -21,17 +21,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "scope"
   ],
   "compare": false,
   "notes": "阶段 2 启用：验证引用溯源不越界",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": false,
   "admin_note": "阶段 2 启用（知识库就绪后启用）：无知识库环境下模型用常识比较必然 fail，避免污染基线",
-  "updated_at": "2026-08-25T10:52:52",
+  "updated_at": "2026-08-31T08:50:39",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应明确拒绝基于《三国演义》知识库比较宋江与诸葛亮，指出水浒传内容不在覆盖范围内，不虚构或引用任何水浒相关来源。",
+    "golden_answer": "本用例为知识库范围外比较（知识库只覆盖《三国演义》，不含《水浒传》）：\n判 pass：明确指出《水浒传》不在知识库覆盖范围内、无法基于知识库比较，不虚构水浒相关内容；或仅以通用常识说明并标注非知识库来源。\n判 fail：虚构或引用任何《水浒传》相关内容作为知识库来源作答；或强行基于《三国演义》知识库比较两人。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:52",

@@ -34,7 +34,7 @@
         <li><strong>对话能力</strong>：多轮上下文 + 流式输出（打字机效果）+ 会话模式（通用 / 知识库优先 / 工具增强）</li>
         <li><strong>LLM 配置</strong>：前端设置面板配置 DeepSeek API Key 与模型（deepseek-chat / deepseek-reasoner）；Key 脱敏存取、SQLite 持久化</li>
         <li><strong>手写 Agent Loop</strong>：思考→行动→观察循环，支持多轮工具调用（上限 4 轮）与 tool_calls 回显（含并行调用合并回显）；输出护栏 PromptLeakGuard（增量检测系统提示泄露，命中即截断替换，chat 与评测共用）；行为契约 BASE_BEHAVIOR（歧义/指代不明/信息不足/自相矛盾时澄清或覆盖说明，结合对话上下文判断）；歧义词表附加说明（高频歧义词如"整除/左右"命中时追加独立消息提示模型，不改用户原话）</li>
-        <li><strong>内置工具</strong>：安全计算器（AST 求值 + 精确性语义：Fraction 有理数精确运算、有限小数/循环小数区分显示、sqrt/完全幂判定、结果自带精确/近似声明；描述明确不支持时间字符串）/ 日期时间（时区支持 zoneinfo、星期几、相对时间推算 delta 参数）/ 笔记（保存 / 按标题读取 / 空标题列出全部 / note_search 模糊检索）；注册表 + 执行器架构</li>
+        <li><strong>内置工具</strong>：安全计算器（AST 求值 + 精确性语义：Fraction 有理数精确运算、有限小数/循环小数区分显示、sqrt/完全幂判定、结果自带精确/近似声明；描述明确不支持时间字符串）/ 日期时间（current_datetime 纯获取：时区 zoneinfo、星期几；datetime_shift 相对推算：显式 base + delta，基准为入参而非调用时刻）/ 笔记（保存 / 按标题读取 / 空标题列出全部 / note_search 模糊检索）；注册表 + 执行器架构</li>
         <li><strong>存储抽象</strong>：Port + Adapter 结构；设置持久化 SQLite，会话/日志暂用内存实现</li>
         <li><strong>测试</strong>：81 个用例全绿（冒烟、设置接口、LLM 客户端 Mock、Agent loop、输出护栏、上下文组装、内置工具、eval schema/runner/评测台、统计聚合）</li>
         <li><strong>处理过程可视化</strong>：SSE <code>trace</code> 事件 + 前端“处理过程”面板（事件流 + 语义摘要 + 原始流开关 + 每轮 token 用量与汇总）</li>

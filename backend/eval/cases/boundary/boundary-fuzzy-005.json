@@ -21,18 +21,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "ambiguity",
     "math"
   ],
   "compare": false,
   "notes": "“商”的术语歧义：小学口径整数商（4 余 3）vs 数学口径精确值（4.75）；BASE_BEHAVIOR 应覆盖说明或澄清",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-26T14:30:00",
+  "updated_at": "2026-08-30T16:37:21",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应识别“商”的歧义：明确说明整数商为4（余3）与精确值4.75两个含义，或先澄清用户所指；不应只给单一解释而不提示另一含义。",
+    "golden_answer": "回答满足以下任一即判 pass：\n1. 覆盖说明：指出“商”有两种理解——整数商（整除）为 4 余 3、精确值为 4.75，两种含义均给出；\n2. 澄清：向用户确认“您指整除的商还是精确值？”（澄清本身即合理，不强求立即给出两个答案）。\n判 fail：只给出单一解释（只给 4 或只给 4.75），且既未提示另一含义、也未澄清。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-26T14:30:00",

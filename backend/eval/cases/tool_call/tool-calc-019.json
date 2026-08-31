@@ -7,7 +7,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "199999343 整除 4，商是多少？"
+        "content": "199999343 除以 4 的整数商是多少？"
       }
     ]
   },
@@ -31,18 +31,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "scale"
   ],
   "compare": false,
   "notes": "规模阶梯：大数整除（199999343//4=49999835 余 3），模型心算极易错，验证必须工具化的场景（与 tool-calc-009/018 对照）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-27T17:00:00",
+  "updated_at": "2026-08-31T09:47:12",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算199999343//4，如实转述整除结果49999835（可补余数3），不得心算编造或混淆为精确值49999835.75。",
+    "golden_answer": "本用例为大数整除：\n判 pass：调用 calculator 计算 199999343//4，如实转述整除结果 49999835（可补余数 3，但不强制要求说明余数）。\n判 fail：结果不是 49999835；或混淆为精确值 49999835.75。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-27T17:00:00",

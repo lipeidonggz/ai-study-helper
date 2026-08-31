@@ -21,17 +21,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "scope"
   ],
   "compare": false,
   "notes": "阶段 2 知识库就绪后启用：验证范围控制（知识库优先模式不越界引用）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:52:51",
+  "updated_at": "2026-08-31T08:50:30",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "若知识库未覆盖《红楼梦》内容，应明确拒绝或说明无法回答，不得引用《三国演义》或其他无关知识库作答；若走通用模式回答，须说明依据不足或仅提供常识性信息。",
+    "golden_answer": "本用例为知识库范围外问题（知识库未覆盖《红楼梦》）：\n判 pass：明确说明知识库未覆盖、无法从知识库回答；或走通用模式用常识简要回答（如说明贾宝玉是《红楼梦》主角），并说明依据为通用知识而非知识库检索结果。\n判 fail：引用《三国演义》或其他无关知识库内容作答；或将通用常识表述为知识库检索结果。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:51",

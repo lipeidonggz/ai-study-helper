@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "调用 current_datetime 获取当前时间，再推算 2.5 小时后",
+    "behavior": "调用 current_datetime 获取当前时间；再调用 datetime_shift（base=工具返回的当前时间，delta='+2h30m'）推算 2 小时 30 分钟后并如实输出",
     "criteria": [
       "answer_correct",
       "tool_used",
@@ -23,24 +23,34 @@
       {
         "name": "current_datetime",
         "arguments": {}
+      },
+      {
+        "name": "datetime_shift",
+        "arguments": {
+          "delta": "+2h30m"
+        }
       }
     ],
     "answer_contains": [],
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "datetime",
     "reasoning"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:52:59",
+  "updated_at": "2026-08-31T08:56:29",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应明确指出已调用current_datetime工具获取当前时间，并基于该真实时间计算出2小时30分钟后的具体时间（可给出近似时间并标注“约”或“左右”），且不得编造或混淆未获工具支持的时间数据。",
+    "golden_answer": "本用例为'时间获取-推算'链路：\n判 pass：调用 current_datetime 获取当前时间；调用 datetime_shift（以工具返回时间为 base、delta='+2h30m'）得到 2 小时 30 分钟后的具体时间，输出与工具推算结果一致（可标注'约/左右'）。\n判 fail：未调用工具而编造时间；或 2 小时 30 分钟后未经 datetime_shift 工具推算；或输出与工具推算结果不一致；或混淆未获工具支持的时间数据。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:59",

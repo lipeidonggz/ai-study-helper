@@ -31,17 +31,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "datetime"
   ],
   "compare": false,
   "notes": "时区已支持（zoneinfo）：模型应传入 timezone=Asia/Tokyo，工具返回东京时间（JST），模型如实转述即可",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:50",
+  "updated_at": "2026-08-31T10:38:11",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "答案应调用current_datetime工具并传入东京时区（timezone=Asia/Tokyo），依据工具返回的东京时间如实回答东京当前时刻；不得在未调用工具或工具无结果时编造时间，不得自行推算时区转换（时区转换由工具完成）。",
+    "golden_answer": "本用例为东京时区时间：\n判 pass：调用 current_datetime 并传入 timezone=Asia/Tokyo，依据工具返回的东京时间如实回答东京当前时刻。\n判 fail：未调用工具或工具无结果时编造时间；或自行推算时区转换；或结果与工具不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:50",

@@ -38,17 +38,21 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "multi-step"
   ],
   "compare": false,
   "notes": "同一次请求内进程内存共享，应能读到刚保存的笔记",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:40",
+  "updated_at": "2026-08-31T10:16:31",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "先调用note_add保存标题为“测试”且内容为“hello”的笔记，再调用note_get读取同一标题“测试”，且输出内容必须确认为“hello”，不得虚构或遗漏读取结果。",
+    "golden_answer": "本用例为'保存-读取'链路：\n判 pass：先调用 note_add 保存标题'测试'、内容'hello'的笔记，再调用 note_get 读取同一标题，输出确认为'hello'。\n判 fail：虚构或遗漏读取结果；或读取与保存内容不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:40",

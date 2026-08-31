@@ -7,9 +7,10 @@
 安全说明：计算器用 AST 解析实现"安全求值"，绝不使用 eval——
 eval 会执行任意代码；AST 方案只允许数字和四则运算，其他一律拒绝。
 
-精确性语义（2026-08-25 修复 boundary-halluc-003 根因）：
+精确性语义（2026-08-25 修复 boundary-halluc-003 根因；2026-08-30 循环小数补循环节表示）：
 - "结果是否精确"由工具层确定性判定，不让模型猜（模型判断依据是不可控黑盒）
-- 四则运算用 Fraction 做精确有理数运算：10/3 返回 10/3（精确），不存在近似
+- 四则运算用 Fraction 做精确有理数运算：10/3 返回 10/3（精确）= 3.(3)（循环小数）
+  ——循环小数同时给出精确分数与循环节十进制表示（长除法确定性生成，不依赖模型）
 - 幂/开方：整数指数精确；分数指数判定是否为完全幂——完全幂精确，否则
   明确标注"近似值：精确值为无理数或无法用有限小数表示"
 - 返回值自带精确性声明，模型的任务退化为"如实转述工具声明"
@@ -147,6 +148,31 @@ def _is_terminating_decimal(value: Fraction) -> bool:
     return d == 1
 
 
+def _repeating_decimal(value: Fraction) -> str:
+    """长除法求循环小数的循环节表示，如 365/7 → 52.(142857)。
+
+    确定性算法：余数首次重复即进入循环节；只做整数运算，无浮点误差。
+    """
+    sign = "-" if value.numerator < 0 else ""
+    num = abs(value.numerator)
+    den = value.denominator
+    integer_part, rem = divmod(num, den)
+    digits: list[str] = []
+    seen: dict[int, int] = {}
+    while rem and rem not in seen:
+        seen[rem] = len(digits)
+        rem *= 10
+        d, rem = divmod(rem, den)
+        digits.append(str(d))
+    if not rem:
+        frac = "".join(digits)
+        return f"{sign}{integer_part}.{frac}" if frac else f"{sign}{integer_part}"
+    start = seen[rem]
+    non_repeat = "".join(digits[:start])
+    repeat = "".join(digits[start:])
+    return f"{sign}{integer_part}.{non_repeat}({repeat})"
+
+
 def _format_value(value: Fraction, exact: bool) -> str:
     """把结果格式化成可读文本：
     - 精确且整数 → 整数（如 8）
@@ -171,16 +197,23 @@ def _calculate(expression: str) -> str:
 
     例：
       "3+5"                 → "3+5 = 8（精确）"
-      "10/3"                → "10/3 = 10/3（精确）"
+      "10/3"                → "10/3 = 10/3（精确）= 3.(3)（循环小数）"
       "sqrt(144)"           → "sqrt(144) = 12（精确）"
       "sqrt(987654321)"     → "sqrt(987654321) ≈ 31426.968052931865（近似值：精确值为无理数或无法用有限小数表示）"
     """
     value, exact = _evaluate(ast.parse(expression, mode="eval").body)
-    if exact:
-        return f"{expression} = {_format_value(value, exact)}（精确）"
+    if not exact:
+        return (
+            f"{expression} ≈ {_format_value(value, exact)}"
+            "（近似值：精确值为无理数或无法用有限小数表示）"
+        )
+    if value.denominator == 1:
+        return f"{expression} = {value.numerator}（精确）"
+    if _is_terminating_decimal(value):
+        return f"{expression} = {_format_value(value, True)}（精确）"
     return (
-        f"{expression} ≈ {_format_value(value, exact)}"
-        "（近似值：精确值为无理数或无法用有限小数表示）"
+        f"{expression} = {value.numerator}/{value.denominator}（精确）"
+        f"= {_repeating_decimal(value)}（循环小数）"
     )
 
 
@@ -201,7 +234,8 @@ def _parse_delta(delta: str) -> _dt.timedelta:
     return total
 
 
-def _now(timezone: str = "Asia/Shanghai", delta: str = "") -> str:
+def _now(timezone: str = "Asia/Shanghai") -> str:
+    """获取当前日期、时间和星期几（时钟事实，工具确定性给出）。"""
     try:
         tz = ZoneInfo(timezone) if timezone else None
     except Exception:
@@ -210,15 +244,45 @@ def _now(timezone: str = "Asia/Shanghai", delta: str = "") -> str:
         now = _dt.datetime.now().astimezone()
     else:
         now = _dt.datetime.now(tz)  # 指定时区的 aware 时间（astimezone() 无参会转回系统时区）
-    note = ""
-    if delta.strip():
-        now = now + _parse_delta(delta)  # 相对时间推算（时钟事实，工具确定性给出）
-        note = f"（相对当前时间 {delta} 推算）"
     # 星期几是日历事实（确定性），工具直接给出，避免模型用知识猜或用计算器瞎算
     # （tool-datetime-003 教训：工具不给星期时模型可能绕圈或虚假转述）
+    return f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}（{_WEEKDAYS_CN[now.weekday()]}）"
+
+
+def _parse_base_datetime(raw: str) -> _dt.datetime | None:
+    """容错解析基准日期时间：接受日期/日期时间/T 分隔/带后缀的完整工具返回文本。"""
+    text = raw.strip().replace("T", " ")
+    m = re.search(r"\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}(?::\d{2})?)?", text)
+    if not m:
+        return None
+    piece = m.group(0)
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return _dt.datetime.strptime(piece, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _shift_datetime(base: str, delta: str, timezone: str = "Asia/Shanghai") -> str:
+    """基于显式传入的基准日期时间做相对推算（时钟事实，工具确定性给出）。
+
+    base 接受 '2026-08-31 10:25:28'，也可直接传 current_datetime 的完整返回文本；
+    推算基准是入参 base 而非本次调用时刻，避免两次调用之间跨天导致的基准漂移。
+    """
+    try:
+        tz = ZoneInfo(timezone) if timezone else None
+    except Exception:
+        tz = None
+    dt = _parse_base_datetime(base)
+    if dt is None:
+        return "错误：无法解析 base 日期时间，请传入形如 '2026-08-31 10:25:28' 的日期时间"
+    if tz is not None:
+        dt = dt.replace(tzinfo=tz)
+    result = dt + _parse_delta(delta)
     return (
-        f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}（{_WEEKDAYS_CN[now.weekday()]}）"
-        f"{note}"
+        f"{result.strftime('%Y-%m-%d %H:%M:%S %Z')}（{_WEEKDAYS_CN[result.weekday()]}）"
+        f"（相对 {dt.strftime('%Y-%m-%d %H:%M:%S')} {delta} 推算）"
     )
 
 
@@ -291,7 +355,7 @@ def builtin_specs() -> list[dict]:
     return [
         {
             "name": "calculator",
-            "description": "安全计算纯数学表达式（支持 + - * / // % ** 与括号，支持 sqrt()；结果自带精确/近似声明）。仅支持数学表达式，不支持时间/日期字符串（如'16:29 + 2:30'），时间推算请用 current_datetime 的 delta 参数",
+            "description": "安全计算纯数学表达式（支持 + - * / // % ** 与括号，支持 sqrt()；结果自带精确/近似声明）。仅支持数学表达式，不支持时间/日期字符串（如'16:29 + 2:30'），时间/日期推算请用 datetime_shift 工具",
             "parameters": {
                 "type": "object",
                 "properties": {"expression": {"type": "string", "description": "数学表达式"}},
@@ -301,15 +365,28 @@ def builtin_specs() -> list[dict]:
         },
         {
             "name": "current_datetime",
-            "description": "获取当前日期、时间和星期几；支持相对时间推算（delta 参数，如 '+2h30m' 表示 2 小时 30 分钟后）",
+            "description": "获取当前日期、时间和星期几（时钟事实，工具确定性给出）",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "timezone": {"type": "string", "description": "时区，默认 Asia/Shanghai"},
-                    "delta": {"type": "string", "description": "相对时间推算，如 '+10d'（天）或 '+2h30m'（小时/分钟），正数未来/负数过去，留空返回当前时间"}
                 },
             },
             "handler": _now,
+        },
+        {
+            "name": "datetime_shift",
+            "description": "基于显式传入的基准日期时间做相对推算（如 delta='+10d' 表示 10 天后、'+2h30m' 表示 2 小时 30 分钟后）；日期/时间推算请用本工具，不要心算。base 可直接传 current_datetime 的返回文本",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "base": {"type": "string", "description": "基准日期时间，如 '2026-08-31 10:25:28'（支持日期或日期+时间；推算基准为传入值，非当前时刻）"},
+                    "delta": {"type": "string", "description": "相对时间增减，如 '+10d'（天）或 '+2h30m'（小时/分钟），正数未来/负数过去"},
+                    "timezone": {"type": "string", "description": "时区，默认 Asia/Shanghai（base 未含时区时按此时区解释）"},
+                },
+                "required": ["base", "delta"],
+            },
+            "handler": _shift_datetime,
         },
         {
             "name": "note_add",

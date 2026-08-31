@@ -7,7 +7,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "19除以4等于多少？"
+        "content": "19除以4等于多少？请给出小数形式的结果"
       }
     ]
   },
@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "basic",
     "math"
   ],
   "compare": false,
-  "notes": "普通除法精确值场景：有限小数应显示 4.75；与整除用例 tool-calc-009 区分",
+  "notes": "有限小数输出场景：输入已显式要求小数形式，避免'除以'的整除/小数歧义；歧义识别由 boundary-fuzzy-005 承担（2026-08-31 输入语义与考核目标对齐）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:45:34",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答输出精确值4.75即可（心算或调用工具均可），不得给出4或仅余数表述。",
+    "golden_answer": "本用例为小数除法（输入已明确要求小数形式）：\n判 pass：输出精确值 4.75（心算或调用工具均可）。\n判 fail：未给出精确值 4.75（如只给 4 或 4 余 3 的整除表述）；或输出 4.75 之外的其他数值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

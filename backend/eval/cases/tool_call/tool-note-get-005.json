@@ -41,7 +41,7 @@
   "updated_at": "2026-08-25T10:54:13",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用note_get且参数title为不存在的标题XYZ；工具返回未找到或无结果时，回答须如实说明该笔记不存在，不得编造任何笔记内容或将其作为事实输出。",
+    "golden_answer": "本用例为读取不存在的笔记：\n判 pass：调用 note_get 且参数 title='XYZ'（不存在的标题）；工具返回未找到或无结果时，如实说明该笔记不存在。\n判 fail：编造任何笔记内容或将其作为事实输出。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:13",

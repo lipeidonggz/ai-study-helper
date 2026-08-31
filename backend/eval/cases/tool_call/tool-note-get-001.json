@@ -41,7 +41,7 @@
   "updated_at": "2026-08-25T10:54:07",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用note_get工具且参数title为“购物清单”；若工具返回未找到则如实告知未找到该笔记，不得编造笔记内容。",
+    "golden_answer": "本用例为按标题读取笔记：\n判 pass：调用 note_get 且参数 title='购物清单'；工具返回未找到时如实告知未找到该笔记。\n判 fail：编造笔记内容；或未如实告知未找到。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:07",

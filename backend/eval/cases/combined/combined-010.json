@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "计算 2×2=4 个番茄，再调用 note_add 保存菜谱",
+    "behavior": "算出 2×2=4 个番茄（心算或 calculator 均可），再调用 note_add 保存菜谱",
     "criteria": [
       "answer_correct",
       "tool_used",
@@ -20,12 +20,6 @@
       "latency_budget"
     ],
     "tool_calls": [
-      {
-        "name": "calculator",
-        "arguments": {
-          "expression": "2*2"
-        }
-      },
       {
         "name": "note_add",
         "arguments": {}
@@ -37,17 +31,21 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "task-decomposition"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:11",
+  "updated_at": "2026-08-31T09:11:40",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应完成2×2=4个番茄的计算，调用calculator计算\"2*2\"得到4，再调用note_add保存番茄炒蛋菜谱，且计算数值必须为4，不得伪造或省略工具调用。",
+    "golden_answer": "本用例为计算与菜谱保存：\n判 pass：给出 2×2=4（心算或调用 calculator 均可），调用 note_add 保存番茄炒蛋菜谱，计算数值为 4。\n判 fail：计算数值不是 4；或未调用 note_add；或伪造/省略工具调用。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:11",

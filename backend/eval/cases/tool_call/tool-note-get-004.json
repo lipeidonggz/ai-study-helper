@@ -47,7 +47,7 @@
   "updated_at": "2026-08-25T10:54:12",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用note_get（按标题精确查）或note_search（模糊检索\"番茄炒蛋\"）读取菜谱笔记；如实输出该工具返回的菜谱内容，若工具未返回结果或报错则不得编造菜谱。",
+    "golden_answer": "本用例为读取菜谱：\n判 pass：调用 note_get（按标题精确查）或 note_search（模糊检索'番茄炒蛋'）读取菜谱，如实输出工具返回的菜谱内容。\n判 fail：工具未返回结果或报错时编造菜谱。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:12",

@@ -38,18 +38,22 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note",
     "verify"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:00",
+  "updated_at": "2026-08-31T08:56:48",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用note_add保存标题为“任务”、内容为“写周报”的笔记，随后调用note_get读取该笔记，并确认返回内容与保存时完全一致，且不得将读取失败或空结果表述为保存成功。",
+    "golden_answer": "本用例为笔记写入后读取验证：\n判 pass：调用 note_add 保存标题'任务'、内容'写周报'的笔记，随后调用 note_get 读取，并确认返回内容与保存时完全一致。\n判 fail：未调用工具；或读取结果与保存内容不一致仍声称成功；或将读取失败/空结果表述为保存成功。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:00",

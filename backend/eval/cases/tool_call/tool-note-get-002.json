@@ -45,7 +45,7 @@
   "updated_at": "2026-08-25T10:54:08",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用note_get（标题留空列出全部）或note_search（检索\"学习计划\"）读取笔记内容，并准确陈述获取到的学习计划内容，不得编造或遗漏关键信息；若工具调用失败或无结果，应明确说明无法获取，而非虚构计划内容。",
+    "golden_answer": "本用例为检索学习计划：\n判 pass：调用 note_get（标题留空列出全部）或 note_search（检索'学习计划'）读取笔记，准确陈述获取到的学习计划内容。\n判 fail：编造或遗漏关键信息；或工具调用失败/无结果时虚构计划内容而非说明无法获取。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:08",

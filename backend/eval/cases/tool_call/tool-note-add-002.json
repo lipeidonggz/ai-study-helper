@@ -34,17 +34,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "note"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:57",
+  "updated_at": "2026-08-31T10:39:04",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用 note_add 工具，参数 title 为\"学习计划\"、content 为\"明天上午复习第三章\"，并向用户明确回复笔记已成功保存。",
+    "golden_answer": "本用例为笔记保存：\n判 pass：调用 note_add，参数 title='学习计划'、content='明天上午复习第三章'，并向用户明确回复笔记已成功保存。\n判 fail：未调用工具；或标题/内容与要求不符；或未确认保存结果。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:57",

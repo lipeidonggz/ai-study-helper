@@ -29,17 +29,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "datetime"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:53",
+  "updated_at": "2026-08-31T10:38:31",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用current_datetime工具获取当前时刻，并依据工具返回结果明确回答具体的时和分；若工具调用失败或无返回，须如实说明无法获取准确时间，不得编造时分。",
+    "golden_answer": "本用例为当前时分：\n判 pass：调用 current_datetime 获取当前时刻，依据工具返回结果明确回答具体的时和分。\n判 fail：工具调用失败或无返回时仍编造时分；或结果与工具不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:53",

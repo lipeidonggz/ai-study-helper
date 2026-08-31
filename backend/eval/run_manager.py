@@ -24,6 +24,7 @@ def build_llm(
     kind: str,
     http_client: httpx.AsyncClient | None = None,
     temperature: float | None = None,
+    model: str | None = None,
 ) -> LLMClient:
     """按 kind 构建 LLM 客户端；real 且未配 Key 时抛明确错误。
 
@@ -37,7 +38,7 @@ def build_llm(
         raise ValueError("未配置大模型 API Key，无法执行真实跑批")
     return DeepSeekLLMClient(
         api_key=settings.api_key,
-        model=settings.model or "deepseek-chat",
+        model=model or settings.model or "deepseek-chat",
         http_client=http_client,
         temperature=temperature,
     )
@@ -85,6 +86,7 @@ class RunManager:
         repeat: int = 1,
         variant: str = "baseline",
         temperature: float | None = None,
+        model: str | None = None,
     ) -> int:
         """创建跑批记录并启动后台任务，返回 run_id。"""
         cases = select_cases(case_filter, self.cases_dir)
@@ -99,11 +101,12 @@ class RunManager:
             "repeat": repeat,
             "variant": variant,
             "temperature": temperature,
+            "model": model,
         }
         run_id = run_store.create_run(self._db_path, name, config, total=len(cases))
         task = asyncio.create_task(
             self._execute(
-                run_id, deps, cases, llm, concurrency, retries, repeat, variant, temperature
+                run_id, deps, cases, llm, concurrency, retries, repeat, variant, temperature, model
             )
         )
         self._tasks[run_id] = task
@@ -120,6 +123,7 @@ class RunManager:
         repeat: int,
         variant: str,
         temperature: float | None,
+        model: str | None,
     ) -> None:
         """后台执行体：跑批 → 逐条落库 → 汇总收尾。"""
         run_store.update_run(self._db_path, run_id, status="running", started=True)
@@ -134,10 +138,10 @@ class RunManager:
                         max_connections=200, max_keepalive_connections=200
                     ),
                 )
-            client = build_llm(deps, llm, shared_http, temperature=temperature)
+            client = build_llm(deps, llm, shared_http, temperature=temperature, model=model)
             # 判官固定温度、与 Agent 实验温度分离：温度扫描时判定口径保持稳定
             judge_llm = (
-                build_llm(deps, llm, shared_http, temperature=JUDGE_TEMPERATURE)
+                build_llm(deps, llm, shared_http, temperature=JUDGE_TEMPERATURE, model=model)
                 if llm == "real"
                 else None
             )
@@ -224,10 +228,11 @@ class RunManager:
         repeat = int(config.get("repeat", 1))
         variant = str(config.get("variant", "baseline"))
         temperature = config.get("temperature")  # 重跑沿用原跑批的 Agent 温度
-        client = build_llm(deps, llm_kind, temperature=temperature)
+        model = config.get("model")  # 重跑沿用原跑批的模型
+        client = build_llm(deps, llm_kind, temperature=temperature, model=model)
         tools = ToolExecutor(default_registry())
         judge_llm = (
-            build_llm(deps, llm_kind, temperature=JUDGE_TEMPERATURE)
+            build_llm(deps, llm_kind, temperature=JUDGE_TEMPERATURE, model=model)
             if llm_kind == "real"
             else None
         )

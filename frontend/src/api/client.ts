@@ -130,6 +130,7 @@ export interface EvalCase {
     max_rounds?: number
   }
   timeout_sec: number
+  hard_timeout_sec: number
   tags: string[]
   compare: boolean
   weight: number
@@ -299,6 +300,7 @@ export const evalApi = {
   startRun(body: {
     name: string
     llm: 'real' | 'fake'
+    model: string | null
     concurrency: number
     retries: number
     repeat: number

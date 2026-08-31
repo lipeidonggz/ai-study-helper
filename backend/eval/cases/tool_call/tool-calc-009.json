@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "basic",
     "math"
   ],
   "compare": false,
   "notes": "整除场景：输入用“整数商”明确语义，避免“整除”的术语歧义（整除关系 vs 整除运算）与“商”的歧义（与 boundary-fuzzy-005 区分）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:19:32",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答输出整除结果4（可补充余数为3）即可，不得混淆为精确值4.75；心算或调用工具均可。",
+    "golden_answer": "本用例为整除运算：\n判 pass：输出整除结果 4（可补充余数为 3）（心算或调用工具均可）。\n判 fail：混淆为精确值 4.75 或输出其他数值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

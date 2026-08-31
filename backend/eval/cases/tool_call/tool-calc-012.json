@@ -7,7 +7,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "100除以3等于多少？"
+        "content": "100除以3等于多少？请用小数形式表示（循环小数请标注）"
       }
     ]
   },
@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "basic",
     "math"
   ],
   "compare": false,
-  "notes": "",
+  "notes": "输入已显式要求小数形式+循环标注，避免'除以'的带余/精确歧义（2026-08-31 输入语义与考核目标对齐）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T11:40:00",
+  "updated_at": "2026-08-31T09:45:18",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答输出约33.33或33.333...等近似值并标注为近似/循环即可（心算或调用工具均可）；工具返回的精确分数100/3（或33又1/3）可如实转述，转述精确分数不算错误；不得把小数形式33.333...表述为精确值。",
+    "golden_answer": "本用例为除不尽的小数：\n判 pass：输出约 33.33 或 33.333... 等近似值并标注为近似/循环（心算或调用工具均可）；如实转述工具返回的精确分数 100/3（或 33 又 1/3）同样合格。\n判 fail：把小数形式 33.333... 表述为精确值或输出其他错误结果",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T11:40:00",

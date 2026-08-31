@@ -7,7 +7,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "123456789 除以 16 等于多少？"
+        "content": "123456789 除以 16 等于多少？请给出小数形式的结果"
       }
     ]
   },
@@ -31,18 +31,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "scale"
   ],
   "compare": false,
   "notes": "规模阶梯：大数除法有限小数（123456789/16=7716049.3125），模型心算极易错，验证必须工具化的场景（与 tool-calc-026 对照）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:47:55",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应调用calculator工具计算123456789/16，如实转述精确结果7716049.3125，不得心算编造或给出其他数值。",
+    "golden_answer": "本用例为大数除法：\n判 pass：调用 calculator 计算 123456789/16，如实转述精确结果 7716049.3125。\n判 fail：结果不是 7716049.3125。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

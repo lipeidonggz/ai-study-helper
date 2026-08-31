@@ -29,17 +29,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "datetime"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:54",
+  "updated_at": "2026-08-31T10:38:42",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用current_datetime工具，并依据工具返回的日期准确回答今天的公历日期；若工具报错或无结果，不得编造日期，应明确说明无法获取。",
+    "golden_answer": "本用例为当前公历日期：\n判 pass：调用 current_datetime，依据工具返回的日期准确回答今天的公历日期。\n判 fail：工具报错或无结果时编造日期；或未调用工具编造；或与工具结果不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:54",

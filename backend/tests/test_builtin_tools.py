@@ -6,7 +6,7 @@
 
 import pytest
 
-from app.tools.builtin import _calculate, _now, _parse_delta
+from app.tools.builtin import _calculate, _now, _parse_delta, _shift_datetime
 import datetime as _dt
 
 
@@ -21,8 +21,8 @@ def test_exact_decimal_literal():
 
 
 def test_exact_rational():
-    """有理数除法：10/3 返回精确分数，不输出浮点近似。"""
-    assert _calculate("10/3") == "10/3 = 10/3（精确）"
+    """有理数除法：10/3 返回精确分数 + 循环节十进制，不输出浮点近似。"""
+    assert _calculate("10/3") == "10/3 = 10/3（精确）= 3.(3)（循环小数）"
 
 
 def test_terminating_decimal_shows_decimal():
@@ -31,9 +31,11 @@ def test_terminating_decimal_shows_decimal():
     assert _calculate("1/8") == "1/8 = 0.125（精确）"
 
 
-def test_repeating_decimal_shows_fraction():
-    """无限循环小数仍显示分数：1/6 分母含质因子 3，不能转有限小数。"""
-    assert _calculate("1/6") == "1/6 = 1/6（精确）"
+def test_repeating_decimal_shows_repetend():
+    """无限循环小数显示精确分数 + 循环节：1/6 = 0.1(6)；365/7 为 combined-007 回归目标。"""
+    assert _calculate("1/6") == "1/6 = 1/6（精确）= 0.1(6)（循环小数）"
+    assert _calculate("365/7") == "365/7 = 365/7（精确）= 52.(142857)（循环小数）"
+    assert _calculate("365/7.0") == "365/7.0 = 365/7（精确）= 52.(142857)（循环小数）"
 
 
 def test_sqrt_perfect_square():
@@ -67,8 +69,8 @@ def test_pow_fraction_perfect():
 
 
 def test_sqrt_fraction_perfect():
-    """分数底数完全平方：(4/9) 开方 = 2/3 精确。"""
-    assert _calculate("sqrt(4/9)") == "sqrt(4/9) = 2/3（精确）"
+    """分数底数完全平方：(4/9) 开方 = 2/3 精确（循环小数同样带循环节）。"""
+    assert _calculate("sqrt(4/9)") == "sqrt(4/9) = 2/3（精确）= 0.(6)（循环小数）"
 
 
 def test_negative_sqrt_rejected():
@@ -99,14 +101,28 @@ def test_parse_delta():
     assert _parse_delta("") == _dt.timedelta()
 
 
-def test_now_with_delta():
-    """current_datetime 支持相对时间推算：delta 推算后的时间应带星期与推算标注。"""
+def test_shift_datetime():
+    """datetime_shift 基于显式基准推算：不依赖调用时刻，结果带星期与推算标注。"""
     base = _now()
-    plus = _now(delta="+2h30m")
+    plus = _shift_datetime(base=base, delta="+2h30m")
     assert "星期" in plus  # 推算后仍带星期（日历事实）
     assert "+2h30m" in plus  # 标注推算来源，模型可如实转述
-    minus = _now(delta="-1h")
+    minus = _shift_datetime(base=base, delta="-1h")
     assert "-1h" in minus
+
+
+def test_shift_datetime_accepts_full_tool_text():
+    """base 可直接传 current_datetime 的完整返回文本（含时区缩写与星期后缀）。"""
+    base = "2026-08-31 23:59:59 CST（星期一）"
+    plus = _shift_datetime(base=base, delta="+10d")
+    assert "2026-09-10" in plus
+    assert "（相对 2026-08-31 23:59:59 +10d 推算）" in plus
+
+
+def test_shift_datetime_accepts_date_only():
+    """base 只给日期（无时刻）也能推算，按 00:00:00 起算。"""
+    plus = _shift_datetime(base="2026-08-31", delta="+10d")
+    assert "2026-09-10" in plus
 
 
 def test_now_with_timezone():

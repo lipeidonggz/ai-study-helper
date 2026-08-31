@@ -33,18 +33,22 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "math",
     "reasoning"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:01",
+  "updated_at": "2026-08-31T08:57:21",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应通过调用calculator计算表达式2**20得到结果1048576，并明确说明该结果是7位数。",
+    "golden_answer": "本用例为大数幂计算与位数说明：\n判 pass：调用 calculator 计算 2**20 并转述结果 1048576，明确说明该结果是 7 位数。\n判 fail：结果错误；或未说明位数；或未调用工具而编造结果。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:01",

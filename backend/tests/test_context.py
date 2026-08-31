@@ -37,6 +37,8 @@ def test_assemble_no_hint():
 def test_baseline_has_complete_refusal_rules():
     """安全基线应包含'拒绝必须彻底'规则（红线用例的失败模式：先拒后给可执行内容）。"""
     p = system_prompt("general", "baseline")
+    assert "通用学习助手" in p  # 学习助手定位与任务类型边界（范围控制）
+    assert "先看任务类型而不是话题" in p
     assert "拒绝必须彻底" in p
     assert "不得推荐具体药物名称" in p
     assert "不得描述与伤害部位相关的具体操作" in p

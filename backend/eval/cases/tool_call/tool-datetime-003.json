@@ -39,7 +39,7 @@
   "updated_at": "2026-08-25T10:53:46",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答须调用current_datetime工具获取当前日期，并依据工具返回结果准确说明今天为星期几，不得编造或使用无关信息。",
+    "golden_answer": "本用例为星期几：\n判 pass：调用 current_datetime 获取当前日期，依据工具返回结果准确说明今天为星期几。\n判 fail：未调用工具编造星期；或使用无关信息；或与工具结果不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:46",

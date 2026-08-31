@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import { evalApi, type EvalCase, type EvalRun, type EvalRunCase } from '../api/client'
 import { navigate } from '../router'
+import { fmtTokens } from '../utils/format'
 
 // 从跑批详情返回（#/eval/runs）时自动选中"测试管理"，否则默认"用例管理"
 const tab = ref<'cases' | 'runs'>(window.location.hash.startsWith('#/eval/runs') ? 'runs' : 'cases')
@@ -19,6 +20,22 @@ const PROMPT_VARIANT_OPTIONS = [
 function variantLabel(v: unknown): string {
   const key = String(v ?? '')
   return PROMPT_VARIANT_OPTIONS.find((o) => o.value === key)?.label ?? key
+}
+
+const MODEL_OPTIONS = [
+  { value: null, label: '跟随全局设置' },
+  { value: 'deepseek-chat', label: 'deepseek-chat（非推理）' },
+  { value: 'deepseek-reasoner', label: 'deepseek-reasoner（推理）' }
+]
+
+function modelLabel(r: EvalRun): string {
+  const m = r.config?.model
+  return typeof m === 'string' && m ? m : '—（未记录）'
+}
+
+function repeatLabel(r: EvalRun): string {
+  const v = r.config?.repeat
+  return typeof v === 'number' ? String(v) : '—'
 }
 
 // 矩阵/列表中区分 run 配置：变体 + 采样温度（温度扫描时一眼可辨）
@@ -115,6 +132,7 @@ function blankCase(): EvalCase {
       max_rounds: 4
     },
     timeout_sec: 30,
+    hard_timeout_sec: 90,
     tags: [],
     compare: false,
     weight: 1,
@@ -204,12 +222,12 @@ function parseMessages(): { role: 'user' | 'assistant' | 'system'; content: stri
   return out
 }
 
-async function saveCase() {
-  if (!editing.value) return
+async function saveCaseInner(): Promise<boolean> {
+  if (!editing.value) return false
   caseError.value = ''
   if (criteriaConflict.value) {
     caseError.value = '验收维度互斥：tool_used 与 tool_not_used 不能同时选择'
-    return
+    return false
   }
   try {
     const body: EvalCase = JSON.parse(JSON.stringify(editing.value))
@@ -230,11 +248,33 @@ async function saveCase() {
       await evalApi.updateCase(body.id, body)
     }
     caseMsg.value = '已保存'
-    editing.value = null
     await loadCases()
+    return true
   } catch (err) {
     caseError.value = `保存失败：${err}`
+    return false
   }
+}
+
+async function saveCase() {
+  if (await saveCaseInner() && isNew.value) {
+    // 新建成功后留在编辑态：后续保存走 update 而非再次 create
+    isNew.value = false
+  }
+}
+
+const caseIdx = computed(() => {
+  if (!editing.value || isNew.value) return -1
+  return cases.value.findIndex((c) => c.id === editing.value?.id)
+})
+
+async function stepCase(delta: number) {
+  if (!editing.value || isNew.value) return
+  const curId = editing.value.id
+  if (!(await saveCaseInner())) return // 保存失败则停留在当前用例
+  const idx = cases.value.findIndex((c) => c.id === curId)
+  const next = cases.value[idx + delta]
+  if (next) editCase(next)
 }
 
 async function removeCase(c: EvalCase) {
@@ -254,6 +294,8 @@ const showStart = ref(false)
 const showMatrix = ref(false) // 对照矩阵视图
 const selRunIds = ref<number[]>([])
 const baseRunId = ref<number | null>(null)
+const matrixAddSel = ref<number | null>(null)
+const matrixIdInput = ref('')
 const showJudgeGroup = ref(false)
 const matrixView = ref<'run' | 'case'>('run') // 矩阵视图：run 级指标 / 用例级对照
 const caseDiff = ref<
@@ -270,6 +312,7 @@ const caseDetail = ref<{ id: string; title: string; cells: Record<number, EvalRu
 const startForm = ref({
   name: '',
   llm: 'real' as 'real' | 'fake',
+  model: null as string | null,
   concurrency: 50,
   retries: 1,
   repeat: 20,
@@ -295,15 +338,56 @@ function toggleRunSel(id: number) {
 function openMatrix() {
   showMatrix.value = true
   matrixView.value = 'run'
-  // 默认选中 baseline 变体的最近 run + 其他变体的最近 run；基准 = 选中的 baseline
-    const byVariant = new Map<string, number>()
-    for (const r of runs.value) {
-      const v = String(r.config?.variant ?? 'baseline')
-      if (!byVariant.has(v)) byVariant.set(v, r.id)
+  // 用户已勾选过 run 时保留选择；为空才默认选中各变体的最近 run
+  if (selRunIds.value.length) {
+    if (baseRunId.value == null || !selRunIds.value.includes(baseRunId.value)) {
+      const base = runs.value.find((r) => String(r.config?.variant ?? 'baseline') === 'baseline')
+      baseRunId.value = base?.id ?? selRunIds.value[0] ?? null
     }
-    selRunIds.value = [...byVariant.values()]
-    const base = runs.value.find((r) => String(r.config?.variant ?? 'baseline') === 'baseline')
+    return
+  }
+  // 默认选中 baseline 变体的最近 run + 其他变体的最近 run；基准 = 选中的 baseline
+  const byVariant = new Map<string, number>()
+  for (const r of runs.value) {
+    const v = String(r.config?.variant ?? 'baseline')
+    if (!byVariant.has(v)) byVariant.set(v, r.id)
+  }
+  selRunIds.value = [...byVariant.values()]
+  const base = runs.value.find((r) => String(r.config?.variant ?? 'baseline') === 'baseline')
   baseRunId.value = base?.id ?? selRunIds.value[0] ?? null
+}
+
+function addMatrixRuns(ids: number[]) {
+  for (const id of ids) {
+    if (!selRunIds.value.includes(id) && runs.value.some((r) => r.id === id)) {
+      selRunIds.value.push(id)
+    }
+  }
+  if (matrixView.value === 'case') loadCaseDiff()
+}
+
+function onAddMatrixRun() {
+  if (matrixAddSel.value == null) return
+  addMatrixRuns([matrixAddSel.value])
+  matrixAddSel.value = null
+}
+
+function onAddMatrixRunByIds() {
+  const ids = matrixIdInput.value
+    .split(/[\s,，、;；]+/)
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n))
+  if (!ids.length) return
+  addMatrixRuns(ids)
+  matrixIdInput.value = ''
+}
+
+function removeMatrixRun(id: number) {
+  selRunIds.value = selRunIds.value.filter((x) => x !== id)
+  if (baseRunId.value === id) {
+    baseRunId.value = selRunIds.value[0] ?? null
+  }
+  if (matrixView.value === 'case') loadCaseDiff()
 }
 
 const selectedRuns = computed(() => {
@@ -504,6 +588,7 @@ async function startRun() {
     const res = await evalApi.startRun({
       name: startForm.value.name || `跑批 ${new Date().toLocaleString()}`,
       llm: startForm.value.llm,
+      model: startForm.value.model,
       concurrency: startForm.value.concurrency,
       retries: startForm.value.retries,
       repeat: startForm.value.repeat,
@@ -558,22 +643,12 @@ function summaryText(run: EvalRun): string {
   if (!s) return '—'
   const parts: string[] = []
   if (typeof s.total === 'number') parts.push(`共 ${s.total} 条`)
-  const cs = s.composite_score
-  if (typeof cs === 'number') {
-    const lo = s.composite_ci_low
-    const hi = s.composite_ci_high
-    const ci =
-      typeof lo === 'number' && typeof hi === 'number'
-        ? `[${(lo * 100).toFixed(1)}%~${(hi * 100).toFixed(1)}%]`
-        : ''
-    parts.push(`复合分 ${(cs * 100).toFixed(1)}%${ci}`)
-  }
   const red = s.red_line as Record<string, unknown> | undefined
   if (red && typeof red.passed === 'boolean') {
     parts.push(red.passed ? '红线✓' : '红线✗')
   }
   if (typeof s.avg_elapsed_ms === 'number') parts.push(`均 ${s.avg_elapsed_ms}ms`)
-  if (typeof s.total_tokens === 'number') parts.push(`${s.total_tokens} token`)
+  if (typeof s.total_tokens === 'number') parts.push(`${fmtTokens(s.total_tokens)} token`)
   if (s.status && typeof s.status === 'object') {
     parts.push(JSON.stringify(s.status))
   }
@@ -585,6 +660,14 @@ function compositeCiText(s: Record<string, unknown>): string {
   const hi = s.composite_ci_high
   if (typeof lo !== 'number' || typeof hi !== 'number') return ''
   return `[${(lo * 100).toFixed(1)}~${(hi * 100).toFixed(1)}%]`
+}
+
+function compositeText(run: EvalRun): string {
+  const s = run.summary as Record<string, unknown> | undefined
+  const cs = s?.composite_score
+  if (typeof cs !== 'number') return '—'
+  const ci = compositeCiText(s ?? {})
+  return `${(cs * 100).toFixed(1)}%${ci ? ` ${ci}` : ''}`
 }
 
 function redLinePassed(s: Record<string, unknown>): boolean {
@@ -702,7 +785,11 @@ function onKeydown(e: KeyboardEvent) {
             <tr v-for="c in cases" :key="c.id">
               <td class="ui-mono">{{ c.id }}</td>
               <td>{{ c.category }}</td>
-              <td>{{ c.title }}</td>
+              <td>
+                <button class="ui-link" :title="`编辑 ${c.id}`" @click="editCase(c)">
+                  {{ c.title }}
+                </button>
+              </td>
               <td class="ec-criteria">
                 <span v-for="cr in c.expected.criteria" :key="cr" class="ui-chip">{{ cr }}</span>
               </td>
@@ -756,9 +843,13 @@ function onKeydown(e: KeyboardEvent) {
                 </select>
                 <span class="ui-help-inline">{{ MODE_META[editing.mode] }}</span>
               </label>
-              <label>超时(秒)
+              <label>耗时预算(秒)
                 <input v-model.number="editing.timeout_sec" type="number" class="ui-input" />
-                <span class="ui-help-inline">超过判超时；同时是 latency_budget 的耗时预算</span>
+                <span class="ui-help-inline">latency_budget 判定基准：慢于它判 fail，但不中断执行</span>
+              </label>
+              <label>硬超时(秒)
+                <input v-model.number="editing.hard_timeout_sec" type="number" class="ui-input" />
+                <span class="ui-help-inline">超过即中断整条用例（防上游慢响应；默认 90）</span>
               </label>
               <label class="ui-check">
                 <input v-model="editing.enabled" type="checkbox" /> 参与跑批
@@ -861,6 +952,17 @@ function onKeydown(e: KeyboardEvent) {
             <p class="ui-help">记录为什么这样定标准、参考了什么依据，便于日后复查。</p>
 
             <div class="ui-toolbar ec-actions">
+              <template v-if="!isNew">
+                <button class="ui-btn" :disabled="caseIdx <= 0" @click="stepCase(-1)">← 上一条</button>
+                <span v-if="caseIdx >= 0" class="ui-muted">{{ caseIdx + 1 }} / {{ cases.length }}</span>
+                <button
+                  class="ui-btn"
+                  :disabled="caseIdx < 0 || caseIdx >= cases.length - 1"
+                  @click="stepCase(1)"
+                >
+                  下一条 →
+                </button>
+              </template>
               <button class="ui-btn primary" @click="saveCase">保存</button>
               <button class="ui-btn" @click="closeEditor">取消</button>
             </div>
@@ -884,10 +986,17 @@ function onKeydown(e: KeyboardEvent) {
         <div v-if="showStart" class="ec-start">
           <div class="ui-grid">
             <label>名称<input v-model="startForm.name" placeholder="留空自动生成" class="ui-input" /></label>
-            <label>模型
+            <label>执行源
               <select v-model="startForm.llm" class="ui-select">
                 <option value="real">真实模型（会花钱）</option>
                 <option value="fake">Fake（干跑不花钱）</option>
+              </select>
+            </label>
+            <label>模型
+              <select v-model="startForm.model" class="ui-select">
+                <option v-for="o in MODEL_OPTIONS" :key="String(o.value)" :value="o.value">
+                  {{ o.label }}
+                </option>
               </select>
             </label>
             <label>提示词变体
@@ -940,6 +1049,27 @@ function onKeydown(e: KeyboardEvent) {
             <button class="ui-btn" @click="showMatrix = false">← 返回列表</button>
             <button class="ui-btn" :class="{ on: matrixView === 'run' }" @click="switchMatrixView('run')">run 级指标</button>
             <button class="ui-btn" :class="{ on: matrixView === 'case' }" @click="switchMatrixView('case')">用例级对照</button>
+            <label>添加 run：
+              <select v-model.number="matrixAddSel" class="ui-select">
+                <option :value="null" disabled>选择…</option>
+                <option v-for="r in runs" :key="r.id" :value="r.id" :disabled="selRunIds.includes(r.id)">
+                  #{{ r.id }} {{ r.name }}
+                </option>
+              </select>
+            </label>
+            <button class="ui-btn sm" :disabled="matrixAddSel == null" @click="onAddMatrixRun">添加</button>
+            <label>
+              <input
+                v-model="matrixIdInput"
+                class="ui-input ec-matrix-id-input"
+                placeholder="或输入 run ID，如 77,78"
+                @keyup.enter="onAddMatrixRunByIds"
+              />
+            </label>
+            <span v-for="rid in selRunIds" :key="rid" class="ec-matrix-chip">
+              #{{ rid }}
+              <button class="ui-link danger" title="移出对照" @click="removeMatrixRun(rid)">×</button>
+            </span>
             <template v-if="matrixView === 'run'">
               <label>基准 run：
                 <select v-model.number="baseRunId" class="ui-select">
@@ -1024,7 +1154,7 @@ function onKeydown(e: KeyboardEvent) {
                   </span>
                 </td>
                 <td>
-                  {{ typeof m.s.total_tokens === 'number' ? m.s.total_tokens : '—' }}
+                  {{ fmtTokens(m.s.total_tokens as number) }}
                   <span v-if="m.vs" class="ec-diff" :class="diffPctRel(m.s.total_tokens, m.vs.total_tokens, true).cls">
                     {{ diffPctRel(m.s.total_tokens, m.vs.total_tokens, true).text }}
                   </span>
@@ -1037,7 +1167,9 @@ function onKeydown(e: KeyboardEvent) {
                 </template>
               </tr>
               <tr v-if="!matrixRows.length">
-                <td :colspan="showJudgeGroup ? 13 : 9" class="ui-muted">勾选上方的 run 参与对照（打开矩阵时已默认选中各变体的最新 run）</td>
+                <td :colspan="showJudgeGroup ? 13 : 9" class="ui-muted">
+                  在工具栏选择或输入 run ID 参与对照（打开矩阵时为空则默认选中各变体的最新 run）
+                </td>
               </tr>
             </tbody>
           </table>
@@ -1078,7 +1210,7 @@ function onKeydown(e: KeyboardEvent) {
                 </tr>
                 <tr v-if="!visibleCaseRows.length">
                   <td :colspan="selectedRuns.length + 1" class="ui-muted">
-                    {{ caseDiffLoading ? '加载中' : '没有用例数据（先在上方勾选参与对照的 run）' }}
+                    {{ caseDiffLoading ? '加载中' : '没有用例数据（先在工具栏添加参与对照的 run）' }}
                   </td>
                 </tr>
               </tbody>
@@ -1194,9 +1326,12 @@ function onKeydown(e: KeyboardEvent) {
             <tr>
               <th>ID</th>
               <th>名称</th>
+              <th>模型</th>
+              <th>Repeat</th>
               <th>状态</th>
               <th>进度</th>
               <th>汇总</th>
+              <th>复合分</th>
               <th>通过用例数</th>
               <th>待人工数</th>
               <th>未通过数</th>
@@ -1222,6 +1357,12 @@ function onKeydown(e: KeyboardEvent) {
                 </span>
               </td>
               <td>
+                <span class="ui-badge" :title="r.config?.model ? '' : '历史跑批未记录模型'">
+                  {{ modelLabel(r) }}
+                </span>
+              </td>
+              <td class="ui-mono">{{ repeatLabel(r) }}</td>
+              <td>
                 <span class="ui-badge" :class="runBadgeClass(r.status)">{{ statusLabel(r.status) }}</span>
                 <span v-if="r.verified" class="ui-badge ok">已核验</span>
               </td>
@@ -1235,6 +1376,7 @@ function onKeydown(e: KeyboardEvent) {
                 <span class="ui-muted">{{ r.progress }}/{{ r.total }}</span>
               </td>
               <td class="ui-muted">{{ summaryText(r) }}</td>
+              <td class="ui-mono">{{ compositeText(r) }}</td>
               <td class="ui-mono">{{ pctText(runVerdictCount(r, 'pass'), r.total) }}</td>
               <td class="ui-mono">{{ pctText(runPendingCases(r), r.total) }}</td>
               <td class="ui-mono">
@@ -1256,7 +1398,7 @@ function onKeydown(e: KeyboardEvent) {
               </td>
             </tr>
             <tr v-if="!runs.length">
-              <td colspan="12" class="ui-muted">还没有跑批记录</td>
+              <td colspan="15" class="ui-muted">还没有跑批记录</td>
             </tr>
           </tbody>
         </table>
@@ -1289,6 +1431,18 @@ function onKeydown(e: KeyboardEvent) {
   border-radius: 8px;
   padding: 14px 16px;
   margin-top: 12px;
+}
+.ec-matrix-id-input {
+  width: 150px;
+}
+.ec-matrix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #eef1f4;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 0.9em;
 }
 .ui-tabs {
   margin-bottom: 14px;

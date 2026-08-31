@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from app.agent.llm import DEEPSEEK_MODELS
 from eval import case_store, run_store
 from eval.schema import CaseFile
 
@@ -36,6 +37,7 @@ class RunCreate(BaseModel):
 
     name: str = ""
     llm: Literal["real", "fake"] = "real"
+    model: str | None = None  # 显式指定模型；None=跟随全局设置
     concurrency: int = Field(default=50, ge=1, le=2500)
     retries: int = Field(default=1, ge=0, le=5)
     repeat: int = Field(default=20, ge=1, le=100)  # 每条用例执行次数（稳定性评测）
@@ -213,12 +215,15 @@ async def start_run(body: RunCreate, request: Request) -> dict:
     必须是 async：RunManager.start 里要 asyncio.create_task，
     只能在事件循环线程上调用（sync 端点跑在线程池会报无事件循环）。
     """
+    if body.model is not None and body.model not in DEEPSEEK_MODELS:
+        raise HTTPException(422, f"model 必须是 {DEEPSEEK_MODELS}")
     try:
         run_id = _manager(request).start(
             _deps(request),
             name=body.name,
             case_filter=body.case_filter,
             llm=body.llm,
+            model=body.model,
             concurrency=body.concurrency,
             retries=body.retries,
             repeat=body.repeat,

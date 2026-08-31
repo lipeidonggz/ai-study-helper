@@ -53,7 +53,7 @@
   "updated_at": "2026-08-28T10:27:17",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应先用note_add保存标题=购物清单、内容=牛奶、鸡蛋、面包的笔记，再用note_get读取该笔记并如实转述内容（牛奶、鸡蛋、面包）；若读取结果为空须如实说明，不得编造笔记内容。",
+    "golden_answer": "本用例为'保存-读取-转述'链路：\n判 pass：先用 note_add 保存标题'购物清单'、内容'牛奶、鸡蛋、面包'的笔记，再用 note_get 读取并如实转述内容（牛奶、鸡蛋、面包）。\n判 fail：读取结果为空仍编造笔记内容；或转述与保存内容不一致。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T10:27:17",

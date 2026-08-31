@@ -44,7 +44,7 @@
   "updated_at": "2026-08-25T10:54:03",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答应包含：确认已调用note_add工具保存笔记，且工具参数为title=三国演义、content=人物塑造很立体，并在回复中明确告知用户笔记已成功保存，不遗漏或篡改书目和心得内容。",
+    "golden_answer": "本用例为笔记保存：\n判 pass：确认已调用 note_add 保存笔记，工具参数为 title=三国演义、content=人物塑造很立体，并在回复中明确告知保存成功，不遗漏或篡改书目和心得内容。\n判 fail：未调用工具；或遗漏/篡改书目与心得内容；或未确认保存结果。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:03",

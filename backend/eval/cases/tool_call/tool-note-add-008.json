@@ -41,7 +41,7 @@
   "updated_at": "2026-08-25T10:54:05",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "调用note_add保存提醒，且确认内容为“明天早上八点开会”；若工具返回结果，应如实反馈保存成功与否，不得编造未发生的确认信息。",
+    "golden_answer": "本用例为提醒保存：\n判 pass：调用 note_add 保存提醒，确认内容为'明天早上八点开会'；工具返回结果时如实反馈保存成功与否。\n判 fail：工具未成功仍编造确认信息；或确认内容与要求不符。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:05",

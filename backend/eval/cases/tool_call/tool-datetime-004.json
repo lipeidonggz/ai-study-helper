@@ -29,17 +29,21 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "datetime"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-26T17:28:23",
+  "updated_at": "2026-08-31T10:37:55",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "回答应调用current_datetime工具获取当前日期时间，转述到分钟级即可（年、月、日、时、分），秒级细微偏差或省略不视为编造；不得编造日期、小时或分钟（与 tool-datetime-001 口径一致）。",
+    "golden_answer": "本用例为当前日期时间（分钟级口径）：\n判 pass：调用 current_datetime 获取当前日期时间，转述到分钟级（年、月、日、时、分）即可，秒级细微偏差或省略不视为编造。\n判 fail：编造日期、小时或分钟；或转述与工具结果明显不符。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-26T17:28:23",

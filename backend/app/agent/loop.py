@@ -75,7 +75,14 @@ async def run_agent_turn(
     safety_guard = SelfHarmGuard()  # 自伤高危短语护栏（确定性兜底，见 guardrail.py）
 
     tool_call_count = 0  # 累计工具调用次数（用于结束统计）
-    total_tokens = {"prompt": 0, "completion": 0, "total": 0}  # 累计 token 用量
+    # 累计 token 用量：输入/输出拆分 + 缓存命中/未命中拆分（成本计算依赖命中价差）
+    total_tokens = {
+        "prompt": 0,
+        "completion": 0,
+        "total": 0,
+        "cache_hit": 0,
+        "cache_miss": 0,
+    }
 
     def _done_data(rounds: int, reason: str) -> dict:
         """组装结束统计（含 token 用量汇总，供 trace 与前端展示）。"""
@@ -119,6 +126,8 @@ async def run_agent_turn(
                 total_tokens["prompt"] += u.get("prompt_tokens", 0)
                 total_tokens["completion"] += u.get("completion_tokens", 0)
                 total_tokens["total"] += u.get("total_tokens", 0)
+                total_tokens["cache_hit"] += u.get("prompt_cache_hit_tokens", 0)
+                total_tokens["cache_miss"] += u.get("prompt_cache_miss_tokens", 0)
                 if trace:
                     trace.step("usage", {"usage": u})
                 continue

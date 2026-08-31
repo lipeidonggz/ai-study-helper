@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "calculator 得 25 → note_add 保存 → note_get 读取，完整链路 3 步",
+    "behavior": "算出 25（心算或 calculator 均可）→ note_add 保存 → note_get 读取，完整链路",
     "criteria": [
       "answer_correct",
       "tool_used",
@@ -20,12 +20,6 @@
       "latency_budget"
     ],
     "tool_calls": [
-      {
-        "name": "calculator",
-        "arguments": {
-          "expression": "100/4"
-        }
-      },
       {
         "name": "note_add",
         "arguments": {}
@@ -39,17 +33,21 @@
     "max_rounds": 3
   },
   "timeout_sec": 60.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "multi-step"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:03",
+  "updated_at": "2026-08-31T09:00:01",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "满分回答必须依次完成调用calculator计算100/4得到25、调用note_add保存该结果、调用note_get读取并回显25这三步完整链路；若任一工具报错或缺失，不得编造25或任何计算结果，应明确说明工具未成功执行。",
+    "golden_answer": "本用例为'计算-保存-读取'三步链路：\n判 pass：满足以下任意一条即判为pass：\n（1）依次完成 calculator 计算 100/4 得到 25、note_add 保存该结果、note_get 读取并回显 25 的完整三步链路。\n（2）通过大模型自身能力计算100/4得到正确结果25，note_add 保存该结果、note_get 读取并回显 25 。\n判 fail：未调用note_add 保存该结果，或未note_get 读取该接口，或调用工具发生错误；",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:03",

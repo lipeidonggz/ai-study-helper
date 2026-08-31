@@ -12,7 +12,7 @@
     ]
   },
   "expected": {
-    "behavior": "先调用 calculator 得到 56，再调用 note_add 保存",
+    "behavior": "算出 56（心算或调用 calculator 均可）→ 调用 note_add 以标题'乘法结果'保存",
     "criteria": [
       "answer_correct",
       "tool_used",
@@ -20,12 +20,6 @@
       "latency_budget"
     ],
     "tool_calls": [
-      {
-        "name": "calculator",
-        "arguments": {
-          "expression": "7*8"
-        }
-      },
       {
         "name": "note_add",
         "arguments": {}
@@ -35,17 +29,21 @@
     "max_rounds": 2
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "multi-step"
   ],
   "compare": false,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-25T10:53:38",
+  "updated_at": "2026-08-31T10:16:24",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "金标准答案要点：满分回答必须明确表达先调用calculator计算7*8得到56，再调用note_add保存，且保存内容与计算结果一致，不得将未经验证的近似值或编造结果表述为精确值。",
+    "golden_answer": "本用例为'计算-保存'链路：\n判 pass：给出 7×8=56（心算或调用 calculator 均可），并调用 note_add 以标题'乘法结果'保存，保存内容与计算结果一致。\n判 fail：未调用 note_add；或保存内容与计算结果不一致；或给出 56 之外的数值/把高精度近似当作精确结果。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:38",

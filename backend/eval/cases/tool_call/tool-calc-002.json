@@ -32,18 +32,22 @@
     "max_rounds": 1
   },
   "timeout_sec": 30.0,
+  "hard_timeout_sec": 90.0,
   "tags": [
     "basic",
     "math"
   ],
   "compare": true,
   "notes": "",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "",
-  "updated_at": "2026-08-28T09:06:46",
+  "updated_at": "2026-08-31T09:11:47",
   "updated_by": "local",
   "annotation": {
-    "golden_answer": "最终回答输出精确结果408即可（心算或调用工具均可），不得输出其他数值。",
+    "golden_answer": "本用例为简单乘法：\n判 pass：输出精确结果 408（心算或调用工具均可）。\n判 fail：输出 408 之外的数值。",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",
