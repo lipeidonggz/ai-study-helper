@@ -23,12 +23,13 @@ from typing import AsyncIterator
 from app.agent.context import assemble, system_prompt  # 上下文组装与系统提示
 from app.agent.guardrail import (
     BLOCK_MESSAGE,
+    DESTRUCTIVE_SAFE_SUFFIX,
     MEDICATION_SAFE_SUFFIX,
-    MedicationAdviceGuard,
     PromptLeakGuard,
+    RefusalContentGuard,
     SELF_HARM_SAFE_SUFFIX,
     SelfHarmGuard,
-    is_actionable_med_request,
+    is_actionable_risk_request,
 )
 from app.agent.llm import LLMClient, LLMEvent, LLMMessage, ToolCall
 from app.agent.trace import Trace, event_to_dict, messages_to_dicts  # 处理过程记录器
@@ -76,9 +77,9 @@ async def run_agent_turn(
     # 复用同一个 loop，线上与评测的护栏行为天然一致。
     guard = PromptLeakGuard(mode, variant)
     safety_guard = SelfHarmGuard()  # 自伤高危短语护栏（确定性兜底，见 guardrail.py）
-    # 用药建议护栏：条件启用——仅当输入判定为"行动执行型用药请求"时才检测；
-    # 学习型药理请求（"布洛芬怎么起作用"）不启用，避免误伤正常学习
-    med_guard = MedicationAdviceGuard(enabled=is_actionable_med_request(user_message))
+    # 拒绝场景可执行内容护栏：条件启用——仅当输入判定为"行动执行型风险请求"
+    # （用药 OR 破坏操作）时才检测；学习型请求（讲药理/命令原理）不启用，避免误伤
+    refusal_guard = RefusalContentGuard(enabled=is_actionable_risk_request(user_message))
 
     tool_call_count = 0  # 累计工具调用次数（用于结束统计）
     # 累计 token 用量：输入/输出拆分 + 缓存命中/未命中拆分（成本计算依赖命中价差）
@@ -165,21 +166,25 @@ async def run_agent_turn(
                         yield prefix
                     yield SELF_HARM_SAFE_SUFFIX
                     return
-                med_hit = med_guard.check(event.text)
-                if med_hit is not None:
-                    # 行动执行型用药请求中出现药名/剂型/剂量指令：截断并追加安全说明
+                refusal_hit = refusal_guard.check(event.text)
+                if refusal_hit is not None:
+                    # 行动执行型风险请求中出现可执行内容（命令/药名/剂量）：截断并追加安全说明
                     if trace:
                         trace.step(
                             "guardrail",
                             {
-                                "action": "med_block",
-                                "fragment": med_guard.hit_fragment(),
+                                "action": "refusal_block",
+                                "fragment": refusal_guard.hit_fragment(),
+                                "kind": refusal_guard.hit_kind(),
                             },
                         )
-                    prefix = event.text[:med_hit]
+                    prefix = event.text[:refusal_hit]
                     if prefix:
                         yield prefix
-                    yield MEDICATION_SAFE_SUFFIX
+                    if refusal_guard.hit_kind() == "drug":
+                        yield MEDICATION_SAFE_SUFFIX
+                    else:
+                        yield DESTRUCTIVE_SAFE_SUFFIX
                     return
                 yield event.text  # 文本增量：立即推给前端（打字机效果）
             elif event.type == "tool_call":

@@ -1,4 +1,4 @@
-"""输出护栏：PromptLeakGuard（系统提示泄露）+ SelfHarmGuard（自伤高危短语）+ MedicationAdviceGuard（用药建议）。
+"""输出护栏：PromptLeakGuard（系统提示泄露）+ SelfHarmGuard（自伤高危短语）+ RefusalContentGuard（拒绝场景可执行内容）。
 
 设计角度（2026-08-25）：
 - 提示注入无法 100% 防住（业界共识是分层防御），输出护栏是最后一道
@@ -14,15 +14,16 @@ SelfHarmGuard（2026-08-28）：自伤场景高危短语护栏。
 - 拦截策略：命中即截断当前 chunk 到短语前，追加安全说明，终止本轮
 - 词表刻意小而高信号：只收"几乎只会出现在自伤场景"的短语，控制误报
 
-MedicationAdviceGuard（2026-08-31）：行动执行型用药请求的可执行建议护栏。
-- 为什么需要：refuse-005（红线，must_pass）全量 20repeat 下仍 19/20——
-  提示词"拒绝必须彻底"已强化（不得推荐或提及药名、举例形式也不行），
-  chat 模型在"解释为什么不能推荐"时仍偶发滑向"如对乙酰氨基酚/布洛芬"+
-  可执行建议（连续两轮全量各漏 1/20）——提示词已接近天花板，上确定性兜底。
-- 与 SelfHarmGuard 的关键区别：**条件启用**——输入侧判定为"行动执行型用药
-  请求"时才检测；学习型药理请求（"布洛芬怎么起作用"）不启用，避免误伤正常学习。
-- 拦截目标：不枚举无限药名，拦"药名（窄高频名单）+ 剂型/剂量指令"两类信号；
-  名单随评测失败样本生长（与歧义词表同维护逻辑），漏网靠提示词兜底。
+RefusalContentGuard（2026-08-31）：拒绝场景可执行内容护栏（通用，条件启用）。
+- 为什么需要：refuse-005（用药）与 refuse-001（危险命令）同族——拒绝类红线
+  用例的病根是"模型在解释为什么不给时滑向给出具体可执行内容"（药名举例、
+  命令原文），提示词强化逐个压不住（各漏 1/20），必须确定性兜底。
+- 通用化设计：拦截目标不是穷举内容，而是"可执行内容形态"——挂载两类检测器：
+  危险命令（rm -rf / format / del /f 等窄名单+模式）与 药名/剂型/剂量（窄名单+模式）。
+- 与 SelfHarmGuard 的关键区别：**条件启用**——输入侧判定为"行动执行型风险请求"
+  （用药 OR 破坏操作）时才检测；学习型请求（"布洛芬怎么起作用"/"rm -rf 是什么"）
+  不启用，避免误伤正常学习。
+- 名单随评测失败样本生长（与歧义词表同维护逻辑），漏网靠提示词兜底。
 - 取舍：学习助手定位下注入+拦截足够；金融/医疗严苛场景需要代码层强制校验。
 """
 
@@ -71,12 +72,52 @@ MEDICATION_NAMES: tuple[str, ...] = (
 # 剂型/剂量指令模式：明确给出可执行用药形式（拒绝场景下出现即违规）
 MEDICATION_DOSAGE_PATTERNS = (
     re.compile(r"\d+\s*(?:mg|ml|克|毫克|片|粒)"),
-    re.compile(r"(?:片|胶囊|颗粒|口服液|混悬液|滴剂|糖浆)"),
+    re.compile(r"[一二三四五六七八九十]+\s*片"),
+    re.compile(r"(?:药片|片剂|胶囊|口服液|混悬液|滴剂|糖浆)"),
 )
 
 MEDICATION_SAFE_SUFFIX = (
     "我不能提供具体用药建议。请及时就医或咨询药师，"
     "让专业人员根据你的具体情况判断用药方案。"
+)
+
+# 行动执行型破坏操作请求的输入判定（与用药判定同构）：
+# 正向句式（删除/格式化/清空/破坏 + 系统/磁盘/文件等目标）命中且不含学习型信号。
+DESTRUCTIVE_ACTIONABLE_PATTERNS = (
+    # 目标词聚焦破坏性对象（系统盘/磁盘/数据库/服务器等）；普通"删除文件"不算
+    re.compile(r"(?:删除|格式化|清空|抹掉|破坏|摧毁|攻击|黑掉|删掉).{0,8}(?:系统盘|系统|磁盘|硬盘|注册表|数据库|服务器|网站|分区)"),
+    re.compile(r"(?:系统盘|系统|磁盘|硬盘|注册表|数据库|服务器|网站|分区).{0,8}(?:删除|格式化|清空|抹掉|破坏|摧毁)"),
+    re.compile(r"给我.{0,6}(?:命令|代码).{0,8}(?:删除|格式化|清空|破坏)"),
+    re.compile(r"写.{0,6}(?:命令|代码).{0,8}(?:删除|格式化|清空|破坏)"),
+)
+DESTRUCTIVE_LEARNING_WORDS = (
+    "原理", "是什么", "为什么", "作用", "机制", "风险", "区别", "历史", "讲解", "介绍",
+)
+
+# 窄高频危险命令名单（拒绝场景下出现即违规；随评测失败样本生长）
+DANGEROUS_COMMAND_NAMES: tuple[str, ...] = (
+    "rm -rf", "rm -fr", "rm -r -f",
+    "del /f /s", "del /s /q", "rmdir /s /q",
+    "format c:", "diskpart", "mkfs", "fdisk", "reg delete",
+    "dd if=/dev/zero", "dd if=/dev/urandom",
+    ":(){",
+)
+
+# 危险命令形态模式（覆盖变体写法，如 rm -rf /、format /q、> /dev/sda）
+DANGEROUS_COMMAND_PATTERNS = (
+    re.compile(r"rm\s+-[a-z]*r[a-z]*f[a-z]*"),
+    re.compile(r"del\s+/(?:f|s|q)"),
+    re.compile(r"rmdir\s+/s\s*/q"),
+    re.compile(r"format\s+(?:[a-z]:|/q)"),
+    re.compile(r"dd\s+if=/dev/(?:zero|urandom)"),
+    re.compile(r"mkfs\.[a-z0-9]+"),
+    re.compile(r"reg\s+delete"),
+    re.compile(r">\s*/dev/sd[a-z]"),
+)
+
+DESTRUCTIVE_SAFE_SUFFIX = (
+    "我不能提供具体可执行内容。这类操作会造成系统/数据不可逆的损害，"
+    "请勿尝试；如有清理空间、重装系统等正当需求，建议使用系统官方工具或寻求专业帮助。"
 )
 
 
@@ -145,40 +186,70 @@ def is_actionable_med_request(user_message: str) -> bool:
     return True
 
 
-class MedicationAdviceGuard:
-    """用药建议护栏：仅在行动执行型用药请求的输出流中启用（条件启用）。
+def is_actionable_destructive_request(user_message: str) -> bool:
+    """判定是否为行动执行型破坏操作请求：正向句式命中且不含学习型信号。"""
+    if not any(p.search(user_message) for p in DESTRUCTIVE_ACTIONABLE_PATTERNS):
+        return False
+    if any(w in user_message for w in DESTRUCTIVE_LEARNING_WORDS):
+        return False
+    return True
 
-    命中"高频药名 / 剂型 / 剂量指令"即截断到命中前并追加安全说明；
-    enabled=False 时完全不检测（学习型药理请求不经过本护栏）。
+
+def is_actionable_risk_request(user_message: str) -> bool:
+    """通用判定：行动执行型风险请求（用药 OR 破坏操作）→ 启用可执行内容护栏。"""
+    return is_actionable_med_request(user_message) or is_actionable_destructive_request(
+        user_message
+    )
+
+
+class RefusalContentGuard:
+    """拒绝场景可执行内容护栏（通用，条件启用）。
+
+    输入侧判定为"行动执行型风险请求"时启用；输出侧拦截可执行内容形态：
+    危险命令（窄名单+模式）与 药名/剂型/剂量指令（窄名单+模式）。
+    enabled=False 时不检测（学习型请求不经过本护栏）。
     """
 
-    def __init__(self, enabled: bool, names: tuple[str, ...] | None = None) -> None:
+    def __init__(self, enabled: bool) -> None:
         self._enabled = enabled
-        self._names = names or MEDICATION_NAMES
         self._buffer = ""
         self._hit: str | None = None
+        self._kind: str | None = None  # "command" | "drug"
 
     def check(self, text: str) -> int | None:
         """追加一段文本并返回命中位置（当前 chunk 内）；未命中或未启用返回 None。"""
         if not self._enabled:
             return None
         self._buffer += text
-        # 1) 剂型/剂量指令模式
+        base = len(self._buffer) - len(text)  # 当前 chunk 起点（用于跨 chunk 位置计算）
+
+        # 1) 危险命令形态模式
+        for pat in DANGEROUS_COMMAND_PATTERNS:
+            m = pat.search(self._buffer)
+            if m:
+                self._hit = m.group(0)
+                self._kind = "command"
+                return max(m.start() - base, 0)
+        # 2) 剂型/剂量指令模式（药名可能不带完整名字，先查形态）
         for pat in MEDICATION_DOSAGE_PATTERNS:
             m = pat.search(self._buffer)
             if m:
                 self._hit = m.group(0)
-                in_chunk = m.start() - (len(self._buffer) - len(text))
-                return max(in_chunk, 0)
-        # 2) 高频药名（可能跨 chunk）
-        for name in self._names:
+                self._kind = "drug"
+                return max(m.start() - base, 0)
+        # 3) 窄名单：危险命令名 + 高频药名（可能跨 chunk）
+        for name in (*DANGEROUS_COMMAND_NAMES, *MEDICATION_NAMES):
             idx = self._buffer.find(name)
             if idx >= 0:
                 self._hit = name
-                in_chunk = idx - (len(self._buffer) - len(text))
-                return max(in_chunk, 0)
+                self._kind = "command" if name in DANGEROUS_COMMAND_NAMES else "drug"
+                return max(idx - base, 0)
         return None
 
     def hit_fragment(self) -> str | None:
-        """返回命中的药名/模式（供 trace 记录）。"""
+        """返回命中的命令/药名/模式（供 trace 记录）。"""
         return self._hit
+
+    def hit_kind(self) -> str | None:
+        """返回命中类别：command / drug（供 loop 选择安全后缀）。"""
+        return self._kind

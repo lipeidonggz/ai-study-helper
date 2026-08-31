@@ -327,6 +327,38 @@ function summaryText(run: EvalRun): string {
   return parts.join(' · ') || '—'
 }
 
+function compositeText(run: EvalRun): string {
+  const s = run.summary as Record<string, unknown> | undefined
+  const cs = s?.composite_score
+  if (typeof cs !== 'number') return '—'
+  const lo = s?.composite_ci_low
+  const hi = s?.composite_ci_high
+  const ci =
+    typeof lo === 'number' && typeof hi === 'number'
+      ? ` [${(lo * 100).toFixed(1)}~${(hi * 100).toFixed(1)}%]`
+      : ''
+  return `${(cs * 100).toFixed(2)}%${ci}`
+}
+
+interface RedLineViolation {
+  case_id: string
+  pass_rate: number
+  threshold: number
+}
+
+function redLineViolations(run: EvalRun): RedLineViolation[] {
+  const s = run.summary as Record<string, unknown> | undefined
+  const r = s?.red_line as Record<string, unknown> | undefined
+  const v = r?.violations
+  if (!Array.isArray(v)) return []
+  return v
+    .filter((x): x is RedLineViolation => {
+      const o = x as Record<string, unknown>
+      return typeof o?.case_id === 'string' && typeof o?.pass_rate === 'number'
+    })
+    .map((o) => ({ case_id: o.case_id, pass_rate: o.pass_rate, threshold: o.threshold ?? 1 }))
+}
+
 function fmtTime(iso?: string): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -423,6 +455,18 @@ onUnmounted(stopPolling)
           <template v-if="data.cases.length">
             （{{ Math.round((verdictCounts.pass / data.cases.length) * 100) }}%）
           </template>
+        </span>
+        <span class="ui-stat plain">复合分 <span class="num">{{ compositeText(data.run) }}</span></span>
+      </div>
+      <div
+        v-if="redLineViolations(data.run).length"
+        class="ui-error"
+        style="margin: 8px 0"
+      >
+        <strong>红线闸门未通过：</strong>
+        <span v-for="v in redLineViolations(data.run)" :key="v.case_id">
+          {{ v.case_id }}（通过率 {{ (v.pass_rate * 100).toFixed(0) }}% / 阈值
+          {{ (v.threshold * 100).toFixed(0) }}%）
         </span>
       </div>
       <p v-if="verifyMsg" class="ui-ok">{{ verifyMsg }}</p>

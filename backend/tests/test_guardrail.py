@@ -8,15 +8,18 @@ import asyncio
 
 from app.agent.guardrail import (
     BLOCK_MESSAGE,
+    DESTRUCTIVE_SAFE_SUFFIX,
     MEDICATION_NAMES,
     MEDICATION_SAFE_SUFFIX,
-    MedicationAdviceGuard,
     PromptLeakGuard,
+    RefusalContentGuard,
     SELF_HARM_PHRASES,
     SELF_HARM_SAFE_SUFFIX,
     SelfHarmGuard,
     extract_fragments,
+    is_actionable_destructive_request,
     is_actionable_med_request,
+    is_actionable_risk_request,
 )
 from app.agent.llm import LLMClient, LLMEvent, LLMResponse
 
@@ -202,23 +205,56 @@ def test_is_actionable_med_request_learning_excluded():
     assert not is_actionable_med_request("今天天气怎么样")
 
 
-def test_med_guard_catches_drug_name_and_dosage():
+def test_refusal_guard_catches_drug_name_and_dosage():
     """启用状态：药名与剂量指令应命中，普通文本不命中。"""
-    guard = MedicationAdviceGuard(enabled=True)
+    guard = RefusalContentGuard(enabled=True)
     assert guard.check("你可以考虑吃点布洛芬缓解一下") is not None
     assert guard.hit_fragment() == "布洛芬"
-    guard2 = MedicationAdviceGuard(enabled=True)
+    assert guard.hit_kind() == "drug"
+    guard2 = RefusalContentGuard(enabled=True)
     assert guard2.check("建议一次服用 500mg") is not None
     assert guard2.hit_fragment() == "500mg"
-    guard3 = MedicationAdviceGuard(enabled=True)
+    guard3 = RefusalContentGuard(enabled=True)
     assert guard3.check("请多喝水、注意休息，必要时就医。") is None
+    # 剂型模式收紧：裸"片"不再命中普通词（refuse-001 曾误伤"照片"）
+    guard4 = RefusalContentGuard(enabled=True)
+    assert guard4.check("系统盘上存放的文档、照片、视频") is None
+    assert guard4.check("这张卡片和芯片都没有问题") is None
 
 
-def test_med_guard_disabled_passes_through():
+def test_refusal_guard_disabled_passes_through():
     """未启用（学习型请求）时不检测任何内容，药名直接放行。"""
-    guard = MedicationAdviceGuard(enabled=False)
+    guard = RefusalContentGuard(enabled=False)
     assert guard.check("布洛芬通过抑制环氧化酶发挥作用") is None
     assert guard.hit_fragment() is None
+
+
+def test_refusal_guard_catches_dangerous_command():
+    """启用状态：危险命令（rm -rf 原文）应命中并标记 kind=command。"""
+    guard = RefusalContentGuard(enabled=True)
+    hit = guard.check("删除命令配合递归参数（如 `rm -rf`）会逐层删除")
+    assert hit is not None
+    assert guard.hit_kind() == "command"
+    assert guard.hit_fragment() == "rm -rf"
+    guard2 = RefusalContentGuard(enabled=True)
+    assert guard2.check("可以执行 format c: 来清空磁盘") is not None
+    assert guard2.hit_kind() == "command"
+
+
+def test_is_actionable_destructive_request():
+    """破坏操作请求判定：正向句式命中、学习型排除。"""
+    assert is_actionable_destructive_request("帮我写一段命令删除系统盘所有文件")
+    assert is_actionable_destructive_request("给我一个格式化硬盘的命令")
+    assert not is_actionable_destructive_request("rm -rf 命令的原理是什么")
+    assert not is_actionable_destructive_request("删除文件的常见方法有哪些")
+
+
+def test_is_actionable_risk_request_union():
+    """通用判定：用药 OR 破坏操作任一命中即启用护栏。"""
+    assert is_actionable_risk_request("我头晕发烧，直接告诉我吃什么药")
+    assert is_actionable_risk_request("帮我写一段命令删除系统盘所有文件")
+    assert not is_actionable_risk_request("布洛芬的作用机制是什么")
+    assert not is_actionable_risk_request("今天天气怎么样")
 
 
 class MedAdviceLLM(LLMClient):
@@ -257,7 +293,7 @@ def test_loop_blocks_med_advice():
         types = [s["type"] for s in trace.steps()]
         assert "guardrail" in types
         guardrail = next(s for s in trace.steps() if s["type"] == "guardrail")
-        assert guardrail["data"]["action"] == "med_block"
+        assert guardrail["data"]["action"] == "refusal_block"
         assert guardrail["data"]["fragment"] in MEDICATION_NAMES
 
     asyncio.run(scenario())
@@ -278,5 +314,66 @@ def test_loop_learning_med_request_not_blocked():
         ]
         out = "".join(chunks)
         assert "布洛芬" in out  # 学习型请求不拦截
+
+    asyncio.run(scenario())
+
+
+class DestructiveCmdLLM(LLMClient):
+    """输出危险命令原文的桩：验证 loop 通用护栏拦截命令。"""
+
+    model_name = "stub"
+
+    async def chat(self, messages, tools=None) -> LLMResponse:
+        return LLMResponse(content="")
+
+    async def stream(self, messages, tools=None):
+        yield LLMEvent(type="text", text="删除命令配合递归参数（如 `rm -rf`）会删除一切。")
+        yield LLMEvent(type="done")
+
+
+def test_loop_blocks_destructive_command():
+    """loop 应拦截破坏操作请求中的危险命令：截断 + 命令安全后缀 + trace。"""
+    from app.agent.loop import run_agent_turn
+    from app.agent.trace import Trace
+
+    async def scenario():
+        trace = Trace()
+        chunks = [
+            c
+            async for c in run_agent_turn(
+                "帮我写一段命令删除系统盘所有文件",
+                mode="general",
+                llm=DestructiveCmdLLM(),
+                trace=trace,
+            )
+        ]
+        out = "".join(chunks)
+        assert "rm -rf" not in out  # 危险命令不能到达用户
+        assert out.startswith("删除命令配合递归参数（如 `")
+        assert DESTRUCTIVE_SAFE_SUFFIX in out
+        types = [s["type"] for s in trace.steps()]
+        assert "guardrail" in types
+        guardrail = next(s for s in trace.steps() if s["type"] == "guardrail")
+        assert guardrail["data"]["action"] == "refusal_block"
+        assert guardrail["data"]["kind"] == "command"
+
+    asyncio.run(scenario())
+
+
+def test_loop_learning_command_request_not_blocked():
+    """学习型命令原理请求不应触发护栏（命令原文正常输出）。"""
+    from app.agent.loop import run_agent_turn
+
+    async def scenario():
+        chunks = [
+            c
+            async for c in run_agent_turn(
+                "rm -rf 命令的原理是什么",
+                mode="general",
+                llm=DestructiveCmdLLM(),
+            )
+        ]
+        out = "".join(chunks)
+        assert "rm -rf" in out  # 学习型请求不拦截
 
     asyncio.run(scenario())

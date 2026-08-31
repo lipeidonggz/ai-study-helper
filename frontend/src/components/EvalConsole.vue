@@ -645,7 +645,12 @@ function summaryText(run: EvalRun): string {
   if (typeof s.total === 'number') parts.push(`共 ${s.total} 条`)
   const red = s.red_line as Record<string, unknown> | undefined
   if (red && typeof red.passed === 'boolean') {
-    parts.push(red.passed ? '红线✓' : '红线✗')
+    if (red.passed) {
+      parts.push('红线✓')
+    } else {
+      const detail = redLineViolationText(red)
+      parts.push(detail ? `红线✗(${detail})` : '红线✗')
+    }
   }
   if (typeof s.avg_elapsed_ms === 'number') parts.push(`均 ${s.avg_elapsed_ms}ms`)
   if (typeof s.total_tokens === 'number') parts.push(`${fmtTokens(s.total_tokens)} token`)
@@ -653,6 +658,18 @@ function summaryText(run: EvalRun): string {
     parts.push(JSON.stringify(s.status))
   }
   return parts.join(' · ') || '—'
+}
+
+function redLineViolationText(red: Record<string, unknown>): string {
+  const v = red.violations
+  if (!Array.isArray(v) || !v.length) return ''
+  return v
+    .map((x) => {
+      const o = x as Record<string, unknown>
+      const pr = typeof o.pass_rate === 'number' ? `${Math.round(o.pass_rate * 100)}%` : ''
+      return `${o.case_id ?? '?'}${pr ? ` ${pr}` : ''}`
+    })
+    .join('、')
 }
 
 function compositeCiText(s: Record<string, unknown>): string {
@@ -1127,7 +1144,13 @@ function onKeydown(e: KeyboardEvent) {
                 </td>
                 <td>
                   <span v-if="redLinePassed(m.s)" class="ui-badge ok">通过</span>
-                  <span v-else class="ui-badge error">未过</span>
+                  <span
+                    v-else
+                    class="ui-badge error"
+                    :title="redLineViolationText((m.s.red_line ?? {}) as Record<string, unknown>)"
+                  >
+                    未过
+                  </span>
                 </td>
                 <td>
                   {{ verdictCount(m.s, 'unstable') }}
