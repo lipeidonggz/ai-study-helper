@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0024 · RAG v1.0 用例设计：判定维度定稿 + 污染半衰期原则 + 用例类型清单（草案）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0024 · RAG v1.0 用例设计：判定维度定稿 + 污染半衰期原则 + 用例类型清单（草案）</h1>
+      <p class="subtitle">主线：RAG 增强的单轮对话 · 关联：0023（目标与边界定稿）、0022（阶段 1 评测体系）</p>
+      <p class="subtitle">笔记结构：第一部分=思路简要描述+结论（复习先读）；第二部分=现场细节（复原现场用）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-09-01</span>
+        <span>参与：沛东 + Codex（AI 协作开发助手）</span>
+        <span>类型：用例设计 / 判定维度定稿，用例类型清单草案</span>
+        <span>分支：v1.0（RAG 开发线）</span>
+        <span>状态：判定维度已定稿（用户价值层 3 维 + 工程诊断层 3 项）；污染半衰期原则已确认；用例类型清单仍为草案</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 + 结论（复习先读这里）</h2>
+      <p><strong>一句话主线：</strong>RAG 用例难在设计开放型回答的判定标准——阶段 1 的"行为对错"升级为<strong>用户价值（黑盒）+ 工程诊断（白盒）</strong>两层判定；另因知识库本质是"弥补模型知识更新延迟"，用例体系必须内置<strong>时间维度（污染半衰期）</strong>，防评测集随时间腐烂。</p>
+      <h3>结论清单</h3>
+      <ol>
+        <li><strong>难度定性</strong>：RAG 用例的难是真实的，拆成四个性质不同的难点——①答案开放性（生成式回答无确定对错）②引用真实性是新判定维度（需对照原文片段）③模型太熟需"逼检索"（细节/出处/新内容类题目）④学习环节语义化（把"解惑/辨析/梳理"转成可判定用例）。四个难点分别有成熟解法或构造技巧，不是不可解。</li>
+        <li><strong>判定维度（定稿，两层）</strong>：分层判据 = <strong>"用户能否直接观察 / 是否在意"</strong>——评测对象是"有 RAG 赋能的 Agent"整体，不是 RAG 内部环节。用户价值层（黑盒，判分）= 正确完整性（含切题，答非所问即不正确）+ 表达合适性（应答形态与问题类型匹配）+ 拒答校准（知识库与模型都不知道时明确说不知道、不编造；过度拒答是 UX 问题，拒答不足是安全问题）；工程诊断层（白盒，不判分）= 引用真实性（红线级：伪造来源直接 fail，不进复合分）+ 检索充分性（常驻诊断：失败归因）+ faithfulness（按需审计：评测可信度）。两层分别服务<strong>对外验收（用户价值）</strong>与<strong>对内归因（工程诊断）</strong>，混在一个列表里会互相污染。</li>
+        <li><strong>污染半衰期原则（沛东洞察，2026-09-01）</strong>：知识库本质是"模型不知道什么"——除项目自有内容外，绝大部分素材公开可得，模型会随时间内化，导致"现在靠检索才能答对、一年后模型直接会"；用例因此按<strong>污染半衰期</strong>分四类（自有内容 / 行为契约：永不退化；经典内容：缓慢退化；最新知识：快速退化），逼检索强度与半衰期挂钩，并用 faithfulness 审计作为"用例污染检测器"，素材源（The Batch / arXiv）持续更新供给新鲜用例。业界对应：FreshQA 动态基准、ACL 2026 post-cutoff decay 研究——动态评测只能降低不能消除污染（新题仍残留 17%-29% 可被旧知识验证）。</li>
+        <li><strong>用例类型清单（草案，按学习过程主线组织）</strong>：九个环节 × 若干题型，先做判定容易的（溯源求证 / 细节问答 / 引用核查——有原文可依，金标准好写），再做开放型（梳理 / 辨析——要点覆盖标准）。每个环节先 3-5 条，跑通评测链路再扩。</li>
+        <li><strong>逼检索构造技巧（针对模型熟悉度）</strong>：细节题（问原文具体表述 / 数字 / 案例）、溯源题（问观点出自哪篇 / 哪个章节）、对比题（问两个来源异同，必须都检索到）、时效题（2025-2026 新内容）、自有内容题（问项目文档细节，模型绝对不知道）。</li>
+        <li><strong>流程</strong>：判定维度（接口层）→ 用例类型清单（骨架，taxonomy-first）→ 逐条对着素材出题（内容驱动填用例）→ 人工逐条审金标准（沿用 0022 原则，AI 起草、人工复核）。</li>
+      </ol>
+      <h3>待定 / 待确认</h3>
+      <ol>
+        <li>各维度权重（默认等权？拒答校准是否单独闸门？）与复合分口径；</li>
+        <li>用例类型清单草案：九环节 × 题型是否覆盖主线；每环节 3-5 条的起步量是否合适；</li>
+        <li>引用真实性判定的粒度：断言级（每句引用单独核对）还是回答级（整体看引用是否真实）；</li>
+        <li>素材与用例的对齐：先采哪些素材、从哪个环节开始出题；</li>
+        <li>用例 schema 时间字段设计：知识截止 / 污染半衰期 / 刷新建议周期的具体字段。</li>
+        <li>版权合规：素材采集时逐条记录许可/风险（manifest，本地私有不进仓库）；公开/商用触发合规复审（换 Datawhale 版、厂商全文转索引+摘要+引用）。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节（复原现场用）</h2>
+      <h3>讨论历程（决策链）</h3>
+      <ol>
+        <li><strong>坑大的担忧（沛东）</strong>：0023 素材清单定稿后，沛东粗略想了下用例怎么搞，觉得"坑挖得有点大，不怎么好搞"。Codex 确认难是真实的，拆成四个难点：答案开放性 / 引用真实性新维度 / 模型太熟需逼检索 / 学习环节语义化。</li>
+        <li><strong>解法对照</strong>：①忠实度 / 相关性 / 上下文相关性是 RAG 评测业界成熟维度，项目已有加权复合分 + 连续打分基础，只加维度不改机制；②引用核查 = "断言 + 出处"逐条对，判官从"对照工具事实"扩展为"对照检索片段"；③逼检索技巧 = 细节 / 出处 / 新内容题，正对应选材时"模型熟悉度低"素材的用途；④学习环节语义化最需自己设计，用"判定难度排序"绕开——先做有原文可依的题型。</li>
+        <li><strong>步骤确认（沛东拍板）</strong>：先做①判定维度 ②用例类型清单，给沛东过目；确认后进入逐条用例设计。进入新工作阶段，笔记换新文件 0024。</li>
+        <li><strong>草案初稿（Codex 产出，沛东审阅的对象）</strong>：Codex 按"复用 0022 机制、加 RAG 维度"的思路产出初始判定维度 = <strong>4 判分 + 1 诊断</strong>：引用真实性（红线级）、忠实度（回答须基于检索内容，不编造）、正确完整性（金标准关键点覆盖）、相关性（切题）+ 检索充分性（诊断，失败归因）。沛东就是对着这份草案发出下面的三连问。</li>
+        <li><strong>三连质疑（沛东，草案被拆）</strong>：沛东连发三问，看似三个独立问题，实则指向同一个本质。①忠实度："知识库外零编造是啥意思？作为学习助手我们并不在意是否用知识库外内容，什么叫编造？"——用户视角 vs 系统视角的分野开始浮现；②三个用户诉求："正确解答所有问题 / 表达方式与问题匹配 / 没有答案明确说不知道"，并指出后两个诉求草案里没有对应；③"引用真实性像是打开内部看的二层判别指标？相关性跟正确完整性会重叠？检索充分性也是内部指标——我们要评测的是有 RAG 赋能的 Agent，需要把这些嵌进去吗？"</li>
+        <li><strong>为什么拆两层（核心推理，2026-09-01）</strong>：三问的共同本质是——"这套维度到底在评测什么？"答案是：我们要评测的是<strong>有 RAG 赋能的 Agent</strong>（用户可见的整体），不是 RAG 内部环节。由此产生两条用途不同的线：<strong>用户价值层</strong>——用户能否直接观察、是否在意这个表现？能且在意 → 进复合分（对外验收的尺子）；<strong>工程诊断层</strong>——用户看不见或不关心，但坏了会影响系统质量 → 不判分只记录（对内修理的仪表盘）。分层判据 = <strong>"用户能否直接观察 / 是否在意"</strong>。草案的毛病正是把两个世界混在一个列表里：忠实度（用户不观察，内部指标）被当成判分维度，会误伤"允许内化知识"的正常回答；相关性被正确完整性覆盖（答非所问即不正确）；引用真实性 / 检索充分性混进来又稀释了用户评分。分层不是维度数量的整理，是<strong>评测目的的分野：对外验收 vs 对内归因</strong>。</li>
+        <li><strong>修订结果（两层判定定稿）</strong>：忠实度概念纠偏为诚实性（把"是否用知识库"与"是否编造"分开，学习助手只关心后者）；新增表达合适性（对应 0023 应答形态轴）；相关性并入正确完整性；引用真实性 / 检索充分性降为工程诊断层。用户价值层 = 正确完整性 + 表达合适性 + 拒答校准（诚实性落地为业界术语）；工程诊断层 = 引用真实性（红线）+ 检索充分性（常驻）。</li>
+        <li><strong>业界查证（2026-09-01）</strong>：Ragas / DeepEval / FutureAGI / Thoughtworks 一致采用三层评测——Retrieval 层（context precision / recall、MRR、NDCG）+ Generation 层（faithfulness、citation quality、answer relevance、context utilization）+ End-to-end 层（answer correctness、helpfulness、refusal calibration、format compliance）。映射确认：我们的用户价值层 = 业界 End-to-end 层（三个用户诉求在业界都有标准名：answer correctness / format compliance / refusal calibration，且拒答校准明确属 End-to-end 层）；工程诊断层 = Retrieval + Generation 层。唯一刻意偏离：业界 faithfulness 定义"只允许基于检索内容"，对知识库问答工具成立，但我们定位允许内化知识，所以 faithfulness 不进用户判分。</li>
+        <li><strong>faithfulness 定位（沛东追问）</strong>：沛东问"faithfulness 加进诊断指标了吗？应该是吗"。Codex 定调：faithfulness 是<strong>评测可信度审计工具</strong>，不是产品运行诊断——因为"回答没完全基于检索"对学习助手不是错误（允许内化知识），但它低 + 答案正确 = "模型不靠检索也答对"的评测污染最强信号（正好对应 0022 评测可信度主线）。落地：不常驻每次 attempt，跑批后对"答案正确"的用例抽样审计，比例升高说明用例失效需换题。与检索充分性（常驻，产品归因）分工：一个回答"这次失败在哪"，一个回答"这次答对是否靠检索"。</li>
+        <li><strong>污染半衰期洞察（沛东，2026-09-01）</strong>：沛东指出——按产品定位 + 知识库内容定位，RAG 只是在弥补大模型知识更新延迟（除项目自有内容外大部分公开可得），所以"现在靠检索才能答对的问题，一年后可能已被模型内化"，评测用例必须随时间更新。Codex 查证业界：ACL 2026《Test of Time》研究 post-cutoff performance decay 作为污染信号；FreshQA 动态基准持续刷新对抗知识内化；ACM MM 2026 发现动态评测仍残留 17%-29% 污染（新题也可能用旧知识验证）。结论：用例按污染半衰期分四类（自有内容 / 行为契约：永不退化；经典内容：缓慢退化；最新知识：快速退化），逼检索强度与半衰期挂钩；faithfulness 审计兼任污染检测器；素材源（The Batch / arXiv）持续更新供给新鲜用例；用例 schema 加时间字段。沛东确认成立。</li>
+      </ol>
+      <h3>草案记录</h3>
+      <p><strong>草案初稿（4 判分 + 1 诊断，被沛东三连问拆解，仅存档）</strong>：Codex 按"复用 0022 机制、加 RAG 维度"思路产出，是沛东审阅的第一版——</p>
+      <ul>
+        <li><strong>引用真实性（citation_truth，红线级）</strong>：回答中引用的来源必须真实存在于知识库且内容吻合；伪造 / 张冠李戴 / 编造来源 = fail。对应 v1.0 引用真实性硬约束。</li>
+        <li><strong>忠实度（faithfulness，判分）</strong>：回答内容是否基于检索到的知识库片段；不得编造知识库没有的事实 / 数字 / 表述。对应"知识库外零编造"。</li>
+        <li><strong>正确完整性（answer_correct，判分）</strong>：答案是否正确、是否覆盖金标准关键点；开放型回答按要点覆盖打分（部分分）。</li>
+        <li><strong>相关性（relevance，判分）</strong>：回答是否切题、没有答非所问；检索到无关内容但强行回答 = 扣分。</li>
+        <li><strong>检索充分性（retrieval_sufficiency，诊断）</strong>：记录"是否检索到足以回答的内容"与"回答是否用上了检索内容"，不直接判 pass/fail，用于失败归因（没检索到 vs 检索到没用上）。</li>
+      </ul>
+      <p><strong>拆解过程概要：</strong>忠实度把"是否用知识库"与"是否编造"混为一谈（学习助手只在意后者，概念纠偏为诚实性）；相关性被正确完整性覆盖；引用真实性 / 检索充分性属"打开内部看"的二层指标，降为工程诊断层；另补用户真实诉求"表达合适性"与"拒答校准"。详见下方定稿版。</p>
+      <p><strong>判定维度（定稿，两层）：</strong></p>
+      <ul>
+        <li><strong>用户价值层（黑盒，判分，进复合分）</strong>：
+          <ul>
+            <li><strong>正确完整性（answer_correct）</strong>：答案正确、覆盖金标准关键点，开放型按要点覆盖给部分分；<strong>含切题</strong>（相关性并入：答非所问即不正确）。</li>
+            <li><strong>表达合适性（format_appropriateness）</strong>：应答形态与问题类型匹配——问"是什么"给定义、问"区别"给对比、问"怎么开始"给路径、问"总结"给要点、问"出题"给题目；答对但形态错位（如问定义却给整章概述）= 扣分。</li>
+            <li><strong>拒答校准（refusal_calibration）</strong>：知识库与模型都不知道时明确说不知道；不编造事实 / 数字 / 来源；过度拒答是 UX 问题，拒答不足是安全问题（业界定义）。</li>
+          </ul>
+        </li>
+        <li><strong>工程诊断层（白盒，不判分）</strong>：
+          <ul>
+            <li><strong>引用真实性（citation_truth，红线级）</strong>：引用的来源必须真实存在于知识库且内容吻合；伪造 / 张冠李戴 / 编造来源 = fail（must_pass 闸门，不进复合分）。对应 v1.0 引用真实性硬约束。</li>
+            <li><strong>检索充分性（retrieval_sufficiency，常驻诊断）</strong>：记录"是否检索到足以回答的内容"与"回答是否用上了检索内容"，失败归因（没检索到 vs 检索到没用上）。</li>
+            <li><strong>faithfulness（按需审计）</strong>：回答论断与检索内容的吻合度；评测可信度审计——低 + 答案正确 = 用例被模型内化（评测污染），提示换题；不常驻打分。</li>
+          </ul>
+        </li>
+      </ul>
+      <p><strong>业界对照（2026-09-01 查证）：</strong></p>
+      <table>
+        <thead>
+          <tr><th>我们的层</th><th>我们的维度</th><th>业界对应（Ragas / DeepEval / FutureAGI / Thoughtworks）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td rowspan="3">用户价值层（黑盒）</td><td>正确完整性</td><td>answer correctness（End-to-end 层）</td></tr>
+          <tr><td>表达合适性</td><td>format compliance（End-to-end 层；业界偏窄，我们更宽：应答形态匹配）</td></tr>
+          <tr><td>拒答校准</td><td>refusal calibration（End-to-end 层）</td></tr>
+          <tr><td rowspan="3">工程诊断层（白盒）</td><td>引用真实性</td><td>citation quality（Generation 层）</td></tr>
+          <tr><td>检索充分性</td><td>context precision / recall（Retrieval 层）</td></tr>
+          <tr><td>faithfulness</td><td>faithfulness / groundedness（Generation 层；我们降级为按需审计）</td></tr>
+        </tbody>
+      </table>
+      <p><strong>污染半衰期分类（2026-09-01 定）：</strong></p>
+      <table>
+        <thead>
+          <tr><th>用例类型</th><th>例子</th><th>退化速度</th><th>用例设计含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>自有内容用例</td><td>问项目文档细节（"0023 素材清单有几类？"）</td><td>永不退化</td><td>可测知识本身，评测最干净</td></tr>
+          <tr><td>行为契约用例</td><td>"必须引用来源"、"不知道就说不知道"</td><td>永不退化</td><td>测行为约束，与知识无关</td></tr>
+          <tr><td>经典内容用例</td><td>问《Building Effective Agents》原文表述</td><td>缓慢退化</td><td>只测行为（引用真实 / 逼检索），不指望测"模型不知道"</td></tr>
+          <tr><td>最新知识用例</td><td>问 2026-08 阿里云安全文章细节</td><td>快速退化</td><td>设计成细节 / 出处题延缓退化；靠素材持续更新换新</td></tr>
+        </tbody>
+      </table>
+      <p><strong>用例类型清单草案（按学习过程主线）：</strong></p>
+      <table>
+        <thead>
+          <tr><th>环节</th><th>用例类型</th><th>示例（对着素材）</th><th>判定侧重</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>认知扩展</td><td>概念 / 定义 / 入门</td><td>"什么是 harness engineering？"</td><td>正确完整 + 表达合适 + 拒答校准</td></tr>
+          <tr><td>细节问答</td><td>原文表述 / 数字 / 案例</td><td>"OpenAI《Harness engineering》说 AGENTS.md 应该是地图还是百科？"</td><td>正确完整 + 引用真实（红线）</td></tr>
+          <tr><td>解惑</td><td>区别 / 为什么 / 误区</td><td>"RAG 和微调有什么区别？为什么有 RAG 还要微调？"</td><td>正确完整 + 表达合适</td></tr>
+          <tr><td>辨析</td><td>观点判断 / 对错论证</td><td>"『Agent 一定会调用工具』这个说法对吗？"</td><td>正确完整 + 引用真实（红线）</td></tr>
+          <tr><td>结构化梳理</td><td>归纳框架 / 模块 / 步骤</td><td>"梳理 multi-agent 系统的常见架构模式"</td><td>正确完整 + 表达合适</td></tr>
+          <tr><td>溯源求证</td><td>出处 / 章节 / 归属</td><td>"『工具调用是 Agent 核心』这个观点出自哪篇？怎么表述的？"</td><td>引用真实（红线）+ 正确完整</td></tr>
+          <tr><td>批判认知</td><td>多方对照 / 论证质疑</td><td>"A社和 OpenAI 对 harness 的理解有什么异同？"</td><td>正确完整 + 引用真实（红线）</td></tr>
+          <tr><td>验证理解</td><td>自测出题</td><td>"根据李博杰书第三章出 3 道自测题"</td><td>表达合适 + 拒答校准</td></tr>
+          <tr><td>学习规划</td><td>路径 / 顺序推荐</td><td>"我想学 Agent，从哪开始？"</td><td>正确完整 + 表达合适</td></tr>
+          <tr><td>重点提炼 / 复习</td><td>要点总结</td><td>"总结《Building Effective Agents》的核心观点"</td><td>正确完整 + 引用真实（红线）</td></tr>
+        </tbody>
+      </table>
+      <h3>下一步</h3>
+      <ol>
+        <li>沛东确认判定维度定稿版与污染半衰期原则；过目用例类型清单草案；</li>
+        <li>确认后：定引用真实性判定粒度 + 各维度权重 / 复合分口径 + 用例 schema 时间字段 → 选首轮素材（自有内容 / 模型熟悉度低优先）→ 逐条对着素材出题（每环节 3-5 条起步）→ 人工审金标准。</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-01 · RAG v1.0 用例设计（判定维度定稿 + 污染半衰期原则 + 用例类型清单草案）
+    </footer>
+  </div>
+</body>
+</html>

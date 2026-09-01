@@ -22,7 +22,7 @@
         <span>参与：沛东 + Codex（AI 协作开发助手）</span>
         <span>类型：需求梳理 / 目标与边界已定稿</span>
         <span>分支：v1.0（RAG 开发线，已推送 origin）</span>
-        <span>状态：目标与边界已定稿（2026-09-01）——输出端主线、知识库主题、素材清单（6 类）、引用硬约束全部确认；剩 4 项真待定（来源标注粒度 / 知识库外细节 / 低置信处理 / 验收线阈值）</span>
+        <span>状态：目标与边界已定稿（2026-09-01）——输出端主线、知识库主题、素材清单（6 类）、引用硬约束、版权合规口径全部确认；剩 4 项真待定（来源标注粒度 / 知识库外细节 / 低置信处理 / 验收线阈值）</span>
       </div>
     </section>
 
@@ -56,6 +56,7 @@
         <li><strong>知识库主题（2026-09-01 定方向）</strong>：<strong>Agent 学习资料</strong>——入门教程 + 业界实践文章（Anthropic/OpenAI/国内厂商）+ 学术论文 + <strong>项目自有文档</strong>（AGENTS.md + memory/ 关键笔记 + 后端架构文档，2026-09-01 确认）；知识深度覆盖入门 / 应用前沿 / 学术研究，支撑完整学习过程；混合策略：内容真实可学（不只要最新）+ 最新素材作为评测验证用例的极佳载体；</li>
         <li><strong>输入侧</strong>：需覆盖"向量化为主的输入知识处理主流策略"（长文本叙事 / 结构感知 / 结构化数据 / 短条目批量 / 多文档集合）；具体形态待输出端定稿后反推。</li>
         <li><strong>素材清单（2026-09-01 全部定稿，6 类）</strong>：教程 3 + 业界文章 16（A社 6 / OpenAI 3 / 个人站 7）+ The Batch 周刊 + 国内厂商文章 8 + 学术论文（arXiv 为主，半自动智能入库带 UI）+ 项目自有文档（AGENTS.md / memory 关键笔记 / backend 架构文档）；按<strong>模型熟悉度</strong>分级（高=评测污染重 / 低=评测干净），经典文承担认知与框架角色、用"模型已知 vs 检索溯源"对照用例把污染变成测试资产；<strong>逐条明细（含链接、熟悉度、载体）见第二部分「素材清单」</strong>。</li>
+        <li><strong>版权合规口径（2026-09-01 补充）</strong>：素材许可矩阵确认——教程两件套 Apache-2.0（宽松）、Datawhale 版 CC BY-NC-SA（个人非商用可用）、厂商文章灰色（本地私有可用）、arXiv 入库记 license；<strong>素材只进本地、永不进仓库</strong>；公开/商用触发合规复审；仓库补 MIT LICENSE（出站方向）。详见第二部分「版权与许可」。</li>
       </ol>
       <h3>真待定清单（尚未定的，已定项已并入结论清单 / 速查表）</h3>
       <ol>
@@ -83,6 +84,7 @@
         <li><strong>国内厂商文章升格（2026-09-01，沛东洞察）</strong>：沛东指出前沿文章（A社 / OpenAI / 个人站）大多以 CodeAgent 为分析对象，而编码域基础设施明显好于其他领域，知识库因此自带偏见；国内厂商文章可补此偏见。Codex 认同并挖根因：编码域自带验证闭环（编译 / 测试 / lint / CI 确定性反馈），非编码域反馈模糊、评测要自己造——正对应 0022 手搓评测可信度的经历，本项目本身就是"难域"；前沿语料是"方便域采样偏差"。国内厂商文章另补"约束对标"：国产模型 / 成本敏感 / 中文环境 / 合规要求下硬扛工程，与 DeepSeek 栈处境更贴近。同时泼冷水：非所有国内厂商文章都补偏见，多为发布通稿 / 译文，需按 4 条选材标准人工筛。</li>
         <li><strong>学术论文来源与入库方式（2026-09-01）</strong>：沛东问期刊/会议论文是否不易公开检索，忆起"某 A 打头网站"（arXiv）；Codex 确认三类公开性：纯期刊有付费墙/延迟开放、AI 顶会（NeurIPS/ICML/ICLR 走 OpenReview、ACL 系列走 ACL Anthology）反而公开、arXiv 是公共预印本层。沛东进一步提出产品定位问题：是否做"自动智能入库"？判断学术论文是最合适对象（来源稳定/格式稳定/结构化最好）。Codex 认同论文最适合，但指出盲点：论文只是五类素材之一且是最容易的一类，全类型自动入库难度高且在主线上价值低；且全自动违背"基础件人工复核"原则。沛东拍板：<strong>其他类型全自动暂不做；论文类做半自动智能入库，且要 UI 不要脚本</strong>（脚本太难用）。</li>
         <li><strong>论文入库 UI 边界确认 + 项目自有文档范围确认（2026-09-01）</strong>：Codex 给出 UI 四步流程（检索条件 → AI 打分排序候选清单 → 人工勾选 → 入库结果），并说明筛选规则独立成可配置文本是论文"范围"的落点；沛东确认理解正确。项目自有文档范围草案（AGENTS.md + memory/ 关键笔记 + backend 架构文档），沛东确认。素材清单至此全部定稿。</li>
+        <li><strong>版权合规（2026-09-01，沛东发问）</strong>：沛东问"教程拿过来进知识库，会不会涉及版权？"。Codex 查证给出许可矩阵：李博杰书 / HF Course 为 Apache-2.0（宽松）；Datawhale 版吴恩达为 CC BY-NC-SA 4.0（非商业 + 相同方式共享）；A社 / OpenAI / 国内厂商 / The Batch 版权归厂商属灰色；arXiv 需逐篇记录 license 字段。沛东补充两个关键事实：<strong>项目代码公开在 GitHub、暂无商用计划</strong>。Codex 据此收敛：真正的风险不是"商用"而是"公开分发"——仓库数据文件已在 .gitignore，素材只进本地永不进仓库，风险从"公开再分发"降级为"个人学习使用"；NC 条款因不商用而满足；SA 条款只在"改编+再分发"时触发，本地入库不触发。决策：素材清单补"许可/风险"口径 + 采集时逐条记录 manifest + 本地私有 + 公开/商用触发合规复审（换 Datawhale 版、厂商全文转索引+摘要+引用）；仓库补 LICENSE（MIT，2026-09-01，出站方向）。</li>
       </ol>
       <h3>草案记录</h3>
       <ul>
@@ -121,6 +123,21 @@
       <p><strong>项目自有文档（2026-09-01 确认范围）</strong>——AGENTS.md（项目核心约定）+ memory/ 下与 Agent 设计相关的关键笔记（0022 评测与调校 / 0009 功能摘要 / 0002 路线图等）+ backend 架构文档。双重作用：①模型绝对没见过的自有内容，评测最干净；②知识库能回答"这个项目自己是怎么做出来的"这类问题。模型熟悉度：<strong>零</strong>（最干净）；载体：Markdown + HTML。</p>
       <p><strong>未收（记录在案）</strong>：Machine Learning Yearning（2018 PDF）——老、非 Agent 主题、模型最熟，仅当补"误差分析"方法论时再议。至此素材清单全部闭环，无待定项。</p>
       <p><strong>模型熟悉度分级的用途</strong>：高=评测污染风险大（模型可能不检索直接答对）；中=部分污染；低=评测最干净。经典文（Building Effective Agents / Lilian 综述 / Chip / Eugene）承担认知与框架角色，正好用"模型已知 vs 检索溯源"对照用例把污染变成测试资产。</p>
+      <h3>版权与许可（2026-09-01 补充）</h3>
+      <p><strong>背景</strong>：沛东问"教程拿过来进知识库，会不会涉及版权？"；随后补充两个关键事实——<strong>项目代码公开在 GitHub、暂无商用计划</strong>。Codex 查证后收敛：真正的风险不是"商用"而是"公开分发"。</p>
+      <table>
+        <thead>
+          <tr><th>素材类别</th><th>许可 / 权属</th><th>风险</th><th>处理口径</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>项目自有文档</td><td>自有</td><td>无</td><td>正常入库，可随仓库分发</td></tr>
+          <tr><td>李博杰书 / HF Course</td><td>Apache-2.0</td><td>无</td><td>全文入库无碍（宽松许可）</td></tr>
+          <tr><td>Datawhale 版吴恩达</td><td>CC BY-NC-SA 4.0</td><td>非商业限制；相同方式共享</td><td>个人非商用 OK（NC 满足）；本地入库不触发 SA（SA 在"改编+再分发"时才触发）；公开/商用前替换</td></tr>
+          <tr><td>A社 / OpenAI / 国内厂商 / The Batch</td><td>版权归厂商</td><td>灰色：复制属未授权</td><td>个人学习本地使用风险很低；产品公开/商用前转"索引+摘要+引用"</td></tr>
+          <tr><td>arXiv / OpenReview / ACL Anthology</td><td>版权归作者</td><td>多数宽松</td><td>入库时记录每篇 license 字段</td></tr>
+        </tbody>
+      </table>
+      <p><strong>落地规则（2026-09-01 定）</strong>：①素材只进本地（新增 <code>data/kb-src/</code> 目录并 gitignore），<strong>永不进仓库</strong>——公开仓库只承载代码与笔记，素材留本地，风险从"公开再分发"降级为"个人学习使用"；②采集时逐条记录许可/风险（manifest），标注 local-only 或可再分发；③<strong>合规复审触发点</strong>：产品公开访问或商用那天，做一遍——换掉 Datawhale 版、厂商全文转"索引+摘要+引用"；④出站方向：仓库此前无 LICENSE（默认"保留所有权利"，与"开放 GitHub"不一致），本次补 MIT（2026-09-01）。</p>
       <h3>现状核查细节（代码证据）</h3>
       <ul>
         <li>SessionStore Port（create_session / get_session / append_message / list_messages）+ InMemorySessionStore 存在；context.py assemble(mode, history, user_message, variant) 支持 history 注入（*history 展开）；</li>
