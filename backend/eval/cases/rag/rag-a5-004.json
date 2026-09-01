@@ -22,8 +22,8 @@
     "answer_contains": [],
     "max_rounds": 4
   },
-  "timeout_sec": 60,
-  "hard_timeout_sec": 180,
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
   "tags": [
     "细节问答",
     "数字",
@@ -31,13 +31,20 @@
   ],
   "compare": false,
   "notes": "首轮切片 ① HTML×低（A5）",
-  "weight": 1,
+  "weight": 1.0,
   "must_pass": false,
-  "must_pass_threshold": 1,
+  "must_pass_threshold": 1.0,
   "enabled": true,
   "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成",
-  "updated_at": "2026-09-01",
-  "updated_by": "codex-draft",
+  "updated_at": "2026-09-02T06:46:06",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足（内容与解释以意思一致为准、表述不限；精确数字/名称/出处须准确）——\n1. 内容正确：约 93%（用户批准了约 93% 的权限提示）；高批准率 = 批准疲劳：弹窗越多用户越不细看、监督越松懈，是 Claude Code 转向 auto mode 的动机之一。\n2. 表达合适：先给数字，再解释机制。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：A5《How we contain Claude》）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：数字错误（如 83%）；只答数字不答原因。\n2. 表达：只给数字不解释。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-01",
+    "annotated_by": "codex-draft"
+  },
   "source_ref": {
     "manifest_id": "A5",
     "location": "permission-approval-93-percent"
@@ -51,12 +58,5 @@
     "last_reviewed_at": null,
     "status": "active",
     "pollution_flags": []
-  },
-  "annotation": {
-    "golden_answer": "判 pass：以下三条须同时满足——\n1. 内容正确：约 93%（用户批准了约 93% 的权限提示）；高批准率 = 批准疲劳：弹窗越多用户越不细看、监督越松懈，是 Claude Code 转向 auto mode 的动机之一。\n2. 表达合适：先给数字，再解释机制。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：A5《How we contain Claude》）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：数字错误（如 83%）；只答数字不答原因。\n2. 表达：只给数字不解释。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
-    "reference_answer": "",
-    "note": "",
-    "annotated_at": "2026-09-01",
-    "annotated_by": "codex-draft"
   }
 }
