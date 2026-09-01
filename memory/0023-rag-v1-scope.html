@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>0023 · 阶段 2 RAG：v1.0 目标与边界梳理（进行中）</title>
+  <title>0023 · 阶段 2 RAG：v1.0 目标与边界梳理（已定稿）</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
   <div class="container">
     <header class="page-head">
-      <h1>0023 · 阶段 2 RAG：v1.0 目标与边界梳理（进行中）</h1>
+      <h1>0023 · 阶段 2 RAG：v1.0 目标与边界梳理（已定稿）</h1>
       <p class="subtitle">主线：RAG 增强的单轮对话 · 关联：0022（阶段 1 评测与调校收官）、0002（路线图阶段 2）</p>
+      <p class="subtitle">笔记结构：第一部分=思路简要描述+结论（复习先读）；第二部分=现场细节（复原现场用）</p>
       <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
     </header>
 
@@ -18,79 +19,124 @@
       <h2>会话元信息</h2>
       <div class="meta">
         <span>日期：2026-09-01</span>
-        <span>参与：用户 + Codex（AI 协作开发助手）</span>
-        <span>类型：需求梳理 / 规划进行中</span>
+        <span>参与：沛东 + Codex（AI 协作开发助手）</span>
+        <span>类型：需求梳理 / 目标与边界已定稿</span>
         <span>分支：v1.0（RAG 开发线，已推送 origin）</span>
-        <span>状态：目标已定稿，功能边界问题逐条讨论中</span>
+        <span>状态：目标与边界已定稿（2026-09-01）——输出端主线、知识库主题、素材清单（6 类）、引用硬约束全部确认；剩 4 项真待定（来源标注粒度 / 知识库外细节 / 低置信处理 / 验收线阈值）</span>
       </div>
     </section>
 
     <section class="card">
-      <h2>目标定稿：RAG 增强的单轮对话</h2>
-      <ul>
-        <li><strong>定义</strong>：用户一个 query → Agent 一个完整回答。单轮 = 不依赖跨消息历史；<strong>Agent 内部手段不限</strong>（多次检索 / 工具调用均可），以"最优回答用户问题"为目标——内部手段本身是额外的探索验证空间；</li>
-        <li><strong>定目标视角：产品视角，不是技术实现视角</strong>——先定"产品要做到什么"，再倒推技术；</li>
-        <li><strong>多轮暂不上</strong>：RAG 难点先在单轮链路上做扎实；多轮是叠加层（单轮基础 + 上下文管理 / query 重写 / 何时检索），混在一起会让评测归因模糊。</li>
-      </ul>
-      <h3>现状核查（2026-09-01，用户质疑"多轮只是框架吧？"——属实）</h3>
-      <ul>
-        <li><strong>多轮会话 = 框架未接通</strong>：Port（SessionStore）+ 内存实现 + assemble 支持 history 参数都存在，但 chat API 不读历史、不存消息、run_agent_turn 不传 history（loop 注释："多轮记忆；当前调用方还没传"）；session_id 注释"当前还没真正持久化会话"——<strong>产品实际行为就是单轮</strong>，v1.0 定位单轮不是砍功能，是与现状一致；</li>
-        <li><strong>kb_priority 模式 = 空壳提示词</strong>：context.py 身份句要求"优先使用个人知识库并给出引用来源"，但无任何检索能力（注释"阶段 2 后 RAG 优先"）——<strong>风险：提示词诱导模型编造"知识库来源"</strong>；v1.0 要把这段空头支票兑现成真检索。</li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2>待深入讨论的问题清单（讨论工作底稿，逐条定口径后更新）</h2>
+      <h2>第一部分 · 思路简要描述 + 结论（复习先读这里）</h2>
+      <p><strong>一句话主线：</strong>v1.0 = RAG 增强的单轮对话，服务"通用学习助手"定位；输出端问答能力按<strong>学习过程主线</strong>组织（初步学习 → 内化学习 → 产出辅助）；输入端知识库主题定为 <strong>Agent 学习资料</strong>、形态覆盖主流处理策略，为支撑这条主线服务。</p>
+      <h3>v1.0 边界速查（一屏看完）</h3>
+      <p><strong>读法：</strong>先扫这张表——v1.0 做什么、做到什么程度、不做什么。详细论证见下方结论清单与第二部分决策链。</p>
+      <table>
+        <thead>
+          <tr><th>维度</th><th>v1.0 状态</th><th>边界 / 理由</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>产品形态</td><td><strong>RAG 增强的单轮对话</strong></td><td>单 query → 完整回答；Agent 内部手段不限（多次检索 / 工具调用均可）；多轮暂不上（是单轮之上的叠加层）</td></tr>
+          <tr><td>输出端范围</td><td><strong>初步学习 + 内化核心环节达标</strong></td><td>认知 / 解惑 / 辨析 / 梳理 / 溯源；批判认知、应用产出部分覆盖；验证理解、学习规划、复习作为补充环节</td></tr>
+          <tr><td>明确缓做</td><td><strong>迁移应用（举一反三）</strong></td><td>单轮 + 跨域，后续版本方向，v1.0 不投入</td></tr>
+          <tr><td>知识库主题</td><td><strong>Agent 学习资料</strong></td><td>教程 + 业界文章 + 学术论文 + 项目自有文档；深度覆盖入门 / 应用前沿 / 学术研究</td></tr>
+          <tr><td>素材策略</td><td><strong>混合"都要"</strong></td><td>真实可学（不只要最新）+ 最新素材作评测验证载体；按模型熟悉度分级，把"模型已知 vs 检索溯源"污染变成测试资产</td></tr>
+          <tr><td>知识库外策略</td><td><strong>通用知识回答 + 标注</strong></td><td>学习助手定位下非纯拒答；纯拒答是"知识库问答工具"的定位</td></tr>
+          <tr><td>引用约束</td><td><strong>关键事实可溯源到检索原文</strong></td><td>引用真实性为 v1.0 硬约束，直接约束检索与生成实现</td></tr>
+          <tr><td>输入侧形态</td><td>覆盖向量化为主的主流处理策略</td><td>长文本叙事 / 结构感知 / 结构化数据 / 短条目批量 / 多文档集合；素材载体已初步覆盖</td></tr>
+        </tbody>
+      </table>
+      <h3>结论清单</h3>
       <ol>
-        <li><strong>覆盖范围</strong>：《三国演义》全书（120 回）还是先放前 N 回做验证？</li>
-        <li><strong>来源标注粒度与格式</strong>：引用到"第几回"还是段落级？格式（"（第 X 回）" / 脚注式）？</li>
-        <li><strong>知识库外回答策略</strong>：明确拒答"不在知识库范围" vs 用通用知识回答但标注"非知识库来源"（现有 boundary-scope-002 口径是后者）？</li>
-        <li><strong>检索不到 / 低置信处理</strong>：拒答 / 退化为通用回答 + 标注？</li>
-        <li><strong>引用真实性硬约束</strong>：回答中的关键事实是否必须可追溯到检索到的原文片段（防编造引用）？建议：v1.0 定为硬约束。</li>
+        <li><strong>目标定稿</strong>：RAG 增强的单轮对话——用户一个 query → Agent 一个完整回答；单轮 = 不依赖跨消息历史；<strong>Agent 内部手段不限</strong>（多次检索/工具调用均可），以"最优回答用户问题"为目标；产品视角定目标；多轮暂不上（多轮是单轮之上的叠加层）。</li>
+        <li><strong>第一性方法论</strong>：问答类型分类的轴 = <strong>产品定位</strong>（不是问答技术、不是知识库主题）。推导链：产品定位 → 使用场景 → 用户意图 → 应答形态 → 内容需求 → 承载形式。</li>
+        <li><strong>输出端主线（学习过程）</strong>：初步学习（认知扩展 / 解惑 / 辨析）→ 内化学习（结构化梳理 / 溯源求证 / 批判认知）→ 产出辅助（应用产出）；补充环节：<strong>验证理解</strong>（含自测出题）、<strong>学习规划与延伸推荐</strong>、<strong>重点提炼 / 复习</strong>。</li>
+        <li><strong>v1.0 范围收敛</strong>："ok 状态" = 初步学习 + 内化核心环节（认知 / 解惑 / 辨析 / 梳理 / 溯源）达标；批判认知、应用产出部分覆盖；<strong>迁移应用（举一反三）明确缓做</strong>（单轮 + 跨域，后续版本方向）。</li>
+        <li><strong>知识库外策略（受定位约束）</strong>：学习助手定位下 = 通用知识回答 + 标注"非知识库来源"（非纯拒答；纯拒答是"知识库问答工具"的定位）。</li>
+        <li><strong>知识库主题（2026-09-01 定方向）</strong>：<strong>Agent 学习资料</strong>——入门教程 + 业界实践文章（Anthropic/OpenAI/国内厂商）+ 学术论文 + <strong>项目自有文档</strong>（AGENTS.md + memory/ 关键笔记 + 后端架构文档，2026-09-01 确认）；知识深度覆盖入门 / 应用前沿 / 学术研究，支撑完整学习过程；混合策略：内容真实可学（不只要最新）+ 最新素材作为评测验证用例的极佳载体；</li>
+        <li><strong>输入侧</strong>：需覆盖"向量化为主的输入知识处理主流策略"（长文本叙事 / 结构感知 / 结构化数据 / 短条目批量 / 多文档集合）；具体形态待输出端定稿后反推。</li>
+        <li><strong>素材清单（2026-09-01 全部定稿，6 类）</strong>：教程 3 + 业界文章 16（A社 6 / OpenAI 3 / 个人站 7）+ The Batch 周刊 + 国内厂商文章 8 + 学术论文（arXiv 为主，半自动智能入库带 UI）+ 项目自有文档（AGENTS.md / memory 关键笔记 / backend 架构文档）；按<strong>模型熟悉度</strong>分级（高=评测污染重 / 低=评测干净），经典文承担认知与框架角色、用"模型已知 vs 检索溯源"对照用例把污染变成测试资产；<strong>逐条明细（含链接、熟悉度、载体）见第二部分「素材清单」</strong>。</li>
       </ol>
-      <h3>"ok 状态"验收线（建议稿，待定）</h3>
-      <ul>
-        <li>RAG 用例集四类（检索命中 / 来源溯源 / 知识库外处理 / 引用格式）通过率 ≥ 阈值；</li>
-        <li>来源引用 100%（需要引用的用例）；</li>
-        <li>知识库外零编造。</li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2>讨论进展：问答类型分类的第一性是产品定位（2026-09-01）</h2>
-      <p><strong>为什么记这个：</strong>梳理"输出端问答类型"时反复觉得分类"不够第一性"——最后定位到根因：<strong>意图不是从问答技术、也不是从知识库主题推的，而是从产品定位推的</strong>（用户提出："用户的意图其实是跟产品定位相关的"）。</p>
-      <h3>推导链（定稿）</h3>
-      <p>产品定位（通用学习助手）→ 使用场景（学习）→ 用户意图（为什么来问）→ 应答形态（怎么帮学）→ 内容需求（需要什么知识）→ 承载形式（输入端）。<strong>定位是第一性的</strong>，知识库主题（三国 or 别的）只是载体，稍后再定。</p>
-      <h3>分类方法论沉淀</h3>
-      <ul>
-        <li><strong>干净的分类三标准</strong>：单一轴（不能一会儿按答案形态、一会儿按难度、一会儿按边界切）、互斥且穷尽、同类共享同一答案结构；</li>
-        <li><strong>三个轴的关系</strong>：用户意图（为什么问，决定质量标准）→ 应答形态（给什么答案，决定实现）→ 问句形式（识别线索，不参与分类）；检索需求（单片段/多片段/聚合/多跳）与范围（内/外/模糊）是独立正交轴，不平铺进同一分类；</li>
-        <li>从"三国问答"推的意图（快速查证/系统了解/比较决策/清单盘点/因果理解/来源核实）<strong>定位错位</strong>——那是"知识库问答工具"视角；学习助手视角下"快速查证（填空式）"不是主意图。</li>
-      </ul>
-      <h3>学习助手意图草案（7 类，待用户确认）</h3>
+      <h3>真待定清单（尚未定的，已定项已并入结论清单 / 速查表）</h3>
       <ol>
-        <li><strong>认知扩展</strong>：了解不了解的概念/人物/事件（"给我讲讲……"）——把不知道变成知道；</li>
-        <li><strong>解惑</strong>：卡在一个点搞懂因果/机制（"为什么……"）——把不懂变成懂；</li>
-        <li><strong>辨析</strong>：区分相近概念/人物/事件（"A 和 B 有什么区别"）——消除混淆；</li>
-        <li><strong>溯源求证</strong>：回到原始材料看原文/出处（"原著怎么说""出自哪一回"）——证据意识；</li>
-        <li><strong>结构化梳理</strong>：要一个主题的整体图景（时间线/清单/总览）——建立框架；</li>
-        <li><strong>批判认知</strong>：区分演义与史实（三国场景下重要）——事实与虚构分离；</li>
-        <li><strong>应用产出</strong>：把知识用于产出（写作业/做介绍），可能要引用格式。</li>
+        <li>来源标注粒度与格式（段落级；格式）；</li>
+        <li>知识库外策略细节（方向已定：通用知识 + 标注，具体边界与措辞待定）；</li>
+        <li>检索不到 / 低置信处理（拒答 / 降级通用回答 + 标注）；</li>
+        <li>验收线阈值（建议稿方向：学习主线核心环节用例通过率 ≥ 阈值 + 来源引用 100% + 知识库外零编造；具体阈值待用例框架产出后定）。</li>
       </ol>
-      <p><strong>对问题清单的影响</strong>：第 3 条（知识库外策略）受定位约束——学习助手定位下知识库外问题应"通用知识回答 + 标注非知识库来源"（呼应 boundary-scope-002 口径），而非纯拒答；纯拒答是"知识库问答工具"的定位。</p>
     </section>
 
     <section class="card">
-      <h2>下一步（顺序有意为之）</h2>
+      <h2>第二部分 · 现场细节（复原现场用）</h2>
+      <h3>讨论历程（决策链）</h3>
       <ol>
-        <li>逐条深入讨论问题清单（1→5），定口径；</li>
-        <li>口径定完 → 定 RAG 用例分类框架（路径 B：taxonomy-first，分类骨架 = 产品定位 + 上面这些边界口径）；</li>
-        <li>最后才动素材（《三国演义》固定版本）与检索管线——<strong>不要着急搞素材</strong>，先想明白。</li>
+        <li><strong>起点（目标定稿）</strong>：沛东提出 v1.0 = RAG 增强的单轮对话，暂不上多轮；确认定义：单 query → 完整回答，Agent 内部手段不限（额外的探索验证空间），产品视角定目标；</li>
+        <li><strong>现状核查</strong>：多轮会话 = 框架未接通（Port + 内存实现 + assemble 支持 history，但 chat API 不传 history、session 不持久化，loop 注释"当前调用方还没传"）；kb_priority = 空壳提示词（要求"优先使用个人知识库并给出引用来源"但无检索能力——有诱导编造来源的风险）；</li>
+        <li><strong>范围之争</strong>：练手应摸 RAG 生产主要问题（沛东要求：输入覆盖主流处理策略、输出覆盖主流问答类型）→ 三国单文本只覆盖"长文本 + 细节问答"，不够 → Codex 曾提议"多形态语料集合"（原著 + 结构化表 + 人物条目 + FAQ）；</li>
+        <li><strong>分类方法论</strong>：输出端问答分类"不够第一性"（沛东直觉）→ Codex 拆解根因：之前分类混了三轴（答案形态 / 技术难度 / 产品边界）→ Codex 提出干净分类三标准（单一轴、互斥且穷尽、同类共享答案结构）→ 三轴递进关系：用户意图（决定质量标准）→ 应答形态（决定实现）→ 问句形式（识别线索）；检索需求与范围为独立正交轴；</li>
+        <li><strong>定位第一性（沛东顿悟）</strong>："用户的意图其实是跟产品定位相关的"——意图分类从产品定位推，不从知识库主题推；三国版意图（快速查证等）是"知识库问答工具"视角，定位错位；</li>
+        <li><strong>学习过程主线（沛东组织）</strong>：意图按"学习的典型过程"组织——初步学习（不知道→知道 / 不懂→懂 / 消除混淆）→ 内化学习（框架 / 证据 / 批判）→ 产出辅助；主线 = 对现实的建模（沛东观点，Codex 确认：有损压缩——能"主"、覆盖绝大多数环节、给功能取舍依据即可；不追求穷尽，靠验证暴露后迭代补——与 0022"评测体系就绪不追求完美"同原则）；</li>
+        <li><strong>环节扫描（Codex 补漏）</strong>：补"验证理解"（含自测出题）；补"学习规划与延伸推荐"（入口：'我想学三国从哪开始'）；补"重点提炼 / 复习"（巩固：'帮我总结要点'，Bloom 认知目标里"记忆"这条腿此前是空的）；"迁移应用 / 举一反三"明确缓做。</li>
+        <li><strong>知识库主题变更：三国 → Agent 学习资料（2026-09-01）</strong>：沛东提出——定位是学习助手、在学 Agent，输入资料就用 Agent 学习资料（业界文章 / 论文 / 教程），知识深度覆盖入门-应用前沿-学术研究，支撑完整学习过程。Codex 确认方向对（知识库与学习目标强一致、深度分层映射主线各环节、多形态贴输入覆盖目标），但<strong>指出漏洞：换掉三国并不能解决评测污染——Agent 资料模型同样熟甚至更熟</strong>；对抗手段四条：①内容时效性（2025-2026 新实践）②自有内容（项目文档进知识库，模型绝对没见过，评测最干净）③引用约束（必须引用原文片段）④细节用例（问原文具体表述/数据/出处逼检索）。沛东拍板：<strong>混合策略"都要"</strong>——知识库要真实可学（自己就是用户），最新素材纳入作评测验证载体；自有内容"妙不可言"；引用约束确认；细节用例待定内容范围后按用户环节构造；实操晚点谈，先用产品经理视角（做时发现问题再讨价还价优先级）。</li>
+        <li><strong>素材清单定稿（2026-09-01 续）</strong>：沛东确认教程两件套（李博杰书 + HF 课程）后要求扩展文章：A社不能只有《Building Effective Agents》，要 OpenAI 与个人站（Agent 业界有名）。Codex 检索验证后给出三组候选，核心标准 = 时效性（2025-2026 新文模型不熟，评测干净）：A社 5 篇核心 + 可选 Claude Code Best Practices；OpenAI 3 篇（含意外收获 <strong>Harness Engineering 2026-02</strong>，与项目 AGENTS.md / 记忆体系强相关）；个人站 5 篇 + 可选 Hamel evals 系列；Lilian 2026-07 Harness 长文与 OpenAI / A社 harness 文构成三方对照，天然是"辨析 / 批判"素材。沛东：可选的全收了。素材越挖越多，知识库还没开建，清单已近 20 条。</li>
+        <li><strong>吴恩达教程发现（2026-09-01）</strong>：沛东问吴恩达是否有文字版教程（视频版暂不管）。Codex 查证：官方 Agentic AI 系列（2025-09/10，DeepLearning.AI）以视频为主（31 视频课 + 3 阅读课），逐字稿不便抓取；但 <strong>Datawhale 有完整中文翻译整理版</strong>（5 模块 Markdown 全部完成），与李博杰书同一条 Markdown 采集管线，收；《Machine Learning Yearning》（2018 PDF）纯文字但老且非 Agent 主题，未选；<strong>The Batch 周刊</strong>纯文字、持续更新、模型不熟（如 2025-10《Disciplined Evals and Error Analysis Accelerate Agentic AI》与评测工作直接共鸣），沛东确认收入。</li>
+        <li><strong>国内厂商文章升格（2026-09-01，沛东洞察）</strong>：沛东指出前沿文章（A社 / OpenAI / 个人站）大多以 CodeAgent 为分析对象，而编码域基础设施明显好于其他领域，知识库因此自带偏见；国内厂商文章可补此偏见。Codex 认同并挖根因：编码域自带验证闭环（编译 / 测试 / lint / CI 确定性反馈），非编码域反馈模糊、评测要自己造——正对应 0022 手搓评测可信度的经历，本项目本身就是"难域"；前沿语料是"方便域采样偏差"。国内厂商文章另补"约束对标"：国产模型 / 成本敏感 / 中文环境 / 合规要求下硬扛工程，与 DeepSeek 栈处境更贴近。同时泼冷水：非所有国内厂商文章都补偏见，多为发布通稿 / 译文，需按 4 条选材标准人工筛。</li>
+        <li><strong>学术论文来源与入库方式（2026-09-01）</strong>：沛东问期刊/会议论文是否不易公开检索，忆起"某 A 打头网站"（arXiv）；Codex 确认三类公开性：纯期刊有付费墙/延迟开放、AI 顶会（NeurIPS/ICML/ICLR 走 OpenReview、ACL 系列走 ACL Anthology）反而公开、arXiv 是公共预印本层。沛东进一步提出产品定位问题：是否做"自动智能入库"？判断学术论文是最合适对象（来源稳定/格式稳定/结构化最好）。Codex 认同论文最适合，但指出盲点：论文只是五类素材之一且是最容易的一类，全类型自动入库难度高且在主线上价值低；且全自动违背"基础件人工复核"原则。沛东拍板：<strong>其他类型全自动暂不做；论文类做半自动智能入库，且要 UI 不要脚本</strong>（脚本太难用）。</li>
+        <li><strong>论文入库 UI 边界确认 + 项目自有文档范围确认（2026-09-01）</strong>：Codex 给出 UI 四步流程（检索条件 → AI 打分排序候选清单 → 人工勾选 → 入库结果），并说明筛选规则独立成可配置文本是论文"范围"的落点；沛东确认理解正确。项目自有文档范围草案（AGENTS.md + memory/ 关键笔记 + backend 架构文档），沛东确认。素材清单至此全部定稿。</li>
+      </ol>
+      <h3>草案记录</h3>
+      <ul>
+        <li><strong>三国版意图（定位错位，仅存档）</strong>：快速查证 / 系统了解 / 比较决策 / 清单盘点 / 因果理解 / 来源核实——"知识库问答工具"视角；</li>
+        <li><strong>学习助手意图 7 类（过渡版）</strong>：认知扩展 / 解惑 / 辨析 / 溯源求证 / 结构化梳理 / 批判认知 / 应用产出；</li>
+        <li><strong>学习过程主线（定稿方向）</strong>：初步学习（认知扩展 / 解惑 / 辨析）+ 验证理解 → 内化学习（结构化梳理 / 溯源求证 / 批判认知）→ 产出辅助（应用产出）；入口环节：学习规划与延伸推荐；巩固环节：重点提炼 / 复习；缓做：迁移应用；</li>
+        <li><strong>输入侧形态覆盖目标</strong>：长文本叙事切分 / 结构感知切分（标题层级）/ 结构化数据（表格，非纯向量）/ 短条目批量向量化（FAQ）/ 多文档集合（元数据过滤 + 跨文档检索）。</li>
+      </ul>
+      <h3>素材清单（2026-09-01 定稿）</h3>
+      <p><strong>教程 3 份（均为文字版，可入库）：</strong></p>
+      <ol>
+        <li><strong>李博杰《深入理解 AI Agent：设计原理与工程实践》</strong>——GitHub bojieli/ai-agent-book，2026-08 开源，Markdown 全文 + 88 个实验，中文，入门→工程实战；模型熟悉度：低（最新开源，评测干净）；载体：Markdown 长文。</li>
+        <li><strong>Hugging Face Agents Course</strong>——huggingface.co/learn/agents-course，免费认证课程，smolagents / LangChain / LlamaIndex 多框架，有中文，系统入门路径；模型熟悉度：中高；载体：网页。</li>
+        <li><strong>吴恩达 Agentic AI（Datawhale 中文整理版）</strong>——github.com/datawhalechina/agentic-ai，5 模块全译（工作流入门 / 反思 / 工具使用 / 构建技巧 / 高自治智能体模式）+ 知识点梳理 + 代码解读；非官方逐字稿，但结构化整理更适合检索；模型熟悉度：低；载体：Markdown。</li>
+      </ol>
+      <p><strong>业界实践文章 16 篇：</strong></p>
+      <ul>
+        <li><strong>A社（6）</strong>：Building Effective Agents（2024-12，workflows vs agents 框架圣经，熟悉度高）；How we built our multi-agent research system（2025-06，多智能体生产实践 + 评测方法论——小样本起步 / LLM-judge 单次评分最稳 / 人工兜底，与 0022 直接呼应）；Effective context engineering for AI agents（2025-09，compaction / 结构化笔记）；Effective harnesses for long-running agents（2025-11，环境初始态 / 增量推进 / 干净收尾，呼应红线护栏）；How we contain Claude across products（2026-05，爆炸半径 / 文件挂载权限模式，熟悉度最低）；Claude Code Best Practices（2025-05，工具使用实践）。</li>
+        <li><strong>OpenAI（3）</strong>：A Practical Guide to Building Agents（2025-04，官方 34 页 PDF 指南）；Harness engineering（2026-02，AGENTS.md 即地图而非百科 / 渐进披露 / 不变量优先于微管理 / 反馈闭环，与项目记忆体系强相关，熟悉度最低）；New tools for building agents（2025-03，Agents SDK / agent 循环 / guardrails / handoffs 概念源）。</li>
+        <li><strong>个人站（7）</strong>：Lilian Weng——LLM Powered Autonomous Agents（2023-06 经典综述：规划 / 记忆 / 工具三件套）+ Harness Engineering for Self-Improvement（2026-07，31 分钟长文，与 OpenAI / A社 harness 三方对照）；Simon Willison——2025: The year in LLMs（2025-12 年度全景：推理模型 / coding agents / 安全）；Chip Huyen——Agents（2025-01，AI Engineering 书摘：定义 / 工具 / 规划 / 失败模式 / 评测）；Eugene Yan——Patterns for Building LLM-based Systems &amp; Products（2024-04 七大模式：Evals / RAG / Finetune / Caching / Guardrails / Defensive UX / 反馈闭环）；Hamel Husain——Your AI Product Needs Evals（2024-03 评测三级体系：单元断言 → 人工+模型评估 → A/B）+ AI Evals FAQ（2025，与 Shreya Shankar 合写）。</li>
+      </ul>
+      <p><strong>周刊来源（1）</strong>：The Batch（deeplearning.ai/the-batch）——Andrew Ng 每周文字通讯，按 Agent 主题精选入库（如 2025-10《Disciplined Evals and Error Analysis Accelerate Agentic AI》），持续更新、模型不熟。</p>
+      <p><strong>国内厂商文章 8 篇（2026-09-01 升格为必收类别并筛定）</strong>——补两块：①<strong>难域</strong>：编码域自带验证闭环（编译 / 测试 / lint / CI），非编码域（客服 / 办公 / 电商 / 内容 / 学习助手）反馈模糊、评测要自己造，前沿语料存在"方便域采样偏差"（CodeAgent 中心主义）；②<strong>约束对标</strong>：国产模型 / 成本敏感 / 中文环境 / 合规要求下的工程取舍，与 DeepSeek 栈处境更贴近。选材标准 4 条：①非编码域 agent 落地案例（而非 CodeAgent 技术博客）；②有真实工程细节（评测 / 护栏 / 成本 / 数据处理）；③2025-2026 新实践；④排除营销通稿和纯译文。最终清单：</p>
+      <ul>
+        <li><strong>美团 WOWService 技术报告</strong>（2025-11，tech.meituan.com）——智能客服 + 多 Agent 协同 + 数据与知识双驱动 + 自动化评测，非编码域（客服）生产落地标杆；模型熟悉度：低；载体：网页长文。</li>
+        <li><strong>美团 VitaBench 评测基准</strong>（2025-11，tech.meituan.com）——复杂生活场景交互式 Agent 评测基准：66 个工具、400 项单场景/跨场景任务、顶级推理模型主榜成功率仅约 30%——与 0022 手搓评测直接共鸣（难域评测 / 交互式任务 / 成功率低）；模型熟悉度：低；载体：网页。</li>
+        <li><strong>火山引擎 Agent Kit</strong>（2025-12，InfoQ）——生产级 Agent 基础设施：8 大模块（记忆 / 知识库 / 监控 / 评测 / 护栏 / 成本），约 70 行代码实现完整 Agent、代码量减少 96%；模型熟悉度：低；载体：网页。</li>
+        <li><strong>多 Agent 生产落地困境：协作税</strong>（2026-06，阿里云开发者社区）——多 Agent 复杂度非线性增长：协作税 3-5× Token 膨胀、延迟 / debug / 冲突成本，六大故障类；模型熟悉度：低；载体：网页。</li>
+        <li><strong>AI Agent 安全防护实战：最小权限与 HITL</strong>（2026-08，阿里云开发者社区）——六大风险、三大根因（功能过多 / 权限过大 / 自主过高）、四道工程化防线（最小权限工具收敛等），与 0022 红线护栏经验直接共鸣；模型熟悉度：低；载体：网页。</li>
+        <li><strong>阿里云的 Agent Infra 长什么样</strong>（2026-05，阿里云开发者社区）——Agent 六大挑战（无规律突发负载 / 大规模动态编排 / 短生命周期 / 数据模态存储复杂 / 动态环境依赖 / 任务级安全可控）与企业级工程化落地；模型熟悉度：低；载体：网页。</li>
+        <li><strong>腾讯汤道生 harness 话语</strong>（2026-03 新京报峰会报道 + 2026-06 界面新闻深度访谈）——国内大厂高管公开谈 harness："AI 落地不只是算法题，不同 Harness 设计对实际效果与 Token 成本影响很大"，另有"产品、模型、评测、数据四维对齐"表述；构成国内 harness 话语第四方；模型熟悉度：低；载体：网页。</li>
+        <li><strong>中国信通院可信 AI 智能体评估体系 2.0</strong>（2026-04，中国信通院）——八大维度全生命周期评估框架（基础设施 / 数据资源 / 核心组件 / 平台支撑 / 关键能力 / 典型应用 / 运维管理 / 价值评价），评测标准线；模型熟悉度：低；载体：网页。</li>
+      </ul>
+      <p><strong>明确排除（记录在案）</strong>：腾讯 TokenHub 软文、腾讯"量化实践"AI 水文、华为盘古矿山（2023 老文）、MarsCode / 通义灵码（编码域，不补偏见）、讯飞 / 京东 / 蚂蚁新闻稿、库迪巡检（⑧）、Kimi K2.6 批判（⑩）。</p>
+      <p><strong>学术论文（2026-09-01 定来源与入库方式）</strong>——来源：<strong>arXiv 为主</strong>（开放获取、API 结构化元数据、LaTeX 生成 PDF 文本质量高、Agent 主题论文基本都在），<strong>OpenReview / ACL Anthology 为辅</strong>（覆盖评审中与已发表的开放论文）；知网等付费墙源排除。入库方式：<strong>半自动智能入库，带 UI</strong>（不做全自动、不做脚本）——UI 上填检索条件（关键词 / 分类 / 时间窗）→ 后端拉 arXiv 候选 + LLM 按主题规则打分排序 → UI 展示候选清单（标题 / 作者 / 摘要 / 打分理由 / 熟悉度预估）→ 人工勾选确认 → 批量下载解析入库。范围 = "主题筛选规则"而非具体清单。模型熟悉度：低（2024-2026 新论文，评测干净）；载体：PDF。</p>
+      <p><strong>项目自有文档（2026-09-01 确认范围）</strong>——AGENTS.md（项目核心约定）+ memory/ 下与 Agent 设计相关的关键笔记（0022 评测与调校 / 0009 功能摘要 / 0002 路线图等）+ backend 架构文档。双重作用：①模型绝对没见过的自有内容，评测最干净；②知识库能回答"这个项目自己是怎么做出来的"这类问题。模型熟悉度：<strong>零</strong>（最干净）；载体：Markdown + HTML。</p>
+      <p><strong>未收（记录在案）</strong>：Machine Learning Yearning（2018 PDF）——老、非 Agent 主题、模型最熟，仅当补"误差分析"方法论时再议。至此素材清单全部闭环，无待定项。</p>
+      <p><strong>模型熟悉度分级的用途</strong>：高=评测污染风险大（模型可能不检索直接答对）；中=部分污染；低=评测最干净。经典文（Building Effective Agents / Lilian 综述 / Chip / Eugene）承担认知与框架角色，正好用"模型已知 vs 检索溯源"对照用例把污染变成测试资产。</p>
+      <h3>现状核查细节（代码证据）</h3>
+      <ul>
+        <li>SessionStore Port（create_session / get_session / append_message / list_messages）+ InMemorySessionStore 存在；context.py assemble(mode, history, user_message, variant) 支持 history 注入（*history 展开）；</li>
+        <li>但 chat.py 的 run_agent_turn(req.message, mode=req.mode, ...) 不传 history；ChatRequest.session_id 注释"当前还没真正持久化会话"；loop.py history 参数注释"多轮记忆；当前调用方还没传"——产品实际行为就是单轮；</li>
+        <li>kb_priority：context.py 身份句"回答时优先使用个人知识库中的资料，并给出引用来源"，注释"阶段 2 后 RAG 优先"——只有提示词无检索能力。</li>
+      </ul>
+      <h3>下一步（顺序有意为之）</h3>
+      <ol>
+        <li>✅ 目标与边界梳理完成（2026-09-01）：学习过程主线、知识库主题、素材清单 6 类、引用硬约束均已定稿；</li>
+        <li>下一轮：<strong>RAG 用例分类框架（路径 B：taxonomy-first）</strong>——<strong>为什么先做这个：</strong>它是 v1.0 的验收地图，素材怎么采、系统做到什么程度、评测怎么设计，都由用例框架反推；没有它，素材采集与代码实现都缺乏目标锚点；</li>
+        <li>再下一轮：素材采集与代码（含论文半自动入库 UI）。</li>
       </ol>
     </section>
 
     <footer class="page-foot">
-      记录创建：2026-09-01 · 阶段 2 RAG v1.0 启动（目标梳理中）
+      记录创建：2026-09-01 · 阶段 2 RAG v1.0 目标与边界已定稿 · 按两分法结构组织
     </footer>
   </div>
 </body>
