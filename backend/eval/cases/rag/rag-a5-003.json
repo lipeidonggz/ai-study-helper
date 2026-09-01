@@ -1,0 +1,62 @@
+{
+  "id": "rag-a5-003",
+  "category": "rag",
+  "title": "辨析：监督能做什么而非做了什么",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "「与其监督 Agent 做了什么，不如监督它能做什么」——这是《How we contain Claude》的核心思路吗？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "判断是否为核心思路并说明（containment：通过沙箱/VM/出口控制限制能力边界）",
+    "criteria": [
+      "answer_correct",
+      "citation_truth",
+      "format_appropriate"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60,
+  "hard_timeout_sec": 180,
+  "tags": [
+    "辨析",
+    "观点判断",
+    "fast"
+  ],
+  "compare": false,
+  "notes": "首轮切片 ① HTML×低（A5）",
+  "weight": 1,
+  "must_pass": false,
+  "must_pass_threshold": 1,
+  "enabled": true,
+  "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成",
+  "updated_at": "2026-09-01",
+  "updated_by": "codex-draft",
+  "source_ref": {
+    "manifest_id": "A5",
+    "location": "containment-rather-than-supervising"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-01",
+    "decay_class": "fast",
+    "half_life_days": 90,
+    "refresh_cadence_days": 90,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  },
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足——\n1. 内容正确：是核心思路。containment（遏制）= 不监督行为而是监督「能做什么」——通过沙箱、虚拟机、出口控制强制访问边界；环境层优先、模型层兜底。\n2. 表达合适：先给判断（是），再说明为什么。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：A5《How we contain Claude》）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：否定或歪曲（如说核心是模型训练/提示词优化/权限弹窗）。\n2. 表达：只给判断不给依据。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-01",
+    "annotated_by": "codex-draft"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "id": "rag-a5-002",
+  "category": "rag",
+  "title": "细节问答：auto mode 拦截比例的含义",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Anthropic《How we contain Claude》里说 Claude Code auto mode 能拦截多少比例的过度行为？这个数字说明了什么？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "给出数字（约 83%）并解释含义（模型层防护不可能是 100%，不能单独依赖）",
+    "criteria": [
+      "answer_correct",
+      "citation_truth",
+      "format_appropriate"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60,
+  "hard_timeout_sec": 180,
+  "tags": [
+    "细节问答",
+    "数字",
+    "fast"
+  ],
+  "compare": false,
+  "notes": "首轮切片 ① HTML×低（A5）",
+  "weight": 1,
+  "must_pass": false,
+  "must_pass_threshold": 1,
+  "enabled": true,
+  "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成",
+  "updated_at": "2026-09-01",
+  "updated_by": "codex-draft",
+  "source_ref": {
+    "manifest_id": "A5",
+    "location": "auto-mode-83-percent"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-01",
+    "decay_class": "fast",
+    "half_life_days": 90,
+    "refresh_cadence_days": 90,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  },
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足——\n1. 内容正确：数字 = 约 83%（约数可接受，数字须准确）；含义要点（表述不限，意思一致即可）：模型层防护不可能 100% 有效；不能单独依赖，需环境层兜底。\n2. 表达合适：先给数字，再解释含义。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：A5《How we contain Claude》）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：数字错误（如 93%）；或未表达出「模型层不是 100%、不能单独依赖」的含义。\n2. 表达：只给数字或只讲含义，缺一半。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-01",
+    "annotated_by": "codex-draft"
+  }
+}

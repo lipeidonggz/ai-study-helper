@@ -1,0 +1,62 @@
+{
+  "id": "rag-a5-001",
+  "category": "rag",
+  "title": "细节问答：防御 Agent 的三个组件",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Anthropic《How we contain Claude》认为防御 Agent 需要防守哪三个组件？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "列出三个组件（模型/运行环境/外部内容）并注明出自 A5",
+    "criteria": [
+      "answer_correct",
+      "citation_truth",
+      "format_appropriate"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
+  "tags": [
+    "细节问答",
+    "原文表述",
+    "fast"
+  ],
+  "compare": false,
+  "notes": "首轮切片 ① HTML×低（A5）",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
+  "enabled": true,
+  "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成",
+  "updated_at": "2026-09-01T22:25:17",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足——\n1. 内容正确：三个组件 = 模型（the model）、运行环境（the environment）、Agent 可触及的外部内容（the external content，如 MCP servers / 第三方插件 / 网页搜索工具）。\n2. 表达合适：以列举形式清晰给出三项，不要用定义或整篇概述替代。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：A5《How we contain Claude》）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：缺项或换项（如把「人/用户」算作组件）。\n2. 表达：未列举、答非所问或以概述替代列举。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-01",
+    "annotated_by": "codex-draft"
+  },
+  "source_ref": {
+    "manifest_id": "A5",
+    "location": "three-components-to-defend"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-01",
+    "decay_class": "fast",
+    "half_life_days": 90,
+    "refresh_cadence_days": 90,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  }
+}

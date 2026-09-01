@@ -1,0 +1,63 @@
+{
+  "id": "rag-cmp-001",
+  "category": "rag",
+  "title": "批判认知：OpenAI 与 Anthropic 对 harness 的理解异同",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "OpenAI《Harness engineering》和 Anthropic《How we contain Claude》对 harness 的理解有什么异同？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "跨文档检索两篇并给出结构化的异同对比，双方观点各覆盖关键点",
+    "criteria": [
+      "answer_correct",
+      "format_appropriate",
+      "citation_truth"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60,
+  "hard_timeout_sec": 180,
+  "tags": [
+    "批判认知",
+    "多方对照",
+    "fast",
+    "跨文档"
+  ],
+  "compare": false,
+  "notes": "首轮切片 ③ 多文档×低（O2 vs A5）",
+  "weight": 1,
+  "must_pass": false,
+  "must_pass_threshold": 1,
+  "enabled": true,
+  "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成；本用例检验跨文档检索与聚合能力",
+  "updated_at": "2026-09-01",
+  "updated_by": "codex-draft",
+  "source_ref": {
+    "manifest_id": "O2 + A5",
+    "location": "全文对照"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-01",
+    "decay_class": "fast",
+    "half_life_days": 90,
+    "refresh_cadence_days": 90,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  },
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足——\n1. 内容正确：相同点——都认为 Agent 工程的关键在外层系统设计而非模型本身（OpenAI：环境/意图/反馈回路；Anthropic：遏制，环境层优先、模型层兜底）；不同点——OpenAI 偏效率与自主（Humans steer, agents execute；AGENTS.md 做地图）；Anthropic 偏安全与爆炸半径（监督「能做什么」，沙箱/VM/出口控制）；两者互补。\n2. 表达合适：结构化对比（同/异分列），两个来源观点分明、不混淆。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：O2《Harness engineering》与 A5《How we contain Claude》，两篇归属不得互换）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：只覆盖一篇；异同对比缺关键点（至少各覆盖「环境/反馈回路」与「遏制/环境层优先」）。\n2. 表达：观点混在一起无法区分哪篇说的。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴，尤其不得把 OpenAI 观点安到 Anthropic 或反之）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-01",
+    "annotated_by": "codex-draft"
+  }
+}

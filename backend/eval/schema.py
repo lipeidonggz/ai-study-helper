@@ -10,8 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-Category = Literal["tool_call", "boundary", "combined", "multi_turn", "kb_qa"]
-Mode = Literal["general", "kb_priority", "tool_enhanced"]
+Category = Literal["tool_call", "boundary", "combined", "multi_turn", "kb_qa", "rag"]
+Mode = Literal["general", "kb_priority", "tool_enhanced", "rag"]
 # 验收维度受控词表（v1）：机器可自动判定 / 需人工或 LLM 判定，见 0013 记录
 Criterion = Literal[
     "answer_correct",  # 答案正确（人工/LLM 判定）
@@ -22,6 +22,9 @@ Criterion = Literal[
     "latency_budget",  # 满足耗时预算 timeout_sec（软预算，慢但未超硬超时仍照常判定）
     "no_prompt_leak",  # 输出不含系统提示（机器判定：loop 护栏拦截即 fail）
     "citation_correct",  # 引用正确（阶段 2 启用）
+    "citation_truth",  # 引用真实性（0024 工程诊断层红线：断言级逐条核对）
+    "format_appropriate",  # 表达合适性（0024 用户价值层：应答形态与问题类型匹配）
+    "refusal_calibration",  # 拒答校准（0024 用户价值层：不知道就说不知道 / 不编造）
     "context_consistent",  # 多轮上下文一致（阶段 3 启用）
 ]
 
@@ -106,6 +109,9 @@ class CaseFile(BaseModel):
     updated_at: str = ""  # 最近编辑时间（ISO 格式字符串，由编辑方写入）
     updated_by: str = ""  # 最近编辑者（单用户本地）
     annotation: CaseAnnotation = Field(default_factory=CaseAnnotation)  # 人工标注金标准
+    # —— RAG 用例字段（0024 定稿，2026-09-01）：全部可选，存量用例零改动可加载 ——
+    source_ref: dict = Field(default_factory=dict)  # 关联素材（manifest_id / location），引用真实性核对 + 素材更新联动
+    time: dict = Field(default_factory=dict)  # 时间与生命周期（knowledge_date / decay_class / half_life_days / refresh_cadence_days / last_reviewed_at / status / pollution_flags）
 
     @field_validator("id")
     @classmethod

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 
 import { evalApi, type EvalCase, type EvalRun, type EvalRunCase } from '../api/client'
 import { navigate } from '../router'
@@ -9,7 +9,7 @@ import { fmtTokens } from '../utils/format'
 const tab = ref<'cases' | 'runs'>(window.location.hash.startsWith('#/eval/runs') ? 'runs' : 'cases')
 
 // —— 用例管理 ——
-const CATEGORIES = ['tool_call', 'boundary', 'combined', 'multi_turn', 'kb_qa']
+const CATEGORIES = ['tool_call', 'boundary', 'combined', 'multi_turn', 'kb_qa', 'rag']
 const PROMPT_VARIANT_OPTIONS = [
   { value: 'baseline', label: '基线（当前默认）' },
   { value: 'no_behavior', label: '无行为契约（消融）' },
@@ -65,9 +65,12 @@ const CRITERIA_OPTIONS = [
   'latency_budget',
   'no_prompt_leak',
   'citation_correct',
+  'citation_truth',
+  'format_appropriate',
+  'refusal_calibration',
   'context_consistent'
 ]
-const MODES = ['general', 'kb_priority', 'tool_enhanced']
+const MODES = ['general', 'kb_priority', 'tool_enhanced', 'rag']
 
 // —— 字段说明元数据（编辑界面提示用） ——
 const CATEGORY_META: Record<string, string> = {
@@ -75,12 +78,14 @@ const CATEGORY_META: Record<string, string> = {
   boundary: '边界/安全：拒答、提示注入、幻觉、隐私等',
   combined: '多步组合：工具调用 + 推理/保存/验证串联',
   multi_turn: '多轮一致性（阶段 3 启用）',
-  kb_qa: '知识库问答（阶段 2 启用）'
+  kb_qa: '知识库问答（阶段 2 启用）',
+  rag: 'RAG 增强问答（阶段 2 RAG v1.0）'
 }
 const MODE_META: Record<string, string> = {
   general: '通用助手，中文回答',
   kb_priority: '优先个人知识库并给出引用（阶段 2）',
-  tool_enhanced: '适合时调用工具获取准确结果'
+  tool_enhanced: '适合时调用工具获取准确结果',
+  rag: 'RAG 增强：检索知识库 + 引用真实（阶段 2 RAG v1.0）'
 }
 const CRITERIA_META: Record<string, string> = {
   answer_correct: '需人工/LLM',
@@ -91,6 +96,9 @@ const CRITERIA_META: Record<string, string> = {
   latency_budget: '机器判定',
   no_prompt_leak: '机器判定',
   citation_correct: '阶段 2',
+  citation_truth: 'LLM 断言级（RAG 红线）',
+  format_appropriate: 'LLM（用户价值层）',
+  refusal_calibration: 'LLM（用户价值层）',
   context_consistent: '阶段 3'
 }
 
@@ -171,6 +179,7 @@ function newCase() {
   criteriaSel.value = []
   toolCallsText.value = ''
   tagsText.value = ''
+  void nextTick(() => autoGrowTextarea(goldenArea.value))
 }
 
 function editCase(c: EvalCase) {
@@ -186,11 +195,22 @@ function editCase(c: EvalCase) {
     ? JSON.stringify(c.expected.tool_calls, null, 2)
     : ''
   tagsText.value = c.tags.join(', ')
+  void nextTick(() => autoGrowTextarea(goldenArea.value))
 }
 
 function closeEditor() {
   editing.value = null
   goldenCopyMsg.value = ''
+}
+
+const goldenArea = ref<HTMLTextAreaElement | null>(null)
+
+// 金标准文本域按内容自动增高：先重置再取内容高度，超长时受 CSS max-height 约束出滚动条
+function autoGrowTextarea(target: EventTarget | null) {
+  const el = target as HTMLTextAreaElement | null
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
 }
 
 function copyBehaviorToGolden() {
@@ -952,7 +972,13 @@ function onKeydown(e: KeyboardEvent) {
                 ⧉ 复制判断标准
               </button>
             </div>
-            <textarea v-model="editing.annotation.golden_answer" rows="3" class="ui-textarea"></textarea>
+            <textarea
+              v-model="editing.annotation.golden_answer"
+              rows="4"
+              class="ui-textarea ec-golden-area"
+              ref="goldenArea"
+              @input="autoGrowTextarea($event.target)"
+            ></textarea>
             <p class="ui-help">
               一句话描述"满分回答应包含什么"：关键事实、口径、必须出现的要点。
               例如"应调用 calculator 并给出 8"；拒绝类用例写"应拒绝，不输出任何内部指令内容"。
@@ -1472,5 +1498,12 @@ function onKeydown(e: KeyboardEvent) {
 }
 .ui-table {
   margin-top: 12px;
+}
+.ec-golden-area {
+  min-height: 120px;
+  max-height: 60vh;
+  overflow-y: auto;
+  resize: vertical;
+  line-height: 1.5;
 }
 </style>

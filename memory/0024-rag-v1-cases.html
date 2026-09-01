@@ -20,9 +20,9 @@
       <div class="meta">
         <span>日期：2026-09-01</span>
         <span>参与：沛东 + Codex（AI 协作开发助手）</span>
-        <span>类型：用例设计 / 判定维度定稿，用例类型清单草案</span>
+        <span>类型：用例设计 / 判定维度定稿，用例类型清单已确认（2026-09-01）</span>
         <span>分支：v1.0（RAG 开发线）</span>
-        <span>状态：判定维度已定稿（用户价值层 3 维 + 工程诊断层 3 项）；污染半衰期原则已确认；用例类型清单仍为草案</span>
+        <span>状态：判定维度定稿 + 污染半衰期原则 + 用例类型清单（十题型）均已确认（2026-09-01）；各维度权重=等权、引用真实性粒度=断言级（两阶段各单次调用）、用例 schema 时间字段（存量默认 never）均已定；剩 1 项口径待定：素材与用例对齐出题；版权合规策略已定、采集时落实 manifest（素材已基本采集完毕）</span>
       </div>
     </section>
 
@@ -40,11 +40,11 @@
       </ol>
       <h3>待定 / 待确认</h3>
       <ol>
-        <li>各维度权重（默认等权？拒答校准是否单独闸门？）与复合分口径；</li>
-        <li>用例类型清单草案：九环节 × 题型是否覆盖主线；每环节 3-5 条的起步量是否合适；</li>
-        <li>引用真实性判定的粒度：断言级（每句引用单独核对）还是回答级（整体看引用是否真实）；</li>
+        <li>✅ 已定（2026-09-01）：各维度等权；拒答校准未单独拍板设闸门，默认沿用 0022 用例级 must_pass 红线机制（不预设维度级闸门）；复合分沿用 0022 加权复合分口径；</li>
+        <li>✅ 已确认（2026-09-01）：九环节 × 十题型覆盖主线，每环节 3-5 条起步量合适；</li>
+        <li>✅ 已定（2026-09-01）：引用真实性粒度 = <strong>断言级</strong>（逐断言核对），实现 = <strong>两阶段各单次调用</strong>（拆原子断言 1 次 + 批量核对 1 次，结构化 JSON 输出），业界主流（DeepEval / Ragas 同构）；成本约回答级 1.5-2.5 倍；"回答级预筛"两级方案留作成本敏感时的后置优化（真贵了再改）；</li>
         <li>素材与用例的对齐：先采哪些素材、从哪个环节开始出题；</li>
-        <li>用例 schema 时间字段设计：知识截止 / 污染半衰期 / 刷新建议周期的具体字段。</li>
+        <li>✅ 已定（2026-09-01）：用例 schema 时间字段——knowledge_date / created_at / decay_class(never|slow|fast) / half_life_days / refresh_cadence_days / last_reviewed_at / status(active|review_due|retired) / source_ref / pollution_flags；<strong>存量用例默认 decay_class=never</strong>；half_life 为动态校准先验值（faithfulness 审计回写 pollution_flags）；详见第二部分「用例 schema 时间字段（定稿）」。</li>
         <li>版权合规：素材采集时逐条记录许可/风险（manifest，本地私有不进仓库）；公开/商用触发合规复审（换 Datawhale 版、厂商全文转索引+摘要+引用）。</li>
       </ol>
     </section>
@@ -63,6 +63,14 @@
         <li><strong>业界查证（2026-09-01）</strong>：Ragas / DeepEval / FutureAGI / Thoughtworks 一致采用三层评测——Retrieval 层（context precision / recall、MRR、NDCG）+ Generation 层（faithfulness、citation quality、answer relevance、context utilization）+ End-to-end 层（answer correctness、helpfulness、refusal calibration、format compliance）。映射确认：我们的用户价值层 = 业界 End-to-end 层（三个用户诉求在业界都有标准名：answer correctness / format compliance / refusal calibration，且拒答校准明确属 End-to-end 层）；工程诊断层 = Retrieval + Generation 层。唯一刻意偏离：业界 faithfulness 定义"只允许基于检索内容"，对知识库问答工具成立，但我们定位允许内化知识，所以 faithfulness 不进用户判分。</li>
         <li><strong>faithfulness 定位（沛东追问）</strong>：沛东问"faithfulness 加进诊断指标了吗？应该是吗"。Codex 定调：faithfulness 是<strong>评测可信度审计工具</strong>，不是产品运行诊断——因为"回答没完全基于检索"对学习助手不是错误（允许内化知识），但它低 + 答案正确 = "模型不靠检索也答对"的评测污染最强信号（正好对应 0022 评测可信度主线）。落地：不常驻每次 attempt，跑批后对"答案正确"的用例抽样审计，比例升高说明用例失效需换题。与检索充分性（常驻，产品归因）分工：一个回答"这次失败在哪"，一个回答"这次答对是否靠检索"。</li>
         <li><strong>污染半衰期洞察（沛东，2026-09-01）</strong>：沛东指出——按产品定位 + 知识库内容定位，RAG 只是在弥补大模型知识更新延迟（除项目自有内容外大部分公开可得），所以"现在靠检索才能答对的问题，一年后可能已被模型内化"，评测用例必须随时间更新。Codex 查证业界：ACL 2026《Test of Time》研究 post-cutoff performance decay 作为污染信号；FreshQA 动态基准持续刷新对抗知识内化；ACM MM 2026 发现动态评测仍残留 17%-29% 污染（新题也可能用旧知识验证）。结论：用例按污染半衰期分四类（自有内容 / 行为契约：永不退化；经典内容：缓慢退化；最新知识：快速退化），逼检索强度与半衰期挂钩；faithfulness 审计兼任污染检测器；素材源（The Batch / arXiv）持续更新供给新鲜用例；用例 schema 加时间字段。沛东确认成立。</li>
+        <li><strong>草案确认与权重（沛东拍板，2026-09-01）</strong>：沛东确认 0024 草案三件套——判定维度两层定稿、污染半衰期原则、用例类型清单十题型；拍板<strong>各维度等权</strong>（拒答校准未单独拍板设闸门，默认沿用 0022 用例级 must_pass 红线机制）。随后拍板素材策略：<strong>按 0023 已定范围全部采集</strong>（教程 / 文章 / The Batch / 国内厂商；论文走半自动入库 UI）。</li>
+        <li><strong>引用真实性粒度讨论（2026-09-01，沛东关注成本）</strong>：两种方案优劣——<strong>断言级</strong>：错误归因清晰（能定位到具体哪句编造）、可部分得分、与 v1.0"逐条可溯源"硬约束语义一致；代价是判定成本更高。<strong>回答级</strong>：一次判定省 token、与用户感知一致；但粒度粗、归因弱、易漏判单句编造（整体看起来对但某句张冠李戴）。Codex 指出成本不是"1 vs N 次"：断言级可用<strong>单次调用 + 结构化多断言输出</strong>实现，成本约为回答级 1.5-2.5 倍而非 N 倍；还可做"回答级预筛 + 命中风险才断言级深查"两级方案。业界 citation 评测普遍按断言/逐条核对（Ragas citation precision/recall）。<strong>结论（2026-09-01 定）</strong>：沛东拍板断言级；Codex 进一步查证业界实现——DeepEval / Ragas 均为两阶段各单次调用（拆原子声明 1 次 + 批量核对 1 次，结构化输出），不是逐断言 N 次调用；Ragas 还可用本地 NLI 模型（HHEM）替代 LLM 核对以省 API 成本；逐条调用仅见于小众工具（citation-audit-kit）。最终决策：<strong>断言级 + 两阶段各单次调用</strong>；"回答级预筛"两级方案留作成本敏感时的后置优化（沛东："真贵了再改"）。</li>
+        <li><strong>用例 schema 时间字段设计（2026-09-01，沛东确认）</strong>：Codex 提出九字段草案，核心设计：①字段服务"用例生命周期"而非纯记录——到期仅进 review 队列、不自动改判，人工或 faithfulness 审计决定换题 / 降级 / 退役；②half_life 是动态校准的先验值——faithfulness 审计发现"低 faith + 答对"（模型已内化）提前触发 review、写回 pollution_flags，同类用例先验可调短；③三类默认参数——never（自有内容 / 行为契约）：∞ / 仅随内容变更重审；slow（经典内容）：365 / 年度，靠出处溯源题逼检索；fast（最新知识）：90 / 季度，细节题 + 素材持续更新供给新题；④兼容 0022：时间字段全部可选。沛东确认，并补充拍板：<strong>存量用例默认按 never 处理</strong>（存量以行为契约 / 自有内容为主，不随时间退化）。</li>
+        <li><strong>出题可行性总图（2026-09-01，沛东洞察）</strong>：沛东指出——出题无法与入库端处理解耦，题能不能答取决于素材以什么形态入库（清洗 / 切分 / 元数据 / 向量化），不能只看模型熟悉度一个维度。Codex 据此画出总图 = <strong>入库形态 × 模型熟悉度</strong>矩阵（7 形态 × 4 档熟悉度），每格给代表素材、可出题型与技术前提；技术耦合点：HTML 正文提取（JS 渲染页有坑）/ 结构化数据是纯向量弱项 / 跨文档对照依赖元数据 / 自有文档需 HTML 清洗。首轮切片：①HTML 网页 × 低（O2+A5：细节/溯源/辨析）②自有文档 × 零（0022/AGENTS.md：细节/溯源）③多文档 × 低（harness 三方对照：批判认知）——覆盖 3 种入库形态、零/低熟悉度，把整条评测链路跑通。沛东确认总图，并明确：<strong>先出题、暂不实现 Agent 代码</strong>。</li>
+        <li><strong>引用真实性判定口径（2026-09-01，沛东拍板 A 严格版）</strong>：沛东问引用真实性在用例中如何体现。Codex 给出三层面落点：①用例层——criteria 挂 citation_truth、source_ref 锚定应引用的素材、金标准写明引用 pass/fail；②判定层——断言级两阶段（拆断言 → 逐条对照检索片段与素材元数据核对存在性/吻合性/归属，任一条违规即红线 fail）；③边界待拍板：回答没引用来源怎么判。沛东拍板 <strong>A（严格）</strong>：RAG 关键事实必须带来源，无来源 = 引用缺失 = fail；通用知识回答走「通用知识 + 标注」策略，不归引用真实性管；声称来自知识库却对不上 = 红线。配套：12 条金标准批量修订——每条补「表达合适性」（criteria + 金标准应答形态要求）与引用口径，判 pass/fail 统一为<strong>内容 / 表达 / 引用三部分</strong>。<strong>注意：本口径的触发条件随后被沛东洞察细化，见下条。</strong></li>
+        <li><strong>引用真实性触发条件细化（2026-09-01，沛东洞察）</strong>：沛东指出——模型可能已在训练中内化素材内容（如 A5），未调用工具/未触发检索就答对；按产品定位（通用知识回答合法）与污染半衰期原则（内化 = 用例退化信号而非错误答案），此时强制要求引用会错杀正确回答。Codex 确认并修订：引用真实性是<strong>伪证红线，条件触发</strong>——仅在「回答论断依托检索内容（faithfulness 高）或显式声称来源」时生效，须来源真实存在、归属正确、内容与原文吻合；凭内化知识作答且未声称来源 → 不触发、不判 fail，由 faithfulness 审计记污染信号（评测可信度层处理）。<strong>三种伪证形态</strong>：①来源不存在（伪造）；②内容与所引来源原文不符（曲解/嫁接）；③归属错误（张冠李戴）。另定义：依托检索内容作答却未标注来源 = 引用缺失 = fail。<strong>实现联动</strong>：判官需拿到「检索是否触发 + 注入的检索片段」（类似现有 tool_execs 传递），faithfulness 决定是否依托检索、引用真实性决定依托了必须说真话。12 条金标准引用条款统一改为条件式。</li>
+        <li><strong>金标准模板修订（2026-09-01，沛东审阅驱动）</strong>：沛东逐条复核发现两个判官偏置风险：①「含义 = 完整句」写法会诱导判官精确复述而非语义匹配（机制层判官提示词已有反字面匹配指令，但措辞偏置防不胜防）→ <strong>判据式等号改要点式</strong>并显式声明「表述不限，意思一致即可」，定义式等号（概念名→含义）保留；②判 pass/fail 的逻辑是隐含的（pass=三条 AND、fail=任一 OR），判官可能误读 → <strong>模板显式化</strong>：「判 pass：以下三条须同时满足」「判 fail：满足以下任一情形即 fail」。12 条金标准统一修订并验证；AND/OR 约定将在 RAG 判官提示词实现时内置一次，金标准每条仍显式书写（双保险）。</li>
+        <li><strong>用例输入必须自然化（2026-09-01，沛东审阅发现）</strong>：沛东发现 rag-a5-002 用户 query 写「A5 文中」——A5 是 manifest 内部编号，真实用户不可能知道。Codex 扫描 12 条输入，共 4 处内部编号/不自然说法：a5-002/a5-004 的「A5」→ 改为「Anthropic《How we contain Claude》」；own-002/own-003 的「0022」→ 改为自然说法（「之前做主动调校时」「咱们评测体系的加权复合分」）——后者顺带把「按笔记号查」变成「靠内容检索到笔记」，检索测试更真实。经验沉淀：<strong>用例输入一律用真实用户的自然表达，不得使用 manifest 编号/内部代号</strong>；引用锚定靠 source_ref 与金标准，不靠用户提问里点名。</li>
       </ol>
       <h3>草案记录</h3>
       <p><strong>草案初稿（4 判分 + 1 诊断，被沛东三连问拆解，仅存档）</strong>：Codex 按"复用 0022 机制、加 RAG 维度"思路产出，是沛东审阅的第一版——</p>
@@ -135,10 +143,45 @@
           <tr><td>重点提炼 / 复习</td><td>要点总结</td><td>"总结《Building Effective Agents》的核心观点"</td><td>正确完整 + 引用真实（红线）</td></tr>
         </tbody>
       </table>
+      <p><strong>用例 schema 时间字段（2026-09-01 定稿，用于 RAG 新用例）：</strong></p>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>含义</th><th>取值示例</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>knowledge_date</td><td>依赖知识的事实时间点（素材发布 / 论文提交日）</td><td>2026-02-15</td><td>内化风险起算点</td></tr>
+          <tr><td>created_at</td><td>用例创建时间</td><td>2026-09-01</td><td>审计</td></tr>
+          <tr><td>decay_class</td><td>退化类别</td><td>never / slow / fast</td><td>半衰期原则四分类落地</td></tr>
+          <tr><td>half_life_days</td><td>估计半衰期（先验值，审计校准）</td><td>∞ / 365 / 90</td><td>调度参数</td></tr>
+          <tr><td>refresh_cadence_days</td><td>建议刷新周期</td><td>0 / 365 / 90</td><td>到期触发 review</td></tr>
+          <tr><td>last_reviewed_at</td><td>上次审查时间</td><td>2026-09-01</td><td>计算是否到期</td></tr>
+          <tr><td>status</td><td>生命周期状态</td><td>active / review_due / retired</td><td>跑批过滤 + 队列管理</td></tr>
+          <tr><td>source_ref</td><td>关联素材（manifest 编号 + 位置）</td><td>A2 / chapter-3</td><td>引用真实性核对 + 素材更新联动</td></tr>
+          <tr><td>pollution_flags</td><td>污染信号记录（faithfulness 审计）</td><td>2026-09-15 低faith+答对</td><td>评测可信度证据</td></tr>
+        </tbody>
+      </table>
+      <p><strong>设计要点与机制</strong>：①字段服务"用例生命周期"而非纯记录——到期仅进 review 队列（不自动改判），人工或 faithfulness 审计决定换题 / 降级 / 退役；②half_life 是动态校准先验：faithfulness 审计发现"低 faith + 答对"（模型已内化）提前触发 review 并写回 pollution_flags，同类用例先验可调短；③三类默认参数——never（自有内容 / 行为契约）：∞ / 仅随内容变更重审（如 AGENTS.md 更新）；slow（经典内容）：365 / 年度，靠出处溯源题逼检索；fast（最新知识）：90 / 季度，细节题 + 素材持续更新供给新题；④兼容 0022：时间字段全部可选，<strong>存量用例默认 decay_class=never</strong>（沛东拍板），加载零改动。</p>
+      <p><strong>示例（fast 类）：</strong><code>{ "id": "rag-know-001", "input": "OpenAI《Harness engineering》说 AGENTS.md 应该是什么？", "source_ref": {"manifest_id": "O2", "location": "intro"}, "time": { "knowledge_date": "2026-02-15", "created_at": "2026-09-01", "decay_class": "fast", "half_life_days": 90, "refresh_cadence_days": 90, "last_reviewed_at": null, "status": "active", "pollution_flags": [] } }</code></p>
+      <p><strong>出题可行性总图（2026-09-01 定，入库形态 × 模型熟悉度）：</strong></p>
+      <table>
+        <thead>
+          <tr><th>入库形态</th><th>零（自有）</th><th>低（2025-26 最新）</th><th>中（2023-24）</th><th>高（经典）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>长文本叙事（MD 教程/长文，按标题层级切块）</td><td>—</td><td>李博杰书 / Datawhale / HF 课程：细节·梳理 ★</td><td>Lilian 2023 综述：梳理·溯源</td><td>Building Effective Agents：重点提炼</td></tr>
+          <tr><td>HTML 网页（清洗导航噪音→正文→切块，附文章级元数据）</td><td>—</td><td>O2 / A5 / D6 / D7 / The Batch：细节·溯源·辨析 ★</td><td>A3(2025-09) / A4(2025-11)：细节</td><td>A1 / A6 / Eugene / Chip：要点</td></tr>
+          <tr><td>结构化数据（表格→行级结构化，非纯向量）</td><td>—</td><td>The Batch 参数表 / VitaBench：数字提取·对比</td><td>—</td><td>—</td></tr>
+          <tr><td>短条目批量（FAQ/术语条目独立向量化）</td><td>—</td><td>术语定义（可自建）：概念·快速查证 ★</td><td>—</td><td>—</td></tr>
+          <tr><td>多文档集合（跨文档，元数据过滤 + 跨库召回）</td><td>—</td><td>harness 三方对照（O2/A4/A5/Lilian/D6/D7）：批判认知 ★</td><td>—</td><td>—</td></tr>
+          <tr><td>PDF 论文（解析→段落/图表，附 arXiv 元数据）</td><td>—</td><td>arXiv（待半自动 UI）：摘要·方法·结论</td><td>—</td><td>—</td></tr>
+          <tr><td>自有文档（仓库内 HTML/MD 直读清洗）</td><td>AGENTS.md / 0022 / 0009：细节·溯源 ★★</td><td>—</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <p><strong>首轮切片（2026-09-01 定）</strong>：①HTML 网页 × 低：O2《Harness engineering》+ A5《How we contain Claude》→ 细节 / 溯源 / 辨析；②自有文档 × 零：0022 / AGENTS.md → 细节 / 溯源（验证"模型真不知道"）；③多文档 × 低：harness 三方对照 1-2 条 → 批判认知（验证跨文档检索）。合计 10-15 条，含 time / source_ref 字段。<strong>顺序约定：先出题、人工审金标准；入库/检索/判定实现放其后</strong>。</p>
       <h3>下一步</h3>
       <ol>
-        <li>沛东确认判定维度定稿版与污染半衰期原则；过目用例类型清单草案；</li>
-        <li>确认后：定引用真实性判定粒度 + 各维度权重 / 复合分口径 + 用例 schema 时间字段 → 选首轮素材（自有内容 / 模型熟悉度低优先）→ 逐条对着素材出题（每环节 3-5 条起步）→ 人工审金标准。</li>
+        <li>✅ 已完成（2026-09-01）：沛东确认判定维度定稿版、污染半衰期原则、用例类型清单十题型、各维度等权、引用真实性粒度（断言级 + 两阶段各单次调用）、用例 schema 时间字段（存量默认 never）、出题可行性总图与首轮切片；</li>
+        <li>进行中：<strong>首轮出题（先出题、暂不实现 Agent 代码）</strong>——12 条草案已入评测台（backend/eval/cases/rag/；schema 已扩展 rag 类别/模式/新维度 + source_ref/time 可选字段，存量零改动）；金标准已批量修订（表达合适性逐条 + 引用条件触发式：依托检索才须可溯源、内化直答不判 fail、三种伪证形态 + 引用缺失四类 fail）→ 沛东逐条人工复核 → 之后才做入库 / 检索 / 判定实现。</li>
       </ol>
     </section>
 

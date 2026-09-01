@@ -1,0 +1,62 @@
+{
+  "id": "rag-own-003",
+  "category": "rag",
+  "title": "自有文档细节：复合分置信区间方法",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "咱们评测体系的加权复合分，置信区间是用什么方法算的？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "依据 0022/0009 回答统计方法（bootstrap 按用例重采样 2000 次、固定种子）",
+    "criteria": [
+      "answer_correct",
+      "citation_truth",
+      "format_appropriate"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60,
+  "hard_timeout_sec": 180,
+  "tags": [
+    "细节问答",
+    "自有内容",
+    "never"
+  ],
+  "compare": false,
+  "notes": "首轮切片 ② 自有×零（0022/0009）",
+  "weight": 1,
+  "must_pass": false,
+  "must_pass_threshold": 1,
+  "enabled": true,
+  "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成",
+  "updated_at": "2026-09-01",
+  "updated_by": "codex-draft",
+  "source_ref": {
+    "manifest_id": "OW1",
+    "location": "0022 评测统计升级 / 0009"
+  },
+  "time": {
+    "knowledge_date": "2026-08-28",
+    "created_at": "2026-09-01",
+    "decay_class": "never",
+    "half_life_days": 36500,
+    "refresh_cadence_days": 0,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  },
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足——\n1. 内容正确：bootstrap（自助法）——按用例重采样 2000 次、固定随机种子可复现，得到加权复合分的置信区间（如 95% CI）。\n2. 表达合适：先给方法名，再给关键参数。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：项目 0022/0009 笔记）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：方法说错（如正态近似/中心极限定理）；重采样次数不符（非 2000）。\n2. 表达：只给方法名不解释参数，或答非所问。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-01",
+    "annotated_by": "codex-draft"
+  }
+}
