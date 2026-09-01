@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0023 · 阶段 2 RAG：v1.0 目标与边界梳理（进行中）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0023 · 阶段 2 RAG：v1.0 目标与边界梳理（进行中）</h1>
+      <p class="subtitle">主线：RAG 增强的单轮对话 · 关联：0022（阶段 1 评测与调校收官）、0002（路线图阶段 2）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-09-01</span>
+        <span>参与：用户 + Codex（AI 协作开发助手）</span>
+        <span>类型：需求梳理 / 规划进行中</span>
+        <span>分支：v1.0（RAG 开发线，已推送 origin）</span>
+        <span>状态：目标已定稿，功能边界问题逐条讨论中</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>目标定稿：RAG 增强的单轮对话</h2>
+      <ul>
+        <li><strong>定义</strong>：用户一个 query → Agent 一个完整回答。单轮 = 不依赖跨消息历史；<strong>Agent 内部手段不限</strong>（多次检索 / 工具调用均可），以"最优回答用户问题"为目标——内部手段本身是额外的探索验证空间；</li>
+        <li><strong>定目标视角：产品视角，不是技术实现视角</strong>——先定"产品要做到什么"，再倒推技术；</li>
+        <li><strong>多轮暂不上</strong>：RAG 难点先在单轮链路上做扎实；多轮是叠加层（单轮基础 + 上下文管理 / query 重写 / 何时检索），混在一起会让评测归因模糊。</li>
+      </ul>
+      <h3>现状核查（2026-09-01，用户质疑"多轮只是框架吧？"——属实）</h3>
+      <ul>
+        <li><strong>多轮会话 = 框架未接通</strong>：Port（SessionStore）+ 内存实现 + assemble 支持 history 参数都存在，但 chat API 不读历史、不存消息、run_agent_turn 不传 history（loop 注释："多轮记忆；当前调用方还没传"）；session_id 注释"当前还没真正持久化会话"——<strong>产品实际行为就是单轮</strong>，v1.0 定位单轮不是砍功能，是与现状一致；</li>
+        <li><strong>kb_priority 模式 = 空壳提示词</strong>：context.py 身份句要求"优先使用个人知识库并给出引用来源"，但无任何检索能力（注释"阶段 2 后 RAG 优先"）——<strong>风险：提示词诱导模型编造"知识库来源"</strong>；v1.0 要把这段空头支票兑现成真检索。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>待深入讨论的问题清单（讨论工作底稿，逐条定口径后更新）</h2>
+      <ol>
+        <li><strong>覆盖范围</strong>：《三国演义》全书（120 回）还是先放前 N 回做验证？</li>
+        <li><strong>来源标注粒度与格式</strong>：引用到"第几回"还是段落级？格式（"（第 X 回）" / 脚注式）？</li>
+        <li><strong>知识库外回答策略</strong>：明确拒答"不在知识库范围" vs 用通用知识回答但标注"非知识库来源"（现有 boundary-scope-002 口径是后者）？</li>
+        <li><strong>检索不到 / 低置信处理</strong>：拒答 / 退化为通用回答 + 标注？</li>
+        <li><strong>引用真实性硬约束</strong>：回答中的关键事实是否必须可追溯到检索到的原文片段（防编造引用）？建议：v1.0 定为硬约束。</li>
+      </ol>
+      <h3>"ok 状态"验收线（建议稿，待定）</h3>
+      <ul>
+        <li>RAG 用例集四类（检索命中 / 来源溯源 / 知识库外处理 / 引用格式）通过率 ≥ 阈值；</li>
+        <li>来源引用 100%（需要引用的用例）；</li>
+        <li>知识库外零编造。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>下一步（顺序有意为之）</h2>
+      <ol>
+        <li>逐条深入讨论问题清单（1→5），定口径；</li>
+        <li>口径定完 → 定 RAG 用例分类框架（路径 B：taxonomy-first，分类骨架 = 产品定位 + 上面这些边界口径）；</li>
+        <li>最后才动素材（《三国演义》固定版本）与检索管线——<strong>不要着急搞素材</strong>，先想明白。</li>
+      </ol>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-01 · 阶段 2 RAG v1.0 启动（目标梳理中）
+    </footer>
+  </div>
+</body>
+</html>
