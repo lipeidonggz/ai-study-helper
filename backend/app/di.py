@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import settings
+from app.storage.fastembed_store import FastEmbedEmbedder
 from app.storage.memory import InMemoryLogStore, InMemorySessionStore, InMemorySettingStore
-from app.storage.ports import LogStore, SessionStore, SettingStore
+from app.storage.ports import Embedder, LogStore, SessionStore, SettingStore, VectorStore
+from app.storage.qdrant_store import QdrantVectorStore
 from app.storage.sqlite.settings_store import SqliteSettingStore
 
 
@@ -27,16 +29,23 @@ class AppDeps:
     session_store: SessionStore
     settings_store: SettingStore
     log_store: LogStore
+    vector_store: VectorStore | None = None
+    embedder: Embedder | None = None
 
 
 def build_deps() -> AppDeps:
     """创建默认依赖组合（开发/生产用：设置持久化到 SQLite）。"""
+    base = Path(__file__).resolve().parent.parent
     db_path = settings.db_path
     if not db_path:
         # 用 __file__ 定位，保证无论从哪个目录启动，路径都指向 backend/data/app.db
-        db_path = str(Path(__file__).resolve().parent.parent / "data" / "app.db")
+        db_path = str(base / "data" / "app.db")
+    qdrant_path = settings.qdrant_path or str(base / "data" / "qdrant")
+    embed_cache = settings.embedding_cache_dir or str(base / "data" / "models")
     return AppDeps(
         session_store=InMemorySessionStore(),  # 会话暂存内存（阶段 4 换 SQLite 支持断点）
         settings_store=SqliteSettingStore(db_path),  # 设置持久化（含 LLM Key）
         log_store=InMemoryLogStore(),  # 日志暂存内存
+        vector_store=QdrantVectorStore(path=qdrant_path, dim=settings.embedding_dim),
+        embedder=FastEmbedEmbedder(model_name=settings.embedding_model, cache_dir=embed_cache),
     )

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0025 · 阶段 2 RAG：v1.0 实现与调校——设计定案 + 实现落地（目标：12 条首轮用例跑通）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0025 · 阶段 2 RAG：v1.0 实现与调校——设计定案 + 实现落地（目标：12 条首轮用例跑通）</h1>
+      <p class="subtitle">主线：RAG 增强的单轮对话 · 关联：0023（目标与边界定稿）、0024（判定体系 + 12 条首轮用例定稿）</p>
+      <p class="subtitle">笔记结构：第一部分=思路简要描述+结论（复习先读）；第二部分=现场细节（复原现场用）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-09-02</span>
+        <span>参与：沛东 + Codex（AI 协作开发助手）</span>
+        <span>类型：实现设计 / 入库侧选型 + 问答侧形态</span>
+        <span>分支：v1.0，RAG 开发线</span>
+        <span>状态：进行中——设计定案（入库侧 / 问答侧 / 骨架硬化 / 选型框架）；实现落地：步骤 0-2 + UI 完成（O1/O2/A5/OW1 已入库 246 块，12 条用例素材齐备）；调校与步骤 3-8 待进行</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>60 秒速览</h2>
+      <ul>
+        <li><strong>本文在干什么</strong>：一条笔记承载 RAG v1.0 全程——先定"素材怎么存、检索怎么取"（入库侧）与"检索怎么接进 Agent"（问答侧），再实现落地（入库管线 + UI），最后跑通 12 条首轮用例（调校）。</li>
+        <li><strong>产出（2026-09-02）</strong>：入库侧定案——Qdrant local + 混合检索（向量+BM25）+ payload 过滤；素材全为长文本、标题层级作切块锚点；pgvector / GraphRAG 本阶段不取。问答侧——确认"两种解法"实为<strong>"检索决策权"连续谱两端</strong>，给出三轴框架（决策权 × 次数/粒度 × 索引形态）；中间态（路由/自适应/纠正式）已列入评估视野。</li>
+        <li><strong>问答侧定案方向（2026-09-02）</strong>：v1 用<strong>"支持 LLM 节点的工作流"</strong>（骨架硬化 + 相关性门控）；agentic RAG 归位为<strong>ReAct 实例</strong>（检索只是其中一个工具），作为受控 A/B 排队。泛化经业界查证成立（Anthropic workflow/agent 二分 + RAG 按 agentic depth 分类），带三个标注：Agent 是家族非单点 / 实践是"硬化程度"旋钮而非二分 / 检索质量是独立轴。</li>
+        <li><strong>实现落地（2026-09-02）</strong>：基础设施（e5-large 本地落地、Qdrant/embedding 适配器）；入库管线（manifest 解析、清洗切块 450 token、PDF/编码/文件规则格式适配）；知识库管理 UI（素材/状态/筛选/chunk 新标签页/检索调试台）。已入库 O1/O2/A5/OW1 共 246 块，12 条用例素材齐备。</li>
+        <li><strong>当前状态</strong>：步骤 0-2 + UI 完成；T1 待重跑；长任务后台化待改造；步骤 3 问答侧 workflow 未开工。</li>
+        <li><strong>下一步</strong>：①步骤 3 问答侧 workflow 骨架；②长任务后台化（单篇入库异步 + 进度 + 可取消）；③步骤 5 十二用例首跑（阶段 D 调校）；④<strong>KB 扩容前先做"入库质量报告"</strong>（每篇自动质量信号 + 异常清单，人工只看异常，不逐篇）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>实践与经验教训（2026-09-02 实现阶段沉淀）</h2>
+      <ol>
+        <li><strong>本地 embedding 选型三约束</strong>：①fastembed 0.8 已移除 BGE-M3，计划会落空——选型前先查当前版本支持的模型清单；②"本地"不等于效果差，决定质量的是模型选型（中英混合素材 → multilingual-e5-large）；③字符数 ≠ token 数（1766 字符的 ASCII 代码块 = 447 tokens），切块与界面要显示真实 token，不能按字符猜。</li>
+        <li><strong>Qdrant 本地模式单进程锁</strong>：两个进程共享同一数据目录直接冲突（8000/8899 双实例翻车现场）；解法 = 同路径客户端单例（进程内）+ 懒加载（不用 KB 的流程不占锁）+ 测试独立目录（conftest 设 ASH_QDRANT_PATH）。嵌入式存储类选型的通用运维坑。</li>
+        <li><strong>向量库 scroll ≠ 入库序</strong>：scroll 返回内部存储序，业务顺序（chunk 在原文中的先后）要显式写入 payload（seq），展示按它排序，不能依赖存储序。</li>
+        <li><strong>入库文件规则放代码而非 MANIFEST</strong>：data/ 整体 gitignore，规则放代码（ingest_rules.py）才能随提交沉淀；MANIFEST 管"有什么素材"，代码管"哪些文件进库"。</li>
+        <li><strong>全量入库按钮要按阶段放开</strong>：适配器未做对前，全量会把不适配素材（PDF / 教程目录 / 老编码 HTML）拉进来 → 先做对格式适配，再放开范围；v1 首轮切片本就是 O2/A5/自有。</li>
+        <li><strong>项目特点（非通用洞察，勿外推）</strong>：本项目的复杂度来自格式本身而非内容组织——内容组织干净（标题层级），复杂度全在格式适配（HTML 站点差异 / PDF / 编码 / 多语言目录）。这是本项目素材特征，不是行业通用规律。</li>
+        <li><strong>PDF 抽取选型：要还原结构先拿到版式信息</strong>：纯文本流（pypdf）没有"标题"概念，visitor 字号恒为 1.0 不可用；换 pdfplumber 逐字符字号/位置后，标题（字号 ≥ 正文 1.5×）、页脚带（底部固定区域）、段落（行距）都可判。另发现一个真 bug：句子切分正则漏了 ASCII 句号 <code>.</code>，英文 PDF 因此断在行尾。</li>
+        <li><strong>版式噪声无害，代码块截断才是真风险</strong>：行号/页码/零星断词对向量召回与 LLM 理解基本无害（实测限定 O1 检索"WebSearchTool 代码示例"命中带行号的代码块）；真正的风险是超长代码块被 token 上限拦腰截断——将来出现"使用/复刻代码"类用例时，需要"代码块整体不拆"的切块规则。</li>
+        <li><strong>模糊指代文档的检索：先给 chunk 注入文档身份，router 别做单点锁定</strong>：用户"那本/那篇/0022 笔记"这类输入是设计内场景（0024 规范禁止用编号）；最便宜的解法是来源行把作者/平台·标题拼进每块文本（实测"OpenAI 指南"前 6 条全命中 O1、"harness 那篇"全命中 O2，此前会被 OW1 淹没）。文档目录预路由只在"查询含可对齐的区分信号"时有效；无信号（纯记忆指代）谁都救不了，信号说错时单点锁定会放大错误——若探针证明需要，router 应输出候选列表供下游澄清，而非锁死一篇。</li>
+        <li><strong>生产级入库质量保障框架（业界通行做法，落地待做）</strong>：KB 变大后逐篇检查不可行，行业做法是"抽样检查 + 出问题定位"，内核四件套：①质量信号自动化（空文本/字数异常、噪声词频率、乱码率、chunk/token 分布，超阈值才人工）；②分层抽样 + 金样张回归（每类站点/格式抽代表固化为金样张，抽取器改动跑回归防"修 A 坏 B"）；③归因链（入库记录来源 + 抽取器/规则版本 + 质量信号，问题反查到"哪一层哪一版"）；④人工审"类"不审"篇"（新格式类别人工建基线一次，存量靠信号监控）+ 坏答案回流（faithfulness/检索失败率异常高的来源反查入库质量）。落地形态 = "入库质量报告"功能（见下一步 ④）。<br><strong>盲区与三层补强（2026-09-02，A5 lede 归位教训）</strong>：信号层只覆盖"格式/噪声"，抓不到"内容完整但归位错误"——A5 开场 lede 被排到文档流后、仅靠一处重复兜住，信号全绿。该类问题由三层补：①人工内容层抽查（对照原文读开头/结构，样本级，不逐篇）；②每次发现固化成"金样张 + 结构断言"（如"首块以 X 开头"）防复发——金样张只免疫已知问题，不发现新问题；③坏答案回流兜底（评测/真实问题触及该内容时失败反查，属被动哨兵）。工程化补强 = <strong>结构指纹</strong>（每篇输出"首段文本 + 节路径序列 + 各节长度"，新类别首建由人确认一次，之后同源 diff 自动抓归位变化）。启发：问题不在"逐篇 vs 抽查"，而在"内容层是否有断言机制"——抽查发现新问题类，断言防复发，回流兜漏网。</li>
+        <li><strong>协作分工教训（2026-09-02，沛东批评"不问就不说"）</strong>：Codex 的默认认知（资深工程经验里的"道道"）不会自动讲出来——沛东不问入库质量保障，Codex 就没主动提。改进 = 在换阶段 / 上规模 / 加新素材类型等关键节点，主动给一份"你可能还没问但值得知道"的风险与做法清单，不等追问；这也呼应 0022"人做二次检查"的反面——AI 的增值不止是执行快，还包括主动把视野里的坑摆上桌。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 + 结论（复习先读这里）</h2>
+      <p><strong>一句话主线：</strong>实现阶段先回答两个"怎么"——知识<strong>怎么存、怎么取</strong>（入库侧），以及检索<strong>怎么进 Agent、判官怎么看见</strong>（问答侧）；承载方式决定入库管线，能力需求决定存储选型，问答侧形态决定检索与判官的联动方式。</p>
+
+      <h3>本次要搞清的问题（2026-09-02）</h3>
+      <p><strong>入库侧：</strong></p>
+      <ol>
+        <li>12 个用例依赖的来源知识：内容承载方式（组织 + 技术格式）是什么？</li>
+        <li>主流外部知识库承载技术（向量库 / 全文检索 / 图数据库 / 关系型等）各自优劣？</li>
+        <li>12 个用例需要什么能力 → 决定本阶段选什么基础设施？</li>
+        <li>其他影响设计的问题（切块 / embedding / 检索信号 / 判官联动等）。</li>
+      </ol>
+      <p><strong>问答侧（新开）：</strong></p>
+      <ol start="5">
+        <li>沛东对"两种解法"（固定管线 vs Agentic RAG）的理解是否正确？还有其他方式吗？</li>
+      </ol>
+
+      <h3>结论（入库侧定案 + 问答侧框架）</h3>
+      <p><strong>入库侧（定案）：</strong></p>
+      <ol>
+        <li><strong>素材形态</strong>：全部长文本（O2/A5 为 HTML、自有为 MD/HTML），无表格依赖；标题层级可作切块锚点。</li>
+        <li><strong>基础设施现状</strong>：本地 embedding 与 Qdrant 均未实现、依赖未装；仅有 storage/ports.py 的 VectorStore/Embedder 接口预留（0005 架构预留，一直未落地）。</li>
+        <li><strong>存储选型</strong>：Qdrant local + 混合检索（向量 + BM25）+ payload 过滤（source_id / decay_class / knowledge_date 三字段；先建 payload index 再建 HNSW）。</li>
+        <li><strong>不取 pgvector</strong>：当前 SQLite、规模小、无 join/事务需求；<strong>不取图数据库</strong>：GraphRAG 本阶段不需要。</li>
+      </ol>
+      <p><strong>问答侧（框架 + 定案方向；触发/注入方式待定）：</strong></p>
+      <ol start="5">
+        <li>"两种解法"不是二分，是<strong>"检索决策权"连续谱两端</strong>：固定管线（无决策）→ 路由/自适应（部分决策）→ Agentic（完全决策）；次数不是区分点（IRCoT 固定管线也可多次检索）。</li>
+        <li><strong>三轴框架</strong>：检索决策权（无/部分/完全）× 检索次数与粒度（0/1/N/生成中按需）× 索引形态（向量/混合/图/长上下文）。任何实际方案都是三轴上的一个点。</li>
+        <li><strong>项目观察</strong>：rag-cmp-001 跨文档聚合两种方案都可做；对照用例要求"不检索直接答"分支——固定管线须加相关性门控/不注入，agentic 是模型天然能力。</li>
+        <li><strong>骨架硬化原则（定案）</strong>：流程骨架（步骤 / 顺序 / 上限 / 兜底 / 护栏）写进代码；LLM 只在窄判断节点被调用且输出 schema 约束——决策空间有界→规则，语义无界→LLM 判断函数；不把多步行为契约写进提示词（否则落入"指令遵循性到不了 100%"的陷阱）。</li>
+        <li><strong>选型框架（定案）</strong>：workflow（支持 LLM 节点）vs ReAct 式 Agent；主判据 = 决策空间能否设计期枚举，叠加错误代价 / 频率规模 / 可观测评测成本；agentic RAG ≈ ReAct + 检索工具（工程近似：Agent 是家族非单点；实践是"骨架硬化程度"旋钮而非严格二分；检索质量是独立轴，可被 workflow 的验证/纠错节点吸收）。</li>
+        <li><strong>v1 落点（定案）</strong>：12 用例任务空间设计期可枚举 → workflow + 相关性门控；agentic 作为受控 A/B 排队（评测链路稳定后补多跳用例对比）。</li>
+      </ol>
+
+      <h3>定案决策速查（复习先扫这张表）</h3>
+      <table>
+        <thead>
+          <tr><th>决策项</th><th>定案口径</th><th>一句话理由</th><th>详见</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>素材承载方式</td><td>全为长文本（HTML/MD）；标题层级作切块锚点；无表格依赖</td><td>决定入库管线的清洗与切分策略</td><td>阶段 A</td></tr>
+          <tr><td>embedding / Qdrant 现状</td><td>均未落地，仅 Port 接口预留（storage/ports.py）</td><td>0005 只画了图纸，从未实现</td><td>阶段 A</td></tr>
+          <tr><td>存储选型</td><td>Qdrant local + 混合检索（向量+BM25）+ payload 过滤（source_id / decay_class / knowledge_date）</td><td>规模小 + 过滤场景明确 + 本地部署</td><td>阶段 A</td></tr>
+          <tr><td>pgvector</td><td>不取</td><td>SQLite 现状、规模小、无 join/事务需求</td><td>阶段 A</td></tr>
+          <tr><td>GraphRAG / 图数据库</td><td>本阶段不取</td><td>12 用例无图谱聚合需求</td><td>阶段 A</td></tr>
+          <tr><td>embedding 选型</td><td>intfloat/multilingual-e5-large（fastembed ONNX 本地，已落地）；升级路径待定，倾向基于 API 的 embedding</td><td>中英混合素材 + 轻量本地跑；fastembed 0.8 已不含 BGE-M3；本地 Qwen3-8B 资源跑不动不取</td><td>步骤 1</td></tr>
+          <tr><td>chunk 原文存储</td><td>Qdrant payload 的 text 字段（单库）；切换信号 = 出现 chunk 级人工编辑/审计需求或 KB 体量明显变大 → 转独立 ChunkStore（SQLite）</td><td>单库简单、检索直达原文；BM25 内存索引需可整体加载的权威来源</td><td>步骤 1</td></tr>
+          <tr><td>chunk 文本格式（方案 1 来源行）</td><td>每块首行"来源：作者/平台 · 标题"（多文件源追加 › 文件标题）；最终文本 ≤ 450 tokens（切块时预留来源行余量）</td><td>模糊指代文档（"那本 OpenAI 指南"/"0022 笔记"）的检索锚点，兼做展示溯源</td><td>阶段 C</td></tr>
+          <tr><td>问答侧形态认知</td><td>不是二分，是"检索决策权"连续谱</td><td>决策权才是本质维度；次数、索引形态正交</td><td>阶段 B</td></tr>
+          <tr><td>三轴框架</td><td>决策权 × 次数/粒度 × 索引形态</td><td>任何实际方案都是三轴上的一个点</td><td>阶段 B</td></tr>
+          <tr><td>骨架硬化原则</td><td>流程骨架进代码；LLM 仅窄判断节点（schema 约束输出）；有界→规则，无界→LLM 判断函数</td><td>提示词行为契约遵循性到不了 100%，把契约从文本挪进代码</td><td>阶段 B</td></tr>
+          <tr><td>问答侧形态（v1 落点）</td><td>workflow（支持 LLM 节点）+ 相关性门控；agentic 受控 A/B 排队</td><td>12 用例任务空间设计期可枚举</td><td>阶段 B</td></tr>
+          <tr><td>选型框架</td><td>workflow vs ReAct：主判据=决策空间可否枚举；叠加错误代价 / 频率 / 可观测</td><td>agentic RAG ≈ ReAct + 检索工具（工程近似）</td><td>阶段 B</td></tr>
+        </tbody>
+      </table>
+
+      <h3>真待定（尚未定）</h3>
+      <ol>
+        <li><strong>检索触发/注入方式</strong>：自动注入（固定管线）vs 检索工具（agentic）vs 中间态（路由/门控）——下一轮讨论核心；</li>
+        <li>回答形态与引用格式：来源标注粒度（文章级 vs 章节级 vs 段落级）与样式；</li>
+        <li>判官如何拿到检索信号：检索是否触发 + 注入片段 + 来源（决定实现要给判官暴露什么）；</li>
+        <li>用户界面是否展示引用来源；</li>
+        <li>是否做多路检索 / rerank（当前 12 用例规模是否需要）；</li>
+        <li>嵌入模型升级路径：v1 已落地 multilingual-e5-large（fastembed 0.8 不再支持 BGE-M3，等价替换为多语言 e5）；若边界探针发现召回不足，升级方向 = 基于 API 的 embedding（本地 Qwen3-8B 资源跑不动，不取）。</li>
+        <li>v1 骨架中检索质量节点（验证/纠错）的具体形态：分数阈值 vs LLM 判断函数（CRAG 式纠错是否纳入首轮）。</li>
+        <li>切片规则具体化（草案：标题层级锚点 + token 上限 450 + 段落边界续切 + section_path 元数据 + 不做重叠；e5 512 token 为硬约束）——步骤 2 输入，待沛东确认。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节（复原现场用）</h2>
+      <h3>讨论历程（决策链，按阶段分界；【决策点】= 该条落定的决策）</h3>
+
+      <h3>阶段 A · 入库侧（2026-09-02）</h3>
+      <ol>
+        <li><strong>进入实现阶段的前置问题（沛东）</strong>：0024 用例定稿后，沛东提出进入实现前先弄清 4 个问题——来源知识的承载方式、主流承载技术优劣、12 用例能力需求 → 选型、其他设计影响；并定下"相关记录换新文件"，0025 骨架由此创建。坑越挖越大的感觉延续到了实现设计，好在这一轮先盘点再动手。</li>
+        <li><strong>盘点（Codex）</strong>：素材全为长文本（O2/A5 HTML、自有 MD/HTML），无表格依赖，标题层级可作切块锚点；存储技术扫描覆盖向量库 / 全文检索 / 图数据库 / 关系型，并落到"12 用例需要什么能力"。</li>
+        <li><strong>沛东三问（关键转折）</strong>：①"本地 embedding 现在有吗？之前用来干啥的，我居然完全没有印象。Qdrant 这个本地有吗？"——直接暴露了图纸与实现的落差；②"payload 过滤是说可以额外使用向量语义匹配之外的字段来过滤吗？"——确认概念；③"这些问题只决定了入库逻辑，用户体验得到的问答侧还没定，先搞定 1/2 再来讨论"——把问答侧明确挂起，作为下一话题。</li>
+        <li><strong>现状澄清（Codex）</strong>：本地 embedding 与 Qdrant 均不存在——0005 只预留了 VectorStore/Embedder 接口（storage/ports.py），从未落地；依赖未装，python 系统版本可能有坑（实现时注意）。</li>
+        <li><strong>payload 过滤解释 + 性能追问（沛东→Codex）</strong>：payload 过滤 = 向量语义匹配之外的元数据过滤；Qdrant 支持 payload index，性能可控；正确做法是先建 payload index 再建 HNSW。</li>
+        <li><strong>选型洞察（沛东）</strong>："Qdrant 相当于向量库在加入关系型数据库的检索能力；pgsql 支持向量是关系型数据库加入向量能力——孰优孰劣，有业界共识吗？"Codex 答：无绝对共识，本质是"以谁为主"的路线之争，场景决定；我们规模小 + SQLite 现状，选 Qdrant local + 混合检索 + payload 过滤。</li>
+        <li><strong>【决策点】入库侧定案（2026-09-02）</strong>：Qdrant local + 混合检索（向量+BM25）+ payload 过滤（source_id / decay_class / knowledge_date 三字段，先 payload index 再 HNSW）；pgvector 不取；图数据库（GraphRAG）本阶段不需要。</li>
+      </ol>
+
+      <h3>阶段 B · 问答侧（2026-09-02）</h3>
+      <ol>
+        <li><strong>沛东提出两种解法的理解</strong>：①先查 chunk（可融合多种方式）+ 预处理（如重排序），再与用户 query 一起给 LLM；②Agentic RAG——检索封装为工具、模型自主决策、天然支持多轮查询。请 Codex 确认理解 + 补充其他方式。</li>
+        <li><strong>校准（Codex）</strong>：不是二分，是"检索决策权"连续谱两端。方案一 = Naive/Advanced RAG：预处理不止重排（还有查询改写 / HyDE / 多查询分解 / step-back）；"次数不是区分点"——IRCoT 固定管线也多次检索，<strong>决策权才是本质</strong>。方案二 = Agentic RAG：本质是决策权交给模型；工具调用是主流落地形态但不是唯一（Self-RAG 用反射 token 决定检索）；它天然支持的是<strong>"一次回答内的多步检索/多跳推理"</strong>，与会话多轮无关。</li>
+        <li><strong>中间态（"还有其他方式"的核心）</strong>：路由型（Adaptive-RAG 按复杂度路由 / query router 按类型路由）、自适应检索（Self-RAG 判要不要检索 + 批判 chunk；FLARE 生成中按需检索）、纠正式（CRAG 检索后评估、差则换路）；Modular RAG = 工程上组件可组合。共同点：LLM 有部分决策权，但没有完整工具循环。</li>
+        <li><strong>正交轴（索引范式）</strong>：GraphRAG（图+社区摘要，擅长聚合类/全局类问题）；长上下文 / context engineering（RAG 的替代思路，大窗口下越来越可行，可作为 v1 兜底）；我们已定的 Qdrant+BM25 混合属于检索侧组件组合，与问答侧选型正交。</li>
+        <li><strong>三轴框架（提炼）</strong>：检索决策权（无/部分/完全）× 检索次数与粒度（0/1/N/生成中按需）× 索引形态（向量/混合/图/长上下文）。"两种解法"实为第一条轴上的两个端点。</li>
+        <li><strong>项目观察</strong>：rag-cmp-001（O2 vs A5 跨文档对比）两种方案都可做——固定管线一次注入两篇 top-k，agentic 对应两次检索调用；对照用例要求"不检索直接答"——固定管线须加相关性门控/不注入分支，agentic 是模型天然能力。这个差异直接决定下一步触发方式的讨论。</li>
+        <li><strong>待定方向（下一轮）</strong>：检索触发/注入方式、回答形态与引用格式、判官检索信号、UI 引用展示、多路检索/rerank。</li>
+        <li><strong>生产形态观察（Voltage Park 引语解读，2026-09-02）</strong>："生产里大多数 agentic RAG 系统，最后长得不像一个聪明的提示词包着向量库，而像一个管线"——开放循环被延迟 / 成本 / 可靠性 / 可观测性四力压回"管线 + 少量有界决策点"的形态；纯开放的 agent 只是 demo 里的理想形态。</li>
+        <li><strong>【决策点】骨架硬化原则（沛东洞察，2026-09-02）</strong>：既然生产 agentic RAG 的骨架是确定的，就没有必要用提示词规定模型行为——应把骨架硬化进 Agent 代码，LLM 只在某些节点做判断；否则落入"指令遵循性到不了 100%"的陷阱。Codex 精确化：硬化 ≠ 不用提示词，LLM 判断节点要窄输出 + schema 约束 + 兜底分支；这是 0022 护栏/harness 原则（确定性兜底不确定性）在 RAG 编排上的延伸。</li>
+        <li><strong>泛化（沛东，2026-09-02）</strong>：这种方式本质是"支持 LLM 节点的工作流"；只有当任务复杂、天然需要多次迭代摸索、或后序检索依赖前序检索结果时，才应把决策权完全交给 LLM——而那时已接近 ReAct，检索只是其中一个工具。问题因此归位为通用选型：何时用 ReAct，何时用支持 LLM 节点的工作流。</li>
+        <li><strong>查证（Codex，2026-09-02）</strong>：泛化不是自嗨——Anthropic《Building Effective Agents》的 Workflow/Agent 二分（workflow = 预定义代码路径编排 LLM 步骤，适合确定性可分解任务；agent = 模型动态主导过程，适合路径无法硬编码的开放任务），判据原话精神即"任务歧义度允许预映射决策树 → workflow"；RAG 2025 taxonomy 直接按 agentic depth 分类；多篇文献明示"Agentic RAG 与 ReAct 高度一致"。但需带三个标注：①Agent 是家族不是单点（Self-RAG 反射 token / Plan-and-Execute / multi-agent / Reflexion 均非 ReAct），"agentic RAG ≈ ReAct"是工程近似；②二分在实践里本来就融合（OpenAI SDK 支持代码编排与策略驱动混合；LangChain：生产大多是组合；Anthropic：agent 的工具可以是 workflow），更准确是"骨架硬化程度"旋钮；③该框架只回答"谁决定检索编排"，检索质量是独立轴（CRAG 纠错式），可被 workflow 的验证/纠错节点吸收但框架本身未显式包含。</li>
+        <li><strong>【决策点】v1 落点（2026-09-02）</strong>：12 用例任务空间设计期可枚举 → workflow（支持 LLM 节点）+ 相关性门控；agentic（ReAct + 检索工具）作为受控 A/B 排队——评测链路稳定后，用同一批用例 + 补多跳用例做对比，有质量缺口再切换或混合。</li>
+      </ol>
+
+      <h3>阶段 C · 实现落地（2026-09-02）</h3>
+      <ol>
+        <li><strong>步骤 1 · 基础设施</strong>：装 qdrant-client 1.19 / fastembed 0.8 / onnxruntime 1.29（Python 3.14 无坑）；e5-large 2.2GB 下载到 backend/data/models（gitignored）；实现 QdrantVectorStore / FastEmbedEmbedder（懒加载 + query/passage 前缀）；Port 扩展（embed is_query / token_count / list_by_document）；DI + 配置接入（ASH_ 前缀）。</li>
+        <li><strong>BGE-M3 计划落空（Codex 发现）</strong>：fastembed 0.8 支持清单里没有 BGE-M3 → 等价替换 multilingual-e5-large（1024 维、多语言、前缀内建处理）；升级方向留 API embedding（本地 Qwen3-8B 资源跑不动不取）。</li>
+        <li><strong>Qdrant 双实例撞锁（实现期第一个坑）</strong>：build_deps 在 8000/8899 两个 uvicorn 实例各开一次本地 Qdrant → 锁冲突启动失败；解法 = 同路径客户端单例 + 懒加载（聊天/评测流程不占锁）；测试进程用独立目录（conftest 设 ASH_QDRANT_PATH），否则与开发服务器互踩。</li>
+        <li><strong>步骤 2 · 入库管线 + UI</strong>：manifest 解析（31 条素材）；HTML/MD 清洗切块（标题锚点 + 450 token 上限 + section_path）；知识库管理页（素材/状态列表、单篇/全量入库、chunk 预览新标签页、检索调试台、筛选下拉）。</li>
+        <li><strong>切块超限 bug（沛东抓出）</strong>：单段超过 450 token 时整段成块，会被 e5 静默截断；修法 = 超长段落按句子/换行边界拆 + 无标点内容按前缀二分硬切；"1766 字符"实为 ASCII 代码块（=447 tokens），字符数 ≠ token 数 → 入库写 payload.tokens，界面显示真实 token。</li>
+        <li><strong>chunk 顺序坑（沛东问出）</strong>：UI 预览曾按 Qdrant scroll 存储序显示（O2 出现 13,1,15,7…）；修法 = 入库写 payload.seq，list_by_document 按 seq 排序（存量数据回退解析 id 尾号）。</li>
+        <li><strong>素材真实形态抽查（格式复杂度现场）</strong>：T1 正文仅 book/ 13 个 md，仓库另有 1383 个杂项 md（README 9 种语言）；T2 有 7 种语言目录；D8（信通院新闻页，后整源弃用删除）曾实测 GB18030 编码 + 新闻页正文在叶子 div（非 p 标签）+ 侧栏噪声；O1 是 7.3MB PDF。→ 对应四个适配：文件白名单规则（ingest_rules.py，规则放代码）、编码自动探测（utf-8 → gb18030）、内容容器提示回退（#left_cont 等 id/class 候选）、pdfplumber 结构化解析（见下方 O1 迭代条目）。</li>
+        <li><strong>UI 交互决策（沛东）</strong>：知识库管理页加类别/状态筛选下拉；chunk 预览必须在<strong>浏览器新标签页</strong>打开（管理页保留）；检索调试台保留（步骤 6/7 的调优工具）。</li>
+        <li><strong>中断教训（T1）</strong>：13 章书单篇同步入库约 10 分钟，客户端中断后状态悬挂在 indexing；向量块在全部 embedding 完成后才一次性写入，所以中断不会留下半成品，但要人工清理悬挂状态 → 长任务需要后台化 + 进度 + 可取消（下一步改造方向）。</li>
+        <li><strong>当前状态</strong>：O1(21) / O2(19) / A5(23) / OW1(183) 已入库共 246 块，12 条用例所需素材齐备；D8 已整源弃用删除；T1 待重跑；全量入库按钮暂不对全部素材放开（按源类型适配后再放开）。</li>
+        <li><strong>O1 PDF 首版问题（沛东验收发现，2026-09-02）</strong>：chunk 几乎没用原文结构（Introduction 与 What is an agent? 揉进一块）；页脚 "A practical guide to building agents" 与页码混入；块断在行尾而非句尾。</li>
+        <li><strong>根因与修复（O1 迭代 1）</strong>：根因 = ①pypdf 纯文本流无结构，整篇按单节处理；②页脚无过滤；③句子切分正则漏 ASCII 句号（英文只按换行断）；④段落按空行切分但 PDF 无空行 → 一行行堆叠。修复 = pdfplumber 按字号判标题（≥ 正文 1.5×，多行大标题合并）、剔除底部页脚带、跳过封面/目录页、按行距拼段（处理断词连字符）、句子切分补 ASCII 句号（避开 e.g. / 3.14）；依赖换 pdfplumber。</li>
+        <li><strong>O1 重跑验证（2026-09-02）</strong>：15 个节路径（Introduction → More resources）、21 块、块与节对齐（O1:0 = Introduction 独占）、页脚残留 0、最长 448 tokens、末块以完整句子收尾；限定 O1 的检索实测命中正确节（含带行号代码块）。残余瑕疵集中在代码示例（行号/断词/Unset 粘连），判定对召回与 LLM 理解无害，接受；两个未来风险见"实践与经验教训"第 8 条。另：重启验证时 8000 曾被系统 Python 的旧代码实例占用（O1 全是"引言"节可识别旧代码）——换代码后要确认服务进程确实加载了新版本。</li>
+        <li><strong>方案 1 · 来源行落地（2026-09-02，沛东提出"chunk 没带文章标题"）</strong>：问题 = 用户模糊指代"那本/那篇/某某笔记"时，chunk 向量没有文档身份词可匹配。实现 = 每块文本首行加"来源：作者/平台 · 标题"（多文件源如 OW1 追加 › 文件标题），切块上限预留来源行 token，最终文本 ≤ 450；来源行随文本进向量与 payload（展示/注入/引用都带出处）。验证 = 不带过滤的模糊查询"OpenAI 指南"前 6 条全命中 O1、"harness 那篇"全命中 O2（此前这类查询被 OW1 的 183 块淹没）；O1/O2/OW1 重跑后最长 438 tokens、零超限。D8 判定为新闻稿页、找不到完整原文 → 按沛东决定整源弃用删除（素材文件 + 台账行 + 代码标签一并移除）。</li>
+        <li><strong>HTML 根容器漏开场 lede（沛东检查 A5 发现，2026-09-02）</strong>：A5 开场"blast radius"一句没出现在块流开头——根因 = 页面结构是 main &gt; section.hero(lede) + div &gt; article(正文)，抽取器优先选 article 当根，把 main 下 article 外的开场白漏在正文流之外（页内另一处重复被塞到 Looking ahead 附近，所以没丢但位置错了）。修复 = 根容器改 main 优先（保留 article 外的 hero，站点外壳已在进入前剔除）+ 段落/标题级样板噪声过滤（newsletter/subscribe/sign up/cookie，CTA 整节丢弃直到下一个真标题）；补回归测试（main + hero + CTA 结构）。A5 重跑 23 块：lede 回到 A5:0、CTA 清零、节路径收在 Footnotes。</li>
+      </ol>
+
+      <h3>阶段 D · 调校（占位，12 条用例跑批后补）</h3>
+      <ol>
+        <li>（步骤 3-5 完成后记录：问答侧 workflow → 判官联动 → 12 条首跑 → 逐条归因调校 → 检索质量节点）</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>产出物与落点（2026-09-02）</h2>
+      <ul>
+        <li><strong>0025 笔记（本文）</strong>：一条笔记承载 RAG v1.0 全程——设计定案（入库侧 / 问答侧 / 骨架硬化 / 选型框架）+ 实现落地（阶段 C）+ 经验教训 + 调校（阶段 D 占位）；</li>
+        <li><strong>真待定 8 项</strong>（见第一部分），其中触发/注入方式为下一轮讨论核心；</li>
+        <li><strong>v1 实施路线（2026-09-02 定，步骤 0-8）</strong>：
+          <ol>
+            <li><strong>步骤 0 · 收口最后三块设计（✅ 沛东拍板）</strong>：①触发/注入方式 = 固定检索 + 相关性门控（先确定性阈值，不够再上 LLM 判断函数）；②回答形态与引用格式 = 文章标题 + 章节级来源标注，注入块自带 [来源] 标记；③判官检索信号 = trace 记录检索事件（query / top-k / 分数 / 来源 / 门控结果），判官据此核对引用真实性。</li>
+            <li><strong>步骤 1 · 基础设施落地（✅ 已完成）</strong>：装 Qdrant local / fastembed（实际落地 multilingual-e5-large——BGE-M3 已被 fastembed 0.8 移除）；实现 storage/ports.py 的 VectorStore / Embedder 适配器并注册 DI。</li>
+            <li><strong>步骤 2 · 入库管线 + UI（✅ 已完成）</strong>：O2/A5 HTML 清洗（剔导航页脚）→ 标题层级切块（450 token 上限）→ payload 元数据（source_id / section_path / knowledge_date / decay_class / tokens / seq）→ Qdrant 入库；自有文档同管线；UI 管理功能；D8/O1/T1 等源类型格式适配见阶段 C。</li>
+            <li><strong>步骤 3 · 问答侧 workflow 骨架（代码硬化）</strong>：query → 检索（混合 + payload 过滤）→ 门控 → 注入（片段 + 来源）→ 生成，每步一个函数；trace 扩展检索事件；保留现有工具循环。</li>
+            <li><strong>步骤 4 · 判官联动（基础件，走铁律）</strong>：runner 把检索信号作为 evidence 传给判官；判官提示词按 0024 口径扩展（引用真实性条件触发 / expected_mode / g-f 层级判定）；判官与系统提示词改动后沛东人工复核。</li>
+            <li><strong>步骤 5 · 12 条首跑 + 调校</strong>：目标 = 链路通 + 判官可用；逐条看 fail，先分类（用例/金标准问题 vs 系统问题 vs 噪声）再动手；金标准改动仍由沛东复核。</li>
+            <li><strong>步骤 6 · 检索质量节点（按首跑结果决定）</strong>：门控阈值够不够；rag-cmp-001 跨文档覆盖稳不稳（不稳加确定性规则"每 source_id 至少取 N 条"）；CRAG 式验证/纠错节点是否纳入首轮。</li>
+            <li><strong>步骤 7 · 能力边界探针 + agentic 对照（实验里程碑，与 v1 验收隔离）</strong>：
+              <ol>
+                <li>7a 探针用例集设计与金标准复核：按固定管线已知失败模式构造（多跳组合 / 聚合共识 / 迭代依赖 / 歧义消解 / 检索词不匹配 / 反事实否定）；素材优先自有内容（排除内化直答混淆）；每例带归因轴（索引召回 / 注入噪声 / 编排不能迭代 / 编排不能分解 / 知识缺口）；标 tag=boundary-probe、must_pass=false。</li>
+                <li>7b baseline 边界测试：workflow 跑 repeat≥10，失败集按归因轴归类——编排类失败 agentic 可能修、检索质量类失败给工具也没用、知识缺口谁都没戏。</li>
+                <li>7c agentic 对照与代价量化：同探针集换 ReAct + search 工具跑 repeat≥10；指标 = 判官通过率 / 延迟 / token / 轮次 / 运行方差 / 判官可评性；预判写进实验假设（防自嗨）。</li>
+                <li>7d 结论沉淀：产出能力边界地图（用例类型 × 变体 × 通过率 × 归因 × 代价），顺带回答 GraphRAG 取舍。</li>
+              </ol>
+            </li>
+            <li><strong>步骤 8 · agentic 切换决策</strong>：由步骤 7 的实验数据决定——无质量缺口→维持 workflow；有缺口且代价可接受→切换或路由混合。</li>
+          </ol>
+        </li>
+        <li><strong>实现落地产物</strong>：backend/app/kb/（manifest / chunker / ingest / ingest_rules / extract）、backend/app/storage/qdrant_store.py / fastembed_store.py / sqlite/kb_store.py、backend/app/api/kb.py、frontend/src/components/KbPage.vue / ChunkPreviewPage.vue；新增 9 个单测（120 全过）；</li>
+        <li><strong>当前入库状态</strong>：O1(21) / O2(19) / A5(23) / OW1(183) 已入库共 246 块，12 条用例所需素材齐备；D8 已整源弃用删除；T1 中断清理后待重跑；全量入库按钮暂不放开（按源类型适配后再放开）；</li>
+        <li><strong>下一步</strong>：①步骤 3 问答侧 workflow 骨架（检索门控 → 注入 → 生成）；②长任务后台化改造（单篇入库异步 + 进度 + 可取消，T1 中断教训）；③步骤 5 十二用例首跑调校（阶段 D 填现场）；④KB 扩容前做"入库质量报告"（质量信号 + 异常清单，见经验教训第 10 条）。</li>
+        <li><strong>过程记录</strong>：0025 一条笔记承载设计 → 实现 → 调校全程（12 条首轮用例跑通为止），不再单开 0026；提交按 0009 权威副本先更新功能摘要再进 commit 正文。</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-02 · 更新：2026-09-02 · 阶段 2 RAG v1.0 实现与调校（设计定案 + 步骤 0-2 实现落地 + UI + 经验教训）
+    </footer>
+  </div>
+</body>
+</html>

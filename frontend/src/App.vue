@@ -9,7 +9,9 @@ import {
   type TraceStep
 } from './api/client'
 import { navigate, parseHash, type Route } from './router'
+import ChunkPreviewPage from './components/ChunkPreviewPage.vue'
 import EvalPage from './components/EvalPage.vue'
+import KbPage from './components/KbPage.vue'
 import RunDetailPage from './components/RunDetailPage.vue'
 
 interface ChatMsg {
@@ -22,6 +24,8 @@ const input = ref('')
 const mode = ref<SessionMode>('general')
 const streaming = ref(false)
 const route = ref<Route>(parseHash(window.location.hash))
+// 模板里 v-else 会把 route.name 收窄为 'chat'，导航高亮需要完整联合类型
+const routeName = computed(() => route.value.name)
 
 const showSettings = ref(false)
 const settings = ref({ model: 'deepseek-chat', apiKey: '', masked: '', hasKey: false })
@@ -104,13 +108,16 @@ async function send() {
 <template>
   <main class="page" :class="{ wide: route.name !== 'chat' }">
     <EvalPage v-if="route.name === 'eval'" />
+    <KbPage v-else-if="route.name === 'kb'" />
+    <ChunkPreviewPage v-else-if="route.name === 'kb-chunks'" :source-id="route.sourceId" />
     <RunDetailPage v-else-if="route.name === 'run'" :run-id="route.runId" />
     <template v-else>
     <header class="bar">
       <h1>AI 助手</h1>
       <nav class="nav">
-        <button :class="{ on: route.name === 'chat' }" @click="navigate('#/')">聊天</button>
+        <button :class="{ on: routeName === 'chat' }" @click="navigate('#/')">聊天</button>
         <a class="nav-link" href="#/eval" target="_blank" rel="noopener">评测台</a>
+        <button :class="{ on: routeName === 'kb' }" @click="navigate('#/kb')">知识库</button>
       </nav>
       <select v-model="mode" :disabled="streaming">
         <option value="general">通用模式</option>

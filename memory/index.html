@@ -169,8 +169,14 @@
           <tr>
             <td><a href="0024-rag-v1-cases.html">0024</a></td>
             <td>2026-09-01</td>
-            <td>RAG v1.0 用例设计——判定维度定稿（用户价值层：正确完整性+表达合适性+拒答校准；工程诊断层：引用真实性红线+检索充分性常驻+faithfulness 按需审计；业界三层评测对照）；污染半衰期原则（用例按退化速度分四类，faithfulness 兼任污染检测器）；用例类型清单草案（按学习过程主线十题型）；逼检索构造技巧</td>
-            <td><span class="badge">定稿中</span></td>
+            <td>RAG v1.0 用例设计定稿——两层判定 + 层级判定（行为正确性 g 门控表达合适性 f）；引用真实性=条件触发伪证红线；污染半衰期三分类（永不 / 缓慢 / 快速退化）；用例 schema 时间字段（存量默认 never）；出题可行性总图（入库形态 × 模型熟悉度）；12 条首轮用例人工复核定稿（backend/eval/cases/rag/）</td>
+            <td><span class="badge">已定稿</span></td>
+          </tr>
+          <tr>
+            <td><a href="0025-rag-v1-implementation.html">0025</a></td>
+            <td>2026-09-02</td>
+            <td>RAG v1.0 实现与调校——设计定案（入库侧 / 问答侧三轴框架 / 骨架硬化 / workflow-vs-ReAct 选型）+ 实现落地（步骤 0-2：e5 本地落地、Qdrant 适配器、入库管线、知识库管理 UI）+ 经验教训（单进程锁 / 切块超限 / chunk 序 / 格式适配）；调校与步骤 3-8 待进行</td>
+            <td><span class="badge">进行中</span></td>
           </tr>
         </tbody>
       </table>

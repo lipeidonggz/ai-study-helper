@@ -112,11 +112,17 @@ class VectorStore(ABC):
     ) -> list[dict]: ...
 
     @abstractmethod
+    def list_by_document(self, kb_id: str, document_id: str, limit: int = 1000) -> list[dict]: ...
+
+    @abstractmethod
     def delete_by_document(self, kb_id: str, document_id: str) -> None: ...
 
 
 class Embedder(ABC):
-    """文本向量化（阶段 2 落地，v1 建议本地 BGE）。"""
+    """文本向量化：索引侧用文档前缀，检索侧用 query 前缀（e5 系模型依赖前缀区分）。"""
 
     @abstractmethod
-    def embed(self, texts: list[str]) -> list[list[float]]: ...
+    def embed(self, texts: list[str], *, is_query: bool = False) -> list[list[float]]: ...
+
+    @abstractmethod
+    def token_count(self, texts: list[str]) -> list[int]: ...

@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     # 数据库文件路径；为空时由 di.py 计算默认值 backend/data/app.db
     db_path: str = ""
 
+    # RAG 基础设施：向量库本地路径 / embedding 模型与缓存目录（为空时由 di.py 计算默认值）
+    qdrant_path: str = ""
+    embedding_model: str = "intfloat/multilingual-e5-large"
+    embedding_cache_dir: str = ""
+    embedding_dim: int = 1024
+    # 知识库入库状态库（SQLite）；为空时由 main.py 计算默认值 backend/data/kb.db
+    kb_db_path: str = ""
+
     # 告诉 pydantic-settings：所有环境变量必须以 ASH_ 开头，
     # 例如 ASH_DB_PATH=xxx 会覆盖 db_path 字段
     model_config = {"env_prefix": "ASH_"}

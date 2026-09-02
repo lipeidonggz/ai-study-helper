@@ -5,15 +5,22 @@
 - 依赖组装（build_deps）集中在这一处，替换依赖（比如测试用内存存储）只需改这里
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
 
-from app.api import chat, eval as eval_api, health, settings as settings_api  # 起别名避免与配置变量同名
+from app.api import chat, eval as eval_api, health, kb as kb_api, settings as settings_api  # 起别名避免与配置变量同名
 from app.config import settings  # 应用配置对象（注意：这里的 settings 不是 api 模块）
 from app.di import build_deps  # 依赖组装工厂
+from app.storage.sqlite.kb_store import KbStore
 from eval.run_manager import RunManager  # 评测台后台跑批管理器
 
 
-def create_app(eval_db_path: str | None = None, eval_cases_dir: str | None = None) -> FastAPI:
+def create_app(
+    eval_db_path: str | None = None,
+    eval_cases_dir: str | None = None,
+    kb_db_path: str | None = None,
+) -> FastAPI:
     """创建并配置 FastAPI 应用。
 
     eval_db_path：评测结果库路径；测试可注入临时路径避免污染真实数据。
@@ -24,10 +31,16 @@ def create_app(eval_db_path: str | None = None, eval_cases_dir: str | None = Non
     app.state.eval_manager = RunManager(
         db_path=eval_db_path, cases_dir=eval_cases_dir
     )  # 评测台：跑批任务 + 结果库
+    if kb_db_path is None:
+        kb_db_path = settings.kb_db_path or str(
+            Path(__file__).resolve().parent.parent / "data" / "kb.db"
+        )
+    app.state.kb_store = KbStore(kb_db_path)  # 知识库：入库状态库
     app.include_router(health.router)  # 注册 /health
     app.include_router(chat.router)  # 注册 /api/chat
     app.include_router(settings_api.router)  # 注册 /api/settings
     app.include_router(eval_api.router)  # 注册 /api/eval
+    app.include_router(kb_api.router)  # 注册 /api/kb
     return app
 
 

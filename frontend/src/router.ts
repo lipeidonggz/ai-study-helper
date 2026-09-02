@@ -3,6 +3,8 @@
 export type Route =
   | { name: 'chat' }
   | { name: 'eval' }
+  | { name: 'kb' }
+  | { name: 'kb-chunks'; sourceId: string }
   | { name: 'run'; runId: number }
 
 export function parseHash(hash: string): Route {
@@ -13,6 +15,10 @@ export function parseHash(hash: string): Route {
       if (Number.isFinite(id)) return { name: 'run', runId: id }
     }
     return { name: 'eval' }
+  }
+  if (parts[0] === 'kb') {
+    if (parts[1] === 'chunks' && parts[2]) return { name: 'kb-chunks', sourceId: parts[2] }
+    return { name: 'kb' }
   }
   return { name: 'chat' }
 }

@@ -341,3 +341,59 @@ export const evalApi = {
     return `/api/eval/runs/${runId}/export`
   }
 }
+
+// —— 知识库管理（0025 步骤 2）：素材/入库状态 + chunk 预览 + 检索调试 ——
+
+export interface KbDocument {
+  source_id: string
+  name: string
+  category: string
+  carrier: string
+  collected: boolean
+  knowledge_date: string
+  decay_class: string
+  status: string
+  chunk_count: number
+  error: string
+  indexed_at: string
+}
+
+export interface KbChunk {
+  id: string
+  section_path: string
+  tokens: number
+  text: string
+}
+
+export interface KbSearchHit {
+  score: number
+  source_id: string
+  section_path: string
+  decay_class: string
+  text: string
+}
+
+export const kbApi = {
+  listDocuments(): Promise<KbDocument[]> {
+    return http('/api/kb/documents')
+  },
+  indexDocument(id: string): Promise<{ source_id: string; status: string; chunk_count: number }> {
+    return http(`/api/kb/documents/${id}/index`, { method: 'POST' })
+  },
+  indexAll(): Promise<{ accepted: number }> {
+    return http('/api/kb/index-all', { method: 'POST' })
+  },
+  deleteDocument(id: string): Promise<{ ok: boolean }> {
+    return http(`/api/kb/documents/${id}`, { method: 'DELETE' })
+  },
+  listChunks(id: string): Promise<KbChunk[]> {
+    return http(`/api/kb/documents/${id}/chunks`)
+  },
+  search(body: { query: string; top_k?: number; filters?: Record<string, unknown> }): Promise<KbSearchHit[]> {
+    return http('/api/kb/search', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  }
+}

@@ -7,6 +7,12 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.4",
+    "qdrant-client>=1.19",
+    "fastembed>=0.8",
+    "rank-bm25>=0.2",
+    "jieba>=0.42",
+    "beautifulsoup4>=4.12",
+    "pdfplumber>=0.11",
 ]
 
 [project.optional-dependencies]
