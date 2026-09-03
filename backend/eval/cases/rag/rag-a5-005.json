@@ -1,0 +1,62 @@
+{
+  "id": "rag-a5-005",
+  "category": "rag",
+  "title": "辨析：两种监督/遏制方式",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "《How we contain Claude》区分了哪两种对 Agent 的监督/遏制方式？各自的重点和典型手段是什么？"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "列举两种方式并说明重点与手段（HITL 监督行为 vs 监督能做什么：边界/沙箱/VM/出口控制）",
+    "criteria": [
+      "answer_correct",
+      "citation_truth",
+      "format_appropriate"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
+  "tags": [
+    "辨析",
+    "对比",
+    "fast"
+  ],
+  "compare": false,
+  "notes": "首轮切片 ① HTML×低（A5）；2026-09-02 补入，替代被挪探针池的 o2-001",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
+  "enabled": true,
+  "admin_note": "2026-09-02 补入（替代 o2-001 的显式定义题）：A5 原文有显式句（supervise what the agent does via HITL / supervise what it's able to do via boundaries）；2026-09-03 沛东人工初审通过，待跑批后再按实际情况调整。",
+  "updated_at": "2026-09-03T09:00:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足（内容与解释以意思一致为准、表述不限；精确数字/名称/出处须准确）——\n1. 内容正确：两种方式——①人在环路监督行为（supervise what the agent does / human-in-the-loop，典型手段为逐次许可，auto mode 是为缓解批准疲劳而设）；②监督「能做什么」（supervise what it's able to do / containment）：通过沙箱、虚拟机、出口控制等强制访问边界，环境层优先、模型层兜底；可提及两者互补（模型层在环境层不可用时兜底），不扣分。\n2. 表达合适：清晰区分两种方式（列举或对照），不混为一谈。\n3. 引用真实（条件触发）：若回答论断依托检索内容或显式声称来源——来源必须真实存在、归属正确、内容与原文吻合（本用例锚定来源：A5《How we contain Claude》）；凭内化知识作答且未声称来源的，不触发本条款，不判 fail。\n判 fail：满足以下任一情形即 fail——\n1. 内容：只答一种、混淆两种，或把「监督行为」当作唯一方式且未提能力/访问边界视角。\n2. 表达：两种方式混杂无法区分。\n3. 引用（条件触发）：①声称的来源不存在（伪造）；②内容与所引来源原文不符；③归属错误（张冠李戴）；④依托检索内容作答却未标注来源（引用缺失）——任一即 fail；未依托检索且未声称来源的作答不适用本条款。",
+    "reference_answer": "",
+    "note": "",
+    "annotated_at": "2026-09-03",
+    "annotated_by": "沛东人工初审"
+  },
+  "source_ref": {
+    "manifest_id": "A5",
+    "location": "two-approaches-supervision-containment"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-02",
+    "decay_class": "fast",
+    "half_life_days": 90,
+    "refresh_cadence_days": 90,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  }
+}

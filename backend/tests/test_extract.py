@@ -68,3 +68,28 @@ def test_main_root_keeps_hero_lede_and_drops_newsletter_cta():
     assert "As agents grow more capable" in joined
     assert "Twelve months ago" in joined
     assert "newsletter" not in joined and "Sign up" not in joined
+
+
+def test_doc_header_h1_kept_but_site_header_excluded():
+    """自有文档：<header class=page-head> 里的 <h1> 标题应成为路径根；
+    站点级 header 在 <main> 外时应被根容器选择排除（不进内容）。"""
+    own_doc = """
+    <html><body>
+      <header class="page-head"><h1>0022 · 主动式验证笔记</h1></header>
+      <section class="card"><h2>会话元信息</h2><p>状态：温度档位扫描定档：1.0。</p></section>
+    </body></html>
+    """
+    sections = extract_sections_html(own_doc)
+    assert sections[0].path.startswith("0022 · 主动式验证笔记")
+    assert "会话元信息" in sections[0].path
+    assert "定档：1.0" in "".join(p for s in sections for p in s.paragraphs)
+
+    article = """
+    <html><body>
+      <header>站点导航：不该进来</header>
+      <main><h1>正文标题</h1><p>正文内容。</p></main>
+    </body></html>
+    """
+    sections = extract_sections_html(article)
+    joined = "".join(p for s in sections for p in s.paragraphs)
+    assert "正文内容。" in joined and "站点导航" not in joined

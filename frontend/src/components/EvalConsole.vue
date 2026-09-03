@@ -808,6 +808,7 @@ function onKeydown(e: KeyboardEvent) {
         <table class="ui-table">
           <thead>
             <tr>
+              <th>序号</th>
               <th>ID</th>
               <th>类别</th>
               <th>标题</th>
@@ -819,7 +820,8 @@ function onKeydown(e: KeyboardEvent) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="c in cases" :key="c.id">
+            <tr v-for="(c, idx) in cases" :key="c.id">
+              <td class="ui-muted">{{ idx + 1 }}</td>
               <td class="ui-mono">{{ c.id }}</td>
               <td>{{ c.category }}</td>
               <td>
@@ -850,7 +852,7 @@ function onKeydown(e: KeyboardEvent) {
               </td>
             </tr>
             <tr v-if="!cases.length">
-              <td colspan="8" class="ui-muted">没有匹配的用例</td>
+              <td colspan="9" class="ui-muted">没有匹配的用例</td>
             </tr>
           </tbody>
         </table>

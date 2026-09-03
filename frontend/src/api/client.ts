@@ -1,6 +1,6 @@
 /** 后端 API 客户端：骨架版只实现 SSE 流式对话。 */
 
-export type SessionMode = 'general' | 'kb_priority' | 'tool_enhanced'
+export type SessionMode = 'general' | 'kb_priority' | 'tool_enhanced' | 'rag'
 
 export interface ChatEvent {
   event: 'start' | 'delta' | 'done' | 'error' | 'trace'

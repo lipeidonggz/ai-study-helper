@@ -20,7 +20,6 @@ _REMOVE_TAGS = {
     "style",
     "nav",
     "footer",
-    "header",
     "aside",
     "form",
     "svg",
@@ -86,6 +85,10 @@ def extract_sections_html(html: str) -> list[Section]:
 
     兼容两种正文结构：p/li 段落（现代站点）与"叶子 div 直接装文本"（老式中文新闻站）。
     无文章容器时兜底按空行切段。
+
+    2026-09-03 修订：不再整删 <header>——站点级 header 在 <main>/<article> 之外，
+    由根容器选择天然排除；而自有文档（memory HTML）把 <h1> 文档标题放在
+    <header class="page-head"> 里，整删会让路径根丢失（own-002 教训，见 0025 经验 16）。
     """
     soup = BeautifulSoup(html, "html.parser")
     for tag in _REMOVE_TAGS:

@@ -123,6 +123,7 @@ async function send() {
         <option value="general">通用模式</option>
         <option value="kb_priority">知识库优先</option>
         <option value="tool_enhanced">工具增强</option>
+        <option value="rag">知识库问答</option>
       </select>
       <button class="link-btn" @click="showSettings = !showSettings">
         {{ showSettings ? '收起' : '设置' }}

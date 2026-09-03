@@ -29,7 +29,7 @@ from app.tools.registry import default_registry
 router = APIRouter(prefix="/api", tags=["chat"])
 
 # 会话模式：通用 / 知识库优先 / 工具增强（范围控制的会话级开关）
-SessionMode = Literal["general", "kb_priority", "tool_enhanced"]
+SessionMode = Literal["general", "kb_priority", "tool_enhanced", "rag"]
 
 
 class ChatRequest(BaseModel):
@@ -67,6 +67,13 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
     tools = ToolExecutor(default_registry())  # 内置工具的执行器
     deps.log_store.append("chat", {"message": req.message, "mode": req.mode})  # 记录日志
     llm = _build_llm(deps)  # 构建 LLM 客户端
+    rag_backend = None
+    if req.mode == "rag":
+        from app.rag.workflow import RagBackend
+
+        if not deps.vector_store or not deps.embedder:
+            raise HTTPException(503, "知识库检索组件未就绪（向量库/embedding 未配置）")
+        rag_backend = RagBackend(deps.vector_store, deps.embedder)
     pending_trace: deque[dict] = deque()  # trace 步骤缓冲：loop 产生、gen 取走
 
     async def gen():
@@ -81,7 +88,12 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
             try:
                 # 进入 Agent 循环，逐块拿到文本并包成 delta 事件
                 async for chunk in run_agent_turn(
-                    req.message, mode=req.mode, llm=llm, tools=tools, trace=trace
+                    req.message,
+                    mode=req.mode,
+                    llm=llm,
+                    tools=tools,
+                    trace=trace,
+                    rag_backend=rag_backend,
                 ):
                     # 先清空已产生的 trace 步骤（保证顺序：trace 在对应文本之前）
                     while pending_trace:

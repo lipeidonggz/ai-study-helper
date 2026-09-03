@@ -47,6 +47,7 @@ async def run_agent_turn(
     history: list[LLMMessage] | None = None,
     trace: Trace | None = None,
     variant: str = "baseline",
+    rag_backend=None,
 ) -> AsyncIterator[str]:
     """执行一轮完整的 Agent 对话，逐块产出最终文本。
 
@@ -59,7 +60,18 @@ async def run_agent_turn(
     :param variant: 提示词变体（prompt 策略对照，默认基线）
     """
     history = history or []  # 没有历史就给空列表
-    messages = assemble(mode, history, user_message, variant)  # 组装上下文
+    # —— RAG 模式：检索 → 门控 → 注入（骨架硬化：流程写死，chat 与评测 runner 共用同一入口，
+    #    避免"评测静默无 RAG"）——
+    rag_context = None
+    if mode == "rag":
+        if rag_backend is None:
+            raise RuntimeError("rag 模式必须注入 rag_backend（chat / 评测 runner 负责构建）")
+        rag_ctx = rag_backend.prepare(user_message)
+        rag_context = rag_ctx.injected
+        if trace:
+            trace.step("retrieval", rag_ctx.trace_data())
+
+    messages = assemble(mode, history, user_message, variant, rag_context=rag_context)  # 组装上下文
 
     # —— 记录：上下文组装结果 ——
     if trace:
