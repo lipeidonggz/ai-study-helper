@@ -5,6 +5,10 @@ v1 规则（2026-09-02 定）：
 - 长度上限 450 token（e5 硬上限 512，留余量），超限按段落边界续切
 - 短节独立成块不合并；不做重叠
 - 每块保留 section_path（父标题路径），供引用定位与判官核对
+
+2026-09-04 增：lake 富文本正文提取（D6 阿里云 developer 页）——部分国内开发者平台把整篇正文
+以 JS 字面量字符串（GLOBAL_CONFIG.larkContent = '...'）存在 <script> 里，静态 DOM 只有导航/关注卡；
+extract_sections_html_auto 检测并还原后复用同一套标题锚点抽取。
 """
 
 import re
@@ -139,6 +143,37 @@ def extract_sections_html(html: str) -> list[Section]:
         if paragraphs:
             sections = [Section(path="引言", paragraphs=paragraphs)]
     return sections
+
+
+def _unescape_lake(s: str) -> str:
+    """反转义 JS 字符串：\\" → "、\\\\ → \\、\\/ → /、\\uXXXX → 字符。"""
+    s = s.replace('\\"', '"').replace("\\\\", "\\").replace("\\/", "/")
+    return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), s)
+
+
+def extract_lake_content(html: str) -> str | None:
+    """从阿里云 developer 页提取 larkContent 富文本正文（还原为可解析 HTML）。
+
+    D6 教训（2026-09-04）：页面正文在 <script> 的 GLOBAL_CONFIG.larkContent 字符串里，
+    静态 DOM 只有导航与"关注卡"（<article> 还可能误导根容器选择）。
+    """
+    marker = "GLOBAL_CONFIG.larkContent = '"
+    start = html.find(marker)
+    if start < 0:
+        return None
+    seg = html[start + len(marker):]
+    for i, ch in enumerate(seg):
+        if ch == "'" and (i == 0 or seg[i - 1] != "\\") and seg[i + 1: i + 2] == ";":
+            return _unescape_lake(seg[:i])
+    return None
+
+
+def extract_sections_html_auto(html: str) -> list[Section]:
+    """HTML 抽取自动分流：命中 lake 富文本（GLOBAL_CONFIG.larkContent）先还原正文再走常规抽取。"""
+    lake = extract_lake_content(html)
+    if lake is not None:
+        return extract_sections_html(lake)
+    return extract_sections_html(html)
 
 
 def extract_sections_md(md: str) -> list[Section]:

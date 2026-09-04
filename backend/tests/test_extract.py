@@ -1,6 +1,6 @@
 """格式适配测试：编码探测（GB18030 页面不再乱码）+ 内容容器/叶子 div 兼容。"""
 
-from app.kb.chunker import extract_sections_html
+from app.kb.chunker import extract_lake_content, extract_sections_html, extract_sections_html_auto
 from app.kb.extract import read_text_auto
 
 
@@ -93,3 +93,36 @@ def test_doc_header_h1_kept_but_site_header_excluded():
     sections = extract_sections_html(article)
     joined = "".join(p for s in sections for p in s.paragraphs)
     assert "正文内容。" in joined and "站点导航" not in joined
+
+
+def test_lake_content_restored_and_auto_extracts():
+    """D6 型页面：正文以 JS 字面量（GLOBAL_CONFIG.larkContent）藏在 script 里，静态 DOM 只有导航。"""
+    static_body = (
+        '<article class="focus">关注阿里云公众号</article>'
+        '<div class="nav">开发者社区</div>'
+    )
+    lake = (
+        '<p data-lake-id="p0">\\u4F5C\\u8005\\uFF1A\\u674E\\u56FD\\u5F3A<\\/p>'
+        '<h1>01 \\u4F01\\u4E1A\\u6784\\u5EFA Agent \\u65F6\\u7684\\u4E94\\u5927\\u75DB\\u70B9</h1>'
+        '<p>\\u5F53\\u524D\\uFF0C\\u4F01\\u4E1A\\u6295\\u4EA7 Agent \\u7684\\u70ED\\u60C5\\u7A7A\\u524D\\u9AD8\\u6DA8\\u3002</p>'
+    )
+    html = (
+        "<html><body>" + static_body +
+        "<script>GLOBAL_CONFIG.larkContent = '" + lake + "';</script>" +
+        "</body></html>"
+    )
+    restored = extract_lake_content(html)
+    assert restored is not None
+    assert "作者：李国强" in restored  # unicode 反转义
+    assert "企业构建 Agent 时的五大痛点" in restored
+    sections = extract_sections_html_auto(html)
+    joined = "".join(p for s in sections for p in s.paragraphs)
+    assert "当前，企业投产 Agent 的热情空前高涨。" in joined
+    assert any("01 企业构建 Agent 时的五大痛点" == s.path for s in sections)
+    assert "关注阿里云" not in joined  # 静态壳不进正文
+
+
+def test_lake_absent_falls_back_to_normal():
+    """无 larkContent 的页面走常规抽取，行为不变。"""
+    html = "<html><body><main><h1>标题</h1><p>正文。</p></main></body></html>"
+    assert extract_sections_html_auto(html) == extract_sections_html(html)

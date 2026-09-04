@@ -25,6 +25,10 @@ SOURCE_RULES: dict[str, list[str]] = {
     "T3": ["[0-9]*/**/*.md"],  # 只收 1-5 章正文
 }
 
+# T1 书内文件顺序（2026-09-04 体检发现）：glob 字母序会把 afterword(后记) 排到 introduction 前；
+# 书结构 = introduction → chapter1..N → afterword → reference-answers
+_T1_FILE_ORDER = {"introduction.md": 0, "afterword.md": 900, "reference-answers.md": 901}
+
 # 每源"来源行"标签（作者/平台 · 标题）：模糊指代检索的锚点（方案 1，2026-09-02 定）。
 # 人工维护、随代码提交沉淀；找不到时回退到 MANIFEST 名称（去掉尾部年份括号）。
 SOURCE_LABELS: dict[str, str] = {
@@ -79,7 +83,20 @@ def collect_source_files(source: SourceDoc) -> list[Path]:
             for f in p.glob(pattern):
                 if f.is_file() and f.suffix.lower() in _ALLOWED_SUFFIX:
                     files.add(f)
-    return sorted(files)
+    return sorted(files, key=lambda f: _source_file_key(source.source_id, f))
+
+
+def _source_file_key(source_id: str, path: Path) -> tuple[int, str]:
+    """源内文件排序键：默认按文件名；T1 按书结构（章节数字自然序）。"""
+    name = path.name.lower()
+    if source_id == "T1":
+        fixed = _T1_FILE_ORDER.get(name)
+        if fixed is not None:
+            return (fixed, name)
+        m = re.match(r"chapter(\d+)\.md$", name)
+        if m:
+            return (int(m.group(1)), name)
+    return (1000, name)
 
 
 def source_label(source: SourceDoc) -> str:

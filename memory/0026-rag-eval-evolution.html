@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0026 · 评测驱动主战场：RAG 系统完善与用例进化</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0026 · 评测驱动主战场：RAG 系统完善与用例进化</h1>
+      <p class="subtitle">主线：RAG 增强的单轮对话 · 关联：0023（目标与边界）→ 0024（判定与用例）→ 0025（实现与调校，12 条跑通收口）→ 本篇（主战场，进行中）</p>
+      <p class="subtitle">笔记结构（进行中两分法）：第一部分=思路简要+结论；第二部分=现场细节（按阶段积累）；阶段收尾时重构为分层阅读</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>会话元信息</h2>
+      <div class="meta">
+        <span>日期：2026-09-04</span>
+        <span>参与：沛东 + Codex（AI 协作开发助手）</span>
+        <span>类型：评测驱动调校 / 系统完善 / 用例扩阶段</span>
+        <span>分支：v1.0，RAG 开发线</span>
+        <span>状态：进行中——阶段 A 全量入库体检完成（27 源 3333 块）；下一步：质量评估报告 → 12 条全量回归 → 判官结构化裁决</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 + 结论（复习先读这里）</h2>
+      <p><strong>一句话主线：</strong>12 条基础用例全部 20/20 后，进入"评测驱动系统完善的主战场"——以基准用例集为锚、以全量语料为基础，按产品划定的环节一个阶段一个阶段扩用例；每阶段走"用例跑批 → 发现问题 → 定位根因 → 解决问题"的闭环，直到所有产品环节用例都跑完、单轮 RAG 能力闭环。</p>
+      <h3>当前阶段任务（2026-09-04 定）</h3>
+      <ol>
+        <li>✅ 全量素材入库（27 源 3333 块，含体检发现的三个工程问题）；</li>
+        <li>⏳ 质量评估报告（自动信号扫描 + 代表源人工核对）；</li>
+        <li>⏳ 12 条基础用例全量回归（语料扩容不变式首战）；</li>
+        <li>⏳ 判官结构化裁决改造（逐主题识别 + 确定性聚合；attempt 数值打分挂起——Run#107 240 attempt 实证 g/f 零分离，启用条件 = 开放表达形态用例出现分离样本）；</li>
+        <li>⏳ faithfulness 抽样审计制度化；</li>
+        <li>⏳ 按产品环节扩用例（每阶段迭代：跑批 → 归因 → 修复）；</li>
+        <li>排队：检索升级（文档级读取 / 两阶段）、术语史语料（A4/P2/D7 已随全量入库）、术语演进探针、BM25/rerank 对照、Agentic A/B（步骤 7）、入库质量报告、长任务后台化、index-all 跳过 ready。</li>
+      </ol>
+      <h3>结论速查（阶段 A 沉淀）</h3>
+      <ul>
+        <li>语料：27 源 3333 块（此前 260 块）；embed 用 batch=32（内存稳定 3.7GB）；D6 lake 富文本适配完成；</li>
+        <li>触发条件判断：是否用 Agentic RAG = 出现"编排类根因"且 workflow 进化（加 LLM 节点/多阶段）仍无法解决的用例，再 A/B 量化代价；</li>
+        <li>主战场节奏：质量报告 → 全量回归 → 判官可信度 → 用例扩阶段迭代。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节（按阶段分界，复原现场用）</h2>
+      <h3>阶段 A · 全量入库体检（2026-09-04，主战场第一仗）</h3>
+      <ol>
+        <li><strong>全量入库完成</strong>：27 源 3333 块（此前 260 块）——T1 书 928、T2/T3 教程、A/O/P/B/D 系列业界文章；D4/D5/PAPER 未采集不在范围。</li>
+        <li><strong>embed 内存失控与修复</strong>：fastembed embed 默认 batch 256，e5-large 在 CPU 上单批峰值可达十几 GB（T1 入库跑到 17.7GB 失控）；修复 = FastEmbedEmbedder 固定 batch=32，实测内存稳定约 3.7GB。吞吐 ~1 块/s 是本机 CPU（12 逻辑核）跑 5.3 亿参数 fp32 的物理上限（豆包给的 INT8 速度数字自相矛盾、与物理账不符，未采信；性能优化非主线，不做）。</li>
+        <li><strong>index-all 重入浪费</strong>：全量入库不跳过已 ready 源（T1 白跑两遍约 34 分钟）→ 待改：index-all 语义 = 补齐未入库，跳过 ready（重入库走单源接口）。</li>
+        <li><strong>D6（阿里云 developer）失败根因与 lake 适配</strong>：正文以 JS 字面量（GLOBAL_CONFIG.larkContent）藏在 script 里（静态 DOM 只有导航 + "关注卡"，且关注卡被包在 &lt;article&gt; 里误导根容器选择）→ 新增 lake 富文本抽取（extract_lake_content 反转义 + extract_sections_html_auto 自动分流 + 回归测试）；D6 重入库 12 块、节标题归位、检索命中正常。</li>
+        <li><strong>意义</strong>：全量入库是抽取适配的体检场——素材类型每扩一批，管线适配要跟着补（与 0025"先做对适配再放开范围"的经验一致）；这三条是质量评估报告的第一批发现。</li>
+      </ol>
+      <h3>阶段 B · 入库质量体检与全量回归（2026-09-04）</h3>
+      <ol>
+        <li><strong>自动信号扫描（27 源 3333 块）</strong>：来源行 100%、乱码 0、空/短块 0、token 全部 ≤437；D2"关注"红旗经查为正文误报。</li>
+        <li><strong>代表源人工核对发现</strong>：①T1 跨文件顺序错乱（glob 字母序把 afterword 排到 introduction 前）→ 修复 = collect_source_files 按书结构自定义排序（introduction → chapter 数字序 → afterword → reference-answers）+ 回归测试，重入库后首块=引言、末块=参考答案；②标题内 Markdown 记号（T2 [[锚点]] / T3 **bold**）为原文自带、非解析 bug，可选清洗；③站壳噪声进首块（B1/B2 导航、P3 赞助、P5 站头、OW1"返回记忆主页"）——与 0025"版式噪声无害"一致，低优先级/可接受；④D7 多文件源第二文件无标题时来源行回退文件名，可接受。</li>
+        <li><strong>全量回归（Run#113，13 条 × repeat20）</strong>：12 条基础用例全部 20/20 零退化（语料 260 → 3333 块，扩容不变式通过）；rag-cmp-002 16/20 仍红（预期，基准用例继续驱动判官结构化 + 检索升级）。</li>
+        <li><strong>结论</strong>：全库内容完整可检索；抽取适配随素材类型继续补（D6 lake / T1 排序都是体检逼出来的）。</li>
+      </ol>
+      <h3>阶段 C 起 · 判官结构化裁决与扩用例（待积累）</h3>
+      <p>（本笔记按阶段继续追加；阶段收尾时重构为分层阅读，初稿交沛东确认。）</p>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-04 · 阶段 2 RAG v1.0 · 评测驱动主战场（进行中）
+    </footer>
+  </div>
+</body>
+</html>

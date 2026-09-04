@@ -21,17 +21,29 @@ def _source(tmp_path, source_id: str, paths: list[str]) -> SourceDoc:
 
 
 def test_rule_limits_to_book(tmp_path):
-    """T1 规则 book/*.md：README 多语言与杂项不进库。"""
+    """T1 规则 book/*.md：README 多语言与杂项不进库；文件按书结构排序。"""
     (tmp_path / "book").mkdir()
-    (tmp_path / "book" / "chapter1.md").write_text("x", encoding="utf-8")
-    (tmp_path / "book" / "chapter2.md").write_text("x", encoding="utf-8")
+    for name in (
+        "afterword.md",
+        "chapter10.md",
+        "chapter2.md",
+        "introduction.md",
+        "reference-answers.md",
+    ):
+        (tmp_path / "book" / name).write_text("x", encoding="utf-8")
     (tmp_path / "README.en.md").write_text("x", encoding="utf-8")
     (tmp_path / "tools").mkdir()
     (tmp_path / "tools" / "a.md").write_text("x", encoding="utf-8")
 
     src = _source(tmp_path, "T1", ["."])
     files = collect_source_files(src)
-    assert [f.name for f in files] == ["chapter1.md", "chapter2.md"]
+    assert [f.name for f in files] == [
+        "introduction.md",
+        "chapter2.md",
+        "chapter10.md",
+        "afterword.md",
+        "reference-answers.md",
+    ]
 
 
 def test_default_collects_all_text_files(tmp_path):

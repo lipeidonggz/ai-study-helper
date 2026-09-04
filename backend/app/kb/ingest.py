@@ -4,7 +4,11 @@
 模型只出现在 embedding 这一确定节点；格式复杂度（编码/PDF/文件选择）在 extract 层消化。
 """
 
-from app.kb.chunker import chunk_sections, extract_sections_html, extract_sections_md
+from app.kb.chunker import (
+    chunk_sections,
+    extract_sections_html_auto,
+    extract_sections_md,
+)
 from app.kb.extract import extract_sections_pdf, read_text_auto
 from app.kb.ingest_rules import collect_source_files, source_label
 from app.kb.manifest import SourceDoc
@@ -27,7 +31,7 @@ def _file_units(source: SourceDoc) -> list[tuple[str | None, list]]:
         else:
             raw = read_text_auto(f)
             secs = (
-                extract_sections_html(raw)
+                extract_sections_html_auto(raw)
                 if f.suffix.lower() == ".html"
                 else extract_sections_md(raw)
             )

@@ -43,10 +43,21 @@ class FastEmbedEmbedder(Embedder):
                     )
         return self._model
 
-    def embed(self, texts: list[str], *, is_query: bool = False) -> list[list[float]]:
+    def embed(
+        self,
+        texts: list[str],
+        *,
+        is_query: bool = False,
+        batch_size: int = 32,
+    ) -> list[list[float]]:
         prefix = _QUERY_PREFIX if is_query else _PASSAGE_PREFIX
         model = self._get_model()
-        return [v.tolist() for v in model.embed([prefix + t for t in texts])]
+        # batch_size 默认 256 时，e5-large 单批 256×512 token 的中间激活可达十几 GB（CPU）；
+        # 全量入库实测内存失控（T1 17GB+，2026-09-04）→ 降批到 32，峰值降一个量级
+        return [
+            v.tolist()
+            for v in model.embed([prefix + t for t in texts], batch_size=batch_size)
+        ]
 
     def token_count(self, texts: list[str]) -> list[int]:
         """逐条统计 token 数（切块长度控制用，e5 硬上限 512）。"""
