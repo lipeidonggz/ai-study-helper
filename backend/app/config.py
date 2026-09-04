@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     embedding_model: str = "intfloat/multilingual-e5-large"
     embedding_cache_dir: str = ""
     embedding_dim: int = 1024
+    # RAG rerank：本地 cross-encoder（fastembed）；为空则跳过 rerank
+    rerank_model: str = "jinaai/jina-reranker-v2-base-multilingual"
     # 知识库入库状态库（SQLite）；为空时由 main.py 计算默认值 backend/data/kb.db
     kb_db_path: str = ""
 

@@ -49,6 +49,21 @@ def _source_line(source: SourceDoc, file_title: str | None) -> str:
     return f"来源：{label}"
 
 
+def _leaf_title(section_path: str) -> str | None:
+    """取叶子节标题（section_path 最后一段）参与检索（own-002 教训，2026-09-04）。
+
+    规则：只拼叶子不拼全路径（token 成本）；路径为空或只有一段（顶层节/引言，等于
+    文档标题）不拼，避免与来源行重复文档标题。
+    """
+    path = (section_path or "").strip()
+    if not path or " / " not in path:
+        return None
+    leaf = path.split(" / ")[-1].strip()
+    if not leaf:
+        return None
+    return leaf
+
+
 def index_source(
     source: SourceDoc,
     vector_store: VectorStore,
@@ -64,10 +79,15 @@ def index_source(
     seq = 0
     for file_title, sections in _file_units(source):
         line = _source_line(source, file_title)
-        # 预留来源行 token：最终入库文本 ≤ 450 tokens（e5 硬上限 512）
-        target = max(320, _MAX_FINAL_TOKENS - tc(line) - 10)
+        # 预留来源行 + 叶子节标题 token：按整份文件最长的叶子标题统一预留，
+        # 保证最终入库文本 ≤ 450 tokens（e5 硬上限 512）
+        leaves = [_leaf_title(s.path) for s in sections]
+        max_leaf_tokens = max((tc(l) for l in leaves if l), default=0)
+        target = max(320, _MAX_FINAL_TOKENS - tc(line) - max_leaf_tokens - 10)
         for c in chunk_sections(sections, tc, max_tokens=target):
-            texts.append(line + "\n\n" + c["text"])
+            leaf = _leaf_title(c["section_path"])
+            head = line + ("\n\n" + leaf if leaf else "")
+            texts.append(head + "\n\n" + c["text"])
             metas.append(
                 {
                     "section_path": c["section_path"],

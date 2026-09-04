@@ -69,6 +69,8 @@ def index_one(source_id: str, request: Request):
     except Exception as exc:
         kb_store.set_status(source_id, "failed", error=str(exc)[:500])
         raise HTTPException(500, f"入库失败：{exc}")
+    if deps.bm25_index:
+        deps.bm25_index.invalidate()
     return {"source_id": source_id, "status": "ready", "chunk_count": count}
 
 
@@ -81,6 +83,8 @@ async def _index_all(manifest: list[SourceDoc], deps, kb_store: KbStore) -> None
             await asyncio.to_thread(index_source, source, deps.vector_store, deps.embedder, kb_store)
         except Exception as exc:
             kb_store.set_status(source.source_id, "failed", error=str(exc)[:500])
+    if deps.bm25_index:
+        deps.bm25_index.invalidate()
 
 
 @router.post("/index-all")
@@ -98,6 +102,8 @@ def remove(source_id: str, request: Request):
     """删除该素材的入库结果（素材文件不动）。"""
     deps, kb_store = _deps(request)
     delete_source(source_id, deps.vector_store, kb_store)
+    if deps.bm25_index:
+        deps.bm25_index.invalidate()
     return {"ok": True}
 
 

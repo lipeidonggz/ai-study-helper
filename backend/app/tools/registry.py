@@ -24,6 +24,14 @@ class ToolRegistry:
         """注册一个工具（重名会覆盖）。"""
         self._tools[tool.name] = tool
 
+    def without(self, names: set[str]) -> "ToolRegistry":
+        """返回去掉指定工具后的新注册表（原表不变；RAG 模式过滤 note 用）。"""
+        reg = ToolRegistry()
+        for name, tool in self._tools.items():
+            if name not in names:
+                reg.register(tool)
+        return reg
+
     def get(self, name: str) -> Tool | None:
         """按名字取工具；不存在返回 None。"""
         return self._tools.get(name)
@@ -59,3 +67,16 @@ class ToolRegistry:
 def default_registry() -> ToolRegistry:
     """创建包含全部内置工具的注册表（应用启动时用）。"""
     return ToolRegistry([Tool(**spec) for spec in builtin_specs()])
+
+
+# note 工具（会话内临时笔记）与 RAG 知识库检索语义重叠且指向另一套存储：
+# own-002 教训（2026-09-04）——RAG 模式下模型会以"空 note 库"的工具结果覆盖已注入的检索资料
+NOTE_TOOL_NAMES = frozenset({"note_add", "note_get", "note_search"})
+
+
+def registry_for_mode(mode: str) -> ToolRegistry:
+    """按对话模式返回工具注册表：rag 模式不注册 note 工具，其余模式全量。"""
+    reg = default_registry()
+    if mode == "rag":
+        reg = reg.without(NOTE_TOOL_NAMES)
+    return reg

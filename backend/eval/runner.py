@@ -29,7 +29,7 @@ from app.agent.trace import Trace
 from app.di import build_deps
 from app.tools.builtin import clear_notes, reset_notes
 from app.tools.executor import ToolExecutor
-from app.tools.registry import default_registry
+from app.tools.registry import registry_for_mode
 from eval.schema import CaseFile, load_cases
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -200,7 +200,20 @@ _JUDGE_SYSTEM = (
     "工具事实一致；判定参考（金标准）是静态参考，可能与工具事实冲突（过期或笔误），"
     "冲突时以工具事实为准；同时核对是否按要求标注近似（如'约/左右'）；"
     "结论正确时，即使推理过程表述略乱也应判 pass；"
-    "fail 和 uncertain 必须给出明确理由，pass 可简述。"
+    "fail 和 uncertain 必须给出明确理由，pass 可简述；"
+    "仅当金标准含显式清单结构（如'核心主题（全部覆盖）'、'扩展主题（至少覆盖 N 个）'，"
+    "通常伴随①/②/③编号或'逐项核对'字样）时，判定前必须先做结构化核对并把核对表写进 reason："
+    "对每个必含项（核心主题/必需要点）逐项标注【覆盖】或【未覆盖】，并引用模型输出中支撑判断的"
+    "原句或注入编号（未覆盖要说明缺什么）；对计数要求（如扩展主题至少 N 个）列出实际覆盖项并计数、"
+    "说明是否达到阈值；对'遗漏透明'类要求单独标注回答是否声明未展开内容。"
+    "判定 pass 必须建立在核对表各项达标之上，reason 以核对表为主体；"
+    "不得跳过核对直接给结论——未呈现核对表的 pass 视为未核对、判 uncertain；"
+    "核对表中标【覆盖】必须从严：输出须点名该主题的关键概念/术语（如 AGENTS.md、Plain Text、"
+    "external content/三层防御组件、local VM），或给出与其它主题不可混淆、能证明模型确实理解"
+    "该主题实质主张的等价描述；纯泛化/近似表述不算覆盖（如'把文档入库/渐进式披露'不能代替"
+    "'AGENTS.md 地图'，'三种隔离模式对应三产品'不能代替'三类风险三组件防御'），应标【未覆盖】"
+    "并说明缺什么；两个概念易混的主题（如 A5 的'三层防御组件'与'三种隔离模式'）必须分开核对，"
+    "模型只覆盖其一不得给另一个标覆盖。"
 )
 
 
@@ -214,6 +227,7 @@ def _default_rag_backend():
         from app.rag.workflow import RagBackend
 
         deps = build_deps()
+        # v1 默认 dense-only：BM25 / rerank 为实验对照，不注入（见 0025 2026-09-04 决策）
         _RAG_BACKEND = RagBackend(deps.vector_store, deps.embedder)
     return _RAG_BACKEND
 
@@ -691,13 +705,24 @@ async def run_all(
     per_case: dict[str, list[dict | None]] = {c.id: [None] * repeat for c in selected}
     remaining: dict[str, int] = {c.id: repeat for c in selected}
     entries_by_id: dict[str, dict] = {}
+    mode_tools: dict[str, ToolExecutor] = {}
+
+    def tools_for(case: CaseFile) -> ToolExecutor:
+        """按用例 mode 取工具集（rag 模式过滤 note 工具，own-002 教训 2026-09-04）。"""
+        ex = mode_tools.get(case.mode)
+        if ex is None:
+            ex = ToolExecutor(registry_for_mode(case.mode))
+            mode_tools[case.mode] = ex
+        return ex
 
     async def attempt_task(case: CaseFile, idx: int) -> None:
         async with sem:
             if cancel_event is not None and cancel_event.is_set():
                 entry = None  # 已请求取消：不再调度新 attempt
             else:
-                entry = await _run_attempt(case, llm, tools, retries, judge_llm, variant)
+                entry = await _run_attempt(
+                    case, llm, tools_for(case), retries, judge_llm, variant
+                )
         # 以下为同步段（无 await），单线程事件循环内写共享 dict 无竞态
         per_case[case.id][idx] = entry
         remaining[case.id] -= 1
@@ -946,7 +971,7 @@ def main() -> int:
 
     cases = load_cases(args.cases)
     print(f"加载用例 {len(cases)} 条")
-    tools = ToolExecutor(default_registry())
+    tools = ToolExecutor(registry_for_mode("general"))
     if args.llm == "fake":
         llm: LLMClient = FakeLLMClient()
         judge_llm: LLMClient | None = None

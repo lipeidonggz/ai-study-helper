@@ -145,6 +145,28 @@ class QdrantVectorStore(VectorStore):
         # Qdrant scroll 返回的是内部存储序，不是入库序；chunk_id 尾号/seq 才是原材料顺序
         return sorted(results, key=lambda c: _chunk_seq(c["payload"], c["id"]))
 
+    def list_all(self, kb_id: str, limit: int = 100000) -> list[dict]:
+        """列出该知识库全部 chunk（BM25 内存索引等整体加载用）。"""
+        self._ensure_collection()
+        client = self._get_client()
+        hits, _ = client.scroll(
+            collection_name=self._collection,
+            scroll_filter=Filter(
+                must=[FieldCondition(key="kb_id", match=MatchValue(value=kb_id))]
+            ),
+            limit=limit,
+            with_payload=True,
+        )
+        return [
+            {
+                "id": payload.get("chunk_id", ""),
+                "payload": payload,
+                "text": payload.get("text", ""),
+            }
+            for hit in hits
+            for payload in [dict(hit.payload or {})]
+        ]
+
     def delete_by_document(self, kb_id: str, document_id: str) -> None:
         """按文档删除全部 chunk（文档重入库前调用）。"""
         self._ensure_collection()

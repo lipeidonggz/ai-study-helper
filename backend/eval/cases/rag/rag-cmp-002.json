@@ -1,0 +1,64 @@
+{
+  "id": "rag-cmp-002",
+  "category": "rag",
+  "title": "基准·跨文档全景对比：O2 与 A5 的代表性主题覆盖（锋利版）",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "全面对比 OpenAI《Harness engineering》和 Anthropic《How we contain Claude》这两篇实践文章：各自的核心主张、关键机制与代表性主题是什么？两者的异同与关系如何？请尽量覆盖两文各自的代表性内容，并标注依据。"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "跨文档检索两篇并给出主题覆盖型全景对比：O2/A5 各至少 4 个代表性主题，观点来源分明、可溯源，允许演进感知（术语未收敛窗口期）",
+    "criteria": [
+      "answer_correct",
+      "format_appropriate",
+      "citation_truth"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
+  "tags": [
+    "批判认知",
+    "多方对照",
+    "benchmark",
+    "主题覆盖",
+    "跨文档"
+  ],
+  "compare": false,
+  "notes": "cmp-001 锋利版（用户完整性导向）：基准用例集第一个成员——评测驱动 Agent 进化的主战场；主题分核心/扩展两档（核心=用户理解全文的骨架、缺则误判；扩展=重要但缺一两个不误判），依据 2026-09-04 两文全文主题地图（O2 19 块/A5 24 块）制定；判 pass=核心全覆盖+扩展各≥2+遗漏透明，让检索漏块（如 A5 三层防御、O2 仓库即事实源）能被判出。",
+  "weight": 1.0,
+  "must_pass": true,
+  "must_pass_threshold": 1.0,
+  "enabled": true,
+  "admin_note": "基准用例集（benchmark）首条；2026-09-04 沛东复核通过（用户完整性导向金标准），enabled=true 进跑批回归；预期先红（当前检索每源预算注入覆盖不足核心主题），驱动检索升级。",
+  "updated_at": "2026-09-04T12:30:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足（内容与解释以意思一致为准、表述不限；精确名称/出处须准确）——\n1. 内容正确（用户完整性导向）：回答须让用户对两文各自的理解完整、不误判。判官按下列主题核对（每主题须有实质内容并附注入编号 [n] 溯源，纯罗列关键词不算）：\n   O2《Harness engineering》侧——\n   核心主题（全部覆盖，缺一则用户会误判全文）：\n   ① 核心命题：Agent 工程的关键在模型外的外层系统设计——人不写代码，而是设计环境、表达意图、构建反馈回路；\n   ② 规则/品味机械编码进仓库（linter / 结构测试 / 不变量，文档说教不够）；\n   ③ agent legibility 是目标：为 agent 优化仓库，偏爱\"无聊技术\"（成熟朴素、API 稳定、可被 agent 完整建模推理，宁可自实现也不适配不透明黑盒库）；\n   ④ 仓库知识即事实源：AGENTS.md / ARCHITECTURE.md 等地图 + Plain Text，把上下文推入仓库。\n   扩展主题（至少覆盖 2 个）：⑤熵与垃圾回收（持续小额还债、防架构漂移）；⑥自主层级提升 / 工程师角色重定义的细节；⑦吞吐改变合并哲学 / agent-generated 的含义；⑧\"还在学什么\"（已知局限）。\n   A5《How we contain Claude》侧——\n   核心主题（全部覆盖）：\n   ① 遏制哲学：监督\"能做什么\"而非\"在做什么\"，环境边界优先；\n   ② 爆炸半径 / 风险思维（cap the blast radius）；\n   ③ 三层防御框架（model / environment / external content 三类风险三组件防御）；\n   ④ 环境层隔离模式实例（ephemeral container / HITL sandbox / local VM，含批准疲劳、93%、auto mode）+ 环境层优先、模型层兜底原则。\n   扩展主题（至少覆盖 2 个）：⑤读入信任（MCP / agent reads 的攻击面）；⑥攻击面持续演进（Looking ahead）；⑦具体翻车教训（missed risks：trust dialog 之前 / 用户作为注入向量 / 批准域名外泄 / VM 隔离挡端点检测等）。\n   允许（鼓励但不强制）先厘清概念状态：两文处于 harness 术语未收敛窗口期（A5 用 containment、未以 harness engineering 命名其主张；\"harness 同时涵盖两者\"属后人归纳，晚于两文）。归纳性表述须与原文可确证内容一致。\n   遗漏透明：回答须让用户知道这不是穷尽目录——若有未展开的重要内容（如 O2 的某扩展主题、A5 的某模式细节），应明说\"这两篇还有 X 未展开\"，不得让用户误以为已覆盖全文。\n2. 表达合适：结构化（先厘清概念状态或直接同/异分列均可），两文观点来源分明、不混淆；给出明确对比结论并收口；可标注局限但不得以资料不完整/术语不同替代结论。\n3. 引用真实（条件触发）：论断依托检索内容或显式声称来源时——来源须真实存在、归属正确、内容与原文吻合（锚定 O2 与 A5，两篇归属不得互换）；凭内化知识作答且未声称来源的不触发本条款。\n判 fail：满足以下任一情形即 fail——\n1. 内容：①O2 侧或 A5 侧任一核心主题缺失；②任一侧扩展主题覆盖 <2；③编造原文没有的主张、定义或统一概念（如声称 A5 以 harness engineering 命名其主张）；④张冠李戴（把 O2 观点安到 A5 或反之）；⑤把\"后人归纳的异同\"表述为两文明文主张且不加区分；⑥任一侧多个要点全部出自同一 section（表面覆盖多主题、实为单点堆砌）。\n2. 表达：通篇只质疑任务前提 / 声明资料不完整 / 要求用户补料，而未给出任何可确证的结构化对比与结论（逃避作答）。\n3. 引用（条件触发）：伪造来源 / 内容与所引原文不符 / 归属错误 / 依托检索作答却未标注来源。",
+    "reference_answer": "",
+    "note": "主题池来自全文 section 地图；覆盖数 4+4 为锋利化阈值，可由判官按主题核对调整。",
+    "annotated_at": "2026-09-04T12:30:00",
+    "annotated_by": "local"
+  },
+  "source_ref": {
+    "manifest_id": "O2 + A5",
+    "location": "全文对照"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-04",
+    "decay_class": "fast",
+    "half_life_days": 90,
+    "refresh_cadence_days": 90,
+    "last_reviewed_at": null,
+    "status": "active",
+    "pollution_flags": []
+  }
+}

@@ -11,9 +11,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import settings
+from app.rag.bm25 import Bm25Index
+from app.rag.reranker import FastEmbedReranker
 from app.storage.fastembed_store import FastEmbedEmbedder
 from app.storage.memory import InMemoryLogStore, InMemorySessionStore, InMemorySettingStore
-from app.storage.ports import Embedder, LogStore, SessionStore, SettingStore, VectorStore
+from app.storage.ports import (
+    Embedder,
+    LogStore,
+    Reranker,
+    SessionStore,
+    SettingStore,
+    VectorStore,
+)
 from app.storage.qdrant_store import QdrantVectorStore
 from app.storage.sqlite.settings_store import SqliteSettingStore
 
@@ -31,6 +40,8 @@ class AppDeps:
     log_store: LogStore
     vector_store: VectorStore | None = None
     embedder: Embedder | None = None
+    reranker: Reranker | None = None
+    bm25_index: Bm25Index | None = None
 
 
 def build_deps() -> AppDeps:
@@ -42,10 +53,15 @@ def build_deps() -> AppDeps:
         db_path = str(base / "data" / "app.db")
     qdrant_path = settings.qdrant_path or str(base / "data" / "qdrant")
     embed_cache = settings.embedding_cache_dir or str(base / "data" / "models")
+    vector_store = QdrantVectorStore(path=qdrant_path, dim=settings.embedding_dim)
     return AppDeps(
         session_store=InMemorySessionStore(),  # 会话暂存内存（阶段 4 换 SQLite 支持断点）
         settings_store=SqliteSettingStore(db_path),  # 设置持久化（含 LLM Key）
         log_store=InMemoryLogStore(),  # 日志暂存内存
-        vector_store=QdrantVectorStore(path=qdrant_path, dim=settings.embedding_dim),
+        vector_store=vector_store,
         embedder=FastEmbedEmbedder(model_name=settings.embedding_model, cache_dir=embed_cache),
+        reranker=FastEmbedReranker.shared(
+            model_name=settings.rerank_model, cache_dir=embed_cache
+        ),
+        bm25_index=Bm25Index(vector_store=vector_store),
     )

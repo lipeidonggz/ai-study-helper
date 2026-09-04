@@ -24,7 +24,7 @@ from app.agent.llm import DeepSeekLLMClient, LLMClient
 from app.agent.loop import run_agent_turn  # 核心：Agent 循环
 from app.agent.trace import Trace  # 处理过程记录器
 from app.tools.executor import ToolExecutor
-from app.tools.registry import default_registry
+from app.tools.registry import registry_for_mode
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -64,7 +64,7 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
     框架会逐步调用它，把每一段内容实时发给前端。
     """
     deps = request.app.state.deps  # 从应用状态取依赖（main.py 里注入）
-    tools = ToolExecutor(default_registry())  # 内置工具的执行器
+    tools = ToolExecutor(registry_for_mode(req.mode))  # rag 模式过滤 note 工具
     deps.log_store.append("chat", {"message": req.message, "mode": req.mode})  # 记录日志
     llm = _build_llm(deps)  # 构建 LLM 客户端
     rag_backend = None
@@ -73,6 +73,7 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
 
         if not deps.vector_store or not deps.embedder:
             raise HTTPException(503, "知识库检索组件未就绪（向量库/embedding 未配置）")
+        # v1 默认 dense-only：BM25 / rerank 为实验对照，不注入（见 0025 2026-09-04 决策）
         rag_backend = RagBackend(deps.vector_store, deps.embedder)
     pending_trace: deque[dict] = deque()  # trace 步骤缓冲：loop 产生、gen 取走
 

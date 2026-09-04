@@ -115,6 +115,9 @@ class VectorStore(ABC):
     def list_by_document(self, kb_id: str, document_id: str, limit: int = 1000) -> list[dict]: ...
 
     @abstractmethod
+    def list_all(self, kb_id: str, limit: int = 100000) -> list[dict]: ...
+
+    @abstractmethod
     def delete_by_document(self, kb_id: str, document_id: str) -> None: ...
 
 
@@ -126,3 +129,10 @@ class Embedder(ABC):
 
     @abstractmethod
     def token_count(self, texts: list[str]) -> list[int]: ...
+
+
+class Reranker(ABC):
+    """query-document 重排打分（分数质量层，弥补稠密排序的平带/词匹配短板）。"""
+
+    @abstractmethod
+    def rerank(self, query: str, documents: list[str]) -> list[float]: ...
