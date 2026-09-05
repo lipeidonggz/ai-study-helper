@@ -6,9 +6,13 @@ import {
   type EvalRun,
   type EvalRunCase,
   type EvalRunAttempt,
-  type ExecTraceEvent
+  type ExecTraceEvent,
+  type CitationPair,
+  type CitationGroup,
+  type CoveragePoints
 } from '../api/client'
 import { fmtTokens } from '../utils/format'
+import MdText from './MdText.vue'
 
 const props = defineProps<{ runId: number }>()
 
@@ -30,6 +34,8 @@ const allExpanded = ref(false)
 // 轻量轮询下，展开过的用例全量数据缓存（repeat_results / trace），轮询刷新后合并回行内
 const detailCache = ref<Record<string, { repeat_results: EvalRunAttempt[]; trace: ExecTraceEvent[] }>>({})
 const filter = ref({ category: '', status: '', verdict: '', q: '' })
+const attemptOnlyFailed = ref(false) // 展开区：只看未通过的 attempt（fail / pending）
+const showAllPairs = ref(false) // 引用对子：默认只列判 fail，勾选后展示全部
 let pollTimer: number | undefined
 
 // —— 用例级结论（后端未填时按状态/判定推导，兼容旧跑批） ——
@@ -383,6 +389,226 @@ function judgmentsText(j: Record<string, string>): string {
     .join('  ')
 }
 
+function diagObj(raw: unknown): Record<string, unknown> {
+  if (!raw) return {}
+  if (typeof raw === 'string') {
+    try {
+      const v = JSON.parse(raw)
+      return v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+    } catch {
+      return {}
+    }
+  }
+  return typeof raw === 'object'
+    ? (raw as Record<string, unknown>)
+    : {}
+}
+
+const DIAG_KEYS: Array<[string, string]> = [
+  ['retrieval_sufficiency', '检索充分性'],
+  ['citation_internal', '引用内部件（漏引）'],
+  ['summarization_attribution', '提炼归因']
+]
+
+function diagStateLabel(v: unknown): string {
+  const s = String(v ?? '')
+  if (s === 'pass') return '通过'
+  if (s === 'fail') return '未通过'
+  if (s === 'na') return '不适用'
+  return s || '—'
+}
+
+function diagLines(raw: unknown): string[] {
+  const d = diagObj(raw)
+  if (!Object.keys(d).length) return []
+  const lines: string[] = []
+  for (const [key, label] of DIAG_KEYS) {
+    if (d[key] !== undefined && d[key] !== null && d[key] !== '') {
+      lines.push(`${label}：${diagStateLabel(d[key])}`)
+    }
+  }
+  const fb = d.sufficiency_first_blocked
+  if (fb && typeof fb === 'object') {
+    const f = fb as Record<string, unknown>
+    lines.push(
+      `首个卡点：${String(f.point_id ?? '?')} → ${String(f.state ?? '?')}` +
+        (f.note ? `（${String(f.note)}）` : '')
+    )
+  }
+  const notes = d.citation_internal_notes
+  if (Array.isArray(notes) && notes.length) {
+    lines.push(`漏引清单：${notes.join('；')}`)
+  }
+  const extra = d.notes
+  if (Array.isArray(extra) && extra.length) {
+    lines.push(`备注：${extra.join('；')}`)
+  }
+  return lines
+}
+
+function visibleAttempts(row: EvalRunCase): Array<{ att: EvalRunAttempt; idx: number }> {
+  const arr = row.repeat_results ?? []
+  const items = arr.map((att, idx) => ({ att, idx }))
+  if (!attemptOnlyFailed.value) return items
+  return items.filter(({ att }) => att.verdict !== 'pass')
+}
+
+function attemptEvidenceHits(att: EvalRunAttempt): Array<Record<string, unknown>> {
+  for (const t of att.trace ?? []) {
+    if (t.type === 'retrieval') {
+      const d = (t.data ?? {}) as Record<string, unknown>
+      const hits = d.hits
+      return Array.isArray(hits) ? (hits as Array<Record<string, unknown>>) : []
+    }
+  }
+  return []
+}
+
+function pairBlockText(att: EvalRunAttempt, blockNo: number | undefined): string {
+  if (!blockNo) return ''
+  const hits = attemptEvidenceHits(att)
+  const h = hits[blockNo - 1]
+  return h ? String(h.text ?? '') : ''
+}
+
+function pairStateLabel(v: string): string {
+  if (v === 'ok') return 'ok'
+  if (v === 'violation') return 'violation'
+  if (v === 'equivocal') return '存疑'
+  return v || '—'
+}
+
+function pairStateClass(v: string): string {
+  if (v === 'ok') return 'ok'
+  if (v === 'violation') return 'error'
+  return 'warn'
+}
+
+function allPairs(att: EvalRunAttempt): CitationPair[] {
+  return att.citation_pairs?.pairs ?? []
+}
+
+function failedPairs(att: EvalRunAttempt): CitationPair[] {
+  return allPairs(att).filter(
+    (p) =>
+      p.content_match === 'violation' || p.attribution_ok === 'violation'
+  )
+}
+
+function visiblePairs(att: EvalRunAttempt): CitationPair[] {
+  return showAllPairs.value ? allPairs(att) : failedPairs(att)
+}
+
+// —— 引用声明组（2026-09-05 起：判定单元从对子升级为声明组；旧跑批仍是对子视图） ——
+function citationGroups(att: EvalRunAttempt): CitationGroup[] {
+  return att.citation_pairs?.groups ?? []
+}
+
+function failedGroups(att: EvalRunAttempt): CitationGroup[] {
+  return citationGroups(att).filter(
+    (g) =>
+      g.content_supported === 'violation' || g.attribution_ok === 'violation'
+  )
+}
+
+function visibleGroups(att: EvalRunAttempt): CitationGroup[] {
+  return showAllPairs.value ? citationGroups(att) : failedGroups(att)
+}
+
+function groupFailed(g: CitationGroup): boolean {
+  return (
+    g.content_supported === 'violation' || g.attribution_ok === 'violation'
+  )
+}
+
+function groupKindLabel(g: CitationGroup): string {
+  const map: Record<string, string> = {
+    block: '块编号引用',
+    source: '点名整篇文档',
+    mixed: '块编号+点名'
+  }
+  return map[String(g.kind ?? '')] ?? String(g.kind ?? '')
+}
+
+function groupBlockChips(g: CitationGroup): string {
+  return (g.blocks ?? [])
+    .map(
+      (b) =>
+        `[${b.block_no}] ${b.source_id ?? ''}` +
+        (b.section_path ? ` · ${b.section_path}` : '')
+    )
+    .join('  ')
+}
+
+function groupBlockText(
+  att: EvalRunAttempt,
+  blockNo: number | undefined
+): string {
+  return pairBlockText(att, blockNo)
+}
+
+// —— 覆盖标注明细（checklist 型拆分编排落库的 coverage_points）——
+function covPoints(att: EvalRunAttempt): CoveragePoints | undefined {
+  return att.coverage_points
+}
+
+function covGroupList(
+  att: EvalRunAttempt,
+  group: 'core' | 'ext'
+): Array<{ id: string; v: string; evidence?: string }> {
+  const items = covPoints(att)?.[group] ?? {}
+  return Object.entries(items).map(([id, x]) => ({
+    id,
+    v: x.v,
+    evidence: x.evidence
+  }))
+}
+
+function covBadgeClass(v: string | undefined): string {
+  if (v === 'covered' || v === 'pass') return 'ok'
+  if (v === 'not_covered' || v === 'fail') return 'error'
+  if (v === 'equivocal') return 'warn'
+  return ''
+}
+
+function covStatusLabel(att: EvalRunAttempt, group: 'core' | 'ext'): string {
+  const list = covGroupList(att, group)
+  const ok = list.filter((p) => p.v === 'covered').length
+  return `${ok}/${list.length}`
+}
+
+function covMatrixRows(
+  row: EvalRunCase
+): Array<{ id: string; group: 'core' | 'ext'; cells: (string | undefined)[] }> {
+  const arr = row.repeat_results ?? []
+  const first = arr.find((a) => covPoints(a))
+  if (!first) return []
+  const cp = covPoints(first) as CoveragePoints
+  const pointIds: { id: string; group: 'core' | 'ext' }[] = [
+    ...Object.keys(cp.core ?? {}).map((id) => ({ id, group: 'core' as const })),
+    ...Object.keys(cp.ext ?? {}).map((id) => ({ id, group: 'ext' as const }))
+  ]
+  return pointIds.map(({ id, group }) => ({
+    id,
+    group,
+    cells: arr.map((a) => covPoints(a)?.[group]?.[id]?.v)
+  }))
+}
+
+function covCellText(v: string | undefined): string {
+  if (v === 'covered') return '✓'
+  if (v === 'not_covered') return '✗'
+  if (v === 'equivocal') return '?'
+  return '—'
+}
+
+function covCellClass(v: string | undefined): string {
+  if (v === 'covered') return 'ok'
+  if (v === 'not_covered') return 'bad'
+  if (v === 'equivocal') return 'eq'
+  return 'na'
+}
+
 onMounted(refresh)
 onUnmounted(stopPolling)
 </script>
@@ -634,9 +860,12 @@ onUnmounted(stopPolling)
                             判官判定未通过
                           </span>
                         </strong>
-                        <pre
+                        <div
+                          class="rd-output-box"
                           :class="{ 'rd-output-fail': rowVerdict(row) === 'fail' }"
-                        >{{ row.output || '（无输出）' }}</pre>
+                        >
+                          <MdText :text="row.output || ''" />
+                        </div>
                         <p v-if="rowVerdict(row) === 'fail'" class="ui-help">
                           请对照上方"判定参考"检查输出：是否缺要点、答错内容或拒绝不合理。
                           若判官误判，可调整参考后点"重跑"。
@@ -663,6 +892,14 @@ onUnmounted(stopPolling)
                         <span class="rd-reason-text">{{ reason }}</span>
                       </div>
                     </div>
+                    <details v-if="diagLines(row.diagnostics).length" class="rd-diag">
+                      <summary>白盒诊断（{{ diagLines(row.diagnostics).length }} 项）</summary>
+                      <ul>
+                        <li v-for="(line, li) in diagLines(row.diagnostics)" :key="li">
+                          {{ line }}
+                        </li>
+                      </ul>
+                    </details>
                     <details v-if="(row.trace ?? []).length" class="rd-trace">
                       <summary>执行轨迹（{{ (row.trace ?? []).length }} 步）</summary>
                       <pre>{{ traceText(row.trace) }}</pre>
@@ -672,43 +909,404 @@ onUnmounted(stopPolling)
                       class="rd-attempts"
                     >
                       <div class="rd-attempts-head">
-                        <strong>本次重复执行明细（{{ row.repeat_results.length }} 次）</strong>
+                        <strong>
+                          本次重复执行明细（{{ visibleAttempts(row).length }}/{{ row.repeat_results.length }} 次）
+                        </strong>
+                        <label class="rd-attempt-filter">
+                          <input v-model="attemptOnlyFailed" type="checkbox" />
+                          只看未通过（fail / pending）
+                        </label>
                       </div>
-                      <div
-                        v-for="(att, ai) in row.repeat_results"
-                        :key="ai"
-                        class="rd-attempt"
-                        :class="{ fail: att.verdict === 'fail' }"
+                      <details
+                        v-if="covMatrixRows(row).length"
+                        class="rd-cov-matrix-box"
+                        open
                       >
-                        <div class="rd-attempt-head">
-                          <span class="rd-attempt-no">#{{ ai + 1 }}</span>
-                          <span class="ui-badge" :class="verdictClass(att.verdict)">
-                            {{ verdictLabel(att.verdict) }}
-                          </span>
-                          <span class="ui-muted">
-                            {{ att.elapsed_ms }}ms · {{ att.tool_calls.join(', ') || '无工具' }}
-                            <template v-if="att.error"> · {{ att.error }}</template>
-                          </span>
+                        <summary>
+                          覆盖矩阵（{{ covMatrixRows(row).length }} 点 ×
+                          {{ row.repeat_results.length }} attempts；✓=covered ✗=not_covered ?=equivocal —=无数据）
+                        </summary>
+                        <div class="rd-cov-matrix-scroll">
+                          <table class="rd-cov-matrix">
+                            <thead>
+                              <tr>
+                                <th class="ui-mono">点</th>
+                                <th
+                                  v-for="(a, ai) in row.repeat_results"
+                                  :key="ai"
+                                  class="ui-mono"
+                                >
+                                  #{{ ai + 1 }}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr
+                                v-for="mr in covMatrixRows(row)"
+                                :key="mr.id"
+                              >
+                                <td
+                                  class="ui-mono rd-cov-matrix-pid"
+                                  :class="{ 'is-ext': mr.group === 'ext' }"
+                                >
+                                  {{ mr.id }}
+                                </td>
+                                <td
+                                  v-for="(v, ci) in mr.cells"
+                                  :key="ci"
+                                  class="rd-cov-cell"
+                                  :class="covCellClass(v)"
+                                  :title="mr.id + ' #' + (ci + 1) + ' = ' + (v || '—')"
+                                >
+                                  {{ covCellText(v) }}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
+                      </details>
+                      <template v-if="visibleAttempts(row).length">
                         <div
-                          v-for="(reason, cr) in att.judge_reasons ?? {}"
-                          :key="cr"
-                          class="rd-attempt-reason"
+                          v-for="item in visibleAttempts(row)"
+                          :key="item.idx"
+                          class="rd-attempt"
+                          :class="{ fail: item.att.verdict === 'fail' }"
                         >
-                          <span class="ui-badge" :class="att.judgments[cr] === 'pass' ? 'ok' : att.judgments[cr] === 'fail' ? 'error' : 'warn'">
-                            {{ cr }}
-                          </span>
-                          {{ reason }}
+                          <div class="rd-attempt-head">
+                            <span class="rd-attempt-no">#{{ item.idx + 1 }}</span>
+                            <span class="ui-badge" :class="verdictClass(item.att.verdict)">
+                              {{ verdictLabel(item.att.verdict) }}
+                            </span>
+                            <span class="ui-muted">
+                              {{ item.att.elapsed_ms }}ms
+                              · {{ (item.att.tool_calls ?? []).join(', ') || '无工具' }}
+                              <template v-if="item.att.error"> · {{ item.att.error }}</template>
+                            </span>
+                          </div>
+                          <div
+                            v-for="(reason, cr) in item.att.judge_reasons ?? {}"
+                            :key="cr"
+                            class="rd-attempt-reason"
+                          >
+                            <span
+                              class="ui-badge"
+                              :class="
+                                item.att.judgments[cr] === 'pass'
+                                  ? 'ok'
+                                  : item.att.judgments[cr] === 'fail'
+                                    ? 'error'
+                                    : 'warn'
+                              "
+                            >
+                              {{ cr }}
+                            </span>
+                            {{ reason }}
+                          </div>
+                          <details
+                            v-if="
+                              covGroupList(item.att, 'core').length ||
+                              covGroupList(item.att, 'ext').length
+                            "
+                            class="rd-cov-detail"
+                            open
+                          >
+                            <summary>
+                              覆盖标注明细（core
+                              {{ covStatusLabel(item.att, 'core') }} · ext
+                              {{ covStatusLabel(item.att, 'ext') }}）
+                            </summary>
+                            <table class="rd-cov-table">
+                              <tbody>
+                                <tr
+                                  v-for="p in [
+                                    ...covGroupList(item.att, 'core'),
+                                    ...covGroupList(item.att, 'ext')
+                                  ]"
+                                  :key="p.id"
+                                >
+                                  <td class="ui-mono rd-cov-pid">
+                                    {{ p.id }}
+                                  </td>
+                                  <td class="rd-cov-v">
+                                    <span
+                                      class="ui-badge"
+                                      :class="covBadgeClass(p.v)"
+                                    >
+                                      {{ p.v }}
+                                    </span>
+                                  </td>
+                                  <td class="rd-cov-ev">{{ p.evidence || '' }}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <div
+                              v-if="item.att.coverage_points?.transparency"
+                              class="rd-cov-tr"
+                            >
+                              遗漏透明：
+                              <span
+                                class="ui-badge"
+                                :class="
+                                  covBadgeClass(
+                                    item.att.coverage_points.transparency.v
+                                  )
+                                "
+                              >
+                                {{ item.att.coverage_points.transparency.v }}
+                              </span>
+                              <template
+                                v-if="item.att.coverage_points.transparency.evidence"
+                              >
+                                — {{ item.att.coverage_points.transparency.evidence }}
+                              </template>
+                              <template
+                                v-if="
+                                  (
+                                    item.att.coverage_points.transparency
+                                      .named_items ?? []
+                                  ).length
+                                "
+                              >
+                                （点名：
+                                {{
+                                  (
+                                    item.att.coverage_points.transparency
+                                      .named_items ?? []
+                                  ).join(
+                                    ' / '
+                                  )
+                                }}）
+                              </template>
+                            </div>
+                            <div
+                              v-if="
+                                (
+                                  item.att.coverage_points?.boundary?.violations ??
+                                  []
+                                ).length
+                              "
+                              class="rd-cov-boundary"
+                            >
+                              事实边界违反：
+                              <ul>
+                                <li
+                                  v-for="(b, bi) in item.att.coverage_points
+                                    ?.boundary?.violations"
+                                  :key="bi"
+                                >
+                                  <b>{{ b.claim_id }}</b>
+                                  ：{{ b.quote }}
+                                </li>
+                              </ul>
+                            </div>
+                          </details>
+                          <details
+                            v-if="
+                              citationGroups(item.att).length ||
+                              allPairs(item.att).length
+                            "
+                            class="rd-cite-pairs"
+                          >
+                            <summary>
+                              <span v-if="citationGroups(item.att).length">
+                                引用声明（fail {{ failedGroups(item.att).length }}/{{
+                                  citationGroups(item.att).length
+                                }}）
+                              </span>
+                              <span v-else>
+                                引用对子（fail {{ failedPairs(item.att).length }}/{{
+                                  allPairs(item.att).length
+                                }}）
+                              </span>
+                              <label class="rd-attempt-filter" @click.stop>
+                                <input v-model="showAllPairs" type="checkbox" />
+                                展示所有
+                              </label>
+                            </summary>
+                            <details
+                              v-if="attemptEvidenceHits(item.att).length"
+                              class="rd-evidence"
+                            >
+                              <summary>
+                                注入证据块（{{ attemptEvidenceHits(item.att).length }}）
+                              </summary>
+                              <pre class="rd-evidence-pre">
+{{ attemptEvidenceHits(item.att)
+  .map(
+    (h, hi) =>
+      `[${hi + 1}] ${String(h.source_id ?? '')} | ${String(h.section_path ?? '')}\n${String(h.text ?? '')}`
+  )
+  .join('\n\n') }}</pre
+                              >
+                            </details>
+                            <template
+                              v-if="citationGroups(item.att).length"
+                            >
+                              <div
+                                v-for="g in visibleGroups(item.att)"
+                                :key="g.gid"
+                                class="rd-pair"
+                                :class="{ fail: groupFailed(g) }"
+                              >
+                                <div class="rd-pair-head">
+                                  <span class="rd-pair-idx">组#{{ g.gid }}</span>
+                                  <span
+                                    class="ui-badge"
+                                    :class="pairStateClass(g.content_supported)"
+                                  >
+                                    content={{
+                                      pairStateLabel(g.content_supported)
+                                    }}
+                                  </span>
+                                  <span
+                                    class="ui-badge"
+                                    :class="pairStateClass(g.attribution_ok)"
+                                  >
+                                    attribution={{
+                                      pairStateLabel(g.attribution_ok)
+                                    }}
+                                  </span>
+                                  <span
+                                    v-if="groupKindLabel(g)"
+                                    class="rd-group-kind"
+                                  >
+                                    {{ groupKindLabel(g) }}
+                                  </span>
+                                </div>
+                                <div class="rd-pair-claim">{{ g.claim }}</div>
+                                <div class="rd-pair-meta">
+                                  引用：{{ (g.refs ?? []).join('、') || '—' }}
+                                  <template
+                                    v-if="
+                                      (g.supporting_blocks ?? []).length
+                                    "
+                                  >
+                                    · 支撑块：[{{
+                                      (g.supporting_blocks ?? []).join('][')
+                                    }}]
+                                  </template>
+                                </div>
+                                <div
+                                  v-if="(g.violations ?? []).length"
+                                  class="rd-group-violations"
+                                >
+                                  <div
+                                    v-for="(vi, vii) in g.violations"
+                                    :key="vii"
+                                    class="rd-group-violation"
+                                  >
+                                    <b v-if="vi.block_no != null"
+                                      >块[{{ vi.block_no }}]</b
+                                    >
+                                    <template v-if="vi.component">
+                                      ：{{ vi.component }}
+                                    </template>
+                                    <template v-if="vi.issue">
+                                      — {{ vi.issue }}
+                                    </template>
+                                  </div>
+                                </div>
+                                <div v-if="g.reason" class="rd-pair-reason">
+                                  {{ g.reason }}
+                                </div>
+                                <details
+                                  v-if="(g.blocks ?? []).length"
+                                  class="rd-pair-blocks"
+                                >
+                                  <summary>
+                                    证据块 {{ (g.blocks ?? []).length }} 个（{{
+                                      groupBlockChips(g)
+                                    }}）
+                                  </summary>
+                                  <pre
+                                    v-for="b in g.blocks"
+                                    :key="b.block_no"
+                                    class="rd-evidence-pre rd-group-block-text"
+                                    >{{ groupBlockText(item.att, b.block_no) }}</pre
+                                  >
+                                </details>
+                              </div>
+                            </template>
+                            <template v-else>
+                              <div
+                                v-for="p in visiblePairs(item.att)"
+                                :key="p.idx"
+                                class="rd-pair"
+                                :class="{
+                                  fail:
+                                    p.content_match === 'violation' ||
+                                    p.attribution_ok === 'violation'
+                                }"
+                              >
+                                <div class="rd-pair-head">
+                                  <span class="rd-pair-idx">#{{ p.idx }}</span>
+                                  <span
+                                    class="ui-badge"
+                                    :class="pairStateClass(p.content_match)"
+                                  >
+                                    content={{
+                                      pairStateLabel(p.content_match)
+                                    }}
+                                  </span>
+                                  <span
+                                    class="ui-badge"
+                                    :class="pairStateClass(p.attribution_ok)"
+                                  >
+                                    attribution={{
+                                      pairStateLabel(p.attribution_ok)
+                                    }}
+                                  </span>
+                                </div>
+                                <div class="rd-pair-claim">{{ p.claim }}</div>
+                                <div class="rd-pair-meta">
+                                  {{ p.ref }} → {{ p.source_id }}
+                                  <template v-if="p.source_label">
+                                    （{{ p.source_label }}）
+                                  </template>
+                                  <template v-if="p.section_path">
+                                    · {{ p.section_path }}
+                                  </template>
+                                  <template v-if="p.block_no">
+                                    · 证据块 [{{ p.block_no }}]
+                                  </template>
+                                </div>
+                                <div v-if="p.reason" class="rd-pair-reason">
+                                  {{ p.reason }}
+                                </div>
+                                <blockquote
+                                  v-if="pairBlockText(item.att, p.block_no)"
+                                  class="rd-pair-block"
+                                >
+                                  {{ pairBlockText(item.att, p.block_no) }}
+                                </blockquote>
+                              </div>
+                            </template>
+                          </details>
+                          <div
+                            v-if="diagLines(item.att.diagnostics).length"
+                            class="rd-attempt-diag"
+                          >
+                            <strong>白盒诊断</strong>
+                            <ul>
+                              <li
+                                v-for="(line, li) in diagLines(item.att.diagnostics)"
+                                :key="li"
+                              >
+                                {{ line }}
+                              </li>
+                            </ul>
+                          </div>
+                          <details class="rd-attempt-output">
+                            <summary>查看本次输出</summary>
+                            <MdText :text="item.att.output || ''" />
+                          </details>
+                          <details v-if="(item.att.trace ?? []).length" class="rd-trace">
+                            <summary>执行轨迹</summary>
+                            <pre>{{ traceText(item.att.trace) }}</pre>
+                          </details>
                         </div>
-                        <details class="rd-attempt-output">
-                          <summary>查看本次输出</summary>
-                          <pre>{{ att.output || '（无输出）' }}</pre>
-                        </details>
-                        <details v-if="(att.trace ?? []).length" class="rd-trace">
-                          <summary>执行轨迹</summary>
-                          <pre>{{ traceText(att.trace) }}</pre>
-                        </details>
-                      </div>
+                      </template>
+                      <p v-else class="ui-muted">没有符合条件的 attempt。</p>
                     </div>
 
                     <div class="rd-annotate">
@@ -889,6 +1487,141 @@ onUnmounted(stopPolling)
   color: var(--ui-text);
   line-height: 1.5;
 }
+.rd-attempt-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+  font-weight: normal;
+  cursor: pointer;
+  padding: 3px 8px;
+  border: 1px solid var(--ui-border-2);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 0.9em;
+  user-select: none;
+}
+.rd-diag {
+  margin-top: 8px;
+  font-size: 0.84em;
+}
+.rd-diag summary {
+  cursor: pointer;
+  color: var(--ui-primary);
+}
+.rd-diag ul,
+.rd-attempt-diag ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: var(--ui-text);
+  line-height: 1.5;
+}
+.rd-attempt-diag {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #eef6ff;
+  border: 1px solid #cfe3f7;
+  border-radius: 6px;
+  color: var(--ui-text);
+}
+.rd-cite-pairs {
+  margin-top: 6px;
+  font-size: 0.84em;
+}
+.rd-cite-pairs > summary {
+  cursor: pointer;
+  color: var(--ui-primary);
+}
+.rd-evidence {
+  margin: 6px 0;
+}
+.rd-evidence summary {
+  cursor: pointer;
+  color: var(--ui-text-2);
+}
+.rd-evidence-pre {
+  background: #f6f8fa;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.rd-pair {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-border-2);
+  border-radius: 6px;
+  background: #fafbfc;
+}
+.rd-pair.fail {
+  background: #fff7f7;
+  border-left-color: var(--ui-danger-fg);
+}
+.rd-pair-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rd-pair-idx {
+  font-family: Consolas, 'Courier New', monospace;
+  color: var(--ui-text-2);
+}
+.rd-group-kind {
+  margin-left: auto;
+  color: var(--ui-text-2);
+  font-size: 0.9em;
+}
+.rd-pair-claim {
+  margin-top: 4px;
+  color: var(--ui-text);
+  line-height: 1.45;
+}
+.rd-pair-meta {
+  margin-top: 3px;
+  color: var(--ui-text-2);
+  font-size: 0.9em;
+}
+.rd-group-violations {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #fff1f0;
+  color: #9a2a2a;
+}
+.rd-group-violation {
+  line-height: 1.45;
+}
+.rd-pair-reason {
+  margin-top: 3px;
+  color: #9a2a2a;
+  line-height: 1.4;
+}
+.rd-pair-blocks {
+  margin-top: 4px;
+}
+.rd-pair-blocks > summary {
+  cursor: pointer;
+  color: var(--ui-text-2);
+  word-break: break-word;
+}
+.rd-group-block-text {
+  margin: 4px 0 0;
+}
+.rd-pair-block {
+  margin: 5px 0 0;
+  padding: 4px 8px;
+  border-left: 3px solid #d0d7de;
+  background: #f6f8fa;
+  color: var(--ui-text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9em;
+}
 .rd-attempt-output {
   margin-top: 6px;
 }
@@ -942,6 +1675,15 @@ onUnmounted(stopPolling)
   border-color: #f0b7bc !important;
   background: #fff7f7 !important;
 }
+.rd-output-box :deep(.md-body),
+.rd-output-box :deep(.mdtext-raw) {
+  border-color: #eef1f4;
+}
+.rd-output-box.rd-output-fail :deep(.md-body),
+.rd-output-box.rd-output-fail :deep(.mdtext-raw) {
+  border-color: #f0b7bc !important;
+  background: #fff7f7 !important;
+}
 .rd-fail-tag {
   margin-left: 6px;
   vertical-align: middle;
@@ -992,6 +1734,100 @@ onUnmounted(stopPolling)
 }
 .rd-annotate select {
   min-width: 110px;
+}
+.rd-cov-matrix-box {
+  margin: 8px 0;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #f9fafb;
+}
+.rd-cov-matrix-box summary {
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+.rd-cov-matrix-scroll {
+  overflow-x: auto;
+  margin-top: 6px;
+}
+.rd-cov-matrix {
+  border-collapse: collapse;
+  font-size: 0.82em;
+}
+.rd-cov-matrix th,
+.rd-cov-matrix td {
+  border: 1px solid #d8dee4;
+  padding: 2px 5px;
+  text-align: center;
+  white-space: nowrap;
+}
+.rd-cov-matrix-pid {
+  text-align: left !important;
+  font-weight: 600;
+}
+.rd-cov-matrix-pid.is-ext {
+  font-weight: 400;
+  color: #57606a;
+}
+.rd-cov-cell.ok {
+  background: #dafbe1;
+  color: #1a7f37;
+}
+.rd-cov-cell.bad {
+  background: #ffebe9;
+  color: #cf222e;
+}
+.rd-cov-cell.eq {
+  background: #fff8c5;
+  color: #9a6700;
+}
+.rd-cov-cell.na {
+  color: #8c959f;
+}
+.rd-cov-detail {
+  margin: 6px 0;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  padding: 4px 10px 8px;
+}
+.rd-cov-detail summary {
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+.rd-cov-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.84em;
+  margin: 6px 0;
+}
+.rd-cov-table td {
+  border-bottom: 1px solid #eaeef2;
+  padding: 3px 6px;
+  vertical-align: top;
+}
+.rd-cov-pid {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.rd-cov-v {
+  width: 130px;
+  white-space: nowrap;
+}
+.rd-cov-ev {
+  color: #57606a;
+}
+.rd-cov-tr,
+.rd-cov-boundary {
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+.rd-cov-boundary {
+  color: #cf222e;
+}
+.rd-cov-boundary ul {
+  margin: 2px 0 0 18px;
 }
 @media (max-width: 900px) {
   .rd-grid2 {

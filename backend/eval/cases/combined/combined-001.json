@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为多步计算与运算顺序解释：\n判 pass：给出结果 60，并明确解释运算顺序（先算括号内 15+5=20，再乘 3 得 60）（心算或调用 calculator 均可）。\n判 fail：结果不是 60；或未解释先括号后乘法的运算顺序。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:55",

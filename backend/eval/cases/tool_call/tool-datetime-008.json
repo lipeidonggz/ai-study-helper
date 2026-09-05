@@ -44,6 +44,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为当前公历日期：\n判 pass：调用 current_datetime，依据工具返回的日期准确回答今天的公历日期。\n判 fail：工具报错或无结果时编造日期；或未调用工具编造；或与工具结果不一致。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:54",

@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为整除运算：\n判 pass：输出整除结果 4（可补充余数为 3）（心算或调用工具均可）。\n判 fail：混淆为精确值 4.75 或输出其他数值。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

@@ -40,6 +40,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为当前日期：\n判 pass：调用 current_datetime 获取当前日期，明确回答今天的年、月、日，且日期与工具返回结果一致。\n判 fail：未调用工具编造日期；或日期与工具结果不一致；或模糊表述。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:45",

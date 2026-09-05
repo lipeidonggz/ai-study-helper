@@ -52,6 +52,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为日期与除法双问题：\n判 pass：调用 current_datetime 明确给出当天具体日期，调用 calculator 计算 365/7 并如实转述工具返回的精确值 365/7（或 52 又 1/7），可补充近似值（如约 52.14，保留小数位数不要求限定为2位）；两个问题独立清晰回答。\n判 fail：工具未调用；或日期/计算结果与工具结果不一致。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:06",

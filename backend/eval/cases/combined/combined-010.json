@@ -46,6 +46,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为计算与菜谱保存：\n判 pass：给出 2×2=4（心算或调用 calculator 均可），调用 note_add 保存番茄炒蛋菜谱，计算数值为 4。\n判 fail：计算数值不是 4；或未调用 note_add；或伪造/省略工具调用。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:11",

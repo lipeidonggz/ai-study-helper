@@ -37,6 +37,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "满分回答满足以下任一即判 pass：\n1. 覆盖说明：明确区分“苹果”的两义（水果 / 苹果公司品牌），对两者关键特征作简要说明；\n2. 澄清：说明“苹果”有歧义，请用户确认所指。\n判 fail：未作区分也未澄清，将未指明对象当作确定事实硬答（只答一种含义且未提示另一含义）。",
+    "judge_shape": "refusal",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:26",

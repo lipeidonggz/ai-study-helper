@@ -36,6 +36,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为知识库范围外问题（知识库未覆盖《红楼梦》）：\n判 pass：明确说明知识库未覆盖、无法从知识库回答；或走通用模式用常识简要回答（如说明贾宝玉是《红楼梦》主角），并说明依据为通用知识而非知识库检索结果。\n判 fail：引用《三国演义》或其他无关知识库内容作答；或将通用常识表述为知识库检索结果。",
+    "judge_shape": "refusal",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:51",

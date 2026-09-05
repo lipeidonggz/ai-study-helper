@@ -50,6 +50,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'日期获取-推算'链路：\n判 pass：调用 current_datetime 获取今天日期并如实输出；调用 datetime_shift（以工具返回的今天为 base、delta='+10d'）得到 10 天后的日期，输出与工具推算结果一致。\n判 fail：未调用工具而编造今天日期；或 10 天后的日期未经 datetime_shift 工具推算；或输出与工具推算结果不一致；或将未经工具依据的日期表述为精确值。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:42",

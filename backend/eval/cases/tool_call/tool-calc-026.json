@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为中等数除法：\n判 pass：调用 calculator 计算 12345/8，如实转述精确结果 1543.125。\n判 fail：结果不是 1543.125。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

@@ -76,6 +76,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 pending_human TEXT,
                 metrics TEXT,
                 judge_reasons TEXT NOT NULL DEFAULT '{}',
+                diagnostics TEXT NOT NULL DEFAULT '{}',
                 verdict TEXT NOT NULL DEFAULT '',
                 repeat_count INTEGER NOT NULL DEFAULT 1,
                 pass_count INTEGER NOT NULL DEFAULT 0,
@@ -102,6 +103,12 @@ def init_db(db_path: Path = DB_PATH) -> None:
         if "judge_reasons" not in case_cols:
             conn.execute(
                 "ALTER TABLE eval_run_cases ADD COLUMN judge_reasons TEXT NOT NULL DEFAULT '{}'"
+            )
+        if "diagnostics" not in case_cols:
+            # 白盒归因输出（2026-09-04）：检索充分性三布尔 / 首个卡点 / 漏引记账 / 提炼归因，
+            # 只服务根因定位，不改判分（verdict-first 编排）
+            conn.execute(
+                "ALTER TABLE eval_run_cases ADD COLUMN diagnostics TEXT NOT NULL DEFAULT '{}'"
             )
         if "repeat_count" not in case_cols:
             conn.execute("ALTER TABLE eval_run_cases ADD COLUMN repeat_count INTEGER NOT NULL DEFAULT 1")
@@ -192,9 +199,9 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
             INSERT INTO eval_run_cases
                 (run_id, case_id, category, title, mode, input, status,
                  elapsed_ms, rounds, tool_calls, tokens, output, error,
-                 judgments, pending_human, metrics, verdict, judge_reasons,
+                 judgments, pending_human, metrics, verdict, judge_reasons, diagnostics,
                  repeat_count, pass_count, repeat_results, trace, pending_attempts)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, case_id) DO UPDATE SET
                 category=excluded.category, title=excluded.title, mode=excluded.mode,
                 input=excluded.input, status=excluded.status, elapsed_ms=excluded.elapsed_ms,
@@ -202,6 +209,7 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 output=excluded.output, error=excluded.error, judgments=excluded.judgments,
                 pending_human=excluded.pending_human, metrics=excluded.metrics,
                 verdict=excluded.verdict, judge_reasons=excluded.judge_reasons,
+                diagnostics=excluded.diagnostics,
                 repeat_count=excluded.repeat_count, pass_count=excluded.pass_count,
                 repeat_results=excluded.repeat_results, trace=excluded.trace,
                 pending_attempts=excluded.pending_attempts
@@ -225,6 +233,7 @@ def insert_case_result(db_path: Path, run_id: int, entry: dict) -> None:
                 json.dumps(entry.get("metrics", {}), ensure_ascii=False),
                 entry.get("verdict", ""),
                 json.dumps(entry.get("judge_reasons", {}), ensure_ascii=False),
+                json.dumps(entry.get("diagnostics", {}), ensure_ascii=False),
                 entry.get("repeat_count", 1),
                 entry.get("pass_count", 0),
                 json.dumps(entry.get("repeat_results", []), ensure_ascii=False),

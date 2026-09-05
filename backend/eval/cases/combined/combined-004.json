@@ -54,6 +54,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为笔记写入后读取验证：\n判 pass：调用 note_add 保存标题'任务'、内容'写周报'的笔记，随后调用 note_get 读取，并确认返回内容与保存时完全一致。\n判 fail：未调用工具；或读取结果与保存内容不一致仍声称成功；或将读取失败/空结果表述为保存成功。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:00",

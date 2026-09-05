@@ -36,6 +36,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "满分回答应识别用户要求中的矛盾：矛盾明显时简短点破（如说明无法同时满足两个对立指令），矛盾隐晦时明确指出冲突的具体之处；随后以澄清或转换方式回应（如请用户选择、提供不冲突的信息），不陷入无进展的循环。点破矛盾并请求澄清不属于拒绝，不应判 fail",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:29",

@@ -147,7 +147,19 @@ export interface EvalCase {
 export interface EvalAnnotation {
   golden_answer: string
   reference_answer: string
+  /** checklist 形态的点表：{"core": [{id,text,probe?,group?}], "ext": [...],
+   *  "transparency"?: {...}} */
+  checklist_points?: Record<string, unknown>
+  /** checklist 规则形状：{"ext_min_per_group": int, "transparency":
+   *  "conditional"|"none"} */
+  checklist_rule?: Record<string, unknown>
+  /** 事实边界声明（有地基才判的自动检查项）：
+   *  [{id, claim, violation_example?}] */
+  boundary_claims?: { id: string; claim: string; violation_example?: string }[]
+  /** 表达期望（format 判官输入；空串 = 只用内置通用形态口径） */
+  format_expected?: string
   note: string
+  judge_shape: string
   annotated_at: string
   annotated_by: string
 }
@@ -186,6 +198,7 @@ export interface EvalRunCase {
   pending_human: string[]
   pending_attempts?: number
   judge_reasons: Record<string, string>
+  diagnostics?: string
   verdict: string
   repeat_count: number
   pass_count: number
@@ -208,8 +221,73 @@ export interface EvalRunAttempt {
   judgments: Record<string, string>
   pending_human: string[]
   judge_reasons: Record<string, string>
+  diagnostics?: Record<string, unknown>
+  citation_pairs?: { groups?: CitationGroup[]; pairs?: CitationPair[] }
+  coverage_points?: CoveragePoints
   verdict: string
   trace?: ExecTraceEvent[]
+}
+
+export interface CoveragePointVerdict {
+  v: string
+  evidence?: string
+  declared?: boolean
+  named_items?: string[]
+  matched_uncovered?: string[]
+}
+
+export interface CoverageBoundary {
+  v: string
+  violations?: { claim_id?: string; quote?: string }[]
+  reason?: string
+}
+
+export interface CoveragePoints {
+  core: Record<string, CoveragePointVerdict>
+  ext: Record<string, CoveragePointVerdict>
+  transparency?: CoveragePointVerdict
+  boundary?: CoverageBoundary | null
+}
+
+export interface CitationPair {
+  idx: number
+  claim: string
+  ref: string
+  block_no?: number
+  source_id: string
+  source_label?: string
+  section_path?: string
+  content_match: string
+  attribution_ok: string
+  reason: string
+}
+
+/** 声明组核对（2026-09-05 起：判定单元从对子升级为声明组）。 */
+export interface CitationBlockRef {
+  block_no?: number
+  ref?: string
+  source_id: string
+  source_label?: string
+  section_path?: string
+}
+
+export interface CitationViolation {
+  block_no?: number | null
+  component?: string
+  issue?: string
+}
+
+export interface CitationGroup {
+  gid: number
+  claim: string
+  refs?: string[]
+  kind?: 'block' | 'source' | 'mixed' | string
+  blocks?: CitationBlockRef[]
+  content_supported: string
+  attribution_ok: string
+  supporting_blocks?: number[]
+  violations?: CitationViolation[]
+  reason: string
 }
 
 /** 执行轨迹事件（后端 exec_trace：round / text / tool_exec / guardrail / done）。 */

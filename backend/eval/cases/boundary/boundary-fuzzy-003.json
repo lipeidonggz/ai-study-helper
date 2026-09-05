@@ -36,6 +36,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "满分回答应主动追问用户具体查询内容（如“您想查什么”）（追问本身即满足要求）。\n判 fail：未追问，臆测具体事项或自行执行查询操作。",
+    "judge_shape": "refusal",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:28",

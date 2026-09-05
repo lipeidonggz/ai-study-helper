@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为简单运算：\n判 pass：输出精确结果 9（心算或调用工具均可）。\n判 fail：输出 9 之外的数值。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

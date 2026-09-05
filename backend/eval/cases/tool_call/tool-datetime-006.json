@@ -44,6 +44,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为当前日期（完全一致口径）：\n判 pass：调用 current_datetime 获取真实当前日期后再输出，月份、日期、年份与工具返回结果完全一致。\n判 fail：未调用工具编造/猜测；或与工具结果不一致。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:51",

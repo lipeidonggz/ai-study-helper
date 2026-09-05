@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'计算-保存-引用'链路：\n判 pass：给出 6×7=42（心算或调用 calculator 均可），调用 note_add 保存内容，回答时明确引用该笔记内容作为依据。\n判 fail：未调用 note_add；或给出 42 之外的数值/把高精度近似当作精确结果；或未引用笔记。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:09",

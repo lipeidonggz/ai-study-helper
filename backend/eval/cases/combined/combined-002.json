@@ -46,6 +46,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为两个乘积的比较：\n判 pass：给出 12×12=144 与 13×11=143，并明确比较得出 12×12 更大（144>143）（心算或调用 calculator 均可）。\n判 fail：乘积结果错误；或未明确比较大小。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:57",

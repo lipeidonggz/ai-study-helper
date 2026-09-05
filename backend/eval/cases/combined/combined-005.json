@@ -49,6 +49,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为大数幂计算与位数说明：\n判 pass：调用 calculator 计算 2**20 并转述结果 1048576，明确说明该结果是 7 位数。\n判 fail：结果错误；或未说明位数；或未调用工具而编造结果。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:01",

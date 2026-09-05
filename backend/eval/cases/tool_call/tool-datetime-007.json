@@ -44,6 +44,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为当前时分：\n判 pass：调用 current_datetime 获取当前时刻，依据工具返回结果明确回答具体的时和分。\n判 fail：工具调用失败或无返回时仍编造时分；或结果与工具不一致。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:53",

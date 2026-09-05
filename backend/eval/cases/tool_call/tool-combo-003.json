@@ -53,6 +53,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'保存-读取'链路：\n判 pass：先调用 note_add 保存标题'测试'、内容'hello'的笔记，再调用 note_get 读取同一标题，输出确认为'hello'。\n判 fail：虚构或遗漏读取结果；或读取与保存内容不一致。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:40",

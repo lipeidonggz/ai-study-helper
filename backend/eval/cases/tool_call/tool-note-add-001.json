@@ -49,6 +49,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为笔记保存：\n判 pass：调用 note_add 保存标题'购物清单'、内容'牛奶、鸡蛋、面包'的笔记，并明确告知用户保存成功。\n判 fail：未调用工具；或标题/内容与要求不符；或未确认保存结果。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:56",

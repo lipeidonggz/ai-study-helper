@@ -50,6 +50,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为检索待办：\n判 pass：调用 note_get（标题留空列出全部）或 note_search（检索'待办'）读取笔记，明确呈现所查到的待办内容或说明未找到待办。\n判 fail：编造或臆测笔记内容；或工具无结果时未如实告知未查到。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:10",

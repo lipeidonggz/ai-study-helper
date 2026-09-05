@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为简单减法：\n判 pass：输出精确结果 7或者7.0或者7.00等等价表示方式（心算或调用工具均可）。\n判 fail：输出非 7 的数值。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

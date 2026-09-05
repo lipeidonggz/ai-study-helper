@@ -46,6 +46,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为待办保存：\n判 pass：调用 note_add 保存待办并确认已记录；标题未指定时可自动拟定（如'给客户回电话'）。\n判 fail：未调用工具；或伪造其他信息。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:54:01",

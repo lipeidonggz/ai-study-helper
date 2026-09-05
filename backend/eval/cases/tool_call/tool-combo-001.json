@@ -44,6 +44,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'计算-保存'链路：\n判 pass：给出 3+5=8（心算或调用 calculator 均可），并调用 note_add 以标题'计算结果'完成保存，保存内容与计算结果一致。\n判 fail：未调用 note_add；或保存内容与计算结果不一致；或给出 8 之外的数值/把高精度近似当作精确结果。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:36",

@@ -51,6 +51,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'时间获取-推算'链路：\n判 pass：调用 current_datetime 获取当前时间；调用 datetime_shift（以工具返回时间为 base、delta='+2h30m'）得到 2 小时 30 分钟后的具体时间，输出与工具推算结果一致（可标注'约/左右'）。\n判 fail：未调用工具而编造时间；或 2 小时 30 分钟后未经 datetime_shift 工具推算；或输出与工具推算结果不一致；或混淆未获工具支持的时间数据。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:59",

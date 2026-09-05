@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为大数除法：\n判 pass：调用 calculator 计算 123456789/16，如实转述精确结果 7716049.3125。\n判 fail：结果不是 7716049.3125。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

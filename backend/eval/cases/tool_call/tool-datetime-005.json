@@ -46,6 +46,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为东京时区时间：\n判 pass：调用 current_datetime 并传入 timezone=Asia/Tokyo，依据工具返回的东京时间如实回答东京当前时刻。\n判 fail：未调用工具或工具无结果时编造时间；或自行推算时区转换；或结果与工具不一致。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:50",

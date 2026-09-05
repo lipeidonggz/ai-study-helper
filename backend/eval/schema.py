@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 Category = Literal["tool_call", "boundary", "combined", "multi_turn", "kb_qa", "rag"]
 Mode = Literal["general", "kb_priority", "tool_enhanced", "rag"]
+JudgeShape = Literal["checklist", "essence", "refusal"]
 # 验收维度受控词表（v1）：机器可自动判定 / 需人工或 LLM 判定，见 0013 记录
 Criterion = Literal[
     "answer_correct",  # 答案正确（人工/LLM 判定）
@@ -22,7 +23,7 @@ Criterion = Literal[
     "latency_budget",  # 满足耗时预算 timeout_sec（软预算，慢但未超硬超时仍照常判定）
     "no_prompt_leak",  # 输出不含系统提示（机器判定：loop 护栏拦截即 fail）
     "citation_correct",  # 引用正确（阶段 2 启用）
-    "citation_truth",  # 引用真实性（0024 工程诊断层红线：断言级逐条核对）
+    "citation_truth",  # 引用真实性（0024 工程诊断层红线：声明级逐条核对）
     "format_appropriate",  # 表达合适性（0024 用户价值层：应答形态与问题类型匹配）
     "refusal_calibration",  # 拒答校准（0024 用户价值层：不知道就说不知道 / 不编造）
     "context_consistent",  # 多轮上下文一致（阶段 3 启用）
@@ -77,9 +78,40 @@ class CaseAnnotation(BaseModel):
 
     golden_answer: str = ""  # 金标准答案要点：满分回答应包含的关键事实/口径/要点
     reference_answer: str = ""  # 完整参考答案（可选）：比要点更精确，供自动判定对照
+    # 清单型金标准的机器可读点表（2026-09-04 起，白盒充分性诊断共用同一份"规格"）：
+    # {"core": [{"id": "...", "text": "..."}], "ext": [...],
+    #  "transparency": {"id": "...", "text": "条件强制规则"}}。
+    # 有 checklist_points 时内容判官按固定 id 标注、白盒按 id 逐点三态；
+    # 无此字段时回退为从 golden_answer 的清单标记（核心/扩展/遗漏透明）动态识别。
+    checklist_points: dict = Field(default_factory=dict)
+    # checklist 规则形状（2026-09-05 中期解耦：用例语义不再住进 runner）：
+    # {"ext_min_per_group": int, "transparency": "conditional" | "none"}。
+    # ext_min_per_group>0 时按 checklist_points.ext[].group 分组计数，任一组低于阈值即 fail；
+    # transparency=conditional 时启用"遗漏透明"条件判定，none 则忽略该键。
+    checklist_rule: dict = Field(default_factory=dict)
+    # 事实边界声明（2026-09-05，checklist 型用户价值层"事实边界小项"输入）：
+    # 金标准作者核实的可确证事实断言，供判官核对输出是否违反；不依赖注入证据，
+    # 无引用/内化直答同样可判。格式：[{"id": "b1", "claim": "...",
+    # "violation_example": "..."}]。空列表 = 不启用该小项。
+    boundary_claims: list[dict] = Field(default_factory=list)
+    # 用例表达期望（2026-09-05，format 判官独立后的用例侧输入）：
+    # 一小段自然语言（如"跨文档对比须结构化、来源分明、有明确结论并收口；
+    # 不得以资料不完整替代结论"）；空串 = 只用判官内置通用形态口径。
+    format_expected: str = ""
+    # 金标准判定形态（2026-09-05 显式化）：checklist（清单型，内容逐主题核对）/
+    # essence（要点式，整体判定）/ refusal（拒答姿态）。空串 = 未标，代码按旧文案嗅探
+    # 兜底推断（迁移期）；新用例与 UI 应显式填写，路由/提示词拼装只看此字段。
+    judge_shape: str = ""
     note: str = ""  # 金标准备注：为什么这样定、判定依据
     annotated_at: str = ""  # 最近更新时间
     annotated_by: str = ""  # 最近维护人
+
+    @field_validator("judge_shape")
+    @classmethod
+    def _validate_judge_shape(cls, v: str) -> str:
+        if v not in ("", "checklist", "essence", "refusal"):
+            raise ValueError("judge_shape 只能是 checklist / essence / refusal（或空串）")
+        return v
 
 
 class CaseFile(BaseModel):

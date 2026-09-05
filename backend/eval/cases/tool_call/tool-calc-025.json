@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为大数减法：\n判 pass：调用 calculator 计算 123456789-98765432，如实转述精确结果 24691357。\n判 fail：结果不是 24691357。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

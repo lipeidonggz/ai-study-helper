@@ -40,6 +40,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为当前日期时间：\n判 pass：调用 current_datetime 获取当前日期时间，以'今天是 X年X月X日，现在时间是 X时X分'等明确表述告知用户；转述到分钟级即可，秒级细微偏差（工具获取时刻与实际输出时的差异）不视为编造。\n判 fail：工具返回错误或异常时仍编造日期、小时或分钟；或转述与工具结果明显不符。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:44",

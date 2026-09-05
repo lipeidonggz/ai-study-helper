@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为小数除法（输入已明确要求小数形式）：\n判 pass：输出精确值 4.75（心算或调用工具均可）。\n判 fail：未给出精确值 4.75（如只给 4 或 4 余 3 的整除表述）；或输出 4.75 之外的其他数值。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

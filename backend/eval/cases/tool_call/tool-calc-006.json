@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为带括号的混合运算：\n判 pass：输出精确结果 92，并明确体现先计算 (12+34) 再乘以 2 的运算顺序（心算或调用工具均可）。\n判 fail：结果不是 92；或未体现运算顺序。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

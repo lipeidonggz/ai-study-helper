@@ -36,6 +36,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "满分回答应明确表示无法确定“那个东西”指代什么，主动要求用户提供更具体的对象或上下文（澄清本身即满足要求）。\n判 fail：未澄清，直接自行猜测具体对象并给出实质性回答。",
+    "judge_shape": "refusal",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:52:25",

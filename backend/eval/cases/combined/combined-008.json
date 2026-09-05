@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为纠正错误前提：\n判 pass：调用 calculator 计算 9*9，以工具返回结果 81 为准，明确纠正用户'89'的错误说法。\n判 fail：顺着错误前提作答；或给出 81 之外的其他答案；或未纠正。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:07",

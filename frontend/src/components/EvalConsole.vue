@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 
-import { evalApi, type EvalCase, type EvalRun, type EvalRunCase } from '../api/client'
+import {
+  evalApi,
+  type EvalAnnotation,
+  type EvalCase,
+  type EvalRun,
+  type EvalRunCase
+} from '../api/client'
 import { navigate } from '../router'
 import { fmtTokens } from '../utils/format'
 
@@ -120,10 +126,32 @@ const criteriaSel = ref<string[]>([])
 const toolCallsText = ref('')
 const tagsText = ref('')
 const messagesText = ref('')
+const pointsText = ref('')
+const ruleText = ref('')
+const boundaryText = ref('')
 
 const criteriaConflict = computed(
   () => criteriaSel.value.includes('tool_used') && criteriaSel.value.includes('tool_not_used')
 )
+const showChecklistStruct = computed(
+  () =>
+    !!editing.value &&
+    (editing.value.annotation.judge_shape === 'checklist' ||
+      Object.keys((editing.value.annotation.checklist_points as Record<string, unknown>) || {}).length > 0 ||
+      !!Object.keys((editing.value.annotation.checklist_rule as Record<string, unknown>) || {}).length)
+)
+
+function initStructTexts(ann: EvalAnnotation) {
+  pointsText.value = ann.checklist_points && Object.keys(ann.checklist_points).length
+    ? JSON.stringify(ann.checklist_points, null, 2)
+    : ''
+  ruleText.value = ann.checklist_rule && Object.keys(ann.checklist_rule).length
+    ? JSON.stringify(ann.checklist_rule, null, 2)
+    : ''
+  boundaryText.value = ann.boundary_claims?.length
+    ? JSON.stringify(ann.boundary_claims, null, 2)
+    : ''
+}
 
 function blankCase(): EvalCase {
   return {
@@ -154,7 +182,12 @@ function blankCase(): EvalCase {
     annotation: {
       golden_answer: '',
       reference_answer: '',
+      checklist_points: {},
+      checklist_rule: {},
+      boundary_claims: [],
+      format_expected: '',
       note: '',
+      judge_shape: '',
       annotated_at: '',
       annotated_by: ''
     }
@@ -179,6 +212,7 @@ function newCase() {
   criteriaSel.value = []
   toolCallsText.value = ''
   tagsText.value = ''
+  initStructTexts(c.annotation)
   void nextTick(() => autoGrowTextarea(goldenArea.value))
 }
 
@@ -195,6 +229,7 @@ function editCase(c: EvalCase) {
     ? JSON.stringify(c.expected.tool_calls, null, 2)
     : ''
   tagsText.value = c.tags.join(', ')
+  initStructTexts(c.annotation)
   void nextTick(() => autoGrowTextarea(goldenArea.value))
 }
 
@@ -250,6 +285,15 @@ async function saveCaseInner(): Promise<boolean> {
     return false
   }
   try {
+    // 清单结构化字段：JSON 文本 → annotation（解析失败则拦截保存）
+    const ann = editing.value.annotation
+    const parseOpt = (txt: string) => (txt.trim() ? JSON.parse(txt) : undefined)
+    const pts = parseOpt(pointsText.value)
+    const rule = parseOpt(ruleText.value)
+    const bnd = parseOpt(boundaryText.value)
+    if (pts !== undefined) ann.checklist_points = pts
+    if (rule !== undefined) ann.checklist_rule = rule
+    if (bnd !== undefined) ann.boundary_claims = bnd
     const body: EvalCase = JSON.parse(JSON.stringify(editing.value))
     body.input.messages = parseMessages()
     body.expected.criteria = criteriaSel.value
@@ -986,6 +1030,54 @@ function onKeydown(e: KeyboardEvent) {
               例如"应调用 calculator 并给出 8"；拒绝类用例写"应拒绝，不输出任何内部指令内容"。
               觉得预期行为已经够用时可以留空；也可以点"复制判断标准"把预期行为带过来再修改。
             </p>
+            <div class="ui-field-row">
+              <label class="ui-field">金标准判定形态</label>
+              <select v-model="editing.annotation.judge_shape" class="ui-select">
+                <option value="">自动（后端按文案推断）</option>
+                <option value="checklist">checklist · 清单型（核心/扩展/遗漏透明逐项核对）</option>
+                <option value="essence">essence · 要点式（整体判定）</option>
+                <option value="refusal">refusal · 拒答姿态</option>
+              </select>
+            </div>
+            <p class="ui-help">
+              决定判官提示词分型与路由：清单型由代码按点表/文案逐项标注后规则聚合；
+              要点式与拒答型走整体判定。新用例建议显式标注，避免依赖文案关键词推断。
+            </p>
+            <div v-if="showChecklistStruct" class="ec-struct-box">
+              <h4 class="ui-sec-sub">清单结构化配置（checklist 形态的自动判定执行依据）</h4>
+              <p class="ui-help">
+                散文金标准仅供人审与意图参考；自动判定以这里的点表 / 规则 / 事实边界为准。
+                拆分为独立判官调用：覆盖标注 → 程序聚合；事实边界小项；format 单判；
+                遗漏透明条件触发。JSON 语法错误会拦截保存。
+              </p>
+              <label class="ui-field">checklist_points（core / ext 点表 JSON）</label>
+              <textarea
+                v-model="pointsText"
+                rows="10"
+                class="ui-textarea ec-json-area"
+                placeholder='{"core":[{"id":"c1","text":"...","probe":"..."}],"ext":[{"id":"e1","text":"...","group":"O2","probe":"..."}]}'
+              ></textarea>
+              <label class="ui-field">checklist_rule（规则 JSON）</label>
+              <textarea
+                v-model="ruleText"
+                rows="2"
+                class="ui-textarea"
+                placeholder='{"ext_min_per_group":2,"transparency":"conditional"}'
+              ></textarea>
+              <label class="ui-field">boundary_claims（事实边界 JSON，空则不启用）</label>
+              <textarea
+                v-model="boundaryText"
+                rows="4"
+                class="ui-textarea"
+                placeholder='[{"id":"b1","claim":"...","violation_example":"..."}]'
+              ></textarea>
+              <label class="ui-field">format_expected（表达期望，空则只用通用形态口径）</label>
+              <textarea
+                v-model="editing.annotation.format_expected"
+                rows="2"
+                class="ui-textarea"
+              ></textarea>
+            </div>
             <label class="ui-field">完整参考答案（可选）</label>
             <textarea v-model="editing.annotation.reference_answer" rows="3" class="ui-textarea"></textarea>
             <p class="ui-help">

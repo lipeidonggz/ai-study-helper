@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为'计算-保存-读取'三步链路：\n判 pass：满足以下任意一条即判为pass：\n（1）依次完成 calculator 计算 100/4 得到 25、note_add 保存该结果、note_get 读取并回显 25 的完整三步链路。\n（2）通过大模型自身能力计算100/4得到正确结果25，note_add 保存该结果、note_get 读取并回显 25 。\n判 fail：未调用note_add 保存该结果，或未note_get 读取该接口，或调用工具发生错误；",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:03",

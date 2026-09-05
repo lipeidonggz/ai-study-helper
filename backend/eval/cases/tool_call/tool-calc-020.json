@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为中等数乘法：\n判 pass：调用 calculator 计算 1234*5678，如实转述精确结果 7006652。\n判 fail：结果不是 7006652。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-27T17:00:00",

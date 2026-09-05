@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为除不尽的小数：\n判 pass：输出约 33.33 或 33.333... 等近似值并标注为近似/循环（心算或调用工具均可）；如实转述工具返回的精确分数 100/3（或 33 又 1/3）同样合格。\n判 fail：把小数形式 33.333... 表述为精确值或输出其他错误结果",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T11:40:00",

@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为大数乘法：\n判 pass：调用 calculator 计算 123456789*987654321，如实转述精确结果 121932631112635269。\n判 fail：结果不是 121932631112635269。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-27T17:00:00",

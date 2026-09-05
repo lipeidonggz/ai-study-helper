@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为中等数整除：\n判 pass：调用 calculator 计算 98765//7，如实转述整除结果 14109（可补余数 2，但不强制要求说明余数）。\n判 fail：结果不是 14109；或混淆为精确值 14109.2857。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-27T17:00:00",

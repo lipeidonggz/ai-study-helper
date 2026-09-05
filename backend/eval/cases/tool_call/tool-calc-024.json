@@ -47,6 +47,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为中等数减法：\n判 pass：调用 calculator 计算 10000-2345，如实转述精确结果 7655。\n判 fail：结果不是 7655。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

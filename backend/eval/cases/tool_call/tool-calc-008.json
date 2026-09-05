@@ -48,6 +48,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为取余运算：\n判 pass：明确给出 17 除以 5 的余数是 2（心算或调用工具均可）。\n判 fail：输出其他数值，或将近似值当作精确值。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-28T09:06:46",

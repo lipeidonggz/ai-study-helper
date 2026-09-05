@@ -49,6 +49,7 @@
   "updated_by": "local",
   "annotation": {
     "golden_answer": "本用例为笔记保存：\n判 pass：调用 note_add 提交标题'项目灵感'、内容'用 RAG 做知识问答'的笔记，并在回复中明确确认保存成功，不遗漏或篡改标题与内容。\n判 fail：未调用工具；或遗漏/篡改标题与内容；或未确认保存结果。",
+    "judge_shape": "essence",
     "reference_answer": "",
     "note": "",
     "annotated_at": "2026-08-25T10:53:59",
