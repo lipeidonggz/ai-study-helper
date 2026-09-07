@@ -320,7 +320,7 @@ def test_deterministic_table_cells_are_units():
         "| 维度 | OpenAI | Anthropic |\n"
         "|---|---|---|\n"
         "| 作者 | Ryan[7] | 未署名[1] |\n"
-        "| 发布日期 | 无明确日期[10] | 2026-05[3] |\n"
+        "| 发布日期 | 无明确日期[10] | 2026年5月[3] |\n"
     )
     claims = _deterministic_extract_claims(text, [])
     refs = [c["refs"] for c in claims]
@@ -375,6 +375,31 @@ def test_deterministic_report_verb_forward_anchor():
     assert claims[0]["refs"] == ["[3]"]
     assert claims[0]["claim"].startswith("Anthropic 自己也在")
     assert "safeguards" in claims[0]["claim"]
+
+
+def test_deterministic_range_refs_not_split_into_fragments():
+    """范围引用 [1]-[5] / [6]-[12] 是布局说明，不作为标引切段。"""
+    text = "《How we contain Claude》[1]-[5] 与《Harness engineering》[6]-[12] 覆盖不同段落。"
+    claims = _deterministic_extract_claims(text, [])
+    assert claims == []
+
+
+def test_deterministic_symbol_only_fragments_filtered():
+    """只剩符号+编号的残片（…（译文。）[3] 切出的 "）[3]"）不产声明。"""
+    text = "模型引用原文（大致有两种方式。）[3]"
+    claims = _deterministic_extract_claims(text, [])
+    assert claims == []
+
+
+def test_deterministic_meta_evidence_caveats_skipped():
+    """资料完整性 / 引用出自类元陈述（带标引）整单元跳过。"""
+    text = (
+        "首先需要说明，知识库中《How we contain Claude》的资料较完整，"
+        "而《Harness engineering》资料部分缺失（如[7]仅为致谢）。"
+    )
+    assert _deterministic_extract_claims(text, []) == []
+    text2 = "- OpenAI相关引用出自 [6][8]-[11]；其中[7]仅为致谢、[12]为\"继续阅读\"链接栏，内容信息量有限。"
+    assert _deterministic_extract_claims(text2, []) == []
 
 
 def test_unified_checklist_judge_single_call_both_dimensions():

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import {
   evalApi,
@@ -9,7 +9,9 @@ import {
   type ExecTraceEvent,
   type CitationPair,
   type CitationGroup,
-  type CoveragePoints
+  type ChecklistPoint,
+  type CoveragePoints,
+  type CoverageRejudgeRecord
 } from '../api/client'
 import { fmtTokens } from '../utils/format'
 import MdText from './MdText.vue'
@@ -45,6 +47,48 @@ function rowVerdict(row: EvalRunCase): string {
   if (row.pending_human?.length) return 'pending'
   if (Object.values(row.judgments).includes('fail')) return 'fail'
   return 'pass'
+}
+
+// —— 清单型判定参考：有 checklist 点表时展示"人读版点表"，散文金标准不参与自动判定 ——
+function isChecklistRow(row: EvalRunCase): boolean {
+  const pts = row.checklist_points
+  return !!pts && !!((pts.core && pts.core.length) || (pts.ext && pts.ext.length))
+}
+
+function corePoints(row: EvalRunCase): ChecklistPoint[] {
+  return row.checklist_points?.core ?? []
+}
+
+function extPoints(row: EvalRunCase): ChecklistPoint[] {
+  return row.checklist_points?.ext ?? []
+}
+
+function extGroups(row: EvalRunCase): { group: string; points: ChecklistPoint[] }[] {
+  const out: { group: string; points: ChecklistPoint[] }[] = []
+  for (const p of extPoints(row)) {
+    const g = p.group || '未分组'
+    let block = out.find((x) => x.group === g)
+    if (!block) {
+      block = { group: g, points: [] }
+      out.push(block)
+    }
+    block.points.push(p)
+  }
+  return out
+}
+
+function checklistRuleSummary(row: EvalRunCase): string {
+  const rule = row.checklist_rule
+  if (!rule) return ''
+  const parts: string[] = []
+  const n = rule.ext_min_per_group
+  if (typeof n === 'number' && n > 0) {
+    parts.push(`扩展主题每源组至少覆盖 ${n} 条（按 group 分组）`)
+  }
+  if (rule.transparency === 'conditional') {
+    parts.push('遗漏透明：扩展主题未全覆盖时，回答须点名未展开项（条件强制）')
+  }
+  return parts.join('；')
 }
 
 function verdictLabel(v: string): string {
@@ -479,8 +523,8 @@ function pairStateLabel(v: string): string {
 }
 
 function pairStateClass(v: string): string {
-  if (v === 'ok') return 'ok'
-  if (v === 'violation') return 'error'
+  if (v === 'ok' || v === 'pass') return 'ok'
+  if (v === 'violation' || v === 'fail') return 'error'
   return 'warn'
 }
 
@@ -545,6 +589,165 @@ function groupBlockText(
   blockNo: number | undefined
 ): string {
   return pairBlockText(att, blockNo)
+}
+
+// —— 判官重判工具（覆盖列重判 / 引用重判 / 引用稳定性，2026-09-07）——
+const covTool = reactive<Record<string, { attempt: number; repeats: number }>>({})
+const covBusy = ref('') // caseId
+const covMsg = ref('')
+const covPointDetail = ref<{
+  pid: string
+  rec: CoverageRejudgeRecord
+} | null>(null)
+const citRepeats = ref(20)
+const citBusy = ref('') // `${caseId}:${idx}:rejudge|stability`
+const citMsg = ref('')
+
+function covToolOf(caseId: string): { attempt: number; repeats: number } {
+  if (!covTool[caseId]) covTool[caseId] = { attempt: 0, repeats: 20 }
+  return covTool[caseId]
+}
+
+function covRejOf(row: EvalRunCase, caseId: string) {
+  const i = covToolOf(caseId).attempt
+  const att = row.repeat_results?.[i]
+  return att?.coverage_rejudge ?? undefined
+}
+
+function setCovAttempt(caseId: string, e: Event) {
+  covToolOf(caseId).attempt = Number(
+    (e.target as HTMLSelectElement).value
+  )
+}
+
+function setCovRepeats(caseId: string, e: Event) {
+  covToolOf(caseId).repeats = Number(
+    (e.target as HTMLInputElement).value
+  )
+}
+
+async function runCoverageRejudge(row: EvalRunCase) {
+  if (!data.value) return
+  const st = covToolOf(row.case_id)
+  covBusy.value = row.case_id
+  covMsg.value = ''
+  try {
+    const res = await evalApi.coverageRejudge(data.value.run.id, row.case_id, {
+      attempt: st.attempt,
+      repeats: st.repeats
+    })
+    if (row.repeat_results?.[st.attempt]) {
+      row.repeat_results[st.attempt].coverage_rejudge = res.record
+    }
+    covMsg.value = `已记录 attempt#${st.attempt + 1} 覆盖重判 ×${st.repeats}`
+  } catch (e) {
+    covMsg.value = `覆盖重判失败：${String(e)}`
+  } finally {
+    covBusy.value = ''
+  }
+}
+
+function covRejStateLabel(v: string): string {
+  if (v === 'covered') return '✓'
+  if (v === 'not_covered') return '✗'
+  if (v === 'equivocal') return '?'
+  return '—'
+}
+
+function covRejStateClass(v: string): string {
+  if (v === 'covered') return 'ok'
+  if (v === 'not_covered') return 'bad'
+  if (v === 'equivocal') return 'eq'
+  return 'na'
+}
+
+function covRejFlipPoints(
+  rec: { summary: Record<string, Record<string, number>> }
+): string[] {
+  return Object.keys(rec.summary ?? {}).filter(
+    (pid) => Object.keys(rec.summary[pid] ?? {}).length > 1
+  )
+}
+
+function openCovPointDetail(pid: string, rec: CoverageRejudgeRecord) {
+  covPointDetail.value = { pid, rec }
+}
+
+async function runCitationRejudge(
+  row: EvalRunCase,
+  idx: number,
+  att: EvalRunAttempt
+) {
+  if (!data.value) return
+  const key = `${row.case_id}:${idx}:rejudge`
+  citBusy.value = key
+  try {
+    const res = await evalApi.citationRejudge(data.value.run.id, row.case_id, {
+      attempt: idx
+    })
+    att.citation_rejudge = res.record
+  } catch (e) {
+    att.citation_rejudge = {
+      created_at: '',
+      verdict: null,
+      reason: `重判失败：${String(e)}`,
+      detail: {}
+    }
+    citMsg.value = `attempt#${idx + 1} 引用重判失败：${String(e)}`
+  } finally {
+    citBusy.value = ''
+  }
+}
+
+async function runCitationStability(
+  row: EvalRunCase,
+  idx: number,
+  att: EvalRunAttempt
+) {
+  if (!data.value) return
+  const key = `${row.case_id}:${idx}:stability`
+  citBusy.value = key
+  try {
+    const res = await evalApi.citationStability(data.value.run.id, row.case_id, {
+      attempt: idx,
+      repeats: citRepeats.value
+    })
+    att.citation_stability = res.record
+  } catch (e) {
+    att.citation_stability = {
+      created_at: '',
+      repeats: 0,
+      verdicts: [],
+      matrix: [],
+      summary: {}
+    }
+    citMsg.value = `attempt#${idx + 1} 引用稳定性审计失败：${String(e)}`
+  } finally {
+    citBusy.value = ''
+  }
+}
+
+function citStCellClass(s: string): string {
+  if (s === 'violation') return 'bad'
+  if (s === 'ok') return 'ok'
+  if (s === 'equivocal') return 'eq'
+  return 'na'
+}
+
+function citStCellText(s: string): string {
+  if (s === 'violation') return '✗'
+  if (s === 'ok') return '✓'
+  if (s === 'equivocal') return '?'
+  return '—'
+}
+
+function citRejFailedGroups(
+  rec: { detail?: { groups?: CitationGroup[] } }
+) {
+  return (rec.detail?.groups ?? []).filter(
+    (g) =>
+      g.content_supported === 'violation' || g.attribution_ok === 'violation'
+  )
 }
 
 // —— 覆盖标注明细（checklist 型拆分编排落库的 coverage_points）——
@@ -819,30 +1022,79 @@ onUnmounted(stopPolling)
                 <td colspan="12">
                   <div class="rd-detail">
                     <div class="rd-ref">
-                      <div class="rd-ref-head">
-                        <strong>判定参考</strong>
-                        <span class="ui-badge" :class="row.golden_answer ? 'ok' : 'warn'">
-                          {{ row.golden_answer ? '金标准' : '预期行为（无金标准）' }}
-                        </span>
-                        <span class="ui-help-inline">判官以此为标准评判本条输出</span>
-                      </div>
-                      <textarea
-                        v-model="goldenEdits[row.case_id]"
-                        rows="2"
-                        class="ui-textarea"
-                        placeholder="留空则后续以预期行为为参考"
-                      ></textarea>
-                      <div class="rd-ref-actions">
-                        <button
-                          class="ui-btn sm"
-                          :disabled="goldenSaving === row.case_id"
-                          @click="saveGolden(row)"
-                        >
-                          {{ goldenSaving === row.case_id ? '保存中…' : '保存为金标准' }}
-                        </button>
-                        <span v-if="goldenMsg" class="ui-ok">{{ goldenMsg }}</span>
-                        <span class="ui-help-inline">修改对后续跑批生效；当前记录判定不变，可点"重跑"验证。</span>
-                      </div>
+                      <template v-if="!isChecklistRow(row)">
+                        <div class="rd-ref-head">
+                          <strong>判定参考</strong>
+                          <span class="ui-badge" :class="row.golden_answer ? 'ok' : 'warn'">
+                            {{ row.golden_answer ? '金标准' : '预期行为（无金标准）' }}
+                          </span>
+                          <span class="ui-help-inline">判官以此为标准评判本条输出</span>
+                        </div>
+                        <textarea
+                          v-model="goldenEdits[row.case_id]"
+                          rows="2"
+                          class="ui-textarea"
+                          placeholder="留空则后续以预期行为为参考"
+                        ></textarea>
+                        <div class="rd-ref-actions">
+                          <button
+                            class="ui-btn sm"
+                            :disabled="goldenSaving === row.case_id"
+                            @click="saveGolden(row)"
+                          >
+                            {{ goldenSaving === row.case_id ? '保存中…' : '保存为金标准' }}
+                          </button>
+                          <span v-if="goldenMsg" class="ui-ok">{{ goldenMsg }}</span>
+                          <span class="ui-help-inline">修改对后续跑批生效；当前记录判定不变，可点"重跑"验证。</span>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="rd-ref-head">
+                          <strong>判定参考（清单型金标准）</strong>
+                          <span class="ui-badge ok">覆盖点表</span>
+                          <span class="ui-help-inline">判官按此逐点标注；散文金标准不参与自动判定</span>
+                        </div>
+                        <div class="rd-checklist">
+                          <div class="rd-check-block">
+                            <div class="rd-check-label">
+                              核心主题 · 全部须覆盖（{{ corePoints(row).length }}）
+                            </div>
+                            <div v-for="p in corePoints(row)" :key="p.id" class="rd-check-item">
+                              <code class="rd-check-id">{{ p.id }}</code>
+                              <div class="rd-check-main">
+                                <div class="rd-check-text">{{ p.text }}</div>
+                                <div v-if="p.probe" class="rd-check-probe">
+                                  覆盖口径：{{ p.probe }}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="rd-check-block">
+                            <div class="rd-check-label">
+                              扩展主题 · 按源组计最低覆盖（共 {{ extPoints(row).length }} 条）
+                            </div>
+                            <template v-for="g in extGroups(row)" :key="g.group">
+                              <div class="rd-check-sub">{{ g.group }} 组</div>
+                              <div v-for="p in g.points" :key="p.id" class="rd-check-item">
+                                <code class="rd-check-id">{{ p.id }}</code>
+                                <div class="rd-check-main">
+                                  <div class="rd-check-text">{{ p.text }}</div>
+                                  <div v-if="p.probe" class="rd-check-probe">
+                                    覆盖口径：{{ p.probe }}
+                                  </div>
+                                </div>
+                              </div>
+                            </template>
+                          </div>
+                          <div v-if="checklistRuleSummary(row)" class="rd-check-rule">
+                            {{ checklistRuleSummary(row) }}
+                          </div>
+                          <p class="ui-help">
+                            判定执行依据为用例文件的清单结构化配置；修改点表/口径请到
+                            「用例管理 → 编辑用例 → 清单结构化配置」。
+                          </p>
+                        </div>
+                      </template>
                     </div>
 
                     <div class="rd-grid2">
@@ -965,6 +1217,149 @@ onUnmounted(stopPolling)
                           </table>
                         </div>
                       </details>
+                      <div
+                        v-if="covMatrixRows(row).length"
+                        class="rd-rej-tool"
+                      >
+                        <strong>覆盖列重判：</strong>
+                        <label>
+                          attempt #
+                          <select
+                            class="ui-select"
+                            :value="covToolOf(row.case_id).attempt"
+                            @change="setCovAttempt(row.case_id, $event)"
+                          >
+                            <option
+                              v-for="(a, ai) in row.repeat_results"
+                              :key="ai"
+                              :value="ai"
+                            >
+                              {{ ai + 1 }}
+                            </option>
+                          </select>
+                        </label>
+                        <label>
+                          ×
+                          <input
+                            class="ui-input rd-rej-num"
+                            type="number"
+                            min="1"
+                            max="50"
+                            :value="covToolOf(row.case_id).repeats"
+                            @input="setCovRepeats(row.case_id, $event)"
+                          />
+                          次
+                        </label>
+                        <button
+                          class="ui-btn sm"
+                          :disabled="covBusy === row.case_id || !!data.active"
+                          @click="runCoverageRejudge(row)"
+                        >
+                          {{
+                            covBusy === row.case_id ? '重判中…' : '运行覆盖重判'
+                          }}
+                        </button>
+                        <span v-if="covMsg" class="ui-muted">{{ covMsg }}</span>
+                      </div>
+                      <div
+                        v-if="covRejOf(row, row.case_id)"
+                        class="rd-rej-panel"
+                      >
+                        <details open>
+                          <summary>
+                            覆盖重判结果（attempt
+                            #{{ covToolOf(row.case_id).attempt + 1 }} ×{{
+                              covRejOf(row, row.case_id)!.repeats
+                            }}，记录于 {{ covRejOf(row, row.case_id)!.created_at }}）
+                          </summary>
+                          <div class="rd-cov-matrix-scroll">
+                            <table class="rd-cov-matrix">
+                              <thead>
+                                <tr>
+                                  <th class="ui-mono"></th>
+                                  <th class="ui-mono">点</th>
+                                  <th
+                                    v-for="(r, ri) in covRejOf(
+                                      row,
+                                      row.case_id
+                                    )!.reps"
+                                    :key="ri"
+                                    class="ui-mono"
+                                  >
+                                    rep{{ ri + 1 }}
+                                  </th>
+                                  <th class="ui-mono">汇总</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr
+                                  v-for="pid in covRejOf(row, row.case_id)!
+                                    .point_ids"
+                                  :key="pid"
+                                >
+                                  <td>
+                                    <button
+                                      class="ui-btn sm"
+                                      @click="
+                                        openCovPointDetail(
+                                          pid,
+                                          covRejOf(row, row.case_id)!
+                                        )
+                                      "
+                                    >
+                                      详情
+                                    </button>
+                                  </td>
+                                  <td class="ui-mono rd-cov-matrix-pid">
+                                    {{ pid }}
+                                  </td>
+                                  <td
+                                    v-for="(r, ri) in covRejOf(
+                                      row,
+                                      row.case_id
+                                    )!.reps"
+                                    :key="ri"
+                                    class="rd-cov-cell"
+                                    :class="
+                                      covRejStateClass(
+                                        r.points[pid]?.v ?? ''
+                                      )
+                                    "
+                                  >
+                                    {{
+                                      covRejStateLabel(r.points[pid]?.v ?? '')
+                                    }}
+                                  </td>
+                                  <td class="rd-rej-summary">
+                                    {{
+                                      Object.entries(
+                                        covRejOf(row, row.case_id)!.summary[
+                                          pid
+                                        ] ?? {}
+                                      )
+                                        .map(([k, n]) => `${k}:${n}`)
+                                        .join(' ')
+                                    }}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <p
+                            v-if="
+                              covRejFlipPoints(covRejOf(row, row.case_id)!)
+                                .length
+                            "
+                            class="ui-muted"
+                          >
+                            翻转点：{{
+                              covRejFlipPoints(covRejOf(row, row.case_id)!)
+                                .join('、')
+                            }}
+                            （同一点多次判定不一致 → 需要看是不是点表/输入问题）
+                          </p>
+                        </details>
+                      </div>
                       <template v-if="visibleAttempts(row).length">
                         <div
                           v-for="item in visibleAttempts(row)"
@@ -1123,6 +1518,63 @@ onUnmounted(stopPolling)
                                 展示所有
                               </label>
                             </summary>
+                            <div class="rd-rej-tool rd-cit-tool">
+                              <button
+                                class="ui-btn sm"
+                                :disabled="
+                                  citBusy ===
+                                    `${row.case_id}:${item.idx}:rejudge` ||
+                                  !!data.active
+                                "
+                                @click="
+                                  runCitationRejudge(
+                                    row,
+                                    item.idx,
+                                    item.att
+                                  )
+                                "
+                              >
+                                {{
+                                  citBusy ===
+                                  `${row.case_id}:${item.idx}:rejudge`
+                                    ? '重判中…'
+                                    : '引用重判(1×)'
+                                }}
+                              </button>
+                              <span>稳定性 ×</span>
+                              <input
+                                v-model.number="citRepeats"
+                                class="ui-input rd-rej-num"
+                                type="number"
+                                min="2"
+                                max="50"
+                              />
+                              <button
+                                class="ui-btn sm"
+                                :disabled="
+                                  citBusy ===
+                                  `${row.case_id}:${item.idx}:stability` ||
+                                  !!data.active
+                                "
+                                @click="
+                                  runCitationStability(
+                                    row,
+                                    item.idx,
+                                    item.att
+                                  )
+                                "
+                              >
+                                {{
+                                  citBusy ===
+                                  `${row.case_id}:${item.idx}:stability`
+                                    ? '审计中…'
+                                    : '运行稳定性审计'
+                                }}
+                              </button>
+                              <span v-if="citMsg" class="ui-muted">
+                                {{ citMsg }}
+                              </span>
+                            </div>
                             <details
                               v-if="attemptEvidenceHits(item.att).length"
                               class="rd-evidence"
@@ -1281,6 +1733,131 @@ onUnmounted(stopPolling)
                                 </blockquote>
                               </div>
                             </template>
+                            <div
+                              v-if="item.att.citation_rejudge"
+                              class="rd-rej-panel"
+                            >
+                              <details open>
+                                <summary>
+                                  引用重判（最新判官版本）：
+                                  <span
+                                    class="ui-badge"
+                                    :class="
+                                      pairStateClass(
+                                        item.att.citation_rejudge.verdict ?? ''
+                                      )
+                                    "
+                                  >
+                                    {{
+                                      item.att.citation_rejudge.verdict
+                                        ? pairStateLabel(
+                                            item.att.citation_rejudge.verdict
+                                          )
+                                        : '转人工'
+                                    }}
+                                  </span>
+                                  <span
+                                    v-if="
+                                      item.att.citation_rejudge.created_at
+                                    "
+                                    class="ui-muted"
+                                  >
+                                    {{ item.att.citation_rejudge.created_at }}
+                                  </span>
+                                </summary>
+                                <div class="rd-pair-reason">
+                                  {{ item.att.citation_rejudge.reason }}
+                                </div>
+                                <div
+                                  v-if="
+                                    citRejFailedGroups(
+                                      item.att.citation_rejudge
+                                    ).length
+                                  "
+                                >
+                                  <div
+                                    v-for="g in citRejFailedGroups(
+                                      item.att.citation_rejudge
+                                    )"
+                                    :key="g.gid"
+                                    class="rd-pair"
+                                  >
+                                    <div class="rd-pair-claim">
+                                      组#{{ g.gid }}：
+                                      {{ g.claim }}
+                                    </div>
+                                    <div class="rd-pair-reason">
+                                      {{ g.reason }}
+                                    </div>
+                                  </div>
+                                </div>
+                              </details>
+                            </div>
+                            <div
+                              v-if="item.att.citation_stability"
+                              class="rd-rej-panel"
+                            >
+                              <details open>
+                                <summary>
+                                  引用稳定性审计（{{
+                                    item.att.citation_stability.matrix.length
+                                  }}
+                                  组 ×
+                                  {{ item.att.citation_stability.repeats }}
+                                  reps）
+                                </summary>
+                                <div class="rd-cov-matrix-scroll">
+                                  <table class="rd-cov-matrix">
+                                    <thead>
+                                      <tr>
+                                        <th class="ui-mono">组</th>
+                                        <th
+                                          v-for="(v, vi) in item.att
+                                            .citation_stability.verdicts"
+                                          :key="vi"
+                                          class="ui-mono"
+                                        >
+                                          {{ vi + 1 }}
+                                        </th>
+                                        <th class="ui-mono">汇总</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      <tr
+                                        v-for="m in item.att.citation_stability
+                                          .matrix"
+                                        :key="m.gid"
+                                      >
+                                        <td
+                                          class="rd-cov-matrix-pid"
+                                          :title="m.claim"
+                                        >
+                                          组#{{ m.gid }}
+                                        </td>
+                                        <td
+                                          v-for="(c, ci) in m.cells"
+                                          :key="ci"
+                                          class="rd-cov-cell"
+                                          :class="citStCellClass(c)"
+                                        >
+                                          {{ citStCellText(c) }}
+                                        </td>
+                                        <td class="rd-rej-summary">
+                                          {{
+                                            Object.entries(
+                                              item.att.citation_stability
+                                                .summary[m.gid] ?? {}
+                                            )
+                                              .map(([k, n]) => `${k}:${n}`)
+                                              .join(' ')
+                                          }}
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </details>
+                            </div>
                           </details>
                           <div
                             v-if="diagLines(item.att.diagnostics).length"
@@ -1350,6 +1927,105 @@ onUnmounted(stopPolling)
         </table>
       </div>
     </template>
+  </div>
+  <div
+    v-if="covPointDetail"
+    class="rd-modal-mask"
+    @click.self="covPointDetail = null"
+  >
+    <div class="rd-modal">
+      <div class="rd-modal-head">
+        <strong>
+          覆盖点 {{ covPointDetail.pid }} · ×{{ covPointDetail.rec.repeats }}
+          判定明细
+        </strong>
+        <button class="ui-btn sm" @click="covPointDetail = null">
+          关闭
+        </button>
+      </div>
+      <div
+        v-if="covPointDetail.rec.points_meta?.[covPointDetail.pid]"
+        class="rd-cov-req"
+      >
+        <b>点要求：</b>
+        {{ covPointDetail.rec.points_meta[covPointDetail.pid].text }}
+        <span
+          v-if="
+            covPointDetail.rec.points_meta[covPointDetail.pid].probe
+          "
+          class="ui-muted"
+        >
+          （覆盖探针：{{
+            covPointDetail.rec.points_meta[covPointDetail.pid].probe
+          }}）
+        </span>
+      </div>
+      <p
+        v-else
+        class="ui-muted rd-cov-req"
+      >
+        （该记录未含点要求文本——旧版本生成；重新运行一次覆盖重判后即会带上）
+      </p>
+      <div class="rd-modal-body">
+        <table class="rd-modal-table">
+          <thead>
+            <tr>
+              <th class="ui-mono">rep</th>
+              <th class="ui-mono">判断结果</th>
+              <th class="ui-mono">判断依据（evidence）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(r, ri) in covPointDetail.rec.reps"
+              :key="ri"
+            >
+              <td class="ui-mono">#{{ ri + 1 }}</td>
+              <td>
+                <span
+                  v-if="r.ok"
+                  class="ui-badge"
+                  :class="
+                    covRejStateClass(
+                      r.points[covPointDetail.pid]?.v ?? ''
+                    )
+                  "
+                >
+                  {{
+                    covRejStateLabel(
+                      r.points[covPointDetail.pid]?.v ?? ''
+                    )
+                  }}
+                </span>
+                <span v-else class="rd-pair-reason">{{ r.error }}</span>
+              </td>
+              <td>
+                <pre
+                  v-if="r.ok && r.points[covPointDetail.pid]?.evidence"
+                  class="rd-evidence-pre rd-modal-ev"
+                  >{{ r.points[covPointDetail.pid]!.evidence }}</pre
+                >
+                <span
+                  v-else-if="r.ok"
+                  class="ui-muted"
+                >
+                  （无 evidence 说明）
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="rd-rej-summary">
+          汇总：{{
+            Object.entries(
+              covPointDetail.rec.summary[covPointDetail.pid] ?? {}
+            )
+              .map(([k, n]) => `${k}:${n}`)
+              .join(' ')
+          }}
+        </p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1785,6 +2461,108 @@ onUnmounted(stopPolling)
 .rd-cov-cell.na {
   color: #8c959f;
 }
+.rd-rej-tool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  font-size: 0.85em;
+}
+.rd-rej-num {
+  width: 64px;
+}
+.rd-rej-panel {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: #fafbfc;
+}
+.rd-rej-panel > details > summary {
+  cursor: pointer;
+  color: var(--ui-primary);
+}
+.rd-cit-tool {
+  margin: 4px 0 0;
+  font-size: 0.82em;
+}
+.rd-rej-summary {
+  font-size: 0.75em;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+}
+.rd-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.rd-modal {
+  background: #fff;
+  border-radius: 8px;
+  max-width: 1240px;
+  width: 96%;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+.rd-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #d8dee4;
+}
+.rd-modal-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+}
+.rd-cov-req {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid #eaeef2;
+  line-height: 1.5;
+  font-size: 0.88em;
+}
+.rd-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86em;
+}
+.rd-modal-table th,
+.rd-modal-table td {
+  border: 1px solid #d8dee4;
+  padding: 4px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+.rd-modal-table td:first-child {
+  white-space: nowrap;
+}
+.rd-modal-table td:nth-child(2) {
+  white-space: nowrap;
+  width: 110px;
+}
+.rd-modal-ev {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.rd-cov-detail-row {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border: 1px solid #eaeef2;
+  border-radius: 6px;
+}
+.rd-cov-detail-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .rd-cov-detail {
   margin: 6px 0;
   border: 1px solid #d8dee4;
@@ -1828,6 +2606,71 @@ onUnmounted(stopPolling)
 }
 .rd-cov-boundary ul {
   margin: 2px 0 0 18px;
+}
+.rd-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 2px;
+}
+.rd-check-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rd-check-label {
+  font-size: 0.84em;
+  font-weight: 600;
+  color: #57606a;
+  margin-bottom: 2px;
+}
+.rd-check-sub {
+  font-size: 0.78em;
+  color: var(--ui-primary);
+  margin-top: 2px;
+}
+.rd-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 8px;
+  border-left: 3px solid #d0d7de;
+  background: #f6f8fa;
+  border-radius: 4px;
+}
+.rd-check-id {
+  font-family: Consolas, 'Courier New', monospace;
+  color: var(--ui-text-2);
+  font-size: 0.82em;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+.rd-check-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rd-check-text {
+  color: var(--ui-text);
+  line-height: 1.45;
+  font-size: 0.84em;
+}
+.rd-check-probe {
+  color: var(--ui-text-2);
+  font-size: 0.78em;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rd-check-rule {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef6ff;
+  border: 1px solid #cfe3f7;
+  color: var(--ui-text-2);
+  font-size: 0.82em;
+  line-height: 1.5;
 }
 @media (max-width: 900px) {
   .rd-grid2 {

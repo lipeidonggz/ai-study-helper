@@ -164,6 +164,26 @@ export interface EvalAnnotation {
   annotated_by: string
 }
 
+export interface ChecklistPoint {
+  id: string
+  text: string
+  probe?: string
+  /** 扩展主题所属分组（源族，如 O2 / A5），core 点无此字段 */
+  group?: string
+}
+
+export interface ChecklistPoints {
+  core?: ChecklistPoint[]
+  ext?: ChecklistPoint[]
+  transparency?: unknown
+}
+
+export interface ChecklistRule {
+  ext_min_per_group?: number
+  transparency?: string
+  [key: string]: unknown
+}
+
 export type RunStatus = 'queued' | 'running' | 'done' | 'canceled' | 'error'
 
 export interface EvalRun {
@@ -208,6 +228,9 @@ export interface EvalRunCase {
   annotate_note: string
   golden_answer: string
   behavior: string
+  judge_shape?: string
+  checklist_points?: ChecklistPoints
+  checklist_rule?: ChecklistRule
   trace?: ExecTraceEvent[]
 }
 
@@ -224,6 +247,9 @@ export interface EvalRunAttempt {
   diagnostics?: Record<string, unknown>
   citation_pairs?: { groups?: CitationGroup[]; pairs?: CitationPair[] }
   coverage_points?: CoveragePoints
+  coverage_rejudge?: CoverageRejudgeRecord
+  citation_rejudge?: CitationRejudgeRecord
+  citation_stability?: CitationStabilityRecord
   verdict: string
   trace?: ExecTraceEvent[]
 }
@@ -288,6 +314,40 @@ export interface CitationGroup {
   supporting_blocks?: number[]
   violations?: CitationViolation[]
   reason: string
+}
+
+export interface CoverageRejudgeRecord {
+  created_at: string
+  repeats: number
+  point_ids: string[]
+  points_meta?: Record<string, { text: string; probe?: string }>
+  reps: Array<{
+    ok: boolean
+    points: Record<string, { v: string; evidence?: string }>
+    error?: string
+  }>
+  summary: Record<string, Record<string, number>>
+  errors: number
+}
+
+export interface CitationRejudgeRecord {
+  created_at: string
+  verdict: string | null
+  reason: string
+  detail: { groups?: CitationGroup[] }
+}
+
+export interface CitationStabilityRecord {
+  created_at: string
+  repeats: number
+  verdicts: Array<string | null>
+  matrix: Array<{
+    gid: number
+    claim: string
+    refs: string[]
+    cells: string[]
+  }>
+  summary: Record<string, Record<string, number>>
 }
 
 /** 执行轨迹事件（后端 exec_trace：round / text / tool_exec / guardrail / done）。 */
@@ -403,6 +463,39 @@ export const evalApi = {
   },
   rerunCase(runId: number, caseId: string): Promise<{ ok: boolean; case: EvalRunCase }> {
     return http(`/api/eval/runs/${runId}/cases/${caseId}/rerun`, { method: 'POST' })
+  },
+  coverageRejudge(
+    runId: number,
+    caseId: string,
+    body: { attempt: number; repeats: number }
+  ): Promise<{ ok: boolean; key: string; record: CoverageRejudgeRecord }> {
+    return http(`/api/eval/runs/${runId}/cases/${caseId}/coverage-rejudge`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
+  citationRejudge(
+    runId: number,
+    caseId: string,
+    body: { attempt: number }
+  ): Promise<{ ok: boolean; key: string; record: CitationRejudgeRecord }> {
+    return http(`/api/eval/runs/${runId}/cases/${caseId}/citation-rejudge`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
+  },
+  citationStability(
+    runId: number,
+    caseId: string,
+    body: { attempt: number; repeats: number }
+  ): Promise<{ ok: boolean; key: string; record: CitationStabilityRecord }> {
+    return http(`/api/eval/runs/${runId}/cases/${caseId}/citation-stability`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body)
+    })
   },
   annotate(
     runId: number,

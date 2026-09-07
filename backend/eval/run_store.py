@@ -265,6 +265,32 @@ def set_annotation(
         )
 
 
+def update_attempt_extra(
+    db_path: Path,
+    run_id: int,
+    case_id: str,
+    attempt_index: int,
+    key: str,
+    value: dict,
+) -> bool:
+    """在指定 attempt 对象上附加审计 overlay 字段（判官重判/稳定性记录，不覆盖原始判定）。"""
+    rows = get_run_cases(db_path, run_id)
+    row = next((r for r in rows if r["case_id"] == case_id), None)
+    if row is None:
+        return False
+    attempts = row.get("repeat_results") or []
+    if not (0 <= attempt_index < len(attempts)):
+        return False
+    attempts[attempt_index][key] = value
+    with _lock, _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE eval_run_cases SET repeat_results = ?"
+            " WHERE run_id = ? AND case_id = ?",
+            (json.dumps(attempts, ensure_ascii=False), run_id, case_id),
+        )
+    return True
+
+
 def _row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
     for key in ("config", "summary"):

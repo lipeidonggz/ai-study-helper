@@ -229,8 +229,6 @@ _JUDGE_CHECKLIST_MODULE = (
 _JUDGE_COVERAGE_MODULE = (
     "\n[清单覆盖专用：本调用只做逐点覆盖标注，不输出最终 verdict]\n"
     "- 你只按清单逐项打标（covered / not_covered / equivocal），不自行拆分或合并主题；\n"
-    "- 覆盖核对须以清单要点内标注的【覆盖探针】为准：标 covered 必须在 evidence 中引用"
-    "与探针要素对应的输出原句，无法指认则标 not_covered；\n"
     "- 标注必须与 evidence 自洽：若 evidence 说明某主题覆盖不完整 / 缺关键组件，"
     "该项必须标 not_covered；禁止出现'证据说未覆盖却标 covered'的自相矛盾；\n"
     "- 标【覆盖】必须从严：输出须点名该主题的关键概念 / 术语，或给出与其它主题不可混淆、"
@@ -945,13 +943,9 @@ def _build_coverage_prompt(case: CaseFile, evidence_text: str, output: str) -> s
 {_coverage_points_block(case)}
 
 【标注口径】
-- 覆盖核对按清单要点内标注的【覆盖探针】进行：标 covered 必须在 evidence 中引用
-  与探针要素对应的输出原句，无法指认则标 not_covered。
-- 核心/扩展主题：输出对该主题有实质内容且点名关键概念 / 术语，或给出与其它主题
-  不可混淆的等价描述才标 covered；纯泛化/近似表述标 not_covered。
-- 标注必须与 evidence 自洽：若 evidence 说明覆盖不完整 / 缺关键组件，必须标
-  not_covered；禁止出现"证据说未覆盖却标 covered"的自相矛盾。
-- 无法判断时标 equivocal 并说明缺什么。
+- 探针含两类内容：正面要件（'覆盖须含……'）与排除句（'……不算覆盖'）：标 covered 必须能引用
+  与正面要件对应的输出原句；仅当该点的实质论述落入其排除句描述时才判 not_covered——
+  排除句不因字眼出现而触发，正面要件已满足时，输出顺带出现排除句相关表述仍判 covered。
 
 【检索证据】（系统记录）
 {evidence_text}
@@ -1574,6 +1568,9 @@ _CITATION_STAGE2_SYSTEM = (
     "也不按编造判罚；无标记且组内所有块都找不到支撑的事实性断言 → content_supported=violation，"
     "并在 violations 中列出缺失成分与查过的块。核对依据只准引用本组块原文或声明原句，"
     "禁止把其它组 / 其它编号块的原文当作本组支撑（各组块已随声明列出，只依据本组内容判断）。"
+    "跨源 / 双侧成分（如“两文都…”“二者…”）若组内缺失某侧来源块 → 该成分无支撑，"
+    "判 content_supported=violation（欠标）；不得以“没引用该源 / 无法核对某侧”为由标 equivocal——"
+    "equivocal 仅限组内块已给出但语义不足以定论的情形。"
     "缺席性断言规则：声明称某内容不存在 / 未署名 / 无日期 / 未提及 / 不含等缺席成分，"
     "只有组内某块原文直接陈述该缺失（如“no persistent workspace”）才算有据；"
     "禁止用“块中没有出现 X”反推“声明称 X 不存在”成立——块沉默不能证明缺席；"
@@ -1586,7 +1583,8 @@ _CITATION_STAGE2_SYSTEM = (
     "（跨源综合句按“每块来源须属于声明所指来源之一”核对）→ attribution_ok=violation，"
     "violations 中列出具体块与归属问题。"
     "禁止评判回答的主题覆盖、表达形态、整体好坏、检索是否充分。"
-    "只输出要求的 JSON；材料不足标 equivocal 并说明缺什么。"
+    "只输出要求的 JSON；equivocal 仅限组内块已给出但语义不足以定论（说明缺什么），"
+    "“缺源未引”属欠标按 violation 判。"
 )
 
 
@@ -1825,11 +1823,15 @@ def _group_detail(groups: list[dict], verdicts: list[dict]) -> dict:
 
 _RANGE_REF_RE = re.compile(r"\[[0-9]+\s*[-–—~至]\s*[0-9]+\]")
 _REF_TOKEN_RE = re.compile(r"\[[0-9]+\]")
+_TOKEN_OR_RANGE_RE = re.compile(r"\[[0-9]+(?:[ ]*[-–—~至][ ]*[0-9]+)?\]")
+_BRACKET_RANGE_RE = re.compile(
+    r"(?:\[[0-9]+\][ ]*[-–—~至][ ]*)+\[[0-9]+\]"
+)
 _REF_GAP_RE = re.compile(r"[\s、，,；;]*")
 _TAIL_PUNCT_RE = re.compile(
     r"[\s，、。；：:（）()【】\[\]「」『』“”\"''!?！？…—\-]*"
 )
-_CONTENT_CHAR_RE = re.compile(r"[\u4e00-\u9fffA-Za-z0-9]")
+_CONTENT_CHAR_RE = re.compile(r"[\u4e00-\u9fffA-Za-z]")
 
 # 元陈述命中即整单元跳过（含标引的布局/证据范围说明）
 _META_HIT_RES = [
@@ -1839,7 +1841,12 @@ _META_HIT_RES = [
         r"检索(到|了)?(的)?(资料|片段|内容)|知识库(中|里)?(检索|收录|均不完整|不完整)|"
         r"未收录|未覆盖|未呈现全文|摘录片段|节选|覆盖(不足|不全|不到)|"
         r"资料(不足|缺失|局限)|(资料|材料|素材)(中|里)?[^。！？]{0,30}?(不完整|局限)|"
-        r"相关?条目|(?:一点|需要|这里|补充)?(?:引用|资料|素材)说明|以上对比|以下对比|目前可见"
+        r"相关?条目|(?:一点|需要|这里|补充)?(?:引用|资料|素材)说明|以上对比|以下对比|目前可见|"
+        r"资料(较完整|部分缺失|并不完整|有限|不足)|材料(较完整|部分缺失|并不完整|不对称|不足)|"
+        r"前几段|手中只有|均以.{0,6}为主|真实边界|完整性或缺失|"
+        r"(?:相关)?引用(?:均)?出自|条目(?:均)?同属|非多篇独立文章|"
+        r"仅为(?:致谢|目录|链接)|为(?:知识库)?目录(?:结构)?(?:图|树)|继续阅读.{0,4}链接栏|"
+        r"内容信息量有限|未纳入实质性对比|另外要澄清|需要说明的是"
     ),
     re.compile(r"^\s*(我将|我来|下面|以下|综上|综上所述|本文|这里|如需|如果你需要|备注|注[:：]|说明[:：]|需要先说明)"),
 ]
@@ -1942,8 +1949,14 @@ def _split_units(text: str) -> list[str]:
 def _marker_groups(unit: str) -> list[tuple[list[str], int, int]]:
     """返回标引组 [(refs, start, end)]；范围引用 [1-5] 不算标引。"""
     tokens: list[tuple[int, int, str]] = []
-    for m in _REF_TOKEN_RE.finditer(unit):
-        tokens.append((m.start(), m.end(), m.group(0)))
+    # 先屏蔽括号式范围（[1]-[5]、[6]-[12]）：按空格等长替换，保持位置对齐
+    masked = _BRACKET_RANGE_RE.sub(lambda m: " " * len(m.group(0)), unit)
+    for m in _TOKEN_OR_RANGE_RE.finditer(masked):
+        tok = m.group(0)
+        # [1-5] / [6]-[12] 等范围引用是布局说明，不作为标引切段
+        if _RANGE_REF_RE.fullmatch(tok):
+            continue
+        tokens.append((m.start(), m.end(), tok))
     groups: list[tuple[list[str], int, int]] = []
     i = 0
     n = len(tokens)
@@ -2170,6 +2183,8 @@ section_path / text 均为系统记录。本批只含以下 {len(batch)} 组声�
   声明中带推断 / 观点 / 类比等语用标记的成分不要求块直接陈述（按语义判断，不依赖特定词），不按编造判罚；
   无标记且组内所有块都找不到支撑的事实性成分 → violation
   → ok | violation | equivocal
+  跨源 / 双侧成分（“两文都…”“二者…”）若组内缺失某侧来源块 → 该成分无支撑 → violation（欠标）；
+  不得以“没引用该源 / 无法核对某侧”为由标 equivocal——equivocal 仅限组内块已给出但语义不足以定论
 - attribution_ok：组内每块的真实来源（source_label 显示名）是否与声明声称的来源一致
   （声明声称来源如 OpenAI/Anthropic 及文章标题）；两篇讲相似内容时，内容吻合但声称出处
   与块真实出处不符仍属归属错误；跨源综合句按“每块来源须属于声明所指来源之一”核对
