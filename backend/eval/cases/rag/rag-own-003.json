@@ -25,9 +25,11 @@
   "timeout_sec": 60,
   "hard_timeout_sec": 180,
   "tags": [
-    "细节问答",
-    "自有内容",
-    "never"
+    "范围=单点",
+    "素材=OWN",
+    "环节=溯源求证",
+    "题型=出处归属",
+    "套件=基础"
   ],
   "compare": false,
   "notes": "首轮切片 ② 自有×零（0022/0009）",
@@ -36,8 +38,8 @@
   "must_pass_threshold": 1,
   "enabled": true,
   "admin_note": "RAG 用例草案（2026-09-01），待金标准人工复核；入库/检索/判定实现未完成",
-  "updated_at": "2026-09-01",
-  "updated_by": "codex-draft",
+  "updated_at": "2026-09-07T21:05:00",
+  "updated_by": "local",
   "source_ref": {
     "manifest_id": "OW1",
     "location": "0022 评测统计升级 / 0009"

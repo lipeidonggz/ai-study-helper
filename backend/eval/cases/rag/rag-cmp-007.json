@@ -1,0 +1,99 @@
+{
+  "id": "rag-cmp-007",
+  "category": "rag",
+  "title": "同根因类探针 · 切面：agent 时代人的角色与治理机制（O2 × A5）",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "OpenAI《Harness engineering》和 Anthropic《How we contain Claude》这两篇文章里，agent 时代“人”的角色和职责分别被怎样重新定义？各自靠什么机制保证 agent 靠谱？请分别说明并标注依据。"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "跨文档检索两篇并分别说明人的角色/职责重定义与各自保证 agent 靠谱的机制，来源分明、可溯源",
+    "criteria": [
+      "answer_correct",
+      "format_appropriate",
+      "citation_truth"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
+  "tags": [
+    "范围=切面",
+    "素材=O2xA5",
+    "精度=精确",
+    "环节=结构化梳理",
+    "题型=区别对比",
+    "套件=探针",
+    "验证=引用",
+    "家族=cmp角色切面"
+  ],
+  "compare": false,
+  "notes": "同文对窄问法切片（人的角色与治理机制）：初版 query 缺文档指代导致检索跑偏，已补两文名称；修正后 Run#137 覆盖基本绿（answer_correct 17 pass），红因引用 7 + pending 2——定位为综合/引用压力探针。",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
+  "enabled": true,
+  "admin_note": "探针用例（综合 + 引用压力）：query 必须点名两文（无指代会检索跑偏）；Run#137 覆盖绿、引用红；不充当 S2 检索类判据。",
+  "updated_at": "2026-09-07T21:05:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：回答须分别说明两文对'人'的角色/职责重定义与保证 agent 靠谱的机制，观点来源分明、可溯源。判官按 checklist_points 逐点核对（每点须实质内容并附注入编号溯源，纯罗列不算）；引用真实性红线条件触发（显式引用承诺须来源真实、归属正确、内容吻合）。",
+    "reference_answer": "",
+    "checklist_points": {
+      "core": [
+        {
+          "id": "o2-c1",
+          "text": "核心命题：Agent 工程的关键在模型外的外层系统设计——团队工作重心从写代码转向设计环境、表达意图、构建反馈回路（角色转变的概括表述）",
+          "probe": "覆盖须含：外层系统/环境设计为重的命题 + 设计环境 / 表达意图 / 构建反馈回路三要素概括；只写'人类掌舵'不够"
+        },
+        {
+          "id": "o2-c2",
+          "text": "规则/品味机械编码进仓库（linter / 结构测试 / 不变量，文档说教不够）",
+          "probe": "覆盖须含：规则 / 品味被机械编码进仓库——linter、结构测试或不变量的具体论述；仅泛泛'写进文档'不够"
+        },
+        {
+          "id": "o2-e2",
+          "text": "工程师角色重定义的细节",
+          "probe": "覆盖须含：工程师工作方式与职责变化的具体描述——如任务分解为可交付块、以提示词驱动 agent、评审交由 agent 之间完成等；仅陈述'人不再写代码 / 设计环境、表达意图、构建反馈回路'类概括，或仅报告产出成效（代码量、耗时），不算覆盖"
+        },
+        {
+          "id": "a5-c1",
+          "text": "遏制哲学：监督\"能做什么\"而非\"在做什么\"，环境边界优先",
+          "probe": "覆盖须含：①监督对象转向——“监督 agent 能做什么 / 限制能做什么”，而非逐动作监督它在做什么（原文锚：Rather than supervising what the agent does, we supervise what it's able to do）；②明确点出“环境 / 访问边界优先”的取向——通过沙箱、VM、文件系统边界、出站控制等给 agent 能触及的范围设硬边界（原文锚：set a hard boundary on what an agent can reach）。第二要件须点名“环境边界 / 访问边界 / 限制能力”类取向表述；仅停留在“监管能做什么”或只列举隔离模式实例（沙箱 / VM 细节）不算——实例由 a5-c4 承接"
+        },
+        {
+          "id": "a5-c4",
+          "text": "环境层隔离模式实例（ephemeral container / HITL sandbox / local VM，含批准疲劳、93%、auto mode）+ 环境层优先、模型层兜底原则",
+          "probe": "覆盖须含：至少一种环境层隔离模式实例（ephemeral container / HITL sandbox / local VM），或批准疲劳 / 93% / auto mode 等机制细节"
+        }
+      ],
+      "ext": []
+    },
+    "checklist_rule": {
+      "ext_min_per_group": 0,
+      "transparency": "none"
+    },
+    "boundary_claims": [],
+    "format_expected": "结构化：先分列两文各自对人的角色/职责的论述与保证机制（来源分明），再给同/异或关系判断并明确收口；依据标注清晰；不得以资料不完整替代结论",
+    "judge_shape": "checklist",
+    "note": "切面探针（人的角色与治理机制）：core 复用 O2/A5 点表中对应主题的 probe；2026-09-07 草稿经沛东确认设计后落 JSON。",
+    "annotated_at": "2026-09-07",
+    "annotated_by": "local"
+  },
+  "source_ref": {
+    "manifest_id": "O2 + A5",
+    "location": "全文对照（切面：人的角色与治理机制）"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-07",
+    "decay_class": "fast"
+  }
+}

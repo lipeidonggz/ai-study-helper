@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0027 · 用例管理与 tag 体系（中文键值版）</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0027 · 用例管理与 tag 体系（2026-09-07 定稿，中文键值版）</h1>
+      <p class="subtitle">id 是身份、tag 是组织；机器语义全部用中文键=值表达，自由中文标签已清空（其功能被受控键值覆盖）。</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>原则与维护</h2>
+      <ul>
+        <li>id = 稳定身份，永不改（避免断开 eval_run_cases 历史关联与考古引用）；</li>
+        <li>tag 只作分组/筛选元数据，判官与跑批不解析 tag——改键名 = 对 18 个 JSON + 本表 + UI 轴配置做字符串替换，成本低、不影响历史；</li>
+        <li>新取值必须先在本表登记；同一用例可多套件/多验证标注（如 cmp-002 既是基准也兼检索验证）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>tag 词表（中文键=值，按视角分三组）</h2>
+      <h3>产品视角（这条用例在测什么用户体验）</h3>
+      <table>
+        <thead><tr><th>键</th><th>含义</th><th>取值</th></tr></thead>
+        <tbody>
+          <tr><td>范围</td><td>问题覆盖范围</td><td>全景（跨文全景宽问法）/ 切面（聚焦切片）/ 单点（单文档主题）</td></tr>
+          <tr><td>精度</td><td>输入精确度（仅变体族/需要时标）</td><td>精确 / 半结构化 / 口语模糊</td></tr>
+          <tr><td>环节</td><td>学习环节（0023 主线词表）</td><td>认知扩展 / 解惑 / 辨析 / 结构化梳理 / 溯源求证 / 批判认知 / 验证理解 / 学习规划 / 重点提炼复习 / 产出辅助</td></tr>
+          <tr><td>题型</td><td>题型（0024 十题型词表）</td><td>概念定义 / 细节 / 为什么误区 / 观点判断 / 区别对比 / 归纳框架 / 出处归属 / 多方对照 / 自测出题 / 路径推荐 / 要点总结</td></tr>
+        </tbody>
+      </table>
+      <h3>系统视角（依赖什么素材、验证哪个根因层）</h3>
+      <table>
+        <thead><tr><th>键</th><th>含义</th><th>取值</th></tr></thead>
+        <tbody>
+          <tr><td>素材</td><td>素材对象（源代号为领域记号，保留英文）</td><td>A5 / O2 / O2xA5 / A1xO1 / OWN / T1 …</td></tr>
+          <tr><td>验证</td><td>主要验证的根因层（基准或探针均可标）</td><td>检索 / 引用 / 生成 / 判官</td></tr>
+        </tbody>
+      </table>
+      <h3>管理视角（怎么组织与使用这套用例）</h3>
+      <table>
+        <thead><tr><th>键</th><th>含义</th><th>取值</th></tr></thead>
+        <tbody>
+          <tr><td>套件</td><td>用例集归属</td><td>基础（基础回归集）/ 基准（must_pass）/ 探针</td></tr>
+          <tr><td>家族</td><td>同一素材+范围的输入精度变体族（可选）</td><td>cmp全景（002/003/004）/ agent构建全景（005）/ cmp局限切面（006）/ cmp角色切面（007）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>当前用例映射（2026-09-07 已落 18 个 JSON）</h2>
+      <table>
+        <thead><tr><th>用例</th><th>tags</th></tr></thead>
+        <tbody>
+          <tr><td>a5-001/002/004</td><td>范围=单点；素材=A5；环节=认知扩展；题型=细节；套件=基础</td></tr>
+          <tr><td>a5-003 / o2-004</td><td>范围=单点；环节=辨析；题型=观点判断；套件=基础（素材分别 A5 / O2）</td></tr>
+          <tr><td>a5-005</td><td>范围=单点；素材=A5；环节=辨析；题型=区别对比；套件=基础</td></tr>
+          <tr><td>o2-002/003</td><td>范围=单点；素材=O2；环节=认知扩展；题型=细节；套件=基础</td></tr>
+          <tr><td>cmp-001</td><td>范围=全景；素材=O2xA5；精度=精确；环节=批判认知；题型=多方对照；套件=基础</td></tr>
+          <tr><td>own-001~003</td><td>范围=单点；素材=OWN；环节=溯源求证；题型=出处归属；套件=基础</td></tr>
+          <tr><td>cmp-002/003/004</td><td>范围=全景；素材=O2xA5；精度=精确/半结构化/口语模糊；环节=批判认知；题型=多方对照；套件=基准；验证=检索；家族=cmp全景</td></tr>
+          <tr><td>rag-cmp-005</td><td>范围=全景；素材=A1xO1；精度=精确；环节=批判认知；题型=多方对照；套件=探针；验证=引用；家族=agent构建全景</td></tr>
+          <tr><td>rag-cmp-006</td><td>范围=切面；素材=O2xA5；精度=精确；环节=批判认知；题型=要点总结；套件=探针；验证=引用；家族=cmp局限切面</td></tr>
+          <tr><td>rag-cmp-007</td><td>范围=切面；素材=O2xA5；精度=精确；环节=结构化梳理；题型=区别对比；套件=探针；验证=引用；家族=cmp角色切面</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>检索类验证组结论（与 0026 C9 联动）</h2>
+      <ul>
+        <li>S2（库有未注入）只出现在跨文全景宽问法：现役检索验证组 = cmp-002/003/004（验证=检索）；</li>
+        <li>005（宽问法但换文章）与 006/007（窄切面）实测红因在引用——定位为综合 + 引用压力探针（验证=引用）；</li>
+        <li>转绿判据：检索信号 = 白盒充分性无 S2；生成信号 = 覆盖 repeat 多数（≥18/20）+ 引用红线通过。</li>
+      </ul>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-07 20:36 · 随用例体系演进维护
+    </footer>
+  </div>
+</body>
+</html>

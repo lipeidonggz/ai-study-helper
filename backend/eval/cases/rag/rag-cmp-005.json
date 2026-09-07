@@ -1,0 +1,135 @@
+{
+  "id": "rag-cmp-005",
+  "category": "rag",
+  "title": "同根因类探针 · 跨文档全景对比：A1《Building Effective Agents》× O1《A Practical Guide to Building Agents》",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "请对 Anthropic《Building Effective Agents》（2024-12）与 OpenAI《A Practical Guide to Building Agents》（2025-04）这两篇“如何构建 agent”的实践指南做全景式对比：两文各自的核心主张与代表性内容是什么？两者的异同与关系如何？请尽量覆盖两文各自有代表性的内容，并标注依据。"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "跨文档检索 A1 与 O1 两篇并给出主题覆盖型全景对比：两文各至少覆盖核心命题与代表性做法，观点来源分明、可溯源",
+    "criteria": [
+      "answer_correct",
+      "format_appropriate",
+      "citation_truth"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
+  "tags": [
+    "范围=全景",
+    "素材=A1xO1",
+    "精度=精确",
+    "环节=批判认知",
+    "题型=多方对照",
+    "套件=探针",
+    "验证=引用",
+    "家族=agent构建全景"
+  ],
+  "compare": false,
+  "notes": "跨文档宽问法探针（A1×O1）：query 自然全景、不点名章节防检索泄漏；红基线实测红因以引用红线为主（citation 19/20、answer_correct 8 pass/12 fail、format 全 pass）——定位为跨文综合 + 引用压力探针，不充当 S2 检索类判据。",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
+  "enabled": true,
+  "admin_note": "探针用例（综合 + 引用压力）：红基线 Run#135 显示红因非 S2；检索类验证组 = cmp-002/003/004（宽问法）+ 未来跨文宽问法。",
+  "updated_at": "2026-09-07T21:05:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：以下三条须同时满足（内容与解释以意思一致为准、表述不限；精确名称/出处须准确）——\n1. 内容正确（用户完整性导向）：回答须让用户对两文各自的理解完整、不误判。判官按 checklist_points 逐主题核对（每主题须有实质内容并附注入编号 [n] 溯源，纯罗列关键词不算）。核心主题全部覆盖；每侧扩展主题至少覆盖 2 个；未覆盖全部扩展主题时须履行遗漏透明（点名至少 1 个未展开的代表性内容层面的项）。\n2. 表达合适：结构化全景对比（分列两文各自内容 + 同/异或关系 + 明确收口），观点来源分明、不混淆；不得以资料不完整替代结论。\n3. 引用真实（条件触发，precision-only）：显式引用承诺（带 [n] 或点名文档）须来源真实、归属正确、内容吻合；漏引移交白盒记账不判 fail。",
+    "reference_answer": "",
+    "checklist_points": {
+      "core": [
+        {
+          "id": "a1-c1",
+          "text": "A1 核心命题：简单、可组合的模式 > 复杂框架；复杂度渐进（先简后繁）",
+          "probe": "覆盖须含两层——“最成功的实现用的是简单可组合模式而非复杂框架”的取向 + “先找最简单方案、只在需要时增加复杂度”的渐进原则；仅泛称“别堆框架 / 简单就好”而无这两层实质不算"
+        },
+        {
+          "id": "a1-c2",
+          "text": "A1 分类体系：增强型 LLM（工具/检索/记忆）+ workflow（prompt chaining / routing / parallelization / orchestrator-workers / evaluator-optimizer）与 agents（自主运行、可纠错）的分层",
+          "probe": "覆盖须含 workflows 与 agents 的分层/区别，或至少两个 workflow 模式的“结构 + 适用场景”；只罗列模式名词不算"
+        },
+        {
+          "id": "o1-c1",
+          "text": "O1 核心定义与三组件：agent 是代表用户独立执行工作流的系统；设计基础 = model / tools / instructions",
+          "probe": "覆盖须含“代表用户 / 高独立性执行”的定义 + 三组件（或等价“模型 / 工具 / 指令”设计基础论述）；缺任一不算"
+        },
+        {
+          "id": "o1-c2",
+          "text": "O1 复杂度演进主张：先单 agent 起步、渐进加工具，避免过早引入多 agent；编排从简单可预测开始",
+          "probe": "覆盖须含“单 agent → 加工具 → 必要时多 agent”的演进取向；只讲“多 agent 很强大”不算"
+        }
+      ],
+      "ext": [
+        {
+          "id": "a1-e1",
+          "text": "A1 模式机制细节：augmented LLM 或任一 workflow（或 agents 自主循环）的具体工作机制与适用场景",
+          "group": "A1",
+          "probe": "须给出至少一个模式的结构描述 + 何时用 / 何时不用的论述；仅提目录级名字不算"
+        },
+        {
+          "id": "a1-e2",
+          "text": "A1 框架立场：何时用 / 不用框架（简单可控、团队水平、可自定义性），不把框架当终点",
+          "group": "A1",
+          "probe": "覆盖须含对框架的取舍判断（用或不用都要有理由）；只说“建议少用框架”而无理由不算"
+        },
+        {
+          "id": "a1-e3",
+          "text": "A1 实践主张：评估优先于复杂度（先简单 prompt + 综合评估再演进）；附录展示客服与编程两类高潜力应用",
+          "group": "A1",
+          "probe": "覆盖须含“评估驱动 / 先测再增复杂度”的方法论，或点名一个附录应用（客服 / 编码 agent）并说明为何适合 agent"
+        },
+        {
+          "id": "o1-e1",
+          "text": "O1 编排与多 agent 形态：single-agent vs multi-agent 取舍；manager（agents as tools）与 decentralized handoffs",
+          "group": "O1",
+          "probe": "覆盖须含多 agent 两类形态之一（manager / handoffs）的机制论述，或单 / 多 agent 取舍理由"
+        },
+        {
+          "id": "o1-e2",
+          "text": "O1 护栏（guardrails）：动机（隐私 / 声誉风险、防系统提示词泄露）与类型（relevance classifier / tripwire 等）或构建启发（先定风险→聚焦→增量）",
+          "group": "O1",
+          "probe": "覆盖须含护栏动机 + 至少一种类型 / 启发；只写“要有护栏”不算"
+        },
+        {
+          "id": "o1-e3",
+          "text": "O1 实操指南特色：instructions 配置 / tool 定义 / 模型选择权衡（复杂度、延迟、成本）",
+          "group": "O1",
+          "probe": "任一条给出具体论述即可（如“指令降低歧义”“模型按任务复杂度选”“工具描述要清晰可测”）"
+        }
+      ],
+      "transparency": {
+        "id": "transparency",
+        "text": "条件强制：回答未覆盖全部扩展主题时必须主动承认还有未展开内容，并至少点名 1 个未展开项——点名对象须为本回答未覆盖的代表性内容层面的项（主题 / 机制 / 做法 / 理念等）；仅点名辅助性材料或表示“可继续深入”不算披露；扩展主题已全部覆盖时无此义务、不得编造遗漏"
+      }
+    },
+    "checklist_rule": {
+      "ext_min_per_group": 2,
+      "transparency": "conditional"
+    },
+    "boundary_claims": [],
+    "format_expected": "结构化全景对比：先分列两文各自的核心主张与代表性内容，再给同 / 异或关系判断并明确收口；观点来源分明、不混淆；可标注局限但不得以资料不完整替代结论",
+    "judge_shape": "checklist",
+    "note": "点表依据 A1（22 块）/ O1（21 块）真实章节起草：A1 侧命题/分类/框架/实践，O1 侧定义/演进/编排/护栏/实操；2026-09-07 草稿待人工复核。",
+    "annotated_at": "2026-09-07",
+    "annotated_by": "local"
+  },
+  "source_ref": {
+    "manifest_id": "A1 + O1",
+    "location": "全文对照"
+  },
+  "time": {
+    "knowledge_date": "2024-12-19 / 2025-04",
+    "created_at": "2026-09-07",
+    "decay_class": "slow"
+  }
+}

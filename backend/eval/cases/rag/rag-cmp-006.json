@@ -1,0 +1,89 @@
+{
+  "id": "rag-cmp-006",
+  "category": "rag",
+  "title": "同根因类探针 · 切面：O2 与 A5 各自承认的局限与未来方向",
+  "mode": "rag",
+  "input": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "OpenAI《Harness engineering》和 Anthropic《How we contain Claude》各自承认了哪些还没解决的问题或局限？对下一步 / 未来有什么展望？请分别整理并标注依据。"
+      }
+    ]
+  },
+  "expected": {
+    "behavior": "跨文档检索两篇并分别整理各自承认的局限/未解问题与未来展望，来源分明、可溯源",
+    "criteria": [
+      "answer_correct",
+      "format_appropriate",
+      "citation_truth"
+    ],
+    "tool_calls": [],
+    "answer_contains": [],
+    "max_rounds": 4
+  },
+  "timeout_sec": 60.0,
+  "hard_timeout_sec": 180.0,
+  "tags": [
+    "范围=切面",
+    "素材=O2xA5",
+    "精度=精确",
+    "环节=批判认知",
+    "题型=要点总结",
+    "套件=探针",
+    "验证=引用",
+    "家族=cmp局限切面"
+  ],
+  "compare": false,
+  "notes": "同文对窄问法切片（局限与展望）：直问切面可召回相关章节，红基线 Run#136 覆盖全绿（answer_correct 20/20 pass），红因全在引用（12/20）——定位为引用压力探针，不属于 S2 检索类。",
+  "weight": 1.0,
+  "must_pass": false,
+  "must_pass_threshold": 1.0,
+  "enabled": true,
+  "admin_note": "探针用例（引用压力）：Run#136 覆盖绿、引用红；不充当 S2 检索类判据。",
+  "updated_at": "2026-09-07T21:05:00",
+  "updated_by": "local",
+  "annotation": {
+    "golden_answer": "判 pass：回答须分别整理两文各自承认的局限 / 未解问题与未来展望，观点来源分明、可溯源。判官按 checklist_points 逐点核对（每点须实质内容并附注入编号溯源，纯罗列不算）；引用真实性红线条件触发（显式引用承诺须来源真实、归属正确、内容吻合）。",
+    "reference_answer": "",
+    "checklist_points": {
+      "core": [
+        {
+          "id": "o2-e4",
+          "text": "“还在学什么”（已知局限）",
+          "probe": "覆盖须含：文章作者自述的未解问题 / 仍在学习的内容 / 承认的局限，即被评文章自身的知识边界；模型回答中'资料缺失 / 未覆盖全文 / 片段不足'等取材自述不算文章内容；其他篇目的未来展望或行业呼吁不算本点"
+        },
+        {
+          "id": "a5-e2",
+          "text": "攻击面持续演进（Looking ahead）",
+          "probe": "覆盖须含：攻击面持续演进 / Looking ahead：未来风险或行业协同呼吁"
+        },
+        {
+          "id": "a5-e3",
+          "text": "具体翻车教训（missed risks：元教训如'最薄弱层是自己构建的那层 / custom proxy 在重大事故中出问题'，或具体事故如 trust dialog 之前 / 用户作为注入向量 / 批准域名外泄 / VM 隔离挡端点检测）",
+          "probe": "覆盖须含：A5 存在翻车教训的证据——元教训（最薄弱层是自己构建的那层、custom proxy 在重大事故中出问题等）或任一具体事故（trust dialog 之前、用户作为注入向量、白名单外泄、VM 隔离挡端点检测等）均可，给出一例即算 covered"
+        }
+      ],
+      "ext": []
+    },
+    "checklist_rule": {
+      "ext_min_per_group": 0,
+      "transparency": "none"
+    },
+    "boundary_claims": [],
+    "format_expected": "结构化：先分列两文各自承认的局限/未解问题与未来展望（来源分明），再给同/异或关系判断并明确收口；依据标注清晰；不得以资料不完整替代结论",
+    "judge_shape": "checklist",
+    "note": "切面探针（局限与展望）：core 复用 O2/A5 点表中对应主题的 probe；2026-09-07 草稿经沛东确认设计后落 JSON。",
+    "annotated_at": "2026-09-07",
+    "annotated_by": "local"
+  },
+  "source_ref": {
+    "manifest_id": "O2 + A5",
+    "location": "全文对照（切面：局限与展望）"
+  },
+  "time": {
+    "knowledge_date": "2026-05-25",
+    "created_at": "2026-09-07",
+    "decay_class": "fast"
+  }
+}

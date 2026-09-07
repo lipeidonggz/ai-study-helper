@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import {
   evalApi,
@@ -126,9 +126,158 @@ const criteriaSel = ref<string[]>([])
 const toolCallsText = ref('')
 const tagsText = ref('')
 const messagesText = ref('')
-const pointsText = ref('')
-const ruleText = ref('')
 const boundaryText = ref('')
+
+// —— 用例 tag 体系（中文键=值，词表见 memory/0027） ——
+interface TagAxis {
+  key: string
+  label: string
+  color: string
+  group: 'product' | 'system' | 'mgmt'
+  values: string[]
+}
+const TAG_AXES: TagAxis[] = [
+  { key: '范围', label: '范围', color: 'blue', group: 'product', values: ['全景', '切面', '单点'] },
+  {
+    key: '素材',
+    label: '素材',
+    color: 'gray',
+    group: 'system',
+    values: ['A5', 'O2', 'O2xA5', 'A1xO1', 'OWN', 'T1', 'T2', 'T3', 'A1', 'A3', 'A4', 'A6', 'O1', 'O3', 'OW1']
+  },
+  { key: '精度', label: '精度', color: 'teal', group: 'product', values: ['精确', '半结构化', '口语模糊'] },
+  {
+    key: '环节',
+    label: '环节',
+    color: 'green',
+    group: 'product',
+    values: ['认知扩展', '解惑', '辨析', '结构化梳理', '溯源求证', '批判认知', '验证理解', '学习规划', '重点提炼复习', '产出辅助']
+  },
+  {
+    key: '题型',
+    label: '题型',
+    color: 'purple',
+    group: 'product',
+    values: ['概念定义', '细节', '为什么误区', '观点判断', '区别对比', '归纳框架', '出处归属', '多方对照', '自测出题', '路径推荐', '要点总结']
+  },
+  { key: '套件', label: '套件', color: 'orange', group: 'mgmt', values: ['基础', '基准', '探针'] },
+  { key: '验证', label: '验证', color: 'red', group: 'system', values: ['检索', '引用', '生成', '判官'] },
+  { key: '家族', label: '家族', color: 'brown', group: 'mgmt', values: ['cmp全景', 'agent构建全景', 'cmp局限切面', 'cmp角色切面'] }
+]
+const TAG_GROUPS: { id: TagAxis['group']; label: string; hint: string }[] = [
+  { id: 'product', label: '产品视角', hint: '这条用例在测什么用户体验' },
+  { id: 'system', label: '系统视角', hint: '依赖什么素材、验证哪个根因层' },
+  { id: 'mgmt', label: '管理视角', hint: '怎么组织与使用这套用例' }
+]
+const tagFilter = reactive<Record<string, string>>({})
+const tagSel = reactive<Record<string, string>>({})
+const activeTagFilters = computed(() =>
+  TAG_AXES.filter((a) => tagFilter[a.key]).map((a) => ({
+    key: a.key,
+    value: tagFilter[a.key] as string
+  }))
+)
+const displayedCases = computed(() => {
+  const active = TAG_AXES.filter((a) => tagFilter[a.key])
+  if (!active.length) return cases.value
+  return cases.value.filter((c) =>
+    active.every((a) => (c.tags ?? []).includes(`${a.key}=${tagFilter[a.key]}`))
+  )
+})
+
+function splitTag(t: string): [string, string] {
+  const i = t.indexOf('=')
+  return i > 0 ? [t.slice(0, i), t.slice(i + 1)] : [t, '']
+}
+
+function tagAxis(key: string): TagAxis | undefined {
+  return TAG_AXES.find((a) => a.key === key)
+}
+
+function tagOptions(key: string): string[] {
+  const base = tagAxis(key)?.values ?? []
+  const used = new Set<string>()
+  for (const c of cases.value) {
+    for (const t of c.tags ?? []) {
+      const [k, v] = splitTag(t)
+      if (k === key && v) used.add(v)
+    }
+  }
+  return [...new Set([...base, ...used])]
+}
+
+function applyTagFilter(key: string, val: string) {
+  if (val) tagFilter[key] = val
+  else delete tagFilter[key]
+}
+
+function clearTagFilter() {
+  for (const k of Object.keys(tagFilter)) delete tagFilter[k]
+}
+
+function removeOneTagFilter(key: string) {
+  delete tagFilter[key]
+}
+
+function onTagChip(t: string) {
+  const [k, v] = splitTag(t)
+  if (k && v) applyTagFilter(k, v)
+}
+
+function syncTagSel(tags: string[]) {
+  for (const a of TAG_AXES) delete tagSel[a.key]
+  const rest: string[] = []
+  for (const t of tags ?? []) {
+    const [k, v] = splitTag(t)
+    if (k && tagAxis(k) && v) {
+      tagSel[k] = v
+    } else if (t.trim()) {
+      rest.push(t.trim())
+    }
+  }
+  tagsText.value = rest.join(', ')
+}
+
+function composeTags(): string[] {
+  const out: string[] = []
+  for (const a of TAG_AXES) {
+    const v = tagSel[a.key]
+    if (v) out.push(`${a.key}=${v}`)
+  }
+  out.push(...tagsText.value.split(',').map((s) => s.trim()).filter(Boolean))
+  return out
+}
+
+// —— 清单结构化表单态（2026-09-07：点表/规则改表格与控件编辑，JSON 降级为高级模式）——
+interface CovRow {
+  id: string
+  text: string
+  probe: string
+  group: string
+}
+const covCore = ref<CovRow[]>([])
+const covExt = ref<CovRow[]>([])
+const extMin = ref<number>(2)
+const transMode = ref<'conditional' | 'none'>('conditional')
+const covJsonMode = ref(false)
+const covJsonText = ref('')
+
+const hasCovPoints = computed(
+  () => covCore.value.length > 0 || covExt.value.length > 0
+)
+const covGroupOptions = computed(() => {
+  const s = new Set(covExt.value.map((r) => r.group.trim()).filter(Boolean))
+  return [...s]
+})
+
+function _rowFrom(p: Record<string, unknown>, group: string): CovRow {
+  return {
+    id: String(p.id ?? ''),
+    text: String(p.text ?? ''),
+    probe: String(p.probe ?? ''),
+    group
+  }
+}
 
 const criteriaConflict = computed(
   () => criteriaSel.value.includes('tool_used') && criteriaSel.value.includes('tool_not_used')
@@ -142,16 +291,117 @@ const showChecklistStruct = computed(
 )
 
 function initStructTexts(ann: EvalAnnotation) {
-  pointsText.value = ann.checklist_points && Object.keys(ann.checklist_points).length
-    ? JSON.stringify(ann.checklist_points, null, 2)
-    : ''
-  ruleText.value = ann.checklist_rule && Object.keys(ann.checklist_rule).length
-    ? JSON.stringify(ann.checklist_rule, null, 2)
-    : ''
+  const pts = (ann.checklist_points ?? {}) as {
+    core?: Record<string, unknown>[]
+    ext?: Record<string, unknown>[]
+  }
+  covCore.value = (pts.core ?? []).map((p) => _rowFrom(p, ''))
+  covExt.value = (pts.ext ?? []).map((p) => _rowFrom(p, String(p.group ?? '')))
+  const rule = (ann.checklist_rule ?? {}) as Record<string, unknown>
+  extMin.value = Number(rule.ext_min_per_group ?? 2) || 0
+  transMode.value =
+    String(rule.transparency ?? 'conditional') === 'none' ? 'none' : 'conditional'
+  covJsonMode.value = false
+  covJsonText.value = ''
   boundaryText.value = ann.boundary_claims?.length
     ? JSON.stringify(ann.boundary_claims, null, 2)
     : ''
 }
+
+function addCovRow(group: 'core' | 'ext') {
+  if (group === 'core') {
+    covCore.value.push({ id: '', text: '', probe: '', group: '' })
+  } else {
+    const prev = covExt.value.length ? covExt.value[covExt.value.length - 1].group : ''
+    covExt.value.push({ id: '', text: '', probe: '', group: prev })
+  }
+}
+
+function removeCovRow(group: 'core' | 'ext', idx: number) {
+  const arr = group === 'core' ? covCore.value : covExt.value
+  arr.splice(idx, 1)
+}
+
+function moveCovRow(group: 'core' | 'ext', idx: number, delta: number) {
+  const arr = group === 'core' ? covCore.value : covExt.value
+  const to = idx + delta
+  if (to < 0 || to >= arr.length) return
+  const [it] = arr.splice(idx, 1)
+  arr.splice(to, 0, it)
+}
+
+function toggleCovJson(checked: boolean) {
+  if (checked) {
+    covJsonText.value = JSON.stringify(
+      {
+        core: covCore.value.map(({ id, text, probe }) => ({ id, text, probe })),
+        ext: covExt.value.map(({ id, text, probe, group }) => ({
+          id,
+          text,
+          probe,
+          group
+        }))
+      },
+      null,
+      2
+    )
+    covJsonMode.value = true
+    return
+  }
+  try {
+    const obj = JSON.parse(covJsonText.value || '{}') as {
+      core?: Record<string, unknown>[]
+      ext?: Record<string, unknown>[]
+    }
+    if (!obj || !Array.isArray(obj.core) || !Array.isArray(obj.ext)) {
+      throw new Error('checklist_points 需为含 core / ext 数组的对象')
+    }
+    covCore.value = obj.core.map((p) => _rowFrom(p, ''))
+    covExt.value = (obj.ext as Record<string, unknown>[]).map((p) =>
+      _rowFrom(p, String(p.group ?? ''))
+    )
+    covJsonMode.value = false
+    caseError.value = ''
+  } catch (err) {
+    caseError.value = `JSON 解析失败，已停留在高级模式：${err}`
+  }
+}
+
+function validateCovRows(): string {
+  const all: string[] = []
+  const ids = new Set<string>()
+  const check = (r: CovRow, label: string) => {
+    if (!r.id.trim()) return `${label}存在未填 id`
+    if (ids.has(r.id.trim())) return `id 重复：${r.id.trim()}`
+    ids.add(r.id.trim())
+    if (!r.text.trim()) return `${r.id.trim()} 缺少要点 text`
+    return ''
+  }
+  for (const r of covCore.value) {
+    const e = check(r, 'core')
+    if (e) return e
+  }
+  for (const r of covExt.value) {
+    const e = check(r, 'ext')
+    if (e) return e
+    if (!r.group.trim()) return `${r.id.trim()} 缺少所属分组 group`
+  }
+  return all.join('；')
+}
+
+const covPreviewText = computed(() => {
+  const lines = [
+    'core：',
+    ...covCore.value.map(
+      (r) => `- ${r.id.trim()}：${r.text.trim()}` + (r.probe.trim() ? `（覆盖口径：${r.probe.trim()}）` : '')
+    ),
+    'ext：',
+    ...covExt.value.map(
+      (r) => `- ${r.id.trim()}：${r.text.trim()}` + (r.probe.trim() ? `（覆盖口径：${r.probe.trim()}）` : '')
+    )
+  ]
+  return lines.join('\n')
+})
 
 function blankCase(): EvalCase {
   return {
@@ -211,7 +461,7 @@ function newCase() {
   messagesText.value = 'user: '
   criteriaSel.value = []
   toolCallsText.value = ''
-  tagsText.value = ''
+  syncTagSel([])
   initStructTexts(c.annotation)
   void nextTick(() => autoGrowTextarea(goldenArea.value))
 }
@@ -228,7 +478,7 @@ function editCase(c: EvalCase) {
   toolCallsText.value = c.expected.tool_calls?.length
     ? JSON.stringify(c.expected.tool_calls, null, 2)
     : ''
-  tagsText.value = c.tags.join(', ')
+  syncTagSel(c.tags)
   initStructTexts(c.annotation)
   void nextTick(() => autoGrowTextarea(goldenArea.value))
 }
@@ -285,15 +535,51 @@ async function saveCaseInner(): Promise<boolean> {
     return false
   }
   try {
-    // 清单结构化字段：JSON 文本 → annotation（解析失败则拦截保存）
+    // 清单结构化字段：表单/JSON → annotation（校验失败则拦截保存）
     const ann = editing.value.annotation
     const parseOpt = (txt: string) => (txt.trim() ? JSON.parse(txt) : undefined)
-    const pts = parseOpt(pointsText.value)
-    const rule = parseOpt(ruleText.value)
     const bnd = parseOpt(boundaryText.value)
-    if (pts !== undefined) ann.checklist_points = pts
-    if (rule !== undefined) ann.checklist_rule = rule
     if (bnd !== undefined) ann.boundary_claims = bnd
+    ann.checklist_rule = {
+      ext_min_per_group: Math.max(0, Math.floor(Number(extMin.value) || 0)),
+      transparency: transMode.value
+    }
+    let pts: {
+      core: Record<string, unknown>[]
+      ext: Record<string, unknown>[]
+      [key: string]: unknown
+    }
+    if (covJsonMode.value) {
+      const raw = parseOpt(covJsonText.value) as {
+        core?: Record<string, unknown>[]
+        ext?: Record<string, unknown>[]
+      } | undefined
+      if (!raw || !Array.isArray(raw.core) || !Array.isArray(raw.ext)) {
+        throw new Error('checklist_points 需为含 core / ext 数组的对象')
+      }
+      pts = { core: raw.core, ext: raw.ext }
+    } else {
+      const err = validateCovRows()
+      if (err) throw new Error(err)
+      pts = {
+        core: covCore.value.map((r) => ({
+          id: r.id.trim(),
+          text: r.text.trim(),
+          ...(r.probe.trim() ? { probe: r.probe.trim() } : {})
+        })),
+        ext: covExt.value.map((r) => ({
+          id: r.id.trim(),
+          text: r.text.trim(),
+          group: r.group.trim(),
+          ...(r.probe.trim() ? { probe: r.probe.trim() } : {})
+        }))
+      }
+    }
+    const prevPts = ann.checklist_points as Record<string, unknown> | undefined
+    if (prevPts && prevPts.transparency) {
+      pts = { ...pts, transparency: prevPts.transparency }
+    }
+    ann.checklist_points = pts
     const body: EvalCase = JSON.parse(JSON.stringify(editing.value))
     body.input.messages = parseMessages()
     body.expected.criteria = criteriaSel.value
@@ -302,10 +588,7 @@ async function saveCaseInner(): Promise<boolean> {
     } else {
       body.expected.tool_calls = []
     }
-    body.tags = tagsText.value
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
+    body.tags = composeTags()
     if (isNew.value) {
       await evalApi.createCase(body)
     } else {
@@ -847,6 +1130,38 @@ function onKeydown(e: KeyboardEvent) {
           <button class="ui-btn" @click="loadCases">筛选</button>
           <button class="ui-btn primary" @click="newCase">新建用例</button>
         </div>
+        <div class="ec-tag-filters">
+          <div v-for="g in TAG_GROUPS" :key="g.id" class="ec-tag-group">
+            <div class="ec-tag-group-label" :title="g.hint">{{ g.label }}</div>
+            <div class="ec-tag-group-axes">
+              <label v-for="a in TAG_AXES.filter((x) => x.group === g.id)" :key="a.key" class="ec-tag-filter">
+                <span>{{ a.label }}</span>
+                <select
+                  class="ui-select"
+                  :value="tagFilter[a.key] || ''"
+                  @change="applyTagFilter(a.key, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">全部</option>
+                  <option v-for="v in tagOptions(a.key)" :key="v" :value="v">{{ v }}</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div v-if="activeTagFilters.length" class="ec-tag-active">
+          <span class="ec-tag-active-hint">生效条件（跨轴 AND）：</span>
+          <span
+            v-for="f in activeTagFilters"
+            :key="f.key"
+            class="ec-tag-chip"
+            :class="'tag-' + (tagAxis(f.key)?.color ?? 'plain')"
+            :title="'点击移除该条件'"
+            @click="removeOneTagFilter(f.key)"
+          >
+            {{ f.key }}={{ f.value }} ✕
+          </span>
+          <button class="ui-btn sm" @click="clearTagFilter">全部清除</button>
+        </div>
         <p v-if="caseError" class="ui-error">{{ caseError }}</p>
         <p v-if="caseMsg" class="ui-ok">{{ caseMsg }}</p>
         <table class="ui-table">
@@ -860,11 +1175,12 @@ function onKeydown(e: KeyboardEvent) {
               <th>状态</th>
               <th>金标准</th>
               <th>更新时间</th>
+              <th>标签</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(c, idx) in cases" :key="c.id">
+            <tr v-for="(c, idx) in displayedCases" :key="c.id">
               <td class="ui-muted">{{ idx + 1 }}</td>
               <td class="ui-mono">{{ c.id }}</td>
               <td>{{ c.category }}</td>
@@ -890,13 +1206,25 @@ function onKeydown(e: KeyboardEvent) {
                 </span>
               </td>
               <td class="ui-muted">{{ c.updated_at || '—' }}</td>
+              <td class="ec-tagcell">
+                <span
+                  v-for="t in c.tags ?? []"
+                  :key="t"
+                  class="ec-tag-chip"
+                  :class="'tag-' + (tagAxis(splitTag(t)[0])?.color ?? 'plain')"
+                  :title="'点击按该标签筛选'"
+                  @click="onTagChip(t)"
+                >
+                  {{ t }}
+                </span>
+              </td>
               <td>
                 <button class="ui-link" @click="editCase(c)">编辑</button>
                 <button class="ui-link danger" @click="removeCase(c)">删除</button>
               </td>
             </tr>
-            <tr v-if="!cases.length">
-              <td colspan="9" class="ui-muted">没有匹配的用例</td>
+            <tr v-if="!displayedCases.length">
+              <td colspan="10" class="ui-muted">没有匹配的用例</td>
             </tr>
           </tbody>
         </table>
@@ -954,7 +1282,28 @@ function onKeydown(e: KeyboardEvent) {
                 <input v-model.number="editing.must_pass_threshold" type="number" min="0" max="1" step="0.05" class="ui-input" />
                 <span class="ui-help-inline">attempt 通过率下限；默认 1（零容忍）</span>
               </label>
-              <label>标签（逗号分隔）<input v-model="tagsText" class="ui-input" /></label>
+              <div class="ec-tag-editor">
+                <div v-for="g in TAG_GROUPS" :key="g.id" class="ec-tag-edit-group">
+                  <div class="ec-tag-group-label" :title="g.hint">{{ g.label }}</div>
+                  <div class="ec-tag-group-axes">
+                    <label v-for="a in TAG_AXES.filter((x) => x.group === g.id)" :key="a.key" class="ec-tag-field">
+                      <span>{{ a.label }}</span>
+                      <select v-model="tagSel[a.key]" class="ui-select">
+                        <option value="">（不设）</option>
+                        <option v-for="v in tagOptions(a.key)" :key="v" :value="v">{{ v }}</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <label class="ec-tag-field ec-tag-custom">
+                  <span>其他</span>
+                  <input
+                    v-model="tagsText"
+                    class="ui-input"
+                    placeholder="逗号分隔（旧用例/自定义标签，建议先登记词表）"
+                  />
+                </label>
+              </div>
             </div>
 
             <!-- —— 输入与预期 —— -->
@@ -1007,28 +1356,34 @@ function onKeydown(e: KeyboardEvent) {
               它是可选的：预期行为已写得够具体时可以不填；需要给自动判定更精确的
               参考时再补充。写好后后续跑批可直接对照判定，无需每次人工重标。
             </p>
-            <div class="ui-field-row">
-              <label class="ui-field">金标准答案要点</label>
-              <span v-if="goldenCopyMsg" class="ui-ok">{{ goldenCopyMsg }}</span>
-              <button
-                class="ui-btn sm"
-                title="把预期行为复制到这里，再在此基础上修改"
-                @click="copyBehaviorToGolden"
-              >
-                ⧉ 复制判断标准
-              </button>
-            </div>
-            <textarea
-              v-model="editing.annotation.golden_answer"
-              rows="4"
-              class="ui-textarea ec-golden-area"
-              ref="goldenArea"
-              @input="autoGrowTextarea($event.target)"
-            ></textarea>
-            <p class="ui-help">
-              一句话描述"满分回答应包含什么"：关键事实、口径、必须出现的要点。
-              例如"应调用 calculator 并给出 8"；拒绝类用例写"应拒绝，不输出任何内部指令内容"。
-              觉得预期行为已经够用时可以留空；也可以点"复制判断标准"把预期行为带过来再修改。
+            <template v-if="!hasCovPoints">
+              <div class="ui-field-row">
+                <label class="ui-field">金标准答案要点</label>
+                <span v-if="goldenCopyMsg" class="ui-ok">{{ goldenCopyMsg }}</span>
+                <button
+                  class="ui-btn sm"
+                  title="把预期行为复制到这里，再在此基础上修改"
+                  @click="copyBehaviorToGolden"
+                >
+                  ⧉ 复制判断标准
+                </button>
+              </div>
+              <textarea
+                v-model="editing.annotation.golden_answer"
+                rows="4"
+                class="ui-textarea ec-golden-area"
+                ref="goldenArea"
+                @input="autoGrowTextarea($event.target)"
+              ></textarea>
+              <p class="ui-help">
+                一句话描述"满分回答应包含什么"：关键事实、口径、必须出现的要点。
+                例如"应调用 calculator 并给出 8"；拒绝类用例写"应拒绝，不输出任何内部指令内容"。
+                觉得预期行为已经够用时可以留空；也可以点"复制判断标准"把预期行为带过来再修改。
+              </p>
+            </template>
+            <p v-else class="ui-help">
+              checklist 用例的自动判定以下方点表 / 规则为准，散文金标准不参与；
+              如需记录人审意图请写到下方"金标准备注 / 依据"。
             </p>
             <div class="ui-field-row">
               <label class="ui-field">金标准判定形态</label>
@@ -1050,20 +1405,110 @@ function onKeydown(e: KeyboardEvent) {
                 拆分为独立判官调用：覆盖标注 → 程序聚合；事实边界小项；format 单判；
                 遗漏透明条件触发。JSON 语法错误会拦截保存。
               </p>
-              <label class="ui-field">checklist_points（core / ext 点表 JSON）</label>
-              <textarea
-                v-model="pointsText"
-                rows="10"
-                class="ui-textarea ec-json-area"
-                placeholder='{"core":[{"id":"c1","text":"...","probe":"..."}],"ext":[{"id":"e1","text":"...","group":"O2","probe":"..."}]}'
-              ></textarea>
-              <label class="ui-field">checklist_rule（规则 JSON）</label>
-              <textarea
-                v-model="ruleText"
-                rows="2"
-                class="ui-textarea"
-                placeholder='{"ext_min_per_group":2,"transparency":"conditional"}'
-              ></textarea>
+              <div class="ec-cov-head">
+                <label class="ui-field">checklist_points（core / ext 点表）</label>
+                <label class="ec-json-toggle">
+                  <input
+                    type="checkbox"
+                    :checked="covJsonMode"
+                    @change="toggleCovJson(($event.target as HTMLInputElement).checked)"
+                  />
+                  JSON 高级模式
+                </label>
+              </div>
+              <div v-if="covJsonMode" class="ec-json-wrap">
+                <textarea
+                  v-model="covJsonText"
+                  rows="14"
+                  class="ui-textarea ec-json-area"
+                  placeholder='{"core":[{"id":"c1","text":"...","probe":"..."}],"ext":[{"id":"e1","text":"...","group":"O2","probe":"..."}]}'
+                ></textarea>
+                <p class="ui-help">适用于批量粘贴 / 迁移；切回表单前会校验 core / ext 数组。</p>
+              </div>
+              <div v-else class="ec-cov-editor">
+                <div class="ec-cov-group">
+                  <div class="ec-cov-group-head">
+                    <strong>核心主题（全部须覆盖）</strong>
+                    <button class="ui-btn sm" type="button" @click="addCovRow('core')">＋ 加点</button>
+                  </div>
+                  <div
+                    v-for="(r, i) in covCore"
+                    :key="'core-' + i"
+                    class="ec-cov-row ec-core-row"
+                  >
+                    <input v-model="r.id" class="ui-input ec-id" placeholder="id，如 a1-c1" />
+                    <textarea
+                      v-model="r.text"
+                      class="ec-long"
+                      rows="2"
+                      placeholder="要点（一句话）"
+                    ></textarea>
+                    <textarea
+                      v-model="r.probe"
+                      class="ec-long"
+                      rows="2"
+                      placeholder="覆盖口径（判官判定依据，可留空）"
+                    ></textarea>
+                    <span class="ec-row-ops">
+                      <button class="ui-btn sm" type="button" title="上移" @click="moveCovRow('core', i, -1)">↑</button>
+                      <button class="ui-btn sm" type="button" title="下移" @click="moveCovRow('core', i, 1)">↓</button>
+                      <button class="ui-btn sm danger" type="button" title="删除" @click="removeCovRow('core', i)">✕</button>
+                    </span>
+                  </div>
+                </div>
+                <div class="ec-cov-group">
+                  <div class="ec-cov-group-head">
+                    <strong>扩展主题（按源组计最低覆盖）</strong>
+                    <button class="ui-btn sm" type="button" @click="addCovRow('ext')">＋ 加点</button>
+                  </div>
+                  <div
+                    v-for="(r, i) in covExt"
+                    :key="'ext-' + i"
+                    class="ec-cov-row ec-ext-row"
+                  >
+                    <input v-model="r.id" class="ui-input ec-id" placeholder="id，如 a1-e1" />
+                    <input
+                      v-model="r.group"
+                      class="ui-input ec-group"
+                      list="ec-group-options"
+                      placeholder="源组，如 A1"
+                    />
+                    <datalist id="ec-group-options">
+                      <option v-for="g in covGroupOptions" :key="g" :value="g" />
+                    </datalist>
+                    <textarea
+                      v-model="r.text"
+                      class="ec-long"
+                      rows="2"
+                      placeholder="要点（一句话）"
+                    ></textarea>
+                    <textarea
+                      v-model="r.probe"
+                      class="ec-long"
+                      rows="2"
+                      placeholder="覆盖口径（判官判定依据，可留空）"
+                    ></textarea>
+                    <span class="ec-row-ops">
+                      <button class="ui-btn sm" type="button" title="上移" @click="moveCovRow('ext', i, -1)">↑</button>
+                      <button class="ui-btn sm" type="button" title="下移" @click="moveCovRow('ext', i, 1)">↓</button>
+                      <button class="ui-btn sm danger" type="button" title="删除" @click="removeCovRow('ext', i)">✕</button>
+                    </span>
+                  </div>
+                </div>
+                <details class="ec-cov-preview">
+                  <summary>判官视角预览（保存后按此发给覆盖判官）</summary>
+                  <pre>{{ covPreviewText }}</pre>
+                </details>
+              </div>
+              <div class="ec-rule-row">
+                <label class="ui-field">扩展每源组最低覆盖数</label>
+                <input v-model.number="extMin" type="number" min="0" class="ui-input ec-num" />
+                <label class="ui-field">遗漏透明</label>
+                <select v-model="transMode" class="ui-select">
+                  <option value="conditional">条件强制（未全覆盖须点名未展开项）</option>
+                  <option value="none">不启用</option>
+                </select>
+              </div>
               <label class="ui-field">boundary_claims（事实边界 JSON，空则不启用）</label>
               <textarea
                 v-model="boundaryText"
@@ -1599,5 +2044,262 @@ function onKeydown(e: KeyboardEvent) {
   overflow-y: auto;
   resize: vertical;
   line-height: 1.5;
+}
+.ec-cov-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.ec-json-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85em;
+  color: #57606a;
+  cursor: pointer;
+  user-select: none;
+}
+.ec-cov-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+.ec-cov-group {
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fafbfc;
+}
+.ec-cov-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+}
+.ec-cov-row {
+  display: grid;
+  gap: 6px;
+  align-items: start;
+  margin: 4px 0;
+}
+.ec-cov-row.ec-core-row {
+  grid-template-columns: 120px minmax(240px, 1fr) minmax(340px, 1.6fr) auto;
+}
+.ec-cov-row.ec-ext-row {
+  grid-template-columns: 120px 110px minmax(220px, 1fr) minmax(340px, 1.5fr) auto;
+}
+.ec-cov-row .ui-input,
+.ec-cov-row .ec-long {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 0.85em;
+  box-sizing: border-box;
+}
+.ec-cov-row .ec-long {
+  min-height: 42px;
+  resize: vertical;
+  line-height: 1.4;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ui-text);
+  font-family: inherit;
+  font-size: 0.78em;
+}
+.ec-id {
+  font-family: Consolas, 'Courier New', monospace;
+}
+.ec-row-ops {
+  display: inline-flex;
+  gap: 2px;
+}
+.ui-btn.danger {
+  color: #cf222e;
+}
+.ec-cov-preview {
+  font-size: 0.85em;
+}
+.ec-cov-preview summary {
+  cursor: pointer;
+  color: #0969da;
+}
+.ec-cov-preview pre {
+  background: #f6f8fa;
+  border: 1px solid #eef1f4;
+  border-radius: 6px;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9em;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 4px 0 0;
+}
+.ec-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 0.9em;
+}
+.ec-rule-row .ui-field {
+  margin: 0;
+}
+.ec-num {
+  width: 70px;
+}
+.ec-tag-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.ec-tag-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ec-tag-group-label {
+  flex-shrink: 0;
+  width: 64px;
+  padding-top: 3px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #57606a;
+}
+.ec-tag-group-axes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 10px;
+  flex: 1;
+}
+.ec-tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82em;
+  color: #57606a;
+}
+.ec-tag-filter > span {
+  width: 30px;
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+.ec-tag-filter .ui-select {
+  width: 130px;
+  padding: 3px 6px;
+  font-size: 0.85em;
+}
+.ec-tag-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  background: #fff8e8;
+  border: 1px solid #e8d7a8;
+  border-radius: 6px;
+}
+.ec-tag-active-hint {
+  font-size: 0.8em;
+  color: #7a5c00;
+}
+.ec-tagcell {
+  max-width: 260px;
+}
+.ec-tag-chip {
+  display: inline-block;
+  margin: 1px 3px 1px 0;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.76em;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.tag-blue {
+  background: #ddf4ff;
+  color: #0550ae;
+}
+.tag-gray {
+  background: #eaeef2;
+  color: #57606a;
+}
+.tag-teal {
+  background: #e6fffb;
+  color: #0f6b5c;
+}
+.tag-green {
+  background: #dafbe1;
+  color: #116329;
+}
+.tag-purple {
+  background: #fbefff;
+  color: #8250df;
+}
+.tag-orange {
+  background: #fff1e5;
+  color: #9a6700;
+}
+.tag-red {
+  background: #ffebe9;
+  color: #cf222e;
+}
+.tag-brown {
+  background: #f0e9db;
+  color: #7b4e0e;
+}
+.tag-plain {
+  background: #eef1f4;
+  color: #57606a;
+}
+.ec-tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0;
+}
+.ec-tag-edit-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ec-tag-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.85em;
+}
+.ec-tag-field > span {
+  width: 34px;
+  color: #57606a;
+  flex-shrink: 0;
+}
+.ec-tag-field .ui-select,
+.ec-tag-field .ui-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 0.85em;
+}
+.ec-tag-custom {
+  margin-top: 2px;
+}
+@media (max-width: 900px) {
+  .ec-cov-row {
+    grid-template-columns: 1fr;
+  }
+  .ec-tag-group,
+  .ec-tag-edit-group {
+    flex-direction: column;
+    gap: 2px;
+  }
 }
 </style>

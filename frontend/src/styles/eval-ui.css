@@ -487,7 +487,7 @@
   border-radius: var(--ui-radius-lg);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
   width: 100%;
-  max-width: 780px;
+  max-width: 1180px;
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
