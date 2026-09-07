@@ -767,6 +767,23 @@ function covGroupList(
   }))
 }
 
+// 覆盖点悬浮提示：id → 点要点 + 覆盖口径（来源：跑批行附带的 checklist_points）
+function covPointTip(
+  row: EvalRunCase,
+  pid: string,
+  meta?: { text?: string; probe?: string }
+): string {
+  const pts = row.checklist_points
+  const list = [...(pts?.core ?? []), ...(pts?.ext ?? [])]
+  const p = list.find((x) => x.id === pid)
+  const text = meta?.text ?? p?.text ?? ''
+  const probe = meta?.probe ?? p?.probe ?? ''
+  let tip = pid
+  if (text) tip += `：${text}`
+  if (probe) tip += `\n覆盖口径：${probe}`
+  return tip
+}
+
 function covBadgeClass(v: string | undefined): string {
   if (v === 'covered' || v === 'pass') return 'ok'
   if (v === 'not_covered' || v === 'fail') return 'error'
@@ -778,6 +795,36 @@ function covStatusLabel(att: EvalRunAttempt, group: 'core' | 'ext'): string {
   const list = covGroupList(att, group)
   const ok = list.filter((p) => p.v === 'covered').length
   return `${ok}/${list.length}`
+}
+
+// 遗漏透明判官返回 → 人读表格行（字段名用易懂字样，值统一格式化）
+function transparencyRows(
+  att: EvalRunAttempt
+): { label: string; value: string; badge?: string }[] {
+  const tp = att.coverage_points?.transparency
+  if (!tp) return []
+  const rows: { label: string; value: string; badge?: string }[] = [
+    { label: '判定结论', value: tp.v || '—', badge: covBadgeClass(tp.v) }
+  ]
+  if (tp.evidence) {
+    rows.push({ label: '判官引用原句', value: tp.evidence })
+  }
+  rows.push({
+    label: '是否承认未覆盖',
+    value: tp.declared === undefined ? '—' : tp.declared ? '是' : '否'
+  })
+  rows.push({
+    label: '点名内容',
+    value: (tp.named_items ?? []).join(' / ') || '无'
+  })
+  rows.push({
+    label: '命中清单项',
+    value: (tp.matched_uncovered ?? []).join('、') || '无'
+  })
+  if (tp.gate_note) {
+    rows.push({ label: '程序闸门提示', value: tp.gate_note })
+  }
+  return rows
 }
 
 function covMatrixRows(
@@ -1182,7 +1229,7 @@ onUnmounted(stopPolling)
                           <table class="rd-cov-matrix">
                             <thead>
                               <tr>
-                                <th class="ui-mono">点</th>
+                                <th class="ui-mono" title="悬浮点编号可查看该点要点与覆盖口径">点</th>
                                 <th
                                   v-for="(a, ai) in row.repeat_results"
                                   :key="ai"
@@ -1200,6 +1247,7 @@ onUnmounted(stopPolling)
                                 <td
                                   class="ui-mono rd-cov-matrix-pid"
                                   :class="{ 'is-ext': mr.group === 'ext' }"
+                                  :title="covPointTip(row, mr.id)"
                                 >
                                   {{ mr.id }}
                                 </td>
@@ -1310,7 +1358,17 @@ onUnmounted(stopPolling)
                                       详情
                                     </button>
                                   </td>
-                                  <td class="ui-mono rd-cov-matrix-pid">
+                                  <td
+                                    class="ui-mono rd-cov-matrix-pid"
+                                    :title="
+                                      covPointTip(
+                                        row,
+                                        pid,
+                                        covRejOf(row, row.case_id)!
+                                          .points_meta?.[pid]
+                                      )
+                                    "
+                                  >
                                     {{ pid }}
                                   </td>
                                   <td
@@ -1419,7 +1477,10 @@ onUnmounted(stopPolling)
                                   ]"
                                   :key="p.id"
                                 >
-                                  <td class="ui-mono rd-cov-pid">
+                                  <td
+                                    class="ui-mono rd-cov-pid"
+                                    :title="covPointTip(row, p.id)"
+                                  >
                                     {{ p.id }}
                                   </td>
                                   <td class="rd-cov-v">
@@ -1435,43 +1496,30 @@ onUnmounted(stopPolling)
                               </tbody>
                             </table>
                             <div
-                              v-if="item.att.coverage_points?.transparency"
+                              v-if="transparencyRows(item.att).length"
                               class="rd-cov-tr"
                             >
-                              遗漏透明：
-                              <span
-                                class="ui-badge"
-                                :class="
-                                  covBadgeClass(
-                                    item.att.coverage_points.transparency.v
-                                  )
-                                "
-                              >
-                                {{ item.att.coverage_points.transparency.v }}
-                              </span>
-                              <template
-                                v-if="item.att.coverage_points.transparency.evidence"
-                              >
-                                — {{ item.att.coverage_points.transparency.evidence }}
-                              </template>
-                              <template
-                                v-if="
-                                  (
-                                    item.att.coverage_points.transparency
-                                      .named_items ?? []
-                                  ).length
-                                "
-                              >
-                                （点名：
-                                {{
-                                  (
-                                    item.att.coverage_points.transparency
-                                      .named_items ?? []
-                                  ).join(
-                                    ' / '
-                                  )
-                                }}）
-                              </template>
+                              <div class="rd-tr-title">遗漏透明</div>
+                              <table class="rd-tr-table">
+                                <tbody>
+                                  <tr
+                                    v-for="(r, ri) in transparencyRows(item.att)"
+                                    :key="ri"
+                                  >
+                                    <th>{{ r.label }}</th>
+                                    <td>
+                                      <span
+                                        v-if="r.badge"
+                                        class="ui-badge"
+                                        :class="r.badge"
+                                      >
+                                        {{ r.value }}
+                                      </span>
+                                      <template v-else>{{ r.value }}</template>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                             </div>
                             <div
                               v-if="
@@ -2600,6 +2648,36 @@ onUnmounted(stopPolling)
 .rd-cov-boundary {
   font-size: 0.85em;
   margin-top: 4px;
+}
+.rd-tr-title {
+  font-weight: 600;
+  color: #57606a;
+  margin: 4px 0 2px;
+}
+.rd-tr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84em;
+}
+.rd-tr-table th,
+.rd-tr-table td {
+  border: 1px solid #e2e5e9;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.rd-tr-table th {
+  width: 132px;
+  white-space: nowrap;
+  background: #f6f8fa;
+  color: #57606a;
+  font-weight: 600;
+}
+.rd-tr-table td {
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
 }
 .rd-cov-boundary {
   color: #cf222e;

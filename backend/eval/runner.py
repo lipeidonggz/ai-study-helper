@@ -255,9 +255,10 @@ _JUDGE_FORMAT_MODULE = (
 )
 
 _JUDGE_TRANSPARENCY_SYSTEM = (
-    "[1] 输出纪律：只输出一个 JSON 对象，不要输出任何其他内容；evidence 必须引用模型输出原句。\n"
-    "[2] 本调用只判'遗漏透明'义务履行，不判内容覆盖 / 表达 / 引用真实性。\n"
-    "[3] 无法判断时标 equivocal 并说明缺什么。"
+    "[1] 本判官只做一项检查：模型回答是否履行'遗漏透明'义务——当扩展主题未全部覆盖时，"
+    "回答是否明确披露仍有未覆盖内容，并点名至少 1 个代表性未覆盖主题。\n"
+    "[2] 覆盖情况已由程序核算并以清单给出，不要重新评价覆盖范围本身。\n"
+    "[3] 只输出一个 JSON 对象（结构见用户消息），不要输出任何其他内容。"
 )
 
 
@@ -979,26 +980,45 @@ def _build_boundary_prompt(case: CaseFile, output: str) -> str:
 
 def _build_transparency_prompt(uncovered: list[dict], output: str) -> str:
     lines = "\n".join(f"- {p['id']}：{p['text']}" for p in uncovered)
-    return f"""判断模型输出是否履行遗漏透明义务（扩展主题未全部覆盖时才触发本调用）。
+    return f"""【任务】
+判断模型回答是否履行"遗漏透明"义务。
 
-【程序已核算：本回答未覆盖的扩展主题】
+背景：以下清单中的扩展主题，本回答均未覆盖。为了让用户知道回答并不完整，
+模型应当明确承认存在未覆盖内容，并点名至少 1 个代表性未覆盖主题。
+本调用只做这一项判断。
+
+【未覆盖主题清单】（程序核算，供点名核对用；判官不得增删改动）
 {lines}
 
-【标注口径】
-- covered：回答明确承认还有未展开内容，且至少点名 1 个未展开项；点名对象必须是
-  上述未覆盖列表中的代表性内容层面的项（主题 / 机制 / 做法 / 理念等）。
-- 仅点名辅助性材料（致谢、相关链接等）、点名已覆盖项、或只说"可继续深入"
-  而无具体点名 → not_covered。
-
-【模型输出】
+【模型回答】
 {output}
 
-只输出一个 JSON 对象（不要其他内容）：
+【判定规则】
+- covered（履行）：回答明确承认仍有未覆盖内容（不是"如需展开可继续"类客套），
+  并点名至少 1 个清单中的未覆盖主题；点名的呈现可以是标题或对主题的实质描述
+  （仅重复清单编号、不带标题或实质内容，不算有效点名）；对应关系在 matched_uncovered 中给出。
+- not_covered（未履行），满足任一即判：
+  a) 没有明确承认存在未覆盖内容（包括只有"可继续深入 / 如需展开"类客套）；
+  b) 点名内容无法对应到清单中的任何未覆盖主题。
+- equivocal：以上均无法确定时使用，并在 evidence 中说明缺什么。
+
+【输出要求】
+只输出一个 JSON 对象，不要任何其他文字。字段含义：
+- v：covered / not_covered / equivocal（判定规则见上）；
+- evidence：从【模型回答】逐字引用的原句，作为判定依据；
+- declared：回答是否明确承认存在未覆盖内容（true / false）；
+- named_items：回答中点名出来的未覆盖内容原句；没有则 []；
+- matched_uncovered：named_items 对应的清单项，格式为"id：标题"；没有则 []。
+
+一致性要求：v 与其余字段必须自洽——named_items 为空、或全部无法对应到清单项时，
+不得判 covered；matched_uncovered 必须由 named_items 支撑
+（不允许出现没有点名依据的整单回显）。
+
 {{"v": "covered|not_covered|equivocal",
-  "evidence": "引用输出原句",
+  "evidence": "引用模型回答原句",
   "declared": true|false,
-  "named_items": ["点名内容原文（无则 []）"],
-  "matched_uncovered": ["命中的未覆盖点 id 或 text（无则 []）"]}}
+  "named_items": ["点名内容原句，无则 []"],
+  "matched_uncovered": ["id：标题，无则 []"]}}
 """
 
 
@@ -1263,6 +1283,22 @@ async def _checklist_split_judge(
                 }
             except Exception as exc:  # noqa: BLE001
                 tr = {"v": "equivocal", "evidence": f"遗漏透明判官调用失败：{exc}"}
+    # 确定性闸门（2026-09-07）：判官判 covered 必须有点名与命中支撑，否则降级 not_covered。
+    # 防两类放水——"泛化披露"（named/matched 为空）与"整单回显"（matched 无点名依据）；
+    # 仅在判官确实返回过 v2 结构（含 named_items/matched_uncovered 键）时生效，
+    # 自动满足（扩展全覆盖）与调用失败（equivocal）不经过此闸门。
+    if (
+        tr.get("v") == "covered"
+        and "named_items" in tr
+        and "matched_uncovered" in tr
+        and not ((tr.get("named_items") or []) and (tr.get("matched_uncovered") or []))
+    ):
+        tr = dict(tr)
+        tr["v"] = "not_covered"
+        tr["gate_note"] = (
+            "程序校验拦截：判官 covered 但 named_items / matched_uncovered 为空，"
+            "按口径降级 not_covered"
+        )
     content["transparency"] = tr
 
     # —— 聚合覆盖 + transparency ——

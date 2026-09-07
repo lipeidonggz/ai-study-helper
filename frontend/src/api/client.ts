@@ -260,6 +260,7 @@ export interface CoveragePointVerdict {
   declared?: boolean
   named_items?: string[]
   matched_uncovered?: string[]
+  gate_note?: string
 }
 
 export interface CoverageBoundary {
