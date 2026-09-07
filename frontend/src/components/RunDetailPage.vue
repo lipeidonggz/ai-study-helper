@@ -462,6 +462,17 @@ function diagStateLabel(v: unknown): string {
   return s || '—'
 }
 
+function diagBlockedStateLabel(v: unknown): string {
+  const map: Record<string, string> = {
+    S1: '注入已覆盖（料够，锅在模型侧）',
+    S2: '库有未注入（锅在检索/注入）',
+    S3: '库无（语料缺口或期望过高，人审）',
+    S2_S3_UNKNOWN: '无法区分（无全库检索器，人审）'
+  }
+  const s = String(v ?? '')
+  return map[s] ?? s
+}
+
 function diagLines(raw: unknown): string[] {
   const d = diagObj(raw)
   if (!Object.keys(d).length) return []
@@ -474,9 +485,10 @@ function diagLines(raw: unknown): string[] {
   const fb = d.sufficiency_first_blocked
   if (fb && typeof fb === 'object') {
     const f = fb as Record<string, unknown>
+    const st = String(f.state ?? '?')
     lines.push(
-      `首个卡点：${String(f.point_id ?? '?')} → ${String(f.state ?? '?')}` +
-        (f.note ? `（${String(f.note)}）` : '')
+      `首个卡点：${String(f.point_id ?? '?')} → 状态 ${st}（${diagBlockedStateLabel(st)}）` +
+        (f.note ? `｜说明：${String(f.note)}` : '')
     )
   }
   const notes = d.citation_internal_notes
