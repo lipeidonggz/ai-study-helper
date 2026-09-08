@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>检索存储结构 v0.5 · reify 通用定律（边/谓词/标签 升节点）</title>
+  <style>
+    body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f6f7f9; color: #24292f; margin: 0; padding: 28px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: #57606a; font-size: 13px; margin-bottom: 20px; }
+    .wrap { max-width: 1280px; margin: 0 auto; }
+
+    .law { background: #fff; border: 2px solid #6b9aff; border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; }
+    .law h3 { margin: 0 0 6px; font-size: 14.5px; color: #0969da; }
+    .law p { margin: 0 0 6px; font-size: 12.8px; line-height: 1.7; }
+    .law .trig { display: flex; gap: 8px; flex-wrap: wrap; }
+    .law .t { background: #eef4ff; border: 1px solid #6b9aff; border-radius: 8px; padding: 6px 10px; font-size: 12px; flex: 1; min-width: 180px; }
+    .law .t b { color: #0969da; }
+
+    .kind { display: flex; gap: 12px; margin-bottom: 22px; }
+    .k { flex: 1; border-radius: 10px; padding: 12px 14px; border: 2px solid; }
+    .k h3 { margin: 0 0 4px; font-size: 14.5px; }
+    .k p { margin: 0; font-size: 12px; color: #444; line-height: 1.5; }
+    .k-con { background: #eef4ff; border-color: #6b9aff; }
+    .k-doc { background: #e9f7ec; border-color: #4bb35c; }
+    .k-term { background: #fff6e6; border-color: #e8a33d; }
+    .k-prop { background: #fdf1f2; border-color: #d9777f; font-style: italic; }
+
+    .two { display: flex; gap: 14px; align-items: stretch; margin-bottom: 22px; }
+    .panel { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 12px 14px; }
+    .panel h4 { margin: 0 0 8px; font-size: 13px; border-bottom: 1px dashed #d0d7de; padding-bottom: 6px; }
+    .l { flex: 1.5; }
+    .r { flex: 1; }
+
+    .node { border-radius: 8px; padding: 8px 10px; font-size: 12.3px; line-height: 1.5; margin-bottom: 8px; }
+    .concept { background: #e7f0ff; border: 1.5px solid #6b9aff; }
+    .document { background: #e9f7ec; border: 1.5px solid #4bb35c; }
+    .term { background: #fff3da; border: 1.5px solid #e8a33d; }
+    .node small { color: #57606a; }
+    .edge { margin: 2px 0 8px 12px; font-size: 11.3px; color: #444; background: #f3f4f6; border-left: 3px solid #bbb; padding: 5px 8px; border-radius: 0 6px 6px 0; }
+    .edge b { color: #0969da; }
+    .edge .p { color: #9a6700; }
+    .lbl { font-size: 10.8px; color: #57606a; background: #f6f8fa; border-radius: 4px; padding: 0 4px; }
+    .reflect { background: #fbeef0; border: 1.5px dashed #d9777f; border-radius: 8px; padding: 7px 10px; font-size: 11.5px; margin: 6px 0; }
+    .nested { margin-left: 18px; border-left: 2px solid #b5d8bd; padding-left: 12px; }
+
+    .corr { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+    .corr th, .corr td { border: 1px solid #d8dee4; padding: 5px 8px; text-align: left; }
+    .corr th { background: #f6f8fa; }
+
+    .flow { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 12px 14px; margin-bottom: 22px; }
+    .flow .steps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+    .fstep { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 7px 10px; text-align: center; flex: 1; min-width: 105px; }
+    .fstep b { display: block; font-size: 12.5px; margin-bottom: 2px; }
+    .fstep span { font-size: 11px; color: #57606a; }
+    .arrow { color: #0969da; font-size: 18px; }
+    .anchor { display: inline-block; background: #fbe9e7; border: 1px dashed #c97; border-radius: 5px; padding: 1px 6px; font-size: 11px; }
+
+    .legend { font-size: 12px; color: #444; line-height: 1.9; }
+    .footer { color: #8c959f; font-size: 11.5px; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>检索存储结构 v0.5：reify 通用定律（2026-09-08 15:53）</h1>
+    <p class="sub">对象默认呆在"它在的地方"；仅当需被单独寻址 / 被整体引用时才对象化（reify）——边、谓词、标签三个起点，同一条定律</p>
+
+    <div class="law">
+      <h3>reify 通用定律</h3>
+      <p><b>对象默认呆在节点的位置或边的位置（或谓词/标签的位置），仅当需要被单独寻址、被作为整体引用时才对象化（reify）成可命中节点。</b> 触发 = "查询需求决定本体"。</p>
+      <div class="trig">
+        <div class="t"><b>能独立提问？</b><br>用户会单独问"X 是什么/放哪层" → 升节点</div>
+        <div class="t"><b>需挂属性？</b><br>如时态、来源、可信度要有地方放 → 升节点</div>
+        <div class="t"><b>需被图遍历/命中？</b><br>作检索路由入口 → 升节点</div>
+      </div>
+      <p style="margin-top:8px;">三个起点：<b>命题</b>从【边】升、<b>维度/可比面</b>从【谓词】升、<b>术语</b>从【标签】升——同一模式，三个起点。</p>
+    </div>
+
+    <div class="kind">
+      <div class="k k-con"><h3>概念 concept</h3><p>稳定实体，canonical 名；结构层 subClassOf / partOf / involves / precedes；聚合同名命题。</p></div>
+      <div class="k k-doc"><h3>文档 document</h3><p>信息内容实体，rdf:type=document；带元数据；只走 cites / partOf / asserts，不进语义层。</p></div>
+      <div class="k k-term"><h3>术语 term</h3><p>denotes 概念，带时态与来源；默认是标签（skos:altLabel），需挂时态/来源或作入口时才升实体；同义用 sameAs。</p></div>
+      <div class="k k-prop"><h3>命题 = 三元组（边）</h3><p>非实体。主体—谓词—客体一条有向边；仅在需被引用审计/作论证端点/挂出处时 reify 成 proposition 节点。</p></div>
+    </div>
+
+    <div class="two">
+      <div class="panel l">
+        <h4>三层结构（谓词 vs 边 vs 标签）</h4>
+        <div class="node concept"><b>概念：harness（canonical）</b>
+          <div class="nested edge"><b>结构层</b>：harness ⊇ linter / 结构测试 / 仓库知识 / CI 闸门 / 评审自动化 <span class="lbl">partOf</span><br>harness → blast radius 前置 <span class="lbl">precedes</span>
+          <div class="reflect" style="margin-top:6px;"><b>标签（命名）</b>：rdfs:label "harness" ／ skos:altLabel "scaffolding"（早期）→ 需时态/来源时升 term 实体 <span class="lbl">term</span></div>
+          </div>
+        </div>
+        <div class="node concept"><b>概念：containment（canonical）</b>
+          <div class="nested edge"><b>谓词（维度）</b>：concept <span class="p">防线层级置于</span> 取值<br>
+          <span class="p">维度必然是谓词；"被几个概念引用"是自然事实（本例仅 containment 用），不是建模分档。唯一分界 = 是否 reify 成轴实体节点（独立提问/挂属性/被遍历时）</span></div>
+        </div>
+        <div class="edge"><b>边（谓词的一次实例化）</b>：(containment) —防线层级置于→ (组织层) <span class="lbl">source=O2</span>　；　(containment) —防线层级置于→ (环境层) <span class="lbl">source=A5</span></div>
+        <div class="reflect"><b>reify 示例（边 → 命题节点）</b><br>
+          S1 = "containment 防线层级置于 组织层"（source O2）　S2 = "containment 防线层级置于 环境层"（source A5）<br>
+          → S1 <b>complement</b> S2（维度已并入谓词，无需再标）；S2 <b>support</b> ← "爆炸半径随能力扩张而增长"（也 reify）</div>
+        <div class="node document"><b>文档：O2 / A5（document 实体）</b> <small>只走 cites / partOf / asserts，不在互补/分歧里</small></div>
+      </div>
+
+      <div class="panel r">
+        <h4>我们的叫法 ↔ KG 术语</h4>
+        <table class="corr">
+          <tr><th>我们之前</th><th>KG 标准</th></tr>
+          <tr><td>概念页</td><td>concept 实体 + 实体页聚合</td></tr>
+          <tr><td>声明 / 立场</td><td>可 reify 三元组 → reified statement / proposition + provenance</td></tr>
+          <tr><td>可比面 / facet</td><td>谓词（私有=引用范围）；可独立提问时升轴实体/对象属性</td></tr>
+          <tr><td>从属 / 包含 / 实现</td><td>subClassOf / partOf / involves</td></tr>
+          <tr><td>互补 / 分歧 / 支持</td><td>complement / attack / support（论证框架）</td></tr>
+          <tr><td>归属边</td><td>grounding / provenance / mention 边</td></tr>
+          <tr><td>容器 / 分片</td><td>document / chunk（语义容器 = 纠正 chunk 语义边界）</td></tr>
+        </table>
+        <h4 style="margin-top:12px;">命题 reify 四触发</h4>
+        <div class="edge">① 加 provenance　② 加时态/可信度/主张主体　③ 作 support/attack 端点　④ 被引用审计</div>
+        <h4 style="margin-top:12px;">三个自研增量</h4>
+        <div class="edge">① 检索路由入口：哪些概念/命题提升为可命中入口</div>
+        <div class="edge">② 维度/可比面组织：facet 作比较轴排布——多方对照难点是"在哪个轴上可比"，先命中轴再沿轴取各源立场（cmp-002：防线层级轴 → 组织层/环境层）</div>
+        <div class="edge">③ 出处链与引用锚对接：声明→容器片段 ↔ 判官引用锚（连续块组），三粒度对齐</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <h4 style="margin:0 0 8px;">取用链路（不变）</h4>
+      <div class="steps">
+        <div class="fstep"><b>宽问题</b><span>"两文围堵防线各放哪层？"</span></div>
+        <div class="arrow">→</div>
+        <div class="fstep"><b>命中概念+轴</b><span>containment @ 防线层级</span></div>
+        <div class="arrow">→</div>
+        <div class="fstep"><b>沿 ground 落点</b><span>{O2-§2:c3–c4, A5-§1:c1}</span></div>
+        <div class="arrow">→</div>
+        <div class="fstep"><b>连续片段注入</b><span>跨 block 边界拼接</span></div>
+        <div class="arrow">→</div>
+        <div class="fstep"><b>引用锚+审计</b><span><span class="anchor">[O2-§2:c3–c4]</span> 声明组并集</span></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <b>v0.5 修正</b>：① 维度 = <b>谓词</b>（OWL 里即 object/data property，同一物）；"私有/共享"只是被几个概念引用的自然事实，<b>不是建模分档</b>；<br>
+      ② "升级为独立轴"唯一分界 = 是否 <b>reify</b>（独立提问/挂属性/被遍历时）成轴实体节点；未 reify 就只是谓词，无"对象属性 vs 轴节点"两档；<br>
+      ③ 谓词/边/标签三层：类型定义 / 一次实例化 / 命名——都不是图两端对象，默认非节点；<br>
+      ④ <b>reify 通用定律</b>：默认位置 → 三判据（独立提问/挂属性/可命中）触发对象化；<br>
+      ⑤ 语义不重复标注：维度并入谓词后边不重复标。含：前驱边实例、共享型轴命名节点未出现——属切片范围非缺类。
+    </div>
+    <div class="footer">v0.5 · 2026-09-08 15:53 · 与 0028 考古层第五段联动 · 待沛东定稿后并入库</div>
+  </div>
+</body>
+</html>
