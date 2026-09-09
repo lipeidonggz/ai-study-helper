@@ -68,6 +68,40 @@ def _leaf_title(section_path: str) -> str | None:
     return leaf
 
 
+def _build_source_chunks(source: SourceDoc, embedder: Embedder) -> list[dict]:
+    """复算某源的 chunk 序列（与 index_source 完全一致），返回含偏移的记录（供入库与 backfill 共用）。
+
+    每条记录：{chunk_id, section_path, text(裸块), stored_text(含来源行/叶子标题头), start, end, file_idx, seq}。
+    start/end 是裸块 text 在"清洗后全文 T"中的字符偏移（T = 各节段落按序以 \\n 连接）。
+    """
+    tc = lambda t: embedder.token_count([t])[0]  # noqa: E731
+    records: list[dict] = []
+    seq = 0
+    for file_idx, (file_title, sections) in enumerate(_file_units(source)):
+        line = _source_line(source, file_title)
+        leaves = [_leaf_title(s.path) for s in sections]
+        max_leaf_tokens = max((tc(l) for l in leaves if l), default=0)
+        target = max(320, _MAX_FINAL_TOKENS - tc(line) - max_leaf_tokens - 10)
+        for c in chunk_sections(sections, tc, max_tokens=target):
+            leaf = _leaf_title(c["section_path"])
+            head = line + ("\n\n" + leaf if leaf else "")
+            stored_text = head + "\n\n" + c["text"]
+            records.append(
+                {
+                    "chunk_id": f"{source.source_id}:{seq}",
+                    "section_path": c["section_path"],
+                    "text": c["text"],
+                    "stored_text": stored_text,
+                    "start": c.get("start"),
+                    "end": c.get("end"),
+                    "file_idx": file_idx,
+                    "seq": seq,
+                }
+            )
+            seq += 1
+    return records
+
+
 def index_source(
     source: SourceDoc,
     vector_store: VectorStore,
@@ -76,54 +110,38 @@ def index_source(
 ) -> int:
     """单篇入库（重入库 = 先删后写）。返回 chunk 数；失败抛异常由调用方记状态。"""
     kb_store.set_status(source.source_id, "indexing")
-    tc = lambda t: embedder.token_count([t])[0]  # noqa: E731
-
-    texts: list[str] = []
-    metas: list[dict] = []
-    seq = 0
-    for file_title, sections in _file_units(source):
-        line = _source_line(source, file_title)
-        # 预留来源行 + 叶子节标题 token：按整份文件最长的叶子标题统一预留，
-        # 保证最终入库文本 ≤ 450 tokens（e5 硬上限 512）
-        leaves = [_leaf_title(s.path) for s in sections]
-        max_leaf_tokens = max((tc(l) for l in leaves if l), default=0)
-        target = max(320, _MAX_FINAL_TOKENS - tc(line) - max_leaf_tokens - 10)
-        for c in chunk_sections(sections, tc, max_tokens=target):
-            leaf = _leaf_title(c["section_path"])
-            head = line + ("\n\n" + leaf if leaf else "")
-            texts.append(head + "\n\n" + c["text"])
-            metas.append(
-                {
-                    "section_path": c["section_path"],
-                    "seq": seq,
-                }
-            )
-            seq += 1
-
-    if not texts:
+    records = _build_source_chunks(source, embedder)
+    if not records:
         raise ValueError(f"{source.source_id}: 未切出任何 chunk（文件缺失或为空？）")
 
+    texts = [r["stored_text"] for r in records]
     vector_store.delete_by_document(KB_ID, source.source_id)
     vecs = embedder.embed(texts, is_query=False)
     token_counts = embedder.token_count(texts)
     points = [
         {
-            "id": f"{source.source_id}:{i}",
+            "id": r["chunk_id"],
             "vector": v,
             "payload": {
-                "text": t,
+                "text": r["stored_text"],
                 "source_id": source.source_id,
                 "document_id": source.source_id,
-                "section_path": m["section_path"],
+                "section_path": r["section_path"],
                 "knowledge_date": source.knowledge_date,
                 "decay_class": source.decay_class,
                 "tokens": int(token_counts[i]),
-                "seq": m["seq"],
+                "seq": r["seq"],
             },
         }
-        for i, (m, v, t) in enumerate(zip(metas, vecs, texts))
+        for i, (r, v) in enumerate(zip(records, vecs))
     ]
     vector_store.upsert(KB_ID, points)
+    kb_store.reset_offsets(source.source_id)
+    for r in records:
+        if r["start"] is not None and r["end"] is not None:
+            kb_store.set_chunk_offset(
+                r["chunk_id"], source.source_id, r["section_path"], r["file_idx"], r["start"], r["end"]
+            )
     kb_store.set_status(source.source_id, "ready", chunk_count=len(points))
     return len(points)
 

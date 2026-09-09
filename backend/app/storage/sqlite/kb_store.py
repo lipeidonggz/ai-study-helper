@@ -22,6 +22,16 @@ class KbStore:
             "indexed_at TEXT"
             ")"
         )
+        self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS chunk_offsets ("
+            "chunk_id TEXT PRIMARY KEY,"
+            "source_id TEXT NOT NULL,"
+            "section_path TEXT NOT NULL DEFAULT '',"
+            "file_idx INTEGER NOT NULL DEFAULT 0,"
+            "start_pos INTEGER NOT NULL,"
+            "end_pos INTEGER NOT NULL"
+            ")"
+        )
         self._conn.commit()
 
     def set_status(
@@ -62,3 +72,56 @@ class KbStore:
         with self._lock:
             self._conn.execute("DELETE FROM kb_documents WHERE source_id = ?", (source_id,))
             self._conn.commit()
+
+    def reset_offsets(self, source_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM chunk_offsets WHERE source_id = ?", (source_id,))
+            self._conn.commit()
+
+    def set_chunk_offset(
+        self,
+        chunk_id: str,
+        source_id: str,
+        section_path: str,
+        file_idx: int,
+        start: int,
+        end: int,
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO chunk_offsets(chunk_id, source_id, section_path, file_idx, start_pos, end_pos) "
+                "VALUES(?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(chunk_id) DO UPDATE SET "
+                "source_id=excluded.source_id, section_path=excluded.section_path, "
+                "file_idx=excluded.file_idx, start_pos=excluded.start_pos, end_pos=excluded.end_pos",
+                (chunk_id, source_id, section_path, file_idx, start, end),
+            )
+            self._conn.commit()
+
+    def get_chunk_offset(self, chunk_id: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT chunk_id, source_id, section_path, file_idx, start_pos, end_pos "
+                "FROM chunk_offsets WHERE chunk_id = ?",
+                (chunk_id,),
+            ).fetchone()
+        if not row:
+            return None
+        keys = ("chunk_id", "source_id", "section_path", "file_idx", "start_pos", "end_pos")
+        return dict(zip(keys, row))
+
+    def list_chunk_offsets(self, source_id: str | None = None) -> list[dict]:
+        with self._lock:
+            if source_id:
+                rows = self._conn.execute(
+                    "SELECT chunk_id, source_id, section_path, file_idx, start_pos, end_pos "
+                    "FROM chunk_offsets WHERE source_id = ? ORDER BY rowid",
+                    (source_id,),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT chunk_id, source_id, section_path, file_idx, start_pos, end_pos "
+                    "FROM chunk_offsets ORDER BY rowid"
+                ).fetchall()
+        keys = ("chunk_id", "source_id", "section_path", "file_idx", "start_pos", "end_pos")
+        return [dict(zip(keys, row)) for row in rows]

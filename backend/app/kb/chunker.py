@@ -217,25 +217,51 @@ def chunk_sections(
     max_tokens: int = MAX_TOKENS,
 ) -> list[dict]:
     """按 token 上限切块：段落累积到超限即切；单段超限按句子/换行边界拆开，杜绝超限块。"""
+    # 偏移坐标系：把各节所有段落按序以 "\n" 连接成"清洗后全文"T，每段记其在 T 中的 [start, end)。
+    # 每个 chunk 的 text = 一段内连续段落的 "\n".join = T 的一个连续子串，故偏移精确、且不改变 text。
+    pos = 0
+    para_range: dict[tuple[int, int], tuple[int, int]] = {}
+    for si, section in enumerate(sections):
+        for pi in range(len(section.paragraphs)):
+            st, en = pos, pos + len(section.paragraphs[pi])
+            para_range[(si, pi)] = (st, en)
+            pos = en + 1  # 段落间以 "\n" 连接（末段后无多余尾缀）
+
     chunks: list[dict] = []
-    for section in sections:
-        cur: list[str] = []
-        for para in section.paragraphs:
+    for si, section in enumerate(sections):
+        cur: list[int] = []  # 本段累积的段落下标
+
+        def _emit(indices: list[int]) -> None:
+            if not indices:
+                return
+            st = para_range[(si, indices[0])][0]
+            en = para_range[(si, indices[-1])][1]
+            chunks.append(
+                {
+                    "section_path": section.path,
+                    "text": "\n".join(section.paragraphs[p] for p in indices),
+                    "start": st,
+                    "end": en,
+                }
+            )
+
+        for pi, para in enumerate(section.paragraphs):
             if token_count_fn(para) > max_tokens:
                 # 单段超限：先落当前累积，再把该段按句子边界拆成多块
-                if cur:
-                    chunks.append({"section_path": section.path, "text": "\n".join(cur)})
-                    cur = []
+                _emit(cur)
+                cur = []
+                pst, pen = para_range[(si, pi)]
                 for piece in _split_long_para(para, token_count_fn, max_tokens):
-                    chunks.append({"section_path": section.path, "text": piece})
+                    chunks.append({"section_path": section.path, "text": piece, "start": pst, "end": pen})
                 continue
-            if cur and token_count_fn("\n".join(cur + [para])) > max_tokens:
-                chunks.append({"section_path": section.path, "text": "\n".join(cur)})
-                cur = [para]
+            if cur and token_count_fn(
+                "\n".join([section.paragraphs[p] for p in cur] + [para])
+            ) > max_tokens:
+                _emit(cur)
+                cur = [pi]
             else:
-                cur.append(para)
-        if cur:
-            chunks.append({"section_path": section.path, "text": "\n".join(cur)})
+                cur.append(pi)
+        _emit(cur)
     return chunks
 
 

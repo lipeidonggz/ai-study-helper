@@ -3,149 +3,219 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>检索存储结构 v0.5 · reify 通用定律（边/谓词/标签 升节点）</title>
+  <title>检索存储结构 · 架构设计文档（2026-09-09）</title>
   <style>
     body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f6f7f9; color: #24292f; margin: 0; padding: 28px; }
-    h1 { font-size: 20px; margin: 0 0 4px; }
-    .sub { color: #57606a; font-size: 13px; margin-bottom: 20px; }
-    .wrap { max-width: 1280px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: #57606a; font-size: 13px; margin-bottom: 22px; }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    .toc { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; }
+    .toc b { color: #0969da; }
 
-    .law { background: #fff; border: 2px solid #6b9aff; border-radius: 10px; padding: 12px 14px; margin-bottom: 20px; }
-    .law h3 { margin: 0 0 6px; font-size: 14.5px; color: #0969da; }
-    .law p { margin: 0 0 6px; font-size: 12.8px; line-height: 1.7; }
-    .law .trig { display: flex; gap: 8px; flex-wrap: wrap; }
-    .law .t { background: #eef4ff; border: 1px solid #6b9aff; border-radius: 8px; padding: 6px 10px; font-size: 12px; flex: 1; min-width: 180px; }
-    .law .t b { color: #0969da; }
+    .section { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 16px 18px; margin-bottom: 24px; }
+    .section > h2 { margin: 0 0 12px; font-size: 17px; border-bottom: 2px solid #0969da; padding-bottom: 8px; }
 
-    .kind { display: flex; gap: 12px; margin-bottom: 22px; }
-    .k { flex: 1; border-radius: 10px; padding: 12px 14px; border: 2px solid; }
-    .k h3 { margin: 0 0 4px; font-size: 14.5px; }
-    .k p { margin: 0; font-size: 12px; color: #444; line-height: 1.5; }
-    .k-con { background: #eef4ff; border-color: #6b9aff; }
-    .k-doc { background: #e9f7ec; border-color: #4bb35c; }
-    .k-term { background: #fff6e6; border-color: #e8a33d; }
-    .k-prop { background: #fdf1f2; border-color: #d9777f; font-style: italic; }
+    .arch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+    .arch .step { background: #f6f8fa; border: 1.5px solid #d0d7de; border-radius: 8px; padding: 10px 12px; text-align: center; flex: 1; min-width: 130px; }
+    .arch .step b { display: block; font-size: 13.5px; margin-bottom: 3px; color: #0969da; }
+    .arch .step span { font-size: 11.5px; color: #57606a; line-height: 1.45; }
+    .arch .arrow { color: #0969da; font-size: 20px; }
+    .chain { font-size: 12.3px; color: #444; background: #f3f4f6; border-left: 3px solid #6b9aff; border-radius: 0 6px 6px 0; padding: 8px 12px; margin-top: 12px; line-height: 1.7; }
+    .chain code { background: #fff; border-radius: 4px; padding: 0 4px; font-size: 11.5px; color: #0969da; }
 
-    .two { display: flex; gap: 14px; align-items: stretch; margin-bottom: 22px; }
-    .panel { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 12px 14px; }
-    .panel h4 { margin: 0 0 8px; font-size: 13px; border-bottom: 1px dashed #d0d7de; padding-bottom: 6px; }
-    .l { flex: 1.5; }
-    .r { flex: 1; }
+    .groups { display: flex; gap: 14px; align-items: stretch; }
+    .group { flex: 1; border-radius: 8px; padding: 12px; border: 1.5px solid; }
+    .g-entity { background: #eef4ff; border-color: #6b9aff; }
+    .g-prop { background: #fdf1f2; border-color: #d9777f; }
+    .g-edge { background: #e9f7ec; border-color: #4bb35c; }
+    .group h3 { margin: 0 0 8px; font-size: 13.5px; }
+    .group ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.7; }
+    .group li b { color: #24292f; }
+    .group li small { color: #57606a; }
 
-    .node { border-radius: 8px; padding: 8px 10px; font-size: 12.3px; line-height: 1.5; margin-bottom: 8px; }
-    .concept { background: #e7f0ff; border: 1.5px solid #6b9aff; }
-    .document { background: #e9f7ec; border: 1.5px solid #4bb35c; }
-    .term { background: #fff3da; border: 1.5px solid #e8a33d; }
-    .node small { color: #57606a; }
-    .edge { margin: 2px 0 8px 12px; font-size: 11.3px; color: #444; background: #f3f4f6; border-left: 3px solid #bbb; padding: 5px 8px; border-radius: 0 6px 6px 0; }
-    .edge b { color: #0969da; }
-    .edge .p { color: #9a6700; }
-    .lbl { font-size: 10.8px; color: #57606a; background: #f6f8fa; border-radius: 4px; padding: 0 4px; }
-    .reflect { background: #fbeef0; border: 1.5px dashed #d9777f; border-radius: 8px; padding: 7px 10px; font-size: 11.5px; margin: 6px 0; }
-    .nested { margin-left: 18px; border-left: 2px solid #b5d8bd; padding-left: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 4px 0; }
+    th, td { border: 1px solid #d8dee4; padding: 6px 9px; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; font-size: 12.5px; }
+    td b { color: #0969da; }
+    code { background: #f0f1f3; border-radius: 4px; padding: 0 4px; font-size: 11.5px; color: #57606a; }
 
-    .corr { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
-    .corr th, .corr td { border: 1px solid #d8dee4; padding: 5px 8px; text-align: left; }
-    .corr th { background: #f6f8fa; }
+    .adr { border: 1px solid #d8dee4; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+    .adr h4 { margin: 0 0 4px; font-size: 13.5px; color: #0969da; }
+    .adr .why { font-size: 12.5px; line-height: 1.75; color: #333; }
+    .adr .ra { font-size: 12px; color: #8b3d3d; background: #fbeef0; border-radius: 6px; padding: 6px 9px; margin-top: 8px; }
+    .adr .ra b { color: #d9777f; }
 
-    .flow { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 12px 14px; margin-bottom: 22px; }
-    .flow .steps { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
-    .fstep { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 7px 10px; text-align: center; flex: 1; min-width: 105px; }
-    .fstep b { display: block; font-size: 12.5px; margin-bottom: 2px; }
-    .fstep span { font-size: 11px; color: #57606a; }
-    .arrow { color: #0969da; font-size: 18px; }
-    .anchor { display: inline-block; background: #fbe9e7; border: 1px dashed #c97; border-radius: 5px; padding: 1px 6px; font-size: 11px; }
-
-    .legend { font-size: 12px; color: #444; line-height: 1.9; }
-    .footer { color: #8c959f; font-size: 11.5px; margin-top: 18px; }
+    .verdict { font-size: 12.5px; color: #333; background: #f3f4f6; border-left: 3px solid #6b9aff; border-radius: 0 6px 6px 0; padding: 10px 12px; line-height: 1.75; }
+    .verdict b { color: #0969da; }
+    .footer { color: #8c959f; font-size: 11.5px; margin-top: 20px; }
+    .alink { color: #0969da; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>检索存储结构 v0.5：reify 通用定律（2026-09-08 15:53）</h1>
-    <p class="sub">对象默认呆在"它在的地方"；仅当需被单独寻址 / 被整体引用时才对象化（reify）——边、谓词、标签三个起点，同一条定律</p>
+    <h1>学习助手的检索存储结构 · 架构设计文档</h1>
+    <p class="sub">数据模型（V1 草案，2026-09-09）· 面向"理解并实现检索层"的读者 · 演变与考古见 <a class="alink" href="../../memory/0028-rag-storage-architecture.html">0028 考古笔记</a></p>
 
-    <div class="law">
-      <h3>reify 通用定律</h3>
-      <p><b>对象默认呆在节点的位置或边的位置（或谓词/标签的位置），仅当需要被单独寻址、被作为整体引用时才对象化（reify）成可命中节点。</b> 触发 = "查询需求决定本体"。</p>
-      <div class="trig">
-        <div class="t"><b>能独立提问？</b><br>用户会单独问"X 是什么/放哪层" → 升节点</div>
-        <div class="t"><b>需挂属性？</b><br>如时态、来源、可信度要有地方放 → 升节点</div>
-        <div class="t"><b>需被图遍历/命中？</b><br>作检索路由入口 → 升节点</div>
-      </div>
-      <p style="margin-top:8px;">三个起点：<b>命题</b>从【边】升、<b>维度/可比面</b>从【谓词】升、<b>术语</b>从【标签】升——同一模式，三个起点。</p>
-    </div>
+    <div class="toc"><b>目录</b>：① 架构概览　② 组件定义　③ 架构决策　④ 编译层　（附录：演进与决策来龙去脉见 0028）</div>
 
-    <div class="kind">
-      <div class="k k-con"><h3>概念 concept</h3><p>稳定实体，canonical 名；结构层 subClassOf / partOf / involves / precedes；聚合同名命题。</p></div>
-      <div class="k k-doc"><h3>文档 document</h3><p>信息内容实体，rdf:type=document；带元数据；只走 cites / partOf / asserts，不进语义层。</p></div>
-      <div class="k k-term"><h3>术语 term</h3><p>denotes 概念，带时态与来源；默认是标签（skos:altLabel），需挂时态/来源或作入口时才升实体；同义用 sameAs。</p></div>
-      <div class="k k-prop"><h3>命题 = 三元组（边）</h3><p>非实体。主体—谓词—客体一条有向边；仅在需被引用审计/作论证端点/挂出处时 reify 成 proposition 节点。</p></div>
-    </div>
-
-    <div class="two">
-      <div class="panel l">
-        <h4>三层结构（谓词 vs 边 vs 标签）</h4>
-        <div class="node concept"><b>概念：harness（canonical）</b>
-          <div class="nested edge"><b>结构层</b>：harness ⊇ linter / 结构测试 / 仓库知识 / CI 闸门 / 评审自动化 <span class="lbl">partOf</span><br>harness → blast radius 前置 <span class="lbl">precedes</span>
-          <div class="reflect" style="margin-top:6px;"><b>标签（命名）</b>：rdfs:label "harness" ／ skos:altLabel "scaffolding"（早期）→ 需时态/来源时升 term 实体 <span class="lbl">term</span></div>
-          </div>
+    <div class="section">
+      <h2>① 架构概览</h2>
+      <div class="chain" style="margin:0 0 12px;border-left-color:#d9777f;">
+        <b>为什么做这个检索存储结构设计——根因</b>：学习类问题要的语义单元是<b>一个结构</b>（具体化陈述集合 + 关系网 + 证据），不是"一段相似文本"。而现有索引的原子是<b>匿名文本块</b>、组织维度只有<b>文本/向量相似度</b>——块没有语义身份，不知道"这是 O2 关于 containment 的主张""它属于局限类""这两条跨文互补"。所以它只能回<b>表层相似的 top-k 列表</b>，<b>回答错了问题</b>：把"取回支撑答案的证明结构"做成了"找相似文本"。换稠密还是 BM25 都改不了这个错位——<b>根不在检索算法，在索引的原子与组织维度跟问题的认知单元不对齐</b>。
+        <div style="margin-top:8px;"><b>由根因必然推出的架构要求</b>（不是偏好）：
+          <ul style="margin:4px 0 0 16px;line-height:1.7;">
+            <li><b>原子要有语义身份</b>：把断言 reify 成<b>具体化陈述</b>（rdf:Statement），携带 主题（<code>dcterms:subject</code>）/ 论述类型（<code>claim_type</code>）/ 出处（<code>provenance</code>）。</li>
+            <li><b>组织要有语义结构</b>：<b>对象图</b>——概念→具体化陈述（陈述边 <code>hasStatement</code>）、具体化陈述↔具体化陈述（论证边）、具体化陈述→chunk（归属边 <code>groundedIn</code>）、文档→具体化陈述（文档断言边 <code>asserts</code>）。</li>
+            <li><b>证据不能在编译处断链</b>：具体化陈述只是<b>索引/地图</b>，chunk 仍是<b>事实源</b>；编译产物绝不能成为最终事实来源，否则引用真实性审计链在编译处断裂（<b>硬约束</b>）。<span style="color:#57606a;">注：所谓"编译产物"即 LLM Wiki 范式——我们采用其"结构化索引"这一面，杜绝其"编译结果当事实源"这一面。</span></li>
+          </ul>
         </div>
-        <div class="node concept"><b>概念：containment（canonical）</b>
-          <div class="nested edge"><b>谓词（维度）</b>：concept <span class="p">防线层级置于</span> 取值<br>
-          <span class="p">维度必然是谓词；"被几个概念引用"是自然事实（本例仅 containment 用），不是建模分档。唯一分界 = 是否 reify 成轴实体节点（独立提问/挂属性/被遍历时）</span></div>
+        <div style="margin-top:8px;"><b>派生约束</b>：第一层定位到<b>内容单元</b>而非文档（粒度与根因同源——按内容容量而非物理文件给单元定级）；不同访问模式（细节 / 概念定位 / 主题聚合 / 跨文对比 / 按类过滤 / 出处溯源）需要不同索引；引用要可溯源可审计——这是生成层的约束，反过来要求索引必须留证据链。</div>
+        <div style="margin-top:6px;color:#57606a;">结论：<b>以"内容单元 + 对象图"为路由与可审计骨架</b>，原文单元仍是事实源；<b>向量承担入口映射（query→概念/具体化陈述）与兜底（未建模/未命中），图承担主路由</b>，不做 chunk 级重排器。</div>
+      </div>
+      <p style="font-size:13.5px;line-height:1.8;margin:0 0 12px;"><b>一句话</b>：为在检索时按"问题的认知结构"取回证明集合（承接根因），把"从语料里取材料"建模成"<b>入口（概念 / 具体化陈述）→ 共同落点（chunk）</b>"的网状。用户问题先命中某个<b>入口节点</b>（概念 或 具体化陈述，取决于问什么），再经<b>归属边</b>落到具体 <b>chunk</b>（原文证据）。<b>不是</b>"概念 → 具体化陈述 → chunk"一条直线——概念和具体化陈述都可能作为入口、也都可能直接 groundedIn 到 chunk。路径见下。</p>
+      <div class="arch">
+        <div class="step"><b>概念（入口）</b><span>知识主题，可聚合<br>agent 防护 / containment</span></div>
+        <div class="arrow">↓ hasStatement</div>
+        <div class="step"><b>具体化陈述（入口）</b><span>已 reify 的断言 + claim_type + 出处</span></div>
+      </div>
+      <div class="chain"><b>共同落点：chunk（原文证据）</b>——概念与具体化陈述均可 groundedIn 到 chunk。三条检索路径：</div>
+      <div class="arch" style="margin-top:10px;">
+        <div class="step"><b>路径 1 · 概念 → chunk</b><span>概念定义/结构类问题<br>"Agent 是啥" → 概念直接 groundedIn</span></div>
+        <div class="step"><b>路径 2 · 概念 → 具体化陈述 → chunk</b><span>主题聚合/对比类问题<br>"两家防护有何异同" → 概念 hasStatement 到具体化陈述 → groundedIn</span></div>
+        <div class="step"><b>路径 3 · 具体化陈述 → chunk</b><span>点名具体论断类问题<br>"Anthropic 承认多Agent协同有局限，具体是啥？" → 该具体化陈述直接 groundedIn</span></div>
+      </div>
+      <div class="chain" style="margin-top:10px;"><b>示例</b>：路径 2——"OpenAI 和 Anthropic 如何给 Agent 做防护、有何异同" → 命中概念 <code>agent 防护</code> → <code>hasStatement</code> 到具体化陈述 <code>P1: OpenAI 用 linter/CI 机械编码规则</code>、<code>P2: Anthropic 用沙箱/VM 设访问边界</code> → 两个具体化陈述互补（<code>complement</code>）→ 各自 <code>groundedIn</code> 到 <code>O2-§2:c3–c4</code>、<code>A5-§1:c1</code>。</div>
+      <div class="chain" style="margin-top:14px;"><b>用真实用例逻辑验证</b>（架构尚未实现，这里是"按此模型走一遍"的可追溯性检查；chunk 落点用用例自带的 <code>source_ref</code> 锚点指代，非手工编的块号）：</div>
+      <table>
+        <tr><th>用例</th><th>用户问什么</th><th>本架构下的检索推演</th><th>路径 / 机制</th></tr>
+        <tr><td><code>rag-a5-001</code></td><td>防御 Agent 要守哪三个组件</td><td>命中概念"防御组件" → <code>hasStatement</code> 到 A5 那条"三个组件（模型 / 运行环境 / 外部内容）"的具体化陈述 → <code>groundedIn</code> 到 <code>A5·three-components-to-defend</code></td><td>路径 2 · 概念→陈述→chunk</td></tr>
+        <tr><td><code>rag-a5-003</code></td><td>"监督能做什么而非做了什么"是核心思路吗</td><td>命中概念"能做什么 / containment" → 找到对应陈述（沙箱 / VM / 出口控制限制能力边界）→ 判定是否为 A5 核心主张 → <code>groundedIn</code> 到 <code>A5·containment-rather-than-supervising</code></td><td>路径 3 · 陈述→chunk（语义辨析依靠陈述本人 + claim_type）</td></tr>
+        <tr><td><code>rag-a5-005</code></td><td>区分哪两种监督 / 遏制方式</td><td>命中概念"监督 / 遏制" → <code>hasStatement</code> 到两条陈述（HITL 监督行为 vs 监督能做什么：边界 / 沙箱 / VM / 出口控制）→ 两陈述经 <code>complement</code> 论证边关联 → 各自 <code>groundedIn</code></td><td>路径 2 + 论证边（对比）</td></tr>
+        <tr><td><code>rag-cmp-002 / 003 / 004</code></td><td>两文各自核心主张、异同关系（三种措辞：锋利 / 半结构化 / 口语模糊）</td><td>命中文档 O2 / A5（<code>:asserts</code>）→ 各文多个主题概念，沿 <code>hasStatement</code> 摊开代表性陈述 → 跨文陈述经 <code>complement / attack / support</code> 论证边关联 → 各自 <code>groundedIn</code>（示意 <code>O2-§…</code>、<code>A5-§…</code>）</td><td>路径 2 多概念 + 文档→具体化陈述（asserts）+ 论证边</td></tr>
+        <tr><td><code>rag-cmp-006</code></td><td>各自承认哪些局限 / 未来展望</td><td>文档 O2 / A5 → <code>:asserts</code> 出陈述 → 按 <code>claim_type</code> 过滤（<code>rdf:type :LimitationStatement</code> 与 <code>:OutlookStatement</code> 两类）→ <code>groundedIn</code> 到各自局限 / 展望段</td><td>按类过滤路由 + 文档→具体化陈述→chunk 链</td></tr>
+        <tr><td><code>rag-own-002</code></td><td>温度定档结论与理由</td><td>命中概念"温度定档" → <code>hasStatement</code> 到"定档 1.0"结论陈述 + 理由陈述（2.0 表现异常、成本收益差）→ 各自 <code>groundedIn</code> 到 <code>OW1·0022</code></td><td>路径 2 · 概念→结论+理由→chunk</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>② 组件定义</h2>
+      <p style="font-size:12.8px;margin:0 0 12px;">按"实体 / 具体化陈述 / 边"三组。实体是图里的节点；具体化陈述是特殊的一类（<b>已 reify 的断言</b>——由边对象化而来）；边是节点间的关系。所有构件均对齐标准 KG（RDF/OWL/SKOS/PROV-O），无自造词。</p>
+      <div class="groups">
+        <div class="group g-entity">
+          <h3>实体（节点）</h3>
+          <ul>
+            <li><b>概念</b>：稳定知识对象，可当主题聚合；canonical 名=<small>其自身身份</small></li>
+            <li><b>文档</b>：信息内容实体；只走文档层关系</li>
+            <li><b>异名</b>：概念的演化叫法（非 canonical）；默认 altLabel，需时态/来源才 reify</li>
+          </ul>
         </div>
-        <div class="edge"><b>边（谓词的一次实例化）</b>：(containment) —防线层级置于→ (组织层) <span class="lbl">source=O2</span>　；　(containment) —防线层级置于→ (环境层) <span class="lbl">source=A5</span></div>
-        <div class="reflect"><b>reify 示例（边 → 命题节点）</b><br>
-          S1 = "containment 防线层级置于 组织层"（source O2）　S2 = "containment 防线层级置于 环境层"（source A5）<br>
-          → S1 <b>complement</b> S2（维度已并入谓词，无需再标）；S2 <b>support</b> ← "爆炸半径随能力扩张而增长"（也 reify）</div>
-        <div class="node document"><b>文档：O2 / A5（document 实体）</b> <small>只走 cites / partOf / asserts，不在互补/分歧里</small></div>
+        <div class="group g-prop">
+          <h3>具体化陈述（reified statement，rdf:Statement）</h3>
+          <ul>
+            <li><b>具体化陈述</b>：<b>已 reify 成实体的断言</b>（<small>rdf:Statement，带 rdf:subject/predicate/object</small>）。<b>提升判据</b>：具备"要指向 chunk / 挂属性 / 作论证端点"任一特点的索引，就 reify 成具体化陈述。</li>
+            <li><b>claim_type</b>：具体化陈述的论述功能类型（<small>rdf:type，如 LimitationStatement</small>）</li>
+            <li><b>出处</b>：具体化陈述来自哪（<small>provenance / PROV-O</small>）</li>
+          </ul>
+        </div>
+        <div class="group g-edge">
+          <h3>边（关系）</h3>
+          <ul>
+            <li><b>概念结构边</b>：概念↔概念（<small>partOf / involves / precedes<br>如 harness ⊇ linter</small>）</li>
+            <li><b>论证边</b>：具体化陈述↔具体化陈述（<small>support / attack / complement</small>）</li>
+            <li><b>归属边</b>：具体化陈述/概念→chunk（<small>groundedIn，证据在此</small>）</li>
+            <li><b>文档断言边</b>：文档→具体化陈述（<small>asserts，从文章找它的断言</small>）</li>
+            <li><b>陈述边 hasStatement</b>：概念→具体化陈述（<small>该陈述"关于"此概念；标准 <code>dcterms:subject</code>，检索时从概念反向遍历</small>）</li>
+          </ul>
+        </div>
       </div>
 
-      <div class="panel r">
-        <h4>我们的叫法 ↔ KG 术语</h4>
-        <table class="corr">
-          <tr><th>我们之前</th><th>KG 标准</th></tr>
-          <tr><td>概念页</td><td>concept 实体 + 实体页聚合</td></tr>
-          <tr><td>声明 / 立场</td><td>可 reify 三元组 → reified statement / proposition + provenance</td></tr>
-          <tr><td>可比面 / facet</td><td>谓词（私有=引用范围）；可独立提问时升轴实体/对象属性</td></tr>
-          <tr><td>从属 / 包含 / 实现</td><td>subClassOf / partOf / involves</td></tr>
-          <tr><td>互补 / 分歧 / 支持</td><td>complement / attack / support（论证框架）</td></tr>
-          <tr><td>归属边</td><td>grounding / provenance / mention 边</td></tr>
-          <tr><td>容器 / 分片</td><td>document / chunk（语义容器 = 纠正 chunk 语义边界）</td></tr>
-        </table>
-        <h4 style="margin-top:12px;">命题 reify 四触发</h4>
-        <div class="edge">① 加 provenance　② 加时态/可信度/主张主体　③ 作 support/attack 端点　④ 被引用审计</div>
-        <h4 style="margin-top:12px;">三个自研增量</h4>
-        <div class="edge">① 检索路由入口：哪些概念/命题提升为可命中入口</div>
-        <div class="edge">② 维度/可比面组织：facet 作比较轴排布——多方对照难点是"在哪个轴上可比"，先命中轴再沿轴取各源立场（cmp-002：防线层级轴 → 组织层/环境层）</div>
-        <div class="edge">③ 出处链与引用锚对接：声明→容器片段 ↔ 判官引用锚（连续块组），三粒度对齐</div>
-      </div>
+      <h3 style="margin:16px 0 6px;font-size:14px;">完整构件对照表</h3>
+      <table>
+        <tr><th>定名</th><th>含义</th><th>标准 KG 构件</th></tr>
+        <tr><td><b>概念</b></td><td>稳定知识对象 / 主题</td><td><code>:harness rdf:type :concept</code>；<code>:concept rdf:type owl:Class</code></td></tr>
+        <tr><td><b>文档</b></td><td>信息内容实体</td><td><code>:O2 rdf:type :document</code></td></tr>
+        <tr><td><b>异名</b></td><td>演化叫法</td><td>默认 <code>skos:altLabel</code>；reify 后 <code>rdf:type :term</code></td></tr>
+        <tr><td><b>具体化陈述</b></td><td>已 reify 的断言（由边对象化）</td><td><code>:s1 rdf:type :Statement</code>（rdf:subject/predicate/object）+ provenance；提升判据：指向 chunk / 挂属性 / 作论证端点</td></tr>
+        <tr><td><b>claim_type</b></td><td>具体化陈述的论述功能类型</td><td><code>:s1 rdf:type :LimitationStatement</code>（subClassOf :Statement）</td></tr>
+        <tr><td><b>概念结构边</b></td><td>概念间结构关系</td><td><code>owl:ObjectProperty</code>（partOf/involves/precedes）</td></tr>
+        <tr><td><b>论证边</b></td><td>具体化陈述间论证关系</td><td><code>support / attack / complement</code>（论证框架）</td></tr>
+        <tr><td><b>归属边</b></td><td>具体化陈述/概念→chunk</td><td><code>:s1 :groundedIn :chunk_x</code>（mention 边）</td></tr>
+        <tr><td><b>文档断言边</b></td><td>文档→具体化陈述</td><td><code>:O2 :asserts :P1</code>（ObjectProperty）</td></tr>
+        <tr><td><b>陈述边 hasStatement</b></td><td>概念→具体化陈述（该陈述关于此概念）</td><td><code>:P1 dcterms:subject :agent防护</code>（检索反向遍历，取"概念→具体化陈述"）</td></tr>
+      </table>
+      <p style="font-size:12px;color:#57606a;margin-top:8px;">边界速记：<b>实体</b>是节点；<b>具体化陈述</b>是"为指向 chunk 而 reify 的断言"；<b>claim_type</b>是具体化陈述的类型标签；五种边各司其职（结构/论证/归属/断言/陈述）。无独立"维度/轴/主题"类别。</p>
     </div>
 
-    <div class="flow">
-      <h4 style="margin:0 0 8px;">取用链路（不变）</h4>
-      <div class="steps">
-        <div class="fstep"><b>宽问题</b><span>"两文围堵防线各放哪层？"</span></div>
-        <div class="arrow">→</div>
-        <div class="fstep"><b>命中概念+轴</b><span>containment @ 防线层级</span></div>
-        <div class="arrow">→</div>
-        <div class="fstep"><b>沿 ground 落点</b><span>{O2-§2:c3–c4, A5-§1:c1}</span></div>
-        <div class="arrow">→</div>
-        <div class="fstep"><b>连续片段注入</b><span>跨 block 边界拼接</span></div>
-        <div class="arrow">→</div>
-        <div class="fstep"><b>引用锚+审计</b><span><span class="anchor">[O2-§2:c3–c4]</span> 声明组并集</span></div>
+    <div class="section">
+      <h2>③ 架构决策</h2>
+
+      <div class="adr">
+        <h4>决策 1 · 具体化陈述必须 reify 成实体</h4>
+        <div class="why"><b>理由</b>：KG 模型里只有<b>实体</b>能作为边的端点去指向 chunk。概念（如"多Agent协同未解决"）是跨段议题，指向不了具体段落；只有"O2 承认它"这条<b>断言</b>才落在某段原文、需要 groundedIn。故断言必须 reify 成实体（具体化陈述）才能指向 chunk。</div>
+        <div class="ra"><b>判据</b>：要不要 groundedIn 到 chunk = 要不要 reify 成具体化陈述。一条信息若不指向具体段（只是概念间关联），不 reify；需定位到原文段，必须 reify。</div>
       </div>
+
+      <div class="adr">
+        <h4>决策 2 · 概念 ≠ 具体化陈述（宾语所指 vs 断言）</h4>
+        <div class="why"><b>理由</b>：概念是"所说的对象"（多Agent协同未解决），具体化陈述是"谁—如何—针对什么"的断言（O2 承认它）。同一概念可被多篇以不同方式论述（承认/展望），每条是不同的具体化陈述，但指向同一宾语概念。分开才能承载"不同的谁说了同一件事"。</div>
+        <div class="ra"><b>反例</b>：若把"多Agent协同未解决"直接当具体化陈述，就无法区分"O2 说它"和"A5 说它"——它们落在不同原文段，需要不同 groundedIn。</div>
+      </div>
+
+      <div class="adr">
+        <h4>决策 3 · 删除"维度/轴/facet/比较轴"</h4>
+        <div class="why"><b>理由</b>：这些是我们为概括差异造的抽象，不是语料实体，也不是用户提问语言。普通用户问"怎么做防护 / 有何异同"（命中概念+具体化陈述+语义边），不问"防线放哪层"。查证 O2/A5 原文：两家讲的是"用什么工具设防"（linter/CI vs 沙箱/VM），从未出现"组织层/环境层"字样。</div>
+        <div class="ra"><b>反例</b>：若建"防线层级"实体，用户不会用它提问；它是分析者概述差异的抽象，建模反而引入噪音。</div>
+      </div>
+
+      <div class="adr">
+        <h4>决策 4 · 多源对比无需"比较轴"</h4>
+        <div class="why"><b>理由</b>：对比 = 同一概念下的多条具体化陈述，经语义边（complement/attack/support）关联。P1（OpenAI 用 linter/CI）与 P2（Anthropic 用沙箱/VM），同为"给 agent 设防"，complement 直接连，不需要"比较轴"中介。</div>
+        <div class="ra"><b>反例</b>：若靠"防线层级轴"去切，反而把"用什么工具设防"扭曲成"放在哪层"，偏离语料真实表述。</div>
+      </div>
+
+      <div class="adr">
+        <h4>决策 5 · 文档可经 asserts 找到其下具体化陈述</h4>
+        <div class="why"><b>理由</b>：文档实体可经 <code>:asserts</code>（对象属性）连到其下具体化陈述，构成"文档 → 具体化陈述 → chunk"链。查询：<code>?doc :asserts ?p . ?p rdf:type :LimitationStatement . ?p :groundedIn ?chunk</code>。文档是入口、具体化陈述是承载断言、chunk 是证据落点。</div>
+        <div class="ra"><b>区分</b>：文档层关系三样并列——<code>cites</code>（文档↔文档）/ <code>partOf</code>（归属）/ <code>asserts</code>（文档→具体化陈述），不可混用。</div>
+      </div>
+
+      <div class="adr">
+        <h4>决策 6 · 具体化陈述 = 标准 rdf:Statement（RDF reification），非自造</h4>
+        <div class="why"><b>理由</b>：KG/RDF 对"主谓宾装不下完整语义"已有标准处理，三套方案——① <strong>RDF reification</strong>：把三元组对象化为 <code>rdf:Statement</code> 实体，用 <code>rdf:subject/predicate/object</code> 拆回，可挂任意属性；② <strong>N-ary relation / relation-as-class</strong>：把关系本身建模成类；③ <strong>Named Graph</strong>：按语境给三元组分组建图。咱们的"具体化陈述"正是 ①，<strong>是 RDF 内置标准模式，不是自造词</strong>。选 ① 因为它让<b>单条断言可寻址、可命中</b>——我们需要给每条断言挂出处/主题/claim_type，且要让它成为 <code>groundedIn</code> 与论证边的端点；named graph 适合按整组切分，n-ary 适合关系自身属性复杂的场景，都不如 reification 直接对应"单条断言可定位"的需求。</div>
+        <div class="ra"><b>对照</b>：<code>hasStatement</code> 不是标准 RDF 谓词，是自定义 ObjectProperty；其语义在标准里对应 <code>dcterms:subject</code>（具体化陈述"关于"某概念，Dublin Core 标准）。文档→具体化陈述用 <code>:asserts</code>（来源），概念←→具体化陈述用 <code>dcterms:subject</code>（主题），两者含义不同，不可混用。</div>
+      </div>
+
+      <div class="adr">
+        <h4>决策 7 · 检索角色分工：向量=入口+兜底，图=主路由（不做 chunk 重排器）</h4>
+        <div class="why"><b>理由</b>：检索分两段——①<strong>入口映射</strong>（自由文本 query → 图入口节点）②<strong>图内遍历</strong>（概念→hasStatement→groundedIn→chunk、论证边、claim_type 过滤）。② 段纯图遍历、不需向量；① 段才是向量扛的活，也是去掉向量时必须用别的东西（符号/异名 + LLM）顶上的一步。故：<strong>入口向量</strong>打概念/具体化陈述（query→图节点），<strong>兜底向量</strong>打 chunk（图没命中 / 问题未建模时捞证据），<strong>图为主路由</strong>；不做 chunk 级重排器——证据侧重排由图信号确定性完成（到种子实体距离 / 命中数 / claim_type）。纯符号/异名入口被否：对 paraphrase、术语漂移脆弱（harness 多家叫法是反例）。</div>
+        <div class="ra"><b>与 GraphRAG 的关系</b>：本设计收敛到微软 GraphRAG 挖除社区块的主体骨架（索引即图 + 本地检索）；其"query→实体"用向量、"实体→邻域→文本块"用图，正对应该入口/主结构分工。差异在它给不了我们的部分——类型化具体化陈述+claim_type（对齐判官）、judge 对齐 grounding、确定性+学习任务视角、编译人工复核；且其"Global/community 摘要（编译结果当事实源）"被第 3 条硬约束否掉，仅取 Local 式 ground 到 chunk 的路。存储落地不必然上专用图库（语料千级块+几百节点，SQLite 建边表即可跑通）；"入口向量 vs 纯符号+LLM"与"向量入口命中 / 图遍历聚齐 / 兜底保真"待真实用例切片验证后再定。</div>
+      </div>
+
+      <div class="verdict"><b>核心判据（贯穿全文档）</b>：能不能被独立提问 / 要不要挂属性 / 要不要被图命中 → 决定某对象要不要 reify 成实体。<b>会不会被独立寻址 / 按类型捞取 / 跨源对比 / 进引用审计 → 决定要不要 reify 成具体化陈述</b>（这是预测；grounding 到"证据 chunk 集合"是它的属性，不是触发）。这回答"什么该立为实体，什么该留在边/标签"。</div>
     </div>
 
-    <div class="legend">
-      <b>v0.5 修正</b>：① 维度 = <b>谓词</b>（OWL 里即 object/data property，同一物）；"私有/共享"只是被几个概念引用的自然事实，<b>不是建模分档</b>；<br>
-      ② "升级为独立轴"唯一分界 = 是否 <b>reify</b>（独立提问/挂属性/被遍历时）成轴实体节点；未 reify 就只是谓词，无"对象属性 vs 轴节点"两档；<br>
-      ③ 谓词/边/标签三层：类型定义 / 一次实例化 / 命名——都不是图两端对象，默认非节点；<br>
-      ④ <b>reify 通用定律</b>：默认位置 → 三判据（独立提问/挂属性/可命中）触发对象化；<br>
-      ⑤ 语义不重复标注：维度并入谓词后边不重复标。含：前驱边实例、共享型轴命名节点未出现——属切片范围非缺类。
+    <div class="section">
+      <h2>④ 编译层：从清洗后原文 → 对象图</h2>
+      <p style="font-size:13.5px;line-height:1.8;margin:0 0 12px;">编译层把语料"编译"成对象图（概念/文档/异名 + 具体化陈述 + 边）。它是<b>索引/地图</b>而非事实源——编译产物落到 chunk（含清洗后原文偏移）作为证据。<b>不是</b>把编译结果当事实（见第 3 条硬约束、决策 6）。</p>
+      <div class="chain"><b>编译流水线</b>：清洗后原文 → 按<b>内容单元</b>切（语义边界优先、<b>token 上限 12k</b> 兜底）→ LLM 一次带类型抽取 → 产物（文档 / 概念+异名 / 边 / 具体化陈述，含 claim_type + 出处 + 证据）→ 跨单元归并 → 校验层 + 质量门。</div>
+
+      <h3 style="margin:14px 0 6px;font-size:14px;">关键决策</h3>
+      <div class="adr">
+        <h4>决策 8 · 编译源 = 清洗后原文，粒度 = 内容单元（token 上限 12k）</h4>
+        <div class="why"><b>理由</b>：只有清洗后原文（切片为 chunk 的输入）有完整上下文；chunk 拆散论断、缺上下文，即便"引用锚=连续块组"也是拆后聚合（判官"声明组"＝一条声明引用的块集，非原文连续）。长书不能整本喂 → 编译粒度取"<b>内容单元</b>"（容量≈文章 10–40 块＝章节/小节），语义边界优先、<b>token 上限 12k</b>（约 1.5–2.5 万字）兜底，超限在小节/段界切、留 overlap。内容单元是<b>虚概念、仅编译时用、不落库</b>；跨单元同概念需归并（sameAs/denotes）、声明合并、去重。</div>
+        <div class="ra"><b>判据</b>：内容单元＝编译窗口，非存储实体；只有编译产物（概念/具体化陈述/边 + 证据 chunk 集合）落库。</div>
+      </div>
+      <div class="adr">
+        <h4>决策 9 · reify 判据 = 预测 + 修补（替代"对齐 chunk"）</h4>
+        <div class="why"><b>理由</b>：判断"某断言将来会不会被独立寻址 / 按类型捞取 / 跨源对比 / 进引用审计"，本质是<b>预测</b>，无法预先完美定。故分两段：<b>预测</b>（编译时）——claim_type 在被查词表（由判官 / a5-cmp 反推的检索需求类型学）/ 立场性"谁—这么认为" / 概念中心度（跨单元/来源、命名主题）/ 需作论证端点，命中任一即 reify；纯结构关系（partOf/involves/precedes）与纯属性留在边/标签。<b>修补</b>（查询/回答时）——① dense 兜底先接住（信息仍在证据里，只是没组织成陈述，不丢事实）；② 判官 miss 驱动 promote（信息在但没组织 → 提升为具体化陈述）；③ 周期清扫批量 promote → 自愈索引。复用判官 / 覆盖性机制。</div>
+        <div class="ra"><b>grounding</b>：具体化陈述 → 证据 <b>chunk 集合</b>（多对多，判官"声明组"口径）。chunk 须补<b>清洗后原文偏移</b>（global offset），否则 span→chunk 只能"section+内容"弱锚。</div>
+      </div>
+      <div class="chain" style="margin-top:14px;"><b>校验层 + 质量门（一等设计项）</b>：人审基础件（编译 prompt / claim_type 词表 / grounding 规则 / 校验门）+ 程序结构校验（id / 词表 / grounding 一致性）+ 判官/引用审计自动门（覆盖性 / 引用真实性）+ 定时抽样；噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引），进不了"事实"。</div>
     </div>
-    <div class="footer">v0.5 · 2026-09-08 15:53 · 与 0028 考古层第五段联动 · 待沛东定稿后并入库</div>
+
+    <div class="footer">
+      附录：数据模型的完整演进（v0.1→v0.12）、曾绕的弯路、决策来龙去脉，见 <a class="alink" href="../../memory/0028-rag-storage-architecture.html">memory/0028-rag-storage-architecture.html</a>。本文档是面向实现/理解的最终形态，2026-09-09 重构。
+    </div>
   </div>
 </body>
 </html>

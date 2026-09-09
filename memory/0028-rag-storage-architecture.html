@@ -38,6 +38,9 @@
         <li><strong>检索需求类型学决定存储结构</strong>：出处指代型 / 概念定位型 / 主题对比型 / 学习任务型，各配不同索引；不是"一个稠密索引硬扛所有访问模式"。</li>
         <li><strong>L0–L3 四层不是通用架构</strong>：是"素材恰为一本大书"时树形展开的特例；通用模型 = 内容单元 + 单元之上的对象图（概念页 / 关系边 / 可比面）。</li>
         <li>落地前提：入库 chunk 已带 source_id + section_path，单元树骨架免费；语料为精选书/课/文章、量级数千块，半自动编译 + 关键页人工复核成本可控。</li>
+        <li><strong>检索三段定调（2026-09-09 11:19）</strong>：向量=入口（概念/命题）+ 兜底（chunk），图=主路由，不做 chunk 重排器；纯符号/异名入口对 paraphrase、术语漂移脆弱（harness 多家叫法是反例）；与 GraphRAG 的关系=借用其骨架、差异化在类型化命题/判官对齐/确定性/人工复核。</li>
+        <li><strong>编译噪声可控，引入划算（2026-09-09 11:37）</strong>：人工复核粒度=基础件（编译 prompt/claim_type 词表/grounding 规则/校验门），非产物；噪声分两类——结构性由程序校验拦、语义性由判官/引用审计当自动门 + 抽样；关键是把噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引），进不了"事实"；故引入图建模检索层即便有噪声也划算。</li>
+        <li><strong>编译层设计定调（2026-09-09 12:10）</strong>：编译源=清洗后原文（非 chunk）；粒度=内容单元（虚概念、仅编译时用、<strong>token 上限定 12k</strong>）；编译=一次带类型 pass（文档/概念+异名/边/具体化陈述）；<strong>reify 判据=预测+修补</strong>（预测：claim_type 被查词表/立场性/概念中心度/论证端点；修补：dense 兜底/判官 miss 驱动 promote/周期清扫）；chunk 补"清洗后原文偏移"（global），grounding=证据 chunk 集合（多对多）；内容单元不落库、跨单元归并/去重；校验层+质量门为一等项。</li>
       </ul>
       <h3>真待定（2026-09-08）</h3>
       <ul>
@@ -136,19 +139,118 @@
       </ul>
       <p><strong>语义不重复标注原则</strong>：凡语义已内嵌在节点或谓词里的，不在边上重复标注。维度住在谓词里（决定命题取值轴），边只承载"连到谁、什么关系"。维度标注仅在两种情况下有用：a) facet 已升级为独立轴实体、被命题引用时（标"@哪个轴"）；b) 归属边起点是概念（多维度需消歧）而非命题时。起点已是命题则不带。</p>
 
+      <h3>考古层第六段 · 用 cmp 家族用例验证模型，逼出 claim_type 与"类型标记通用"（2026-09-08 16:20–16:31）</h3>
+      <p><strong>起题</strong>：概念层收敛后，沛东提议"拿搞不定的 cmp 族用例来验证模型是不是好使"——用六个 cmp 用例（002/003/004/005/006/007）逐一映射到 v0.5，检验表达力与根因归类能力。</p>
+      <ul>
+        <li><strong>验证结论 · 模型能表达所有 cmp 用例</strong>：每个用例本质 = "<strong>一根比较轴 + 各源在轴上的命题立场</strong>"。002/003/004 = 全景对比（轴：agent 实践）；005 = 同轴换素材（A1/O1）；006 = 局限与展望；007 = 人的角色与治理。与 v0.5 命题层级（命题=三元组+来源标注）完全吻合。</li>
+        <li><strong>验证结论 · 模型能归类所有红因，且落在三个自研增量上</strong>：S2 检索红（002/003/004）→ 缺增量①路由入口 + ②比较轴；引用压力红（005/006/007）→ 检索定位成功但"命题→出处"没接好，即增量③。<strong>三个增量不是拍脑袋，是被这几类红因逼出来的。</strong></li>
+        <li><strong>验证暴露的设计输入 · 轴 ≠ 主题</strong>：全景对比 query 命中的不是"轴"而是"<strong>主题聚合</strong>"（如"agent 实践"），"全景"只是 query 的广度修饰词、不是图对象；006/007 命中的才是轴（局限 / 角色）。<strong>topic vs dimension 是否需要两类节点，定为待定项</strong>，暂不展开。</li>
+        <li><strong>深挖 · 谓词要分类，但更准确是"给命题打类型"</strong>：用 cmp-006 追问"局限/展望怎么建模"——局限不是实体/轴/谓词（无独立知识身份、无取值对比档位、是类别），应建模为<strong>命题的类型标签</strong>。谓词分类落回 KG = <strong>reified statement 的 rdf:type</strong>：`(O2, 承认局限, 多agent协同难)` 既有 rdf:type=statement，又有 rdf:type=LimitationStatement（LimitationStatement subClassOf statement）。类别词表<strong>复用 ISR（科研文本信息结构：limitation/outlook 为预置类）/ FrameNet（frame 语义）</strong>，不发明。</li>
+        <li><strong>推理 · 类型标记是通用的，不限于命题</strong>：rdf:type 作用于<strong>所有实体</strong>——概念（concept）、文档（document）、术语（term）都有类型；命题只是其中一种（statement + 论述功能子类）。补的这条让"给命题打功能类型"归位为"类型标记在具体类别上的一次应用"，而非特例。</li>
+        <li><strong>新增路由机制 · 按类过滤</strong>：概念/轴路由（宽问法）之外，还有<strong>按命题类型捞取</strong>——`?p rdf:type :Limitation` 即把两文所有"承认局限"的命题捞出，再沿归属边到 chunk。cmp-006 正是这条路由。</li>
+      </ul>
+      <p><strong>结论（v0.6）</strong>：模型经真实用例验证，表达力与根因归类能力成立；三点新增——① 命题 = reified statement，可带 <strong>rdf:type 论述功能子类</strong>（claim_type，复用 ISR/FrameNet 词表）；② <strong>rdf:type 通用</strong>于所有实体，不限于命题；③ 对象图有<strong>两类路由</strong>：概念/轴语义路由 + 命题类型过滤路由。</p>
+
+      <h3>考古层第七段 · 复杂度警报与减法：把"主题"删掉，模型收敛成三样（2026-09-08 16:45–16:51）</h3>
+      <p><strong>起题</strong>：套用例越套越多概念（轴 / facet / claim_type / topic…），沛东一句"擦，我咋觉得越来越复杂了，主题到底是啥？是边的集合？命题的集合？"——这是复杂度过载的警报。回头看，复杂度主要由反复引入新词造成，本可以更朴素。</p>
+      <ul>
+        <li><strong>结论 1 · 主题 = 概念，不单设类别</strong>："agent 实践""人的角色重定义"都是<strong>概念（concept）</strong>，只是更上位、被当"内容标签"用。"主题聚合"实为<strong>概念聚合</strong>——命中概念节点，沿"哪些命题涉及它"的边把内容摊开。集合是查询沿边得出的，<strong>主题是那个节点，不是那堆边</strong>。</li>
+        <li><strong>结论 2 · "topic vs dimension"待定项落定——没有 topic</strong>：之前"主题 vs 轴"纠结，是把"概念（聚合侧）"和"维度（对比侧）"当成需二选一，其实两者都由 concept / 谓词承担。<strong>单独 topic 类别删掉</strong>；dimension = 谓词（可再 reify 成轴节点）。就这两个。</li>
+        <li><strong>结论 3 · 模型收敛为三样</strong>：实体 = <strong>概念 / 文档 / 异名</strong>（三个）；命题 = <strong>可 reify 的边</strong>（带类型 + 出处）；谓词 = <strong>维度</strong>。检索就两种机制：沿概念/轴的<strong>语义路由</strong>（宽问法、对比异同）+ 沿命题类型的<strong>过滤路由</strong>（006/007 捞同类）。无第四样。</li>
+        <li><strong>结论 5 · 术语更名为"异名"（消除通用含义歧义）</strong>："术语"在中文通用含义太强（= 专业性词汇），用它专指"概念的演化叫法"词不达意。改名为<strong>异名（alias）</strong>——概念在特定来源/时期的叫法，非 canonical 名；默认是 <code>skos:altLabel</code>，需挂时态/来源或作入口时才 reify 成 term 实体。与之对照：<strong>canonical 名（主名）</strong>= 概念自身的身份（rdfs:label），不单独建实体。<strong>注：本文档历史段（质询 9/10、v0.3 schema、一条铁律等）里的"术语"即现在的"异名"</strong>，属考古记录用词，保留原样。</li>
+        <li><strong>结论 4 · 弯路复盘</strong>：话题/主题被我叫过 topic，维度被我叫过轴 / facet / 可比面，命题类型被我混进命题过——这些词都归并入三样，不再保留独立概念。复杂度过载是"为区分而造词"的代价，收敛后回到"实体 + 命题 + 谓词"。</li>
+      </ul>
+      <p><strong>结论（v0.7）</strong>：对象模型 = <strong>三类实体（概念 / 文档 / 异名）+ 可 reify 的命题边 + 维度谓词</strong>；主题 = 概念（内容标签用法），不是独立类别；检索 = 概念/轴语义路由 + 命题类型过滤路由。<strong>无 topic。</strong></p>
+
+      <h3>考古层第八段 · 用用户视角否掉"维度"：模型回到概念+命题+语义边（2026-09-08 收官）</h3>
+      <p><strong>起题</strong>：一套用 v0.7 后，沛东连续追问"维度"到底是不是实体/类/谓词、"防线层级"是不是该进概念——一路逼出关键质疑："<strong>用户真的会问'OpenAI 的防线放到哪一层'吗？没读过原文，他更会问的是'OpenAI 如何给 Agent 做防护'，或比较时问'两家防护有何异同'。</strong>"这从用户视角否掉了"维度"的存在必要。</p>
+      <ul>
+        <li><strong>查证原文（关键证据）</strong>：O2 讲"enforce mechanically——linter、结构测试、CI、doc-gardening"，堵的是代码依赖方向；A5 讲"supervise what it's able to do——沙箱/VM/文件系统边界/egress 控制，set a hard boundary on what an agent can reach"。两篇都讲"<strong>用什么工具/机制设防</strong>"，<strong>从未出现"组织层/环境层"字样</strong>——那个对立是我们事后概括的抽象。</li>
+        <li><strong>结论 1 · "维度/防线层级"不是语料实体，也不是用户提问语言</strong>：普通用户问的是"怎么防护/有何异同"（命中 concept 防护 + 各源 proposition + 语义边），不是"防线放哪层"。"防线层级/组织层/环境层"是我们做对比分析时脑内概括的抽象，<strong>不该进对象图</strong>。</li>
+        <li><strong>结论 2 · 多源对比不需要"比较轴"中介</strong>：对比 = <strong>同一 concept 下的多条 proposition，经语义边（complement/attack/support）关联</strong>。P1（OpenAI 用 linter/CI）与 P2（Anthropic 用沙箱/VM），同为"给 agent 设防"，complement 直接连，无需"防线层级"当桥梁。</li>
+        <li><strong>结论 3 · 模型回到朴素结构</strong>：<strong>概念（+文档/异名实体）+ 命题（可 reify 的 rdf:Statement，带 claim_type）+ 语义边（概念结构边 / 命题论证边）+ 归属边（grounding）</strong>。<strong>无 topic、无维度/轴/facet/比较轴</strong>——这些是我们为"抽象概括差异"造的词，不是检索对象。</li>
+        <li><strong>结论 4 · 自研增量②重定位</strong>：原"facet 作比较轴"取消；改为"多源对照 = 同 concept 下多条 proposition 经语义边关联"（原本就是这个概念，只是不需要"轴"这个中介标签）。三个增量收为：① 路由入口选择；② 多源对照组织（concept→proposition→语义边）；③ 出处链与引用锚对接。</li>
+      </ul>
+      <p><strong>结论（v0.8，收官）</strong>：对象模型 = <strong>概念 + 命题 + 语义边 + claim_type + 归属边</strong>（实体：概念/文档/异名；命题：可 reify 的 rdf:Statement；语义边：结构/论证；归属边：grounding）。<strong>删除"维度/轴/facet/比较轴"</strong>——它们是分析抽象，非语料实体、非用户提问语言；用户视角是"怎么做防护/有何异同"，对比天然发生在同 concept 的 proposition 之间。这是整轮概念讨论的最终收敛，把 v0.2–v0.7 反复纠结的"维度怎么建模"整体化解为"不需要它"。</p>
+      <p><strong>方法论收获</strong>：当一个概念怎么建模都别扭时，先问"<strong>这是语料里的东西，还是我们为分析造的东西？用户会这么问吗？</strong>"——用用户视角替产品/工程视角做判据，能直接否掉那些"分析者自造"的建模负担（正是我们常说的"产品视角第一性"在建模层的体现）。</p>
+
+      <h3>考古层第九段 · reify 的真正动机：只有实体能指向 chunk（2026-09-09 09:59）</h3>
+      <p><strong>起题</strong>：v0.8 删除"维度"后，沛东对"命题是否还需要 reify、'多Agent协同未解决'到底该建模成什么"连续提出质疑，最终自己推出一条干净的因果链，把 reify 的真正动机说透了——比我们此前任何论证都深。</p>
+      <ul>
+        <li><strong>因果链（沛东，关键）</strong>：① 在 KG 模型里，<strong>只有实体才能作为边的端点去指向具体 chunk</strong>（target 必须是资源/实体，不能是字面值）；② "多Agent协同未解决"是一个实体（概念），但<strong>它指向不了 chunk</strong>——它是"被讲到的东西"这个跨段议题，不锚定在某段；③ 只有"O2 承认多Agent协同未解决"这条<b>边（断言）</b>才会、也需要指向某个 chunk——因为是"这句具体的话"落在某段原文里，需要 groundedIn。</li>
+        <li><strong>结论 · 命题 = 因"要指向 chunk"而 reify 成实体的断言</strong>：要让"指向 chunk"（groundedIn）能发生，必须把这条断言 reify 成实体（我们叫命题）。原生边（三元组）不是实体、不能当 chunk 的指向端点。这就把"命题必须 reify"从多个零散理由（我此前误引用审计等）收敛为<b>一条本质原因</b>。</li>
+        <li><strong>判据（由此得到）</strong>：<strong>要不要 groundedIn 到 chunk = 要不要 reify 成命题</strong>。一条信息若不指向具体 chunk（只是概念间关联），不 reify；若需定位到原文段落，必须 reify 成命题。干净、可判。</li>
+        <li><strong>概念 ≠ 命题（宾语所指 vs 断言）</strong>："多Agent协同未解决"是<b>概念（宾语所指）</b>，不是命题；"O2 承认它"才是<b>命题（断言）</b>。同一概念可被多篇以不同方式论述（承认/展望），每条是不同的命题，但指向同一宾语概念。命题 = "谁—如何—针对什么"的断言（可 reify 的 rdf:Statement）；概念 = 所说的对象。</li>
+        <li><strong>勘误</strong>：此前曾以"引用审计要求命题 reify"为论据——错。引用审计是<b>模型输出之后</b>的事（针对模型输出的引用核对），与知识库建模（命题/字段）无关。reify 的真实动机纯粹是"能指向 chunk"（检索阶段），与输出审计两不相涉。</li>
+      </ul>
+      <p><strong>结论（v0.9）</strong>：命题 = <strong>因"要 groundedIn 到 chunk"而 reify 成实体的断言</strong>（"谁—如何—针对什么"，rdf:Statement）；概念 = 所述的宾语对象（不一定能直接指 chunk）。判据：<strong>要不要指向 chunk = 要不要 reify 成命题</strong>。这修正了 v0.8 对"命题"只给定义、没给"为什么必须 reify"的不足。</p>
+      <p><strong>补充 · 文档 → 命题 → chunk 链（2026-09-09 10:03）</strong>：文档实体可经 <code>:asserts</code>（对象属性）连接到其下命题——<code>:O2 :asserts :P1</code>（P1 为 LimitationStatement），<code>:P1 :groundedIn :chunk_x</code>。即"文档怎么找它的局限"：<code>?doc :asserts ?p . ?p rdf:type :LimitationStatement . ?p :groundedIn ?chunk</code>。文档是入口、命题是承载断言、chunk 是证据落点。与文档层其它关系区分：cites（文档↔文档）/ partOf（归属）/ asserts（文档→命题）三者并列。</p>
+
+      <h3>考古层第十段 · 术语定名与标准核实：命题/断言 = KG 已有 rdf:Statement，非自造（2026-09-09 10:42）</h3>
+      <p><strong>起题</strong>：v0.9 后，沛东追问"<strong>断言这个概念是 KG 本来就有的，还是我们造的？</strong>遇到'主谓宾装不下完整语义'，KG 怎么处理？"——把"命题/断言"从我们的动词推向标准术语归属确认，并顺带核实"概念→命题"这条边该怎么命名。</p>
+      <ul>
+        <li><strong>结论 1 · 命题/断言 = KG 固有概念，标准名 reified statement（rdf:Statement）</strong>：RDF 内置 reification 机制，官方用途正是记录 provenance（何时/何地/谁说的）。我们把断言 reify 成实体、挂 claim_type（rdf:type 子类）/ 出处（provenance）/ 主题，就是对 reified statement 的标准语义扩展，<strong>完全非自造</strong>。</li>
+        <li><strong>结论 2 · "主谓宾装不下"KG 已有三套标准方案</strong>：① <strong>RDF reification</strong>——三元组对象化为 <code>rdf:Statement</code>，<code>rdf:subject/predicate/object</code> 拆回，可挂任意属性；② <strong>N-ary relation / relation-as-class</strong>——把关系本身建模成类；③ <strong>Named Graph</strong>——按语境给三元组分组建图。咱们的命题采用 ①，理由：需要逐条断言挂"出处 / 主题 / claim_type"，且要让断言本身就成 <code>groundedIn</code> 与论证边的端点——只有对象化能让单条断言可寻址、可命中。named graph 适合按整组切分，n-ary 适合关系自身属性复杂，均不如 reification 直接对应"单条断言可定位"的需求。</li>
+        <li><strong>结论 3 · hasStatement 不是标准 RDF 谓词，需对齐到 dcterms:subject</strong>：查证 hasStatement（初稿拟 hasClaim，后经沛东敲定为 hasStatement）非 W3C 标准词汇，是自定义 ObjectProperty（与 :asserts / :groundedIn 同类，RDF 合法）。其标准语义是——"具体化陈述关于某概念"＝<code>P dcterms:subject 概念</code>（Dublin Core 标准，"资源的主题"）。故"概念→具体化陈述（主题）"是反向遍历 <code>dcterms:subject</code>。文档→具体化陈述（来源）与概念←→具体化陈述（主题）是两条不同关系，前者 <code>:asserts</code>、后者 <code>dcterms:subject</code>，不可混用。</li>
+      </ul>
+      <p><strong>结论（v0.10，2026-09-09 10:42）</strong>：术语定名——"命题"统一为"<strong>具体化陈述（reified statement，rdf:Statement）</strong>"；"断言"保留给未 reify 的陈述内容；"概念→具体化陈述"边命名为"<strong>陈述边 hasStatement</strong>"、标准映射 <code>dcterms:subject</code>。这是"无自造词"原则的收口：从"概念要不要 reify"到"边叫什么名"，全部钉到 KG 标准上。</p>
+
+      <h3>考古层第十一段 · 检索角色定调：向量=入口+兜底，图=主路由；收敛到 GraphRAG 骨架（2026-09-09 11:19）</h3>
+      <p><strong>起题</strong>：v0.10 后，沛东逼问"能不能直接用图数据库、把向量库整个去掉？"——把"编译层+chunk 层"的存储落地方式摊开，又借微软 GraphRAG 反照我们的设计，最后定下检索三段的角色分工。</p>
+      <ul>
+        <li><strong>结论 1 · 检索分两段，图只解决"里面怎么走"，不解决"从哪进"</strong>：①<strong>入口映射</strong>——自由文本 query → 图入口节点（哪个概念 / 命题 / claim_type）；②<strong>图内遍历</strong>——概念→hasStatement→groundedIn→chunk、论证边、claim_type 过滤。第 ② 段是纯图遍历、不需向量；第 ① 段才是向量真正扛的活，也是想"去掉向量"时必须用别的东西（符号/异名 + LLM）顶上的一步。图回答"进了之后怎么走"，不回答"你的 query 该从哪个节点进"。</li>
+        <li><strong>结论 2 · 查证微软 GraphRAG，融合点=向量从哪进、图怎么找全</strong>：两阶段（离线索引 + 查询）。Local Search = 实体概要 embedding 命中种子实体 → 图邻域扩展 → 关联文本块；Global Search = 社区摘要 map-reduce（不用块级检索）；DRIFT = 全局+局部的结合。它把"query→实体"用向量、"实体→邻域→文本块"用图、文本块做证据——正是"向量入口 + 图组织 + 原文证据"。</li>
+        <li><strong>结论 3 · 我们独立推出的=GraphRAG 挖除社区块的主体骨架</strong>（沛东观察，确认）：差异帧在 GraphRAG 给不了的部分——<strong>类型化命题 + claim_type</strong>（对齐判官金标准，GraphRAG 的 claim/relation 是自由串）、<strong>judge 对齐的 grounding</strong>（每条命题 groundedIn 到具体 chunk）、<strong>确定性 + 学习任务视角</strong>（多维审约束）、<strong>编译人工复核</strong>。故主架构既然已知，接下来"怎么编译"不做骨架发明，而是把精力放在这些差异化点 + 借用其成熟的 LLM 抽取/归并/分块做法。</li>
+        <li><strong>结论 4 · 检索角色定调（沛东拍板）</strong>：<strong>向量=入口 + 兜底，图=主路由</strong>——入口向量打概念/命题（query→图节点），兜底向量打 chunk（图没命中/问题未建模时捞证据）；<strong>不做 chunk 级重排器</strong>（证据侧排序由图信号确定性完成，如到种子实体距离 / 命中数 / claim_type）。纯符号/异名匹配被否：对 paraphrase 与术语漂移脆弱（harness 多家叫法是反例）。</li>
+        <li><strong>结论 5 · 存储落地不必然上图数据库</strong>：语料千级块 + 几百概念/命题，量级用现有 SQLite 建边表即可跑通图遍历，比引入 Neo4j / Jena Fuseki 轻；"图"是结构语义概念，落地未必专用图库。</li>
+        <li><strong>待验证（求真戒直觉）</strong>：以上"向量入口命中 / 图遍历聚齐 / 兜底兜住未建模"目前是直觉，需搭最小切片（O2/A5 几十块 + 手搭几十节点图 + 嵌入）跑真实用例验证三点：①向量入口 vs 纯符号的命中率；②命中后图遍历能否聚齐该用例证据块；③未建模探索性 query 兜底能否兜住且不破坏引用审计。</li>
+      </ul>
+      <p><strong>结论（v0.11，2026-09-09 11:19）</strong>：检索三段定调——<strong>向量=入口（概念/命题）+ 兜底（chunk），图=主路由（hasStatement/论证边/groundedIn/claim_type 过滤），不做 chunk 重排器</strong>；与 GraphRAG 的关系=借用其骨架（索引即图）+ 差异化（类型化命题/判官对齐 grounding/确定性/学习任务/人工复核），并明确其"编译结果当事实源"面（Global/community 摘要）被我们的硬约束否掉。</p>
+
+      <h3>考古层第十二段 · 引入图建模检索层：不追求完美，噪声可控，值得（2026-09-09 11:37）</h3>
+      <p><strong>起题</strong>：沛东追问"LLM 编译出三元组会有很多噪声、需要人审；别说十万级文档库，就咱们这几千条，人审基本落不了地"——把"编译人工复核"这个假设从可行推向怀疑，也逼我们把"引入这套结构"的权衡算清楚。</p>
+      <ul>
+        <li><strong>结论 1 · 人工复核的粒度是"基础件"，不是"产物"</strong>：人审编译 prompt / claim_type 词表（复用 ISR/FrameNet 收敛）/ grounding 规则 / 校验门，几十条就够；审的是"规则"，不是"每条产物"。这与项目"基础件人工复核"纪律一致——我们一向审金标准/判官提示词/系统提示词/工具契约，从不逐个审输出。</li>
+        <li><strong>结论 2 · 噪声分两类，各有自动化的挡法</strong>：①<strong>结构性</strong>（id 不存在、claim_type 不在词表、groundedIn 指向不存在的块、违反基数）→ <strong>程序化校验直接拦</strong>（同判官"校验闸门"做法）；②<strong>语义性</strong>（主张内容错、关系类型标错、异名归并错）→ <strong>判官/引用审计当自动质量门</strong>（覆盖性/引用真实性）+ <strong>定时抽样</strong>看漂移。</li>
+        <li><strong>结论 3 · 关键：噪声的爆炸半径锁死在"路由"，进不了"事实"</strong>：因为 chunk=事实源、编译=索引（第 3 条硬约束），答案从 chunk 生成；某条命题哪怕抽错/归并错/type 错，最坏结果=漏块/路由偏差，判官的覆盖性/引用真实性会把它当 miss 揪出来；它<strong>不会变成一句编错的事实被当成答案</strong>。LLM 编译噪声只毒害"取到哪些块"，不毒害"回答什么"——而前者能用判官自动兜住。</li>
+        <li><strong>结论 4 · 权衡（沛东拍板）</strong>：引入图建模检索层<strong>不追求完美</strong>；即便有噪声，它已解决大量问题；剩余问题被上述机制（校验 + 判官门 + 抽样 + 噪声锁死在路由）兜住，<strong>不会让引入弊大于利</strong>——这个权衡够清楚、够划算。</li>
+        <li><strong>落点</strong>：编译层设计必须把"<strong>校验层 + 质量门</strong>"当一等设计项（schema 校验 / claim_type 词表约束 / grounding 一致性 / 判官引用审计在编译侧复用），不能指望"人审产物"兜底；库越大越依赖机器门，而门制是可扩的。</li>
+      </ul>
+      <p><strong>结论（2026-09-09 11:37）</strong>：编译噪声是真实存在但可控的——人工复核=审基础件＋程序结构校验＋判官自动门＋抽样，而非"人审每条产物"；关键设计约束是把噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引）。综上，引入图建模检索层即便有噪声也划算，胜过无结构的纯稠密 top-k。</p>
+
+      <h3>考古层第十三段 · 编译层设计定调：源=清洗后原文、粒度=内容单元、reify=预测+修补（2026-09-09 12:10）</h3>
+      <p><strong>起题</strong>：过了"检索角色定调 / 噪声可控"后，真正进入"怎么编译"。沛东连追三问把编译层从"想象"推到"可落地"：①该直接抽具体化陈述吗？还是文档/概念/边/具体化陈述一起？reify 判据？②从哪编译（原文？chunk？）？③内容单元是不是虚概念、要不要长度上限？</p>
+      <ul>
+        <li><strong>结论 1 · 编译=一次带类型的 pass，不是"statement-first"</strong>：LLM 读编译上下文，产类型化元素（文档/概念+异名/边/被判定 reify 的具体化陈述）；是否 reify 由判据分流，不是"先抽命题再补概念"。</li>
+        <li><strong>结论 2 · 编译源=清洗后原文（切片为 chunk 的输入），非 chunk</strong>：chunk 拆散论断、缺完整上下文；即便"引用锚=连续块组"也是拆后聚合、非原文连续（查证 <code>_resolve_citation_groups</code> 聚"声明组"、<code>_marker_groups</code> 按模型输出连续 [n] 切段，均非原文连续）。</li>
+        <li><strong>结论 3 · reify 本质是预测（无法预先知道会不会被问）→ 需"预测+修补"两段</strong>：<strong>预测</strong>（编译时）——claim_type 在被查词表（从判官/a5-cmp 反推的检索需求类型学）/ 立场性"谁—这么认为" / 概念中心度（跨单元/来源、命名主题）/ 需作论证端点，命中任一即 reify；纯结构关系（partOf/involves/precedes）与纯属性留边/标签。<strong>修补</strong>（查询/回答时）——①dense 兜底先接住（信息仍在证据里，只是没组织成陈述，不丢事实）；②判官 miss 驱动 promote（信息在但没组织→提升为具体化陈述）；③周期清扫批量 promote → 自愈索引。复用判官/覆盖性机制。</li>
+        <li><strong>结论 4 · 内容单元=虚概念、仅编译时用、不落库</strong>：语义边界（标题/小节）优先，<strong>token 上限 12k</strong>（约 1.5–2.5 万字）兜底；超限在小节/段界切、留 overlap；跨单元同概念归并（sameAs/denotes）、声明合并、去重。</li>
+        <li><strong>结论 5 · chunk 须补"清洗后原文偏移"（global offset）</strong>：否则 span→chunk 只能靠"section+内容"弱锚；grounding=证据 <strong>chunk 集合</strong>（多对多，判官"声明组"口径）。</li>
+        <li><strong>结论 6 · 校验层+质量门为一等设计项</strong>：人审基础件 / 程序结构校验 / 判官/引用审计自动门 / 抽样；噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引），进不了"事实"。</li>
+      </ul>
+      <p><strong>结论</strong>：编译层"="清洗后原文 → 内容单元（≤12k token）→ 一次带类型抽取 → 跨单元归并 → 校验层+质量门"；产出"对象图（概念/异名/文档 + 具体化陈述 + 边）+ 证据 chunk 集合"；reify 由"预测+修补"决定，替代旧的"对齐 chunk"判据。</p>
+
       <h3>决策记录与未决（时间精确到分）</h3>
       <ul>
         <li>2026-09-08 上午：沛东拍板开 0028，考古层第一段先记录问题、分析、初步方向；开宗明义采用"RAG 本义被窄化"讨论；</li>
         <li>2026-09-08 12:52：对象模型升级 v0.2（对象=概念非容器 / 文章=容器根 / facet 三态判据 / 术语对齐成熟领域），概念图同步更新；</li>
         <li>2026-09-08 15:10：对象模型升级 v0.3——KG 打底（概念/命题/文档/术语四类实体 + 各谓词），舍弃自创"对象图"异构；边分概念结构层与声明论证层；术语层含概念-术语分离/denotes/时态/sameAs/防回填铁律；三个自研增量（路由入口/facet 组织/出处链对齐）单列。概念图待升 v0.3；</li>
         <li>2026-09-08 15:30：对象模型 v0.4（命题 = 可选择性 reify 的三元组：provenance/时态/论证端点/引用审计四触发；四级分层确认：元模型/顶层本体/领域本体/实例；类借顶层本体、自研在领域本体+三增量）。概念图同步升 v0.4；</li>
-        <li>2026-09-08 15:53：对象模型 v0.5——facet=谓词非字段（私有/共享仅指引用范围）；"升级为独立轴"=实体但分两档（对象属性 vs 轴实体节点）；谓词/边/标签三层（类型/实例/命名）；reify 通用定律（默认位置→三判据触发对象化）；语义不重复标注原则；自研增量②定位。概念图待升 v0.5；</li>
-        <li>未决：facet 升格节点的具体判据样例（何时算"被独立提问"需题型学定界）、术语/命题 reify 判据与 facet 三态的统一、编译层与判官引用锚（连续块组）的 schema 联动、切片验证范围——待方案讨论后落定再进入实现。</li>
+        <li>2026-09-08 15:53：对象模型 v0.5——facet=谓词非字段（私有/共享仅指引用范围）；"升级为独立轴"=实体但分两档（对象属性 vs 轴实体节点）；谓词/边/标签三层（类型/实例/命名）；reify 通用定律（默认位置→三判据触发对象化）；语义不重复标注原则；自研增量②定位。概念图同步升 v0.5；</li>
+        <li>2026-09-08 16:31：对象模型 v0.6——cmp 家族真实用例验证通过（表达力+根因归类成立）；命题可带 rdf:type 论述功能子类（claim_type，复用 ISR/FrameNet）；rdf:type 通用所有实体；对象图两类路由（概念/轴语义 + 命题类型过滤）。概念图待升 v0.6；</li>
+        <li>2026-09-08 16:51：对象模型 v0.7——复杂度警报与减法：<strong>删除独立 topic 类别，主题=概念（内容标签用法）</strong>；模型收敛为三样（三类实体 concept/document/term + 可 reify 命题边 + 维度谓词）；检索两机制（概念/轴语义路由 + 命题类型过滤路由）；归类曾绕的弯路（topic/轴/facet/claim_type 并入三样）。概念图待升 v0.7；</li>
+        <li>2026-09-08 收官：对象模型 v0.8——<strong>用户视角否掉"维度"</strong>：查证 O2/A5 原文（讲"用什么工具设防"，无"组织层/环境层"字样），判断"维度/轴/facet/比较轴"是分析抽象、非语料实体、非用户提问语言，<strong>全部删除</strong>；模型回到"概念 + 命题（可 reify rdf:Statement + claim_type）+ 语义边（结构/论证）+ 归属边（grounding）"；多源对比 = 同 concept 下多条 proposition 经语义边关联；三自研增量收为（路由入口 / 多源对照组织 / 出处链接引用锚）。概念图 + 0028 同步 v0.8；</li>
+      <li>2026-09-09 09:59：对象模型 v0.9——<strong>reify 真正动机</strong>（沛东因果链）：只有实体能作为端点指向 chunk；断言才需要指向 chunk；故断言 reify 成命题。判据：<strong>要不要 groundedIn 到 chunk = 要不要 reify 成命题</strong>。概念 ≠ 命题（宾语所指 vs 断言）；勘误"引用审计要求 reify"（那是输出后的事，与建模无关）。0028 同步 v0.9；</li>
+      <li>2026-09-09 10:42：对象模型 v0.10——<strong>术语定名与标准核实</strong>："命题"统一为"具体化陈述（reified statement，rdf:Statement）"（= KG 已有 rdf:Statement / reification 标准模式，非自造）；"断言"留给未 reify 的陈述；KG 处理"主谓宾装不下"三套方案（reification / n-ary / named graph）确认选 reification；hasStatement（初稿 hasClaim，敲定为 hasStatement）确认非标准谓词、语义对齐 dcterms:subject（陈述边）。概念图 + 0028 同步 v0.10；</li>
+      <li>2026-09-09 11:19：检索角色定调 v0.11——<strong>向量=入口+兜底，图=主路由，不做 chunk 重排器</strong>；认同"收敛到 GraphRAG 骨架（除社区摘要）"并明确差异化点（类型化命题+claim_type / 判官对齐 grounding / 确定性+学习任务 / 人工复核）；否掉纯符号/异名入口（对 paraphrase、术语漂移脆弱）；存储不必然上专用图库（SQLite 建边表可跑通）；待搭最小切片验证向量入口命中/图遍历聚齐/兜底保真。0028 同步 v0.11；</li>
+      <li>2026-09-09 11:37：编译噪声可控定调——<strong>人工复核=审基础件（编译 prompt/claim_type 词表/grounding 规则/校验门）＋程序结构校验＋判官自动门＋抽样</strong>，非"人审每条产物"；噪声分两类（结构→程序拦 / 语义→判官兜）；关键：把噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引），进不了"事实"；故引入图建模检索层不追求完美、即便有噪声也划算，利大于弊。编译层设计须把"校验层+质量门"当一等项。0028 同步；</li>
+      <li>2026-09-09 12:10：编译层设计定调 v0.12——<strong>编译源=清洗后原文（非 chunk）；粒度=内容单元（虚概念、仅编译用、token 上限定 12k）；一次带类型 pass（文档/概念+异名/边/具体化陈述）；reify 判据=预测+修补</strong>（预测：claim_type 被查词表/立场性/概念中心度/论证端点；修补：dense 兜底/判官 miss promote/周期清扫）；chunk 补"清洗后原文偏移"（global），grounding=证据 chunk 集合（多对多）；内容单元不落库、跨单元归并/去重；校验层+质量门一等项。0028 + 架构文档同步 v0.12；</li>
+        <li>未决：facet 升格节点的具体判据样例（何时算"被独立提问"需题型学定界）、术语/命题 reify 判据与 facet 三态的统一、编译层与判官引用锚（连续块组）的 schema 联动；<strong>入口向量 vs 纯符号+LLM 的取舍、检索三段（向量入口命中/图遍历聚齐/兜底保真）的实测表现</strong>——待最小切片验证后定论再进入实现。</li>
       </ul>
     </section>
 
     <footer class="page-foot">
-      记录创建：2026-09-08 · 初稿待沛东确认 · 随检索架构讨论演进维护
+      记录创建：2026-09-08 · 更新：2026-09-09 10:03 · 初稿待沛东确认 · 随检索架构讨论演进维护
     </footer>
   </div>
 </body>
