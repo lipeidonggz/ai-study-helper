@@ -197,7 +197,7 @@
     <div class="section">
       <h2>④ 编译层：从清洗后原文 → 对象图</h2>
       <p style="font-size:13.5px;line-height:1.8;margin:0 0 12px;">编译层把语料"编译"成对象图（概念/文档/异名 + 具体化陈述 + 边）。它是<b>索引/地图</b>而非事实源——编译产物落到 chunk（含清洗后原文偏移）作为证据。<b>不是</b>把编译结果当事实（见第 3 条硬约束、决策 6）。</p>
-      <div class="chain"><b>编译流水线</b>：清洗后原文 → 按<b>内容单元</b>切（语义边界优先、<b>token 上限 12k</b> 兜底）→ LLM 一次带类型抽取 → 产物（文档 / 概念+异名 / 边 / 具体化陈述，含 claim_type + 出处 + 证据）→ 跨单元归并 → 校验层 + 质量门。</div>
+      <div class="chain"><b>编译流水线</b>：清洗后原文 → <b>内容单元</b>（语义边界优先、≤12k token 兜底；整篇 &lt;12k 时整篇即一个单元，<code>section_path</code> 仅边界启发式、非强制切分点）→ 【<b>Pass 1 抽取</b>】按窗口抽<b>原子断言 + 逐字短锚</b>（宽召回门槛；subject/object 用名词短语；局部抽取、不需全局；窗口 ~5k 字符段落界切；短锚=每支撑块 1–2 句，省输出 token 且定位更稳）→ 【<b>Pass 2 分类/建图</b>】按批做<b> KG 组装</b>（reify 判据 + claim_type + 概念/relation + data_evidence；~40 条/批、程序合并、claim_idx 偏移、实体去重）→ <b>A4 引文锚定</b>（evidence_texts 归一化定位 → chunk 并集 → evidence_chunks）→ 产物（entity / statement / relation + term + data_evidence）→ 跨单元归并 → 校验层 + 质量门。</div>
 
       <h3 style="margin:14px 0 6px;font-size:14px;">关键决策</h3>
       <div class="adr">
@@ -219,8 +219,8 @@
           <b>约束与理由</b>：claim_type 是<b>路由过滤标签</b>，不是"论文话语结构标注"——只在三种情况才需要（① 概念陈述集<b>异构</b>，概念路径分不开；② 用户<b>按单一论述角色过滤</b>；③ 别的路径——概念 / 结构边 / 论证边 / 出处边 / 生成——带不到）。权威词表（AZ/CoreSC：Background/Method/Result/Conclusion/Limitation/Future Work；Argument Mining 的 claim/premise、interpretation/evaluation/agreement/disagreement；SemMedDB 谓词）以<b>穷举标注全部句子</b>为目标，<b>我们的 claim_type 只需覆盖"被 reify + 要按角色过滤"的交集</b>，故权威角色大多并非检索所需；且问题空间（学习者按"角色"过滤的题型）本就很窄、由产品定位固定，语料量只是二阶因子（再多文档只提高概念陈述集异构/激活度，更多来源的异名/术语漂移落在入口/异名侧，均撑不大类型集合）；LLM 把"理解"挪出了类型系统（入口映射、回答生成+判官、其它结构边各自接活）。<b>原则：分类粒度由"它服务的决策/查询"决定，不由数据丰富度决定。</b>
         </div>
       </div>
-      <h3 style="margin:16px 0 6px;font-size:14px;">A2 · 编译输出 schema（每内容单元产出的对象）</h3>
-      <p style="font-size:12.8px;line-height:1.8;margin:0 0 10px;">编译器一次带类型 pass，对每个<strong>内容单元</strong>产一批对象：<code>content_unit</code>（编译窗口，虚、不落库）+ <code>document / concept / term / statement / edge</code>。每个对象有<strong>私钥 <code>id</code>：全局唯一、无业务含义，当数据库主键（ULID / 序列）</strong>；<strong>展示/自然键另用字段</strong>（document 的 <code>ref</code>=O2/A5、concept 的 <code>canonical</code>、term 的 <code>label</code>），供人读与编译期去重。id 不承担业务含义——避免重命名 / 撞名破坏引用，不能拿名字当主键。</p>
+      <h3 style="margin:16px 0 6px;font-size:14px;">编译输出 schema（每内容单元产出的对象）</h3>
+      <p style="font-size:12.8px;line-height:1.8;margin:0 0 10px;">编译器分<strong>两段</strong>、对每个<strong>内容单元</strong>产一批对象：<b>Pass 1 抽原子断言（看局部）</b>、<b>Pass 2 分类/组装（看全局）</b>。产物含 <code>content_unit</code>（编译窗口，虚、不落库）+ <code>entity / term / statement / relation / data_evidence</code>（<b>KG 术语</b>，对应本文档的 概念 / 具体化陈述 / 边）。每个对象有<strong>私钥 <code>id</code>：全局唯一、无业务含义，当数据库主键（ULID / 序列）</strong>；展示/自然键另用字段（document 的 <code>ref</code>=O2/A5、概念 <code>canonical</code>、term 的 <code>label</code>）。id 不承担业务含义——避免重命名 / 撞名破坏引用，不能拿名字当主键。</p>
       <table>
         <tr><th>对象</th><th>字段</th><th>类型</th><th>必填</th><th>含义</th></tr>
         <tr><td rowspan="5">content_unit<br><small>编译窗口（虚、不落库）</small></td><td><code>source_id</code></td><td>str</td><td>是</td><td>源代号（O2 / A5 / T1…）</td></tr>
@@ -244,35 +244,37 @@
         <tr><td><code>label</code></td><td>str</td><td>是</td><td>异名（自然键）</td></tr>
         <tr><td><code>denotes</code></td><td>PK ref</td><td>是</td><td>指向 <code>concept.id</code>（引用 id，不是 canonical）</td></tr>
         <tr><td><code>note</code></td><td>str</td><td>否</td><td>漂移/来源说明</td></tr>
-        <tr><td rowspan="10">statement</td><td><code>id</code></td><td>PK</td><td>是</td><td>全局唯一、无业务含义</td></tr>
+        <tr><td rowspan="11">statement</td><td><code>id</code></td><td>PK</td><td>是</td><td>全局唯一、无业务含义</td></tr>
         <tr><td><code>type</code></td><td>enum</td><td>是</td><td><code>statement</code></td></tr>
         <tr><td><code>subject</code>/<code>object</code></td><td>PK ref</td><td>是</td><td>端点 = 概念/文档/异名（引用 id）</td></tr>
         <tr><td><code>predicate</code></td><td>str</td><td>是</td><td>关系动词（主张 / 承认 / 采取…）</td></tr>
         <tr><td><code>claim_type</code></td><td>enum</td><td>否</td><td>仅类型过滤类赋值：<code>LimitationStatement</code>/<code>OutlookStatement</code>；否则空</td></tr>
-        <tr><td><code>reify_reason</code></td><td>enum</td><td>是</td><td><code>type_filter</code>（claim_type 在被查词表）/ <code>argument_endpoint</code>（作论证边端点）/ <code>concept_central</code>（跨单元/来源枢纽）</td></tr>
-        <tr><td><code>clean_ref</code></td><td>{src,file,start,end}</td><td>是</td><td>该断言在"清洗后原文"的 span（A4 用）</td></tr>
+        <tr><td><code>reify_reasons</code></td><td>str[]</td><td>是</td><td>可多选、列所有命中项：<code>type_filter</code>（claim_type 在被查词表）/ <code>argument_endpoint</code>（作论证边端点）/ <code>concept_central</code>（跨单元/来源枢纽）；一条断言可同时命中（如"既是局限又是论证端点"）</td></tr>
+        <tr><td><code>evidence_texts</code></td><td>str[]</td><td>否</td><td>LLM 输出的逐字连续原文引文数组（每段一段连续引文；引文锚定逐段定位；也作引用审计/排障锚）</td></tr>
+        <tr><td><code>clean_ref</code></td><td>{src,file,start,end}</td><td>是</td><td>程序由 evidence_texts 逐段归一化匹配定位的起止（引文锚定算出）</td></tr>
         <tr><td><code>asserted_by</code></td><td>doc ref</td><td>是</td><td>文档→陈述（asserts 边来源；立场/谁说的由此承载，不单列 reify 触发）</td></tr>
         <tr><td><code>about</code></td><td>concept ref[]</td><td>否</td><td>概念↔陈述（hasStatement 主题，对齐 dcterms:subject）</td></tr>
-        <tr><td><code>evidence_chunks</code></td><td>chunk ref[]</td><td>否</td><td>A4 由 clean_ref 与 chunk_offsets 重叠算出</td></tr>
+        <tr><td><code>evidence_chunks</code></td><td>chunk ref[]</td><td>否</td><td>由 clean_ref 与 chunk_offsets 重叠算出（引文锚定）</td></tr>
         <tr><td rowspan="5">edge</td><td><code>id</code></td><td>PK</td><td>是</td><td>全局唯一、无业务含义</td></tr>
         <tr><td><code>from</code>/<code>to</code></td><td>node ref</td><td>是</td><td>端点（实体 / 陈述 / chunk）</td></tr>
         <tr><td><code>predicate</code></td><td>enum</td><td>是</td><td>关系名（见谓词词表）</td></tr>
         <tr><td><code>clean_ref</code></td><td>{...}</td><td>否</td><td>有原文依据时给；纯结构/关系则无</td></tr>
         <tr><td><code>produced_by</code></td><td>enum</td><td>是</td><td><code>compile</code> / <code>compile-hypothesis</code> / <code>auto</code>（含义见下）</td></tr>
       </table>
-      <div class="chain" style="margin-top:10px;"><b>A4 · span→chunk</b>：statement 的 <code>clean_ref</code> 是 LLM 相对内容单元输出的 span，程序用 <code>content_unit.clean_start</code> 平移成"清洗后原文"坐标，再与 <code>chunk_offsets</code> 做 <code>[start,end)</code> 重叠 → <code>evidence_chunks</code>（证据 chunk 集合，多对多，判官"声明组"口径）。LLM 只输出 span，不给 chunk id。</div>
-      <div class="chain" style="margin-top:10px;"><b>produced_by 取值含义</b>：<b>compile</b>=编译器从原文直接抽出、有 span 背书的产物（概念/文档/结构边/asserts/有原文支撑的陈述），低风险；<b>compile-hypothesis</b>=编译器<b>推断的关系</b>、无单一 span 直接背书（主要是 <code>support/attack/complement</code> 论证边），已标注为假设、待 C 自动判定/判官兜底，风险较高；<b>auto</b>=<b>程序算的</b>（<code>groundedIn</code> 由 A4 重叠得出、<code>provenance</code> 派生），确定性输出。</div>
+      <div class="chain" style="margin-top:10px;"><b>引文锚定 → chunk（span→chunk 映射）</b>：LLM 对每陈述输出<b>逐字连续原文引文数组</b> <code>evidence_texts</code>（每段一段连续引文，可跨多个不连续段落），<b>不给数字 span、不许 "..." 桥接</b>；程序对<b>每段</b>在内容单元文本上做<b>归一化精确匹配</b>（压缩空白/换行、统一引号/破折号、剥 markdown 记号）定位起止 → 加 <code>content_unit.clean_start</code> 得全局坐标 → 与 <code>chunk_offsets</code> 做 <code>[start,end)</code> 重叠 → <b>并集</b>得 <code>evidence_chunks</code>（多对多，判官"声明组"口径）。<b>某段匹配失败仅该段降级 section 级弱锚，其余段照常落块</b>（段级优雅降级；全段落空才整条降级 <code>anchor=section</code>，引用审计标注精度降级）。绕开"LLM 标数字不可靠"——数字只由程序算，LLM 只复现文本。</div>
+      <div class="chain" style="margin-top:10px;"><b>produced_by 取值含义</b>：<b>compile</b>=编译器从原文直接抽出、有 span 背书的产物（概念/文档/结构边/asserts/有原文支撑的陈述），低风险；<b>compile-hypothesis</b>=编译器<b>推断的关系</b>、无单一 span 直接背书（主要是 <code>support/attack/complement</code> 论证边），已标注为假设、待 C 自动判定/判官兜底，风险较高；<b>auto</b>=<b>程序算的</b>（<code>groundedIn</code> 由引文锚定重叠得出、<code>provenance</code> 派生），确定性输出。</div>
       <div class="chain" style="margin-top:10px;"><b>谓词词表</b>（edge 的 <code>predicate</code> 取值，按族分组，各声明端点 + 产出方）：</div>
       <table>
         <tr><th>族</th><th>谓词</th><th>from→to</th><th>产出方</th><th>注</th></tr>
         <tr><td>结构</td><td><code>partOf</code>/<code>involves</code>/<code>precedes</code></td><td>概念↔概念</td><td>compile</td><td></td></tr>
         <tr><td>论证</td><td><code>support</code>/<code>attack</code>/<code>complement</code></td><td>陈述↔陈述</td><td>compile-hypothesis</td><td>自动判定待 C</td></tr>
-        <tr><td>归属</td><td><code>groundedIn</code></td><td>陈述/概念→chunk</td><td>auto</td><td>A4 重叠算</td></tr>
+        <tr><td>归属</td><td><code>groundedIn</code></td><td>陈述/概念→chunk</td><td>auto</td><td>引文锚定重叠算</td></tr>
         <tr><td>断言</td><td><code>asserts</code></td><td>文档→陈述</td><td>compile</td><td></td></tr>
         <tr><td>陈述边</td><td><code>hasStatement</code></td><td>概念↔陈述</td><td>compile</td><td>语义对齐 dcterms:subject</td></tr>
       </table>
+      <div class="chain" style="margin-top:14px;"><b>两段式 + 窗口化 / 分批（B6 已验证，2026-09-09）</b>：<b>Pass 1 抽取</b>=按窗口抽<strong>原子断言 + 逐字短锚</strong>（宽召回门槛——只抽对可点名知识对象述说可引证之事；跳过叙述/过渡/复述/无新断言例子；短锚=每支撑块 1–2 句，<b>省输出 token、且短引文更抗定位偏差</b>；<b>窗口 ~5k 字符、段落界切</b>——Pass 1 只做局部抽取、不需完整上下文，窗口小则不触发输出上限）。<b>Pass 2 分类/建图</b>=按批做 <b>KG 组装</b>（<code>reify_reasons</code> 三触发判 statement、<code>claim_type</code> 局限/展望判别、概念规范化/去重、<code>data_evidence</code> 数据并入 statement 证据；<b>~40 条/批防输出上限</b>，程序合并：claim_idx 偏移、实体按 name 去重）。<b>A4 引文锚定</b>=evidence_texts 归一化定位 → chunk 并集 → evidence_chunks。理由：<b>抽取=召回、分类=精度</b>分离（借鉴判官稳定性做法）；<b>输出上限是硬约束</b> → 把大结构拆成可限长的块（窗口/分批）。<b>B6 实测</b>：O2/A5 218 claim → 146 entity / 150 statement / 298 relation，A4 定位 100%；<strong>over-reify 在 <code>concept_central</code>（判太松，属性/定义/机制也立节点）</strong>——收紧 concept_central 为待定项（见 0028 未决）。</div>
       <div class="chain" style="margin-top:14px;"><b>校验层 + 质量门（一等设计项）</b>：人审基础件（编译 prompt / claim_type 词表 / grounding 规则 / 校验门）+ 程序结构校验（id / 词表 / grounding 一致性）+ 判官/引用审计自动门（覆盖性 / 引用真实性）+ 定时抽样；噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引），进不了"事实"。</div>
-      <div class="chain" style="margin-top:14px;"><b>实现提示（编译层如何用偏移 / 划内容单元）</b>：① 编译层按 <code>(source_id, file_idx)</code> 定位"清洗后原文"文件（<code>file_idx</code> 对应入库时多文件源的第几个文件）；② 在该文件内按 <code>section_path</code> 分组、切出<b>内容单元</b>（章节/小节，语义边界优先、≤12k token 兜底，超限在小节/段界切、留 overlap）——<b>内容单元划分是编译层职责，不在 chunk/偏移层做</b>；③ 对单元内每条命题，用 <code>(start_pos, end_pos)</code> 与 chunk 区间做重叠，得到证据 chunk 集合。单文件大 PDF：<code>file_idx</code>=0、内容单元即按该文件的 <code>section_path</code> 分组。</div>
+      <div class="chain" style="margin-top:14px;"><b>实现提示（编译层如何用偏移 / 划内容单元 / 控输出上限）</b>：① 编译层按 <code>(source_id, file_idx)</code> 定位"清洗后原文"文件；② 在该文件内切出<b>内容单元</b>——<b>语义边界优先的连贯窗口</b>（<code>section_path</code> 仅启发式、非强制切分点；整篇 &lt;12k token 时整篇即一个单元），超限才在小节/段界切、留 overlap——内容单元划分是编译层职责，不在 chunk/偏移层做；③ <b>Pass 1 在该内容单元内再按窗口（~5k 字符、段落界切）逐窗抽取</b>（局部抽取不需要全局，窗口小则不触发输出上限）；④ <b>Pass 2 按批（~40 条/批）分类组装</b>（图太大时单次输出超限 → 分批 + 程序合并，claim_idx 偏移、实体按 name 去重）；⑤ 对每条 statement，用 <code>evidence_texts</code>（引文锚定）定位 + 与 chunk 区间重叠，得证据 chunk 集合。单文件大 PDF：<code>file_idx</code>=0、内容单元即该文件（偏移即全局）。</div>
     </div>
 
     <div class="footer">
