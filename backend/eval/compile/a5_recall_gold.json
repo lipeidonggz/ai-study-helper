@@ -1,0 +1,28 @@
+{
+  "source": "A5",
+  "kind": "recall_gold",
+  "note": "Pass 1 召回金标准（粗）：抓'漏没漏'，非精度标准。anchor_text 必须与清洗后原文逐字一致（程序定位用）。must=true 的漏了更严重。",
+  "match_rule": "每项：把 anchor_text 定位到 clean_T 得 span；若存在 >=1 条 Pass1 claim 的 evidence_texts 定位后与该 span 重叠 → 命中。recall = 命中项 / 总项。",
+  "items": [
+    {"id": "g01", "must": true,  "anchor_text": "we supervise what it’s able to do", "section": "containment", "what": "containment=监督'能做什么'（经沙箱/VM/出口控制）"},
+    {"id": "g02", "must": true,  "anchor_text": "approved roughly 93% of permission prompts", "section": "HITL", "what": "HITL 批准率≈93%（可错）"},
+    {"id": "g03", "must": false, "anchor_text": "any probabilistic defense has a non-zero miss rate", "section": "HITL", "what": "概率防御有非零漏检"},
+    {"id": "g04", "must": true,  "anchor_text": "The agent takes a harmful action no one asked for", "section": "three risks", "what": "风险三类（误用/模型不当/外部攻击）——锚到类别内容段（非引导句）"},
+    {"id": "g05", "must": true,  "anchor_text": "The environment in which the agent runs", "section": "three components", "what": "防御三组件（环境/模型/外部内容）——锚到组件内容段（非引导句）"},
+    {"id": "g06", "must": false, "anchor_text": "in a gVisor container on isolated infrastructure", "section": "claude.ai", "what": "claude.ai：gVisor 容器 + 隔离 / server-side / ephemeral FS"},
+    {"id": "g07", "must": false, "anchor_text": "allow reads, require approval for write, bash, and network access", "section": "Claude Code", "what": "Claude Code 初始防御"},
+    {"id": "g08", "must": false, "anchor_text": "we shipped an OS-level sandbox", "section": "Claude Code", "what": "OS-level sandbox（Seatbelt/bubblewrap）"},
+    {"id": "g09", "must": false, "anchor_text": "an 84% reduction in permission prompts", "section": "Claude Code", "what": "sandbox 使提示降 84%"},
+    {"id": "g10", "must": false, "anchor_text": "Do you trust this folder?", "section": "trust boundary", "what": "未获信任前执行本地 hook（trust boundary 缺陷）"},
+    {"id": "g11", "must": false, "anchor_text": "Claude completed the exfiltration 24 times", "section": "phish", "what": "25 次重试 24 次外泄（用户作为注入向量）"},
+    {"id": "g12", "must": true,  "anchor_text": "The only defense that holds in this situation is the environment", "section": "phish", "what": "用户注入向量时环境层唯一有效防御"},
+    {"id": "g13", "must": true,  "anchor_text": "ran inside a full virtual machine", "section": "Cowork", "what": "Cowork 首版全 VM 隔离（凭据留 host keychain）"},
+    {"id": "g14", "must": false, "anchor_text": "any failure during VM startup made Cowork unusable", "section": "Cowork", "what": "全 VM 缺陷 → 改 host-mode"},
+    {"id": "g15", "must": true,  "anchor_text": "a malicious file placed in the user’s mounted workspace", "section": "egress incident", "what": "经允许域(api.anthropic.com)外泄的翻车案例"},
+    {"id": "g16", "must": false, "anchor_text": "the software you build yourself is often the weakest", "section": "lesson", "what": "自建组件往往最薄弱"},
+    {"id": "g17", "must": false, "anchor_text": "Isolation reduces visibility", "section": "EDR", "what": "隔离降低可见性/妨碍端点检测"},
+    {"id": "g18", "must": true,  "anchor_text": "Persistent memory poisoning", "section": "looking ahead", "what": "展望：持久内存投毒"},
+    {"id": "g19", "must": true,  "anchor_text": "Multi-agent trust escalation", "section": "looking ahead", "what": "展望：多agent信任升级"},
+    {"id": "g20", "must": false, "anchor_text": "environment layer first, then steer behavior at the model layer", "section": "principles", "what": "原则：环境层先行、再模型层引导"}
+  ]
+}

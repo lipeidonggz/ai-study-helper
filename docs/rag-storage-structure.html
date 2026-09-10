@@ -135,7 +135,7 @@
         <tr><td><b>概念</b></td><td>稳定知识对象 / 主题</td><td><code>:harness rdf:type :concept</code>；<code>:concept rdf:type owl:Class</code></td></tr>
         <tr><td><b>文档</b></td><td>信息内容实体</td><td><code>:O2 rdf:type :document</code></td></tr>
         <tr><td><b>异名</b></td><td>演化叫法</td><td>默认 <code>skos:altLabel</code>；reify 后 <code>rdf:type :term</code></td></tr>
-        <tr><td><b>具体化陈述</b></td><td>已 reify 的断言（由边对象化）</td><td><code>:s1 rdf:type :Statement</code>（rdf:subject/predicate/object）+ provenance；提升判据见决策 9（预测+修补）</td></tr>
+        <tr><td><b>具体化陈述</b></td><td>已 reify 的断言（由边对象化）</td><td><code>:s1 rdf:type :Statement</code>（rdf:subject/predicate/object；<b>object 可选</b>、可带 <code>roles</code> 角色限定）+ provenance；提升判据见决策 9（预测+修补）</td></tr>
         <tr><td><b>claim_type</b></td><td>具体化陈述的论述功能类型</td><td><code>:s1 rdf:type :LimitationStatement</code>（subClassOf :Statement）</td></tr>
         <tr><td><b>概念结构边</b></td><td>概念间结构关系</td><td><code>owl:ObjectProperty</code>（partOf/involves/precedes）</td></tr>
         <tr><td><b>论证边</b></td><td>具体化陈述间论证关系</td><td><code>support / attack / complement</code>（论证框架）</td></tr>
@@ -181,7 +181,7 @@
 
       <div class="adr">
         <h4>决策 6 · 具体化陈述 = 标准 rdf:Statement（RDF reification），非自造</h4>
-        <div class="why"><b>理由</b>：KG/RDF 对"主谓宾装不下完整语义"已有标准处理，三套方案——① <strong>RDF reification</strong>：把三元组对象化为 <code>rdf:Statement</code> 实体，用 <code>rdf:subject/predicate/object</code> 拆回，可挂任意属性；② <strong>N-ary relation / relation-as-class</strong>：把关系本身建模成类；③ <strong>Named Graph</strong>：按语境给三元组分组建图。咱们的"具体化陈述"正是 ①，<strong>是 RDF 内置标准模式，不是自造词</strong>。选 ① 因为它让<b>单条断言可寻址、可命中</b>——我们需要给每条断言挂出处/主题/claim_type，且要让它成为 <code>groundedIn</code> 与论证边的端点；named graph 适合按整组切分，n-ary 适合关系自身属性复杂的场景，都不如 reification 直接对应"单条断言可定位"的需求。</div>
+        <div class="why"><b>理由</b>：KG/RDF 对"主谓宾装不下完整语义"已有标准处理，三套方案——① <strong>RDF reification</strong>：把三元组对象化为 <code>rdf:Statement</code> 实体，用 <code>rdf:subject/predicate/object</code> 拆回，可挂任意属性；② <strong>N-ary relation / relation-as-class</strong>：把关系本身建模成类；③ <strong>Named Graph</strong>：按语境给三元组分组建图。咱们的"具体化陈述"正是 ①，<strong>是 RDF 内置标准模式，不是自造词</strong>。选 ① 因为它让<b>单条断言可寻址、可命中</b>——我们需要给每条断言挂出处/主题/claim_type，且要让它成为 <code>groundedIn</code> 与论证边的端点；named graph 适合按整组切分，n-ary 适合关系自身属性复杂的场景，都不如 reification 直接对应"单条断言可定位"的需求。<b>补</b>：多论元（如"经由 X 的手段"）在具体化陈述上用 <code>roles</code>（n-ary 角色限定）承载——即 <strong>"reification + 角色限定"</strong>的组合（对齐 RDF-star qualifier / PROV-O qualified relation）；故并非"不用 n-ary"，而是"以 reification 作载体、多论元作其角色"。</div>
         <div class="ra"><b>对照</b>：<code>hasStatement</code> 不是标准 RDF 谓词，是自定义 ObjectProperty；其语义在标准里对应 <code>dcterms:subject</code>（具体化陈述"关于"某概念，Dublin Core 标准）。文档→具体化陈述用 <code>:asserts</code>（来源），概念←→具体化陈述用 <code>dcterms:subject</code>（主题），两者含义不同，不可混用。</div>
       </div>
 
@@ -244,10 +244,11 @@
         <tr><td><code>label</code></td><td>str</td><td>是</td><td>异名（自然键）</td></tr>
         <tr><td><code>denotes</code></td><td>PK ref</td><td>是</td><td>指向 <code>concept.id</code>（引用 id，不是 canonical）</td></tr>
         <tr><td><code>note</code></td><td>str</td><td>否</td><td>漂移/来源说明</td></tr>
-        <tr><td rowspan="11">statement</td><td><code>id</code></td><td>PK</td><td>是</td><td>全局唯一、无业务含义</td></tr>
+        <tr><td rowspan="12">statement</td><td><code>id</code></td><td>PK</td><td>是</td><td>全局唯一、无业务含义</td></tr>
         <tr><td><code>type</code></td><td>enum</td><td>是</td><td><code>statement</code></td></tr>
-        <tr><td><code>subject</code>/<code>object</code></td><td>PK ref</td><td>是</td><td>端点 = 概念/文档/异名（引用 id）</td></tr>
+        <tr><td><code>subject</code> / <code>object</code></td><td>PK ref</td><td>subject 是；object 否</td><td>端点 = 概念/文档/异名（引用 id）；<b>object 可选</b>（一元断言：subject + 不及物/形容词谓语，如 "agents grow more capable"）</td></tr>
         <tr><td><code>predicate</code></td><td>str</td><td>是</td><td>关系动词（主张 / 承认 / 采取…）</td></tr>
+        <tr><td><code>roles</code></td><td>map</td><td>否</td><td><b>n-ary 角色限定</b>（KG n-ary：动作的额外参与者）。首个角色 <code>instrument</code>（手段/工具，"经由/通过 X"）→ 值列表</td></tr>
         <tr><td><code>claim_type</code></td><td>enum</td><td>否</td><td>仅类型过滤类赋值：<code>LimitationStatement</code>/<code>OutlookStatement</code>；否则空</td></tr>
         <tr><td><code>reify_reasons</code></td><td>str[]</td><td>是</td><td>可多选、列所有命中项：<code>type_filter</code>（claim_type 在被查词表）/ <code>argument_endpoint</code>（作论证边端点）/ <code>concept_central</code>（跨单元/来源枢纽）；一条断言可同时命中（如"既是局限又是论证端点"）</td></tr>
         <tr><td><code>evidence_texts</code></td><td>str[]</td><td>否</td><td>LLM 输出的逐字连续原文引文数组（每段一段连续引文；引文锚定逐段定位；也作引用审计/排障锚）</td></tr>
@@ -272,7 +273,46 @@
         <tr><td>断言</td><td><code>asserts</code></td><td>文档→陈述</td><td>compile</td><td></td></tr>
         <tr><td>陈述边</td><td><code>hasStatement</code></td><td>概念↔陈述</td><td>compile</td><td>语义对齐 dcterms:subject</td></tr>
       </table>
-      <div class="chain" style="margin-top:14px;"><b>两段式 + 窗口化 / 分批（B6 已验证，2026-09-09）</b>：<b>Pass 1 抽取</b>=按窗口抽<strong>原子断言 + 逐字短锚</strong>（宽召回门槛——只抽对可点名知识对象述说可引证之事；跳过叙述/过渡/复述/无新断言例子；短锚=每支撑块 1–2 句，<b>省输出 token、且短引文更抗定位偏差</b>；<b>窗口 ~5k 字符、段落界切</b>——Pass 1 只做局部抽取、不需完整上下文，窗口小则不触发输出上限）。<b>Pass 2 分类/建图</b>=按批做 <b>KG 组装</b>（<code>reify_reasons</code> 三触发判 statement、<code>claim_type</code> 局限/展望判别、概念规范化/去重、<code>data_evidence</code> 数据并入 statement 证据；<b>~40 条/批防输出上限</b>，程序合并：claim_idx 偏移、实体按 name 去重）。<b>A4 引文锚定</b>=evidence_texts 归一化定位 → chunk 并集 → evidence_chunks。理由：<b>抽取=召回、分类=精度</b>分离（借鉴判官稳定性做法）；<b>输出上限是硬约束</b> → 把大结构拆成可限长的块（窗口/分批）。<b>B6 实测</b>：O2/A5 218 claim → 146 entity / 150 statement / 298 relation，A4 定位 100%；<strong>over-reify 在 <code>concept_central</code>（判太松，属性/定义/机制也立节点）</strong>——收紧 concept_central 为待定项（见 0028 未决）。</div>
+      <div class="chain" style="margin-top:14px;"><b>两段式 + 窗口化 / 分批（B6 已验证，2026-09-09）</b>：<b>Pass 1 抽取</b>=按窗口抽<strong>原子断言 + 逐字短锚</strong>（宽召回门槛——只抽对可点名知识对象述说可引证之事；跳过叙述/过渡/复述/无新断言例子；短锚=每支撑块 1–2 句，<b>省输出 token、且短引文更抗定位偏差</b>；<b>窗口 ~5k 字符、段落界切</b>——Pass 1 只做局部抽取、不需完整上下文，窗口小则不触发输出上限）。<b>Pass 2 分类/建图 + 结构规范化</b>=按批做 <b>KG 组装</b>（<code>reify_reasons</code> 三触发判 statement、<code>claim_type</code> 局限/展望判别、去重、<code>data_evidence</code> 数据并入 statement 证据；<b>结构规范化</b>：从句主语/宾语→干净概念、手段/路径→<code>roles</code>——把 Pass 1 的糙结构归约成干净结构；<b>~40 条/批防输出上限</b>，程序合并：claim_idx 偏移、实体按 name 去重）。<b>A4 引文锚定</b>=evidence_texts 归一化定位 → chunk 并集 → evidence_chunks。理由：<b>抽取=召回、分类+规范化=精度</b>分离（借鉴判官稳定性做法）；<b>输出上限是硬约束</b> → 把大结构拆成可限长的块（窗口/分批）。<b>B6 实测</b>：O2/A5 218 claim → 146 entity / 150 statement / 298 relation，A4 定位 100%；<strong>over-reify 在 <code>concept_central</code>（判太松）</strong>——收紧 concept_central 为待定项（见 0028 未决）。</div>
+      <h3 style="margin:16px 0 6px;font-size:14px;">Pass 1 · 提示词（定稿）+ 验收标准</h3>
+      <p style="font-size:12.5px;line-height:1.7;margin:0 0 8px;">Pass 1 = 知识抽取器：把清洗后原文窗口抽成<b>原子断言</b>（含逐字短锚与 n-ary 角色）。system message 定稿如下（user message = 窗口头信息 + 原文窗口）：</p>
+      <pre style="white-space:pre-wrap;font-size:11.8px;line-height:1.6;background:#f6f8fa;border:1px solid #d8dee4;border-radius:8px;padding:10px 12px;color:#24292f;">你是「知识抽取器」。把输入的「清洗后原文窗口」抽成【原子断言】列表（每条 = 一个 subject–predicate–object 的最小断言，可带角色），只输出严格 JSON。
+
+# 输入
+一段清洗后原文（纯段落文本、无编号、可能含多个主题）。
+
+# 输出（严格 JSON；无多余文字、无代码围栏）
+{"claims":[{"subject":"…","predicate":"…","object":"…","roles":{"instrument":["…"]},"evidence_texts":["逐字连续引文","…"]}]}
+roles 可省略。
+
+# A. 抽取范围
+抽：针对某个「可被点名的知识对象」（有名有姓，如 containment / model layer / egress control / Claude Cowork；仅举例，不限于此），说了「可被引证之事」的断言——是什么 / 怎么运作 / 为什么 / 有什么局限 / 未来方向 / 与谁的关系 / 谁主张什么 / 分成哪类 / 属性 / 机制。
+跳过：过渡 / 引子 / 钩子；只复述上一句的；无新断言的例子；主体是「我们 / 本文 / 这个改动」这类叙述 / 元主体。
+拿不准就抽（宁多勿漏）。
+
+# B. 原子性（一条 = 一个最小断言）
+- 复合句（一句话两个意思）→ 拆成两条。例：`X is fast and Y is slow` → `X is fast` ／ `Y is slow`。
+- 复合谓词（一个主语、两个动词）→ 拆成两条。例：`X reads and writes files` → `X reads files` ／ `X writes files`。
+- 列表（一个位置多个项 A/B/C，主语或宾语皆可）→ 每条一个项；只拆「项的个数」，谓词不变、不新造动词。例：`X reads files, sockets, and env vars` → `X reads files` ／ `X reads sockets` ／ `X reads env vars`。
+
+# C. 字段约定
+- subject / object = 有名名词短语（可点名对象）；predicate = 动词。
+- subject 取该断言所描述的、最具体、最像话题的核心实体。例：✗ `An important factor is caching` → ✓ `caching is an important factor`。
+- 不作 subject：抽象类别 / 属性 / 从句；报告来源 / 元主体（telemetry / we / 本文 / 作者）。
+- 动名 / 命题主语必须归约：以 granting / placing / supervising / limiting / having 或 "X that …"、"only when …" 开头的主语，改写为「施事（或核心实体）→ 谓词 → 该命题」。
+- 定义 / 归类断言（is / is a / has…）：把被归类 / 被描述的实体放 subject。
+
+# D. 角色（n-ary 关系的限定；写在 roles 里，不占 object）
+- 「经由 / 通过 / 借助 / 用 X」这类「手段 / 工具」→ 放进 `roles.instrument`（可多值）；不要塞进 object、不要拆成新条、不要新造动词。
+- 没有角色就不要输出 `roles` 字段（不要输出空 `{}`）。
+- 例：`X repels attacks via sandboxes and VMs` → 一条：`{subject:X, predicate:repels, object:attacks, roles:{instrument:["sandboxes","VMs"]}}`。
+
+# E. evidence_texts
+- 每条 claim 给逐字原文引文数组。
+- 每个元素 = 同一段原文内的一段连续文字；含标点、与原文逐字一致；不许拼接、不许改写。
+- 跨段（即便相邻段）→ 拆成多个数组元素。
+- 某段找不到逐字对应 → 放弃该段；整条都找不到 → 放弃该 claim。</pre>
+      <div class="chain"><b>Pass 1 验收标准（在 Pass 1 的 claim 上算；<u>须多次跑、看稳定性</u>）</b>：① <b>召回</b>——对召回金标准（<code>backend/eval/compile/a5_recall_gold.json</code>，段落级匹配）recall 应 ≈1.00（关键内容不漏）；② <b>证据可锚</b>——每条 claim 的 <code>evidence_texts</code> 能逐字定位到 clean_T，≈1.00；③ <b>结构合规（Pass 1 自身）</b>——subject/predicate 必填、<b>object 可选</b>（一元断言）、一条一项（原子性）、无空 <code>roles</code>。<b>④ 稳定性（核心）</b>：①②③ 须在<b>多次跑批</b>下一致达标（借鉴判官 repeat 稳定性）——单遍达标不算数，要多遍稳。<b>从句主语/宾语归约、手段/路径→<code>roles</code>、措辞/粒度等，都属 Pass 2 的结构规范化，不计入 Pass 1 验收（Pass 1 尽力、Pass 2 兜底）。</b></div>
       <div class="chain" style="margin-top:14px;"><b>校验层 + 质量门（一等设计项）</b>：人审基础件（编译 prompt / claim_type 词表 / grounding 规则 / 校验门）+ 程序结构校验（id / 词表 / grounding 一致性）+ 判官/引用审计自动门（覆盖性 / 引用真实性）+ 定时抽样；噪声爆炸半径锁死在"路由"（chunk=事实源、编译=索引），进不了"事实"。</div>
       <div class="chain" style="margin-top:14px;"><b>实现提示（编译层如何用偏移 / 划内容单元 / 控输出上限）</b>：① 编译层按 <code>(source_id, file_idx)</code> 定位"清洗后原文"文件；② 在该文件内切出<b>内容单元</b>——<b>语义边界优先的连贯窗口</b>（<code>section_path</code> 仅启发式、非强制切分点；整篇 &lt;12k token 时整篇即一个单元），超限才在小节/段界切、留 overlap——内容单元划分是编译层职责，不在 chunk/偏移层做；③ <b>Pass 1 在该内容单元内再按窗口（~5k 字符、段落界切）逐窗抽取</b>（局部抽取不需要全局，窗口小则不触发输出上限）；④ <b>Pass 2 按批（~40 条/批）分类组装</b>（图太大时单次输出超限 → 分批 + 程序合并，claim_idx 偏移、实体按 name 去重）；⑤ 对每条 statement，用 <code>evidence_texts</code>（引文锚定）定位 + 与 chunk 区间重叠，得证据 chunk 集合。单文件大 PDF：<code>file_idx</code>=0、内容单元即该文件（偏移即全局）。</div>
     </div>

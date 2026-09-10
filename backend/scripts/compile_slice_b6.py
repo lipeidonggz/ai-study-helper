@@ -44,20 +44,42 @@ PASS2_BATCH = 40
 # ---------------------------------------------------------------------------
 # 编译系统提示词（基础件，草稿；附字段/概念定义 + 规则 + 示例）
 # ---------------------------------------------------------------------------
-PASS1_SYSTEM = """你是知识抽取器。从一个"内容单元"（清洗后原文）里抽出【原子断言】列表，只输出严格 JSON，不要多余解释、不要代码围栏。
+PASS1_SYSTEM = """你是「知识抽取器」。把输入的「清洗后原文窗口」抽成【原子断言】列表（每条 = 一个 subject–predicate–object 的最小断言，可带角色），只输出严格 JSON。
 
-# 原子断言
-一条断言 = 一个"谁—怎么样—关于什么"的最小单元（subject / predicate / object），是"说了什么"的最小单位。
+# 输入
+一段清洗后原文（纯段落文本、无编号、可能含多个主题）。
 
-# 规则
-1. 抽取门槛（宽召回）：只抽"对某个**可被点名的知识对象**（有名有姓——如 containment、model layer、egress control、Claude Cowork；**仅举例，不限于这些**）述说了**可被引证之事**"的原子断言——是什么 / 怎么运作 / 为什么 / 有什么局限 / 未来方向 / 与谁的关系 / 谁主张什么 / 分成哪类 / 属性 / 机制。其余（过渡 / 引子 / 钩子、只复述上一句、无新断言的例子）跳过；<b>主体为"我们 / 本文 / 这个改动"这类叙述/元主体的，跳过</b>；拿不准就抽（宁多勿漏）。
-2. 原子性：一条只表达一个断言；一句话装了两个意思就拆成两条（"这是问题，我们在解决" → ① 承认·这是问题；② 构建/采用·解决手段）。
-3. evidence_texts：每条 claim 给【逐字原文】<b>短锚数组</b>——<b>每个支撑块给一条短锚</b>（1–2 句，能逐字定位到该块即可），可多个元素以覆盖跨块证据。不要整段长文（避免输出过长）；每条锚必须连续、逐字、不许用 "..." 桥接；禁止 paraphrase / 总结；某块找不到逐字对应就放弃该段。
-4. subject / predicate / object：subject、object 用**有名名词短语**（可点名的知识对象——credentials、blast radius、containment、Claude Code…）；predicate 用动词（主张 / 承认 / 构建 / 采用 / 定义…）。若一句话的主语/宾语天然是命题/从句（"credentials never entering the sandbox"、"When environmental defenses aren't available"），把它**归约**成其中的有名概念作 subject/object，把状态/条件放进谓词——不要为了凑成"完整一句"而把整句塞进主语/宾语。
-5. 不做 claim_type、不做 reify、不做概念归类——只抽"说了什么 + 证据在哪"。
+# 输出（严格 JSON；无多余文字、无代码围栏）
+{"claims":[{"subject":"…","predicate":"…","object":"…","roles":{"instrument":["…"]},"evidence_texts":["逐字连续引文","…"]}]}
+roles 可省略。
 
-# 输出
-{"claims":[{"subject":"…","predicate":"…","object":"…","evidence_texts":["连续逐字引文","…"]}]}
+# A. 抽取范围
+抽：针对某个「可被点名的知识对象」（有名有姓，如 containment / model layer / egress control / Claude Cowork；仅举例，不限于此），说了「可被引证之事」的断言——是什么 / 怎么运作 / 为什么 / 有什么局限 / 未来方向 / 与谁的关系 / 谁主张什么 / 分成哪类 / 属性 / 机制。
+跳过：过渡 / 引子 / 钩子；只复述上一句的；无新断言的例子；主体是「我们 / 本文 / 这个改动」这类叙述 / 元主体。
+拿不准就抽（宁多勿漏）。
+
+# B. 原子性（一条 = 一个最小断言）
+- 复合句（一句话两个意思）→ 拆成两条。例：`X is fast and Y is slow` → `X is fast` ／ `Y is slow`。
+- 复合谓词（一个主语、两个动词）→ 拆成两条。例：`X reads and writes files` → `X reads files` ／ `X writes files`。
+- 列表（一个位置多个项 A/B/C，主语或宾语皆可）→ 每条一个项；只拆「项的个数」，谓词不变、不新造动词。例：`X reads files, sockets, and env vars` → `X reads files` ／ `X reads sockets` ／ `X reads env vars`。
+
+# C. 字段约定
+- subject / object = 有名名词短语（可点名对象）；predicate = 动词。
+- subject 取该断言所描述的、最具体、最像话题的核心实体。例：✗ `An important factor is caching` → ✓ `caching is an important factor`。
+- 不作 subject：抽象类别 / 属性 / 从句；报告来源 / 元主体（telemetry / we / 本文 / 作者）。
+- 动名 / 命题主语必须归约：以 granting / placing / supervising / limiting / having 或 "X that …"、"only when …" 开头的主语，改写为「施事（或核心实体）→ 谓词 → 该命题」。
+- 定义 / 归类断言（is / is a / has…）：把被归类 / 被描述的实体放 subject。
+
+# D. 角色（n-ary 关系的限定；写在 roles 里，不占 object）
+- 「经由 / 通过 / 借助 / 用 X」这类「手段 / 工具」→ 放进 `roles.instrument`（可多值）；不要塞进 object、不要拆成新条、不要新造动词。
+- 没有角色就不要输出 `roles` 字段（不要输出空 `{}`）。
+- 例：`X repels attacks via sandboxes and VMs` → 一条：`{subject:X, predicate:repels, object:attacks, roles:{instrument:["sandboxes","VMs"]}}`。
+
+# E. evidence_texts
+- 每条 claim 给逐字原文引文数组。
+- 每个元素 = 同一段原文内的一段连续文字；含标点、与原文逐字一致；不许拼接、不许改写。
+- 跨段（即便相邻段）→ 拆成多个数组元素。
+- 某段找不到逐字对应 → 放弃该段；整条都找不到 → 放弃该 claim。
 """
 
 
@@ -196,6 +218,12 @@ def _extract_json(content: str) -> dict:
     try:
         return json.loads(obj)
     except json.JSONDecodeError as e:
+        # 容忍"Extra data"（JSON 后有冗余内容）：取第一个完整 JSON 值。
+        try:
+            val, _ = json.JSONDecoder().raw_decode(text[start:])
+            return val
+        except Exception:
+            pass
         # 常见 LLM 输出问题：字符串内的裸换行未转义、尾逗号。做一次宽松修复再试。
         repaired = _repair_json(obj)
         try:
@@ -287,6 +315,7 @@ async def _compile_source(
     token_limit: int = 12000,
     pass1_window_chars: int = 5000,
     only_pass1: bool = False,
+    tag: str = "",
 ) -> dict | None:
     """对单个源做整篇编译（一个内容单元），返回 bundle（含引文锚定结果）；源缺失返回 None。"""
     manifest = parse_manifest(MANIFEST_PATH)
@@ -331,7 +360,20 @@ async def _compile_source(
         r1 = await client.chat([LLMMessage(role="system", content=PASS1_SYSTEM), LLMMessage(role="user", content=u1)])
         claims.extend(_extract_json(r1.content).get("claims", []))
     print(f"[B6] {source_id}: Pass1 窗口 {len(windows)} 个 / 输入 {len(clean_t)} 字符 / claims {len(claims)} 条")
-    claims_file = OUT_DIR / f"b6_claims_{source_id}.json"
+    # B8 结构校验/归一：去空 roles、剔除缺必填字段(subject/predicate)的 claim
+    _before = len(claims)
+    norm: list[dict] = []
+    for c in claims:
+        if not c.get("roles"):
+            c.pop("roles", None)  # 空 roles 不落
+        if c.get("subject") and c.get("predicate"):  # object 可选（一元断言）
+            norm.append(c)
+    dropped = _before - len(norm)
+    claims = norm
+    if dropped:
+        print(f"[B6] {source_id}: 结构校验剔除 {dropped} 条缺必填字段的 claim（剩余 {len(claims)}）")
+    suffix = f"_{tag}" if tag else ""
+    claims_file = OUT_DIR / f"b6_claims_{source_id}{suffix}.json"
     claims_file.write_text(json.dumps(claims, ensure_ascii=False, indent=2), encoding="utf-8")
     if only_pass1:
         print(f"[B6] {source_id}: 仅 Pass1，claims 落盘 {claims_file}")
@@ -377,6 +419,8 @@ async def _compile_source(
             st["predicate"] = c["predicate"]
             st["object"] = c["object"]
             st["evidence_texts"] = c.get("evidence_texts", [])
+            if c.get("roles"):
+                st["roles"] = c["roles"]
     # 数据/基准断言并入其支撑 statement 的证据（不独立立节点）
     for de in bundle.get("data_evidence", []):
         fi = de.get("evidence_for")
@@ -407,6 +451,7 @@ async def main() -> None:
     parser.add_argument("--token-limit", type=int, default=12000)
     parser.add_argument("--pass1-window-chars", type=int, default=5000)
     parser.add_argument("--only-pass1", action="store_true", help="只跑 Pass 1 并落盘 claims，不做 Pass 2")
+    parser.add_argument("--tag", default="", help="输出文件后缀标签（区分多遍跑批）")
     args = parser.parse_args()
 
     settings = SqliteSettingStore(APP_DB).get_llm_settings()
@@ -418,11 +463,12 @@ async def main() -> None:
     results = {}
     for sid in [s.strip() for s in args.source.split(",") if s.strip()]:
         bundle = await _compile_source(
-            sid, settings.api_key, model, args.token_limit, args.pass1_window_chars, args.only_pass1
+            sid, settings.api_key, model, args.token_limit, args.pass1_window_chars, args.only_pass1, args.tag
         )
         if bundle is None:
             continue
-        out = OUT_DIR / f"b6_{sid}.json"
+        suffix = f"_{args.tag}" if args.tag else ""
+        out = OUT_DIR / f"b6_{sid}{suffix}.json"
         out.write_text(json.dumps(bundle, ensure_ascii=False, indent=2), encoding="utf-8")
         results[sid] = str(out)
         stmts = bundle.get("statements", [])
