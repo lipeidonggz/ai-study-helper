@@ -148,6 +148,34 @@ _DEDUP_LOOSE = """# 去重
 """
 
 
+# Pass 2 · 步骤①「抽取」：块(context+claims) → entities + edges（不去重、不分类）
+PASS2_STEP1_SYSTEM = """你是「知识图谱抽取器」。从输入的「块 context + 该块 claims」抽出【实体 + 边】，只输出严格 JSON。
+
+# 输入
+按块组织：每块含 context（该块清洗后原文）+ 该块 claims（每条 claim = subject/predicate/object（可空）/roles（可空）+ claim_idx）。
+
+# 输出（严格 JSON；无多余文字、无代码围栏）
+{"entities":[{"name","type":"concept|document","aliases":[]}],
+ "edges":[{"from","predicate","to","roles":{},"claim_idx":0}]}
+
+# 规则
+1. 实体（entity）= **可点名的名词概念**（稳定知识对象 / 主题）。判据：**能自然地问"什么是 X？"**。
+   · 是（通用例，非本语料）：cache / database index / supply chain / HTTP —— 都是能被单独定义的名词概念。
+   · 不是（**不作实体**，即便它是 claim 的 subject / object）：
+     - **从句 / 命题式**：以 how to / whether / when / why 开头的句子式；
+     - **描述 / 定语短语**：含 "the risk of X / the likelihood of Y / N components / a broader release of …" 这类定语、数量、从句修饰的短语；
+   · 短语里**有可点名的概念就取那个概念**（如 "how to optimize the query" → 实体 `query`）；**取不出干净概念就不建实体**。
+   · name = 规范名词；type ∈ {concept, document}。
+2. 别名（aliases）：同一实体的另一个名字；判据 = 把原文里的名字换成它、句意不变。可放：单复数 / 大小写 / 连字符 / 冠词 / 缩写与全称。不放：它使用/包含/依赖的东西、描述/定语、相关但非同一对象。别名不得又是独立 entity。
+3. 边（edges）：from / to **都必须是实体**（见规则 1）；把 claim 建成 from→predicate→to。
+   · **任一端不是实体（是描写 / 从句）→ 该端不建实体、且这条 claim 不生成边**（不要为凑边而硬造脏实体）。
+   · **一元断言**（object 为空）→ `to` 留空（只有 from 端）。
+4. roles：「经由 / 通过 / 借助 X」这类手段 / 路径 → 放到边的 `roles.instrument`（可多值）；不要塞进 to、不要新造动词。
+5. 不做去重、不判 claim_type / reify（后续步骤做）：同一实体 / 边可重复出现。
+6. 只输出 JSON。
+"""
+
+
 def _build_clean_t(sections) -> str:
     """构建"清洗后全文 T"：与 chunk_sections / chunk_offsets 同一坐标（各节段落按序 \\n 连接）。"""
     return "\n".join(p for s in sections for p in s.paragraphs)
@@ -279,6 +307,68 @@ def _repair_json(s: str) -> str:
     repaired = "".join(out)
     repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
     return repaired
+
+
+async def _chat_json(
+    client: DeepSeekLLMClient,
+    messages: list[LLMMessage],
+    *,
+    label: str = "",
+    retries: int = 3,
+) -> tuple[dict, str]:
+    """调用 LLM 并解析出 JSON 对象；输出畸形/被截断时重试。返回 (对象, 原始输出文本)。"""
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        msgs = list(messages)
+        if attempt > 1:
+            msgs.append(
+                LLMMessage(
+                    role="user",
+                    content="上次输出不是合法 JSON（可能被截断或夹带多余文字）。请重新输出一个完整、合法的 "
+                    "JSON 对象：无代码围栏、无解释文字，括号与引号闭合。",
+                )
+            )
+        resp = await client.chat(msgs)
+        try:
+            return _extract_json(resp.content), resp.content
+        except Exception as e:  # JSON 畸形 / 被截断
+            last_err = e
+            print(f"[B6] {label or 'LLM'}: JSON 解析失败（第 {attempt}/{retries} 次）：{e}")
+    raise RuntimeError(f"{label or 'LLM'}: 重试 {retries} 次仍无法解析 JSON") from last_err
+
+
+async def _pass2_extract(
+    client: DeepSeekLLMClient,
+    source_id: str,
+    batch: list[dict],
+    stats: dict,
+    label: str,
+) -> dict:
+    """抽取一批块（entities + edges）；解析持续失败时把批拆半重试（防单批过大被截断）。"""
+    user2 = (
+        f"source_id={source_id}；asserted_by={source_id}。\n按块组织的断言清单：\n"
+        + json.dumps(batch, ensure_ascii=False, indent=2)
+    )
+    stats["in"] += len(user2)
+    try:
+        part, raw = await _chat_json(
+            client,
+            [LLMMessage(role="system", content=PASS2_STEP1_SYSTEM), LLMMessage(role="user", content=user2)],
+            label=label,
+        )
+    except Exception:
+        if len(batch) <= 1:
+            raise
+        mid = len(batch) // 2
+        print(f"[B6] {source_id}: {label} 解析持续失败，拆半重试（{len(batch)} → {mid}+{len(batch) - mid} 块）")
+        a = await _pass2_extract(client, source_id, batch[:mid], stats, f"{label}a")
+        b = await _pass2_extract(client, source_id, batch[mid:], stats, f"{label}b")
+        return {
+            "entities": a.get("entities", []) + b.get("entities", []),
+            "edges": a.get("edges", []) + b.get("edges", []),
+        }
+    stats["out"] += len(raw)
+    return part
 
 
 def _a4(bundle: dict, clean_t: str, chunks: list[dict], source_id: str, file_idx: int) -> dict:
@@ -418,8 +508,12 @@ async def _compile_source(
                 f"内容单元窗口：source_id={source_id}；file_idx=0；window={wi + 1}/{len(windows)}；"
                 f"section_path={content_unit['section_path']}。\n下面是该窗口清洗后原文，请抽原子断言：\n\n" + w
             )
-            r1 = await client.chat([LLMMessage(role="system", content=PASS1_SYSTEM), LLMMessage(role="user", content=u1)])
-            claims.extend(_extract_json(r1.content).get("claims", []))
+            part1, _ = await _chat_json(
+                client,
+                [LLMMessage(role="system", content=PASS1_SYSTEM), LLMMessage(role="user", content=u1)],
+                label=f"Pass1 {source_id} 窗口{wi + 1}/{len(windows)}",
+            )
+            claims.extend(part1.get("claims", []))
         print(f"[B6] {source_id}: Pass1 窗口 {len(windows)} 个 / 输入 {len(clean_t)} 字符 / claims {len(claims)} 条")
         # B8 结构校验/归一：去空 roles、剔除缺必填字段(subject/predicate)的 claim
         _before = len(claims)
@@ -440,7 +534,7 @@ async def _compile_source(
             print(f"[B6] {source_id}: 仅 Pass1，claims 落盘 {claims_file}")
             return None
 
-    # Pass 2：分类 + 结构规范化 + 建图——按"块"组输入（每块 context + 该块 claims），分批保输出上限
+    # Pass 2 · 步骤①「抽取」：块(context + claims) → entities + edges（不去重、不分类）
     blocks = _build_pass2_blocks(claims, clean_t, chunks)
     batches: list[list[dict]] = []
     cur: list[dict] = []
@@ -454,65 +548,22 @@ async def _compile_source(
         cur_n += n
     if cur:
         batches.append(cur)
-    print(f"[B6] {source_id}: Pass2 输入 {len(blocks)} 块 / {len(claims)} claims / {len(batches)} 批")
-    p2_system = PASS2_SYSTEM + "\n" + (_DEDUP_STRICT if dedup == "strict" else _DEDUP_LOOSE)
-    merged: dict = {"entities": [], "terms": [], "statements": [], "relations": [], "data_evidence": []}
-    p2_in = 0
-    p2_out = 0
-    for batch in batches:
-        user2 = (
-            f"source_id={source_id}；asserted_by={source_id}。\n按块组织的断言清单：\n"
-            + json.dumps(batch, ensure_ascii=False, indent=2)
-        )
-        p2_in += len(user2)
-        r2 = await client.chat([LLMMessage(role="system", content=p2_system), LLMMessage(role="user", content=user2)])
-        p2_out += len(r2.content)
-        part = _extract_json(r2.content)
-        merged["statements"].extend(part.get("statements", []))  # claim_idx 已是全局下标
-        merged["data_evidence"].extend(part.get("data_evidence", []))
-        merged["entities"].extend(part.get("entities", []))
-        merged["terms"].extend(part.get("terms", []))
-        merged["relations"].extend(part.get("relations", []))
-    print(f"[B6] {source_id}: Pass2 字符 输入={p2_in} 输出={p2_out} 比例 in:out={p2_in / max(1, p2_out):.1f}:1")
-    # 实体按 name 去重
-    seen: set[str] = set()
-    ents: list[dict] = []
-    for e in merged["entities"]:
-        n = e.get("name")
-        if n and n not in seen:
-            seen.add(n)
-            ents.append(e)
-    merged["entities"] = ents
-    bundle = merged
-    # 用 Pass 1 清单补回 subject/predicate/object/evidence（Pass 2 只出分类）
-    for st in bundle.get("statements", []):
-        idx = st.get("claim_idx")
-        if isinstance(idx, int) and 0 <= idx < len(claims):
-            c = claims[idx]
-            st["subject"] = c["subject"]
-            st["predicate"] = c["predicate"]
-            st["object"] = c.get("object")  # object 可选（一元断言）
-            st["evidence_texts"] = c.get("evidence_texts", [])
-            if c.get("roles"):
-                st["roles"] = c["roles"]
-    # 数据/基准断言并入其支撑 statement 的证据（不独立立节点）
-    for de in bundle.get("data_evidence", []):
-        fi = de.get("evidence_for")
-        di = de.get("claim_idx")
-        if isinstance(fi, int) and isinstance(di, int) and 0 <= di < len(claims):
-            target = next((s for s in bundle.get("statements", []) if s.get("claim_idx") == fi), None)
-            if target is not None:
-                for ev in claims[di].get("evidence_texts", []):
-                    if ev not in target.get("evidence_texts", []):
-                        target.setdefault("evidence_texts", []).append(ev)
-    bundle["content_unit"] = content_unit
-    bundle["source_id"] = source_id
-    bundle = _a4(bundle, clean_t, chunks, source_id, 0)
+    print(f"[B6] {source_id}: Pass2①抽取 输入 {len(blocks)} 块 / {len(claims)} claims / {len(batches)} 批")
+    entities: list[dict] = []
+    edges: list[dict] = []
+    stats = {"in": 0, "out": 0}
+    for bi, batch in enumerate(batches, start=1):
+        part = await _pass2_extract(client, source_id, batch, stats, f"Pass2① {source_id} 批{bi}/{len(batches)}")
+        entities.extend(part.get("entities", []))
+        edges.extend(part.get("edges", []))
+    p2_in, p2_out = stats["in"], stats["out"]
+    print(
+        f"[B6] {source_id}: Pass2①抽取 字符 输入={p2_in} 输出={p2_out} 比例 in:out={p2_in / max(1, p2_out):.1f}:1"
+        f" | entities(原样)={len(entities)} edges={len(edges)}"
+    )
 
-    # 文档元数据由程序填（LLM 不该给 url/作者/日期）
-    for e in bundle.get("entities", []):
-        if e.get("type") == "document":
-            e.setdefault("metadata_source", "program-filled-from-manifest")
+    # 步骤②归并/消解、③分类：待实现（先只做①抽取）
+    bundle: dict = {"entities": entities, "edges": edges, "content_unit": content_unit, "source_id": source_id}
     return bundle
 
 
@@ -550,8 +601,8 @@ async def main() -> None:
         stmts = bundle.get("statements", [])
         n_ok = sum(1 for s in stmts if s.get("a4_note") == "OK")
         print(
-            f"[B6] {sid}: 实体 {len(bundle.get('entities', []))} / 陈述 {len(stmts)} / 关系 {len(bundle.get('relations', []))} "
-            f"/ 引文锚定定位成功 {n_ok} → {out}"
+            f"[B6] {sid}: 实体 {len(bundle.get('entities', []))} / 边 {len(bundle.get('edges', bundle.get('relations', [])))} "
+            f"/ 陈述 {len(stmts)} / 定位成功 {n_ok} → {out}"
         )
     if not results:
         sys.exit("[B6] 没有产出 bundle")
