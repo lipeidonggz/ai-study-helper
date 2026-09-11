@@ -77,7 +77,7 @@ def load_predicates() -> Counter:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="表面谓词 → 受控关系表 映射")
-    parser.add_argument("--batch", type=int, default=70)
+    parser.add_argument("--batch", type=int, default=40)
     parser.add_argument("--out", default=str(TMP / "predicate_mapping.json"))
     args = parser.parse_args()
 
@@ -94,17 +94,29 @@ async def main() -> None:
     mapping: dict[str, str] = {}
     notes: dict[str, str] = {}
     gaps: list[str] = []
-    for i in range(0, len(items), args.batch):
-        chunk = items[i : i + args.batch]
+    async def ask(chunk: list[tuple[str, int]], label: str) -> dict:
         listing = "\n".join(f"{p or '(空)'} ×{c}" for p, c in chunk)
         part, _ = await _chat_json(
             client,
             [LLMMessage(role="system", content=SYSTEM), LLMMessage(role="user", content=listing)],
-            label=f"谓词映射 {i // args.batch + 1}",
+            label=label,
         )
-        mapping.update({k.strip().lower(): v for k, v in (part.get("mapping") or {}).items()})
         notes.update(part.get("notes") or {})
-        gaps += part.get("table_gaps") or []
+        gaps.extend(part.get("table_gaps") or [])
+        return {k.strip().lower(): v for k, v in (part.get("mapping") or {}).items()}
+
+    for i in range(0, len(items), args.batch):
+        chunk = items[i : i + args.batch]
+        got = await ask(chunk, f"谓词映射 {i // args.batch + 1}")
+        mapping.update({p: r for p, r in got.items() if p in dict(chunk)})
+        # 完整性校验：JSON 合法但**缺键**不会触发重试，必须按缺失项追问
+        for retry in range(1, 3):
+            missing_now = [(p, c) for p, c in chunk if p not in mapping]
+            if not missing_now:
+                break
+            print(f"  [补问] 第 {i // args.batch + 1} 批缺 {len(missing_now)} 条，第 {retry} 次补问")
+            got = await ask(missing_now, f"谓词映射 {i // args.batch + 1}-补{retry}")
+            mapping.update({p: r for p, r in got.items() if p in dict(missing_now)})
 
     by_rel: dict[str, list[tuple[str, int]]] = defaultdict(list)
     unmapped, split, missing = [], [], []

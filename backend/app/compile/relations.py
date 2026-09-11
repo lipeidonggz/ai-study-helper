@@ -43,14 +43,36 @@
     新谓词按频次事后收敛进表。表是活的。
   · 方向与对称性写在说明里；反向关系一律另立条目（如 has_part / part_of）。
 
-## 待定（等拍板，暂不改表）
+## 决策记录（2026-09-10 拍板，表 32 → 36 条）
 
-  1. `affects` 现在收 14 种 / 30 条（`addresses` / `decide` / `is problematic for` / `err toward`…）
-     —— 收紧定义，还是拆成两条？
-  2. `shipped`×12 / `built`×4 现在落进 `provides`（语义漂移）——要不要单列 `releases`？
-  3. 要不要新增 `become`（状态转变）、`overlap_or_complement`（关系比较）？
-  4. `after` 现在 0 条——删掉，还是与 `before` 合并成一条带方向的？
-  5. "由…决定"（`should be determined by`）要不要单列 `determines`？
+  1. `affects` 原本是个垃圾抽屉（14 种 / 30 条：`addresses` / `decide` / `is problematic for` / `err toward`…）
+     → **拆**：新增 `handles`（接 `addresses` 类"应对/处置"）、新增 `changes`（接"改变"类），
+     `affects` 收紧为"方向和结果都不明确的影响"；**评价类**（`is problematic for` / `err toward`）
+     走 `has_property`，不进关系词。
+  2. `shipped`×12 / `built`×4 落在 `provides` 属语义漂移 → **新增 `creates`**（产出 / 构建 / 发布）。
+     不叫 `releases`，否则 `built` 被挤出去。
+  3. **新增 `become`**（X 自己的状态转变）；`overlap_or_complement` **暂不加**（语料里只有 1 条，
+     先用 `similar_to` 兜，等 ≥10 条再单列）。
+  4. `before` / `after` **保留一对**（让模型自己翻转主宾是颠倒的高发点，一行成本换方向不出错；
+     `after` 暂无实例，属预留）。
+  5. `determines` **暂不加**（`should be determined by` 只有 2 条）→ 先归 `requires`，挂"待观察"。
+
+  配套验收（新增）：**相邻关系标注一致率 < 0.8 就把它们合并回去——宁可粗、不许混**。
+  重点盯 `affects`/`changes`/`become`、`provides`/`creates`/`supports`、`is`/`is_a`/`has_property`。
+
+  6. **方向不是关系**（2026-09-10 实测后补）——两遍跑同一份语料，`increases ↔ reduces` 会被标反，
+     `causes ↔ increases` 来回摇。回看五条用途：判同指要的是**族级可比**，挑证据要的是"风险/代价/机制/防护"
+     这种族级区分，**没有一条需要"增/减"体现在关系词上**。故：删 `increases` / `reduces`，
+     统一走 `changes` + `sign: up|down`（方向是修饰，和否定一样进字段）。
+     表：36 → 34 条。同时把两处边界写死：`can` 只在"能力/权限本身被断言"时用（情态词不算关系，
+    `bounds can be placed on` 归 constrains）；`is_a` 只管"是一种/一类/一个例子"，其余判断走 has_property。
+
+  7. **补四类缺失关系**（2026-09-11）——把归一步的输入从"160 字符短锚"换成"整块原文"后，
+     表外新词从 1–2 条涨到 3–7 条。逐条看上下文发现：**多数是表的真缺口，不是模型乱搞**
+     （短锚时反而都是乱搞：`covers` / `has`）。故补：`instructs`（指令/要求）、
+     `acts_on`（动作类总归处——之前只说"动作动词不进表"却没给去处，`handles` 就是这么冒出来的）、
+     `comes_from`（来源/出处）、`indicates`（证据→结论）；并把 `supports` 的定义扩到含"为…而存在/目的在于"。
+     表：34 → 38 条。`handles` 的成员分派留到下一轮（一次只动一个变量）。
 """
 
 from __future__ import annotations
@@ -58,25 +80,34 @@ from __future__ import annotations
 # 语义关系 id → 中文说明（含方向/对称性约定）
 SEMANTIC_RELATIONS: dict[str, str] = {
     # 定义与结构
-    "is_a": "X 是 Y 的一种（上下位）",
-    "is": "X 就是 / 被描述为 Y（等同或判断，非上下位）",
+    "is_a": "X 是 Y 的一种 / 一类 / 一个例子（Y 是类别或上位概念）",
+    "is": "X 就是 / 被描述为 Y（等同或判断）。注意：「为…而设计 / 面向…」是**用途**，归 supports；"
+          "「X 是 Y 的机制」这类判断仍归 is",
     "has_part": "X 拥有 / 包含 Y（整体—部分、成员、组成）",
     "part_of": "X 是 Y 的一部分 / 成员（has_part 的反向）",
-    "has_property": "X 具有属性 / 处于某状态 Y",
+    "has_property": "X 具有属性 / 处于某状态 Y（**属性值与评价放这里**，不进关系词）",
     # 能力与权限
-    "can": "X 有能力 / 被允许做 Y（否定走 polarity）",
+    "can": "X 有能力 / 被允许做 Y（**只有「能力/权限本身」被断言时才用**，如 `can access`、`has access to`；"
+           "情态词本身不代表关系——`bounds can be placed on X` 说的是约束，应归 constrains；"
+           "强调「借助某机制实现」时用 uses）。否定走 polarity",
     "requires": "X 需要 / 依赖 Y",
+    "instructs": "X 指令 / 要求 Y 做某事（指令、提示、要求；`requires` 是「X 需要 Y」，方向与语义都不同）",
     # 约束与防护
     "constrains": "X 限制 / 约束 Y",
     "blocks": "X 阻断 / 拒绝 / 阻止 Y",
     "enforces": "X 强制执行 / 落实 Y",
     "protects_against": "X 防护 / 抵御 Y",
+    "handles": "X 应对 / 处置 / 着手解决 Y（含 mitigates 类）",
     # 手段与因果
     "uses": "X 使用 / 借助 Y（手段、途径、机制）",
+    "acts_on": "X 对 Y 施加操作 / 动作（动作类总归处：reads / writes / spawns / executes / approves / "
+               "mounts / audits / does…；**动作细节留在 predicate_surface**）",
+    "creates": "X 产出 / 构建 / 发布 Y（产品、机制、新事物）",
     "causes": "X 导致 / 引起 Y（含代价、后果）",
-    "affects": "X 影响 Y（方向不明确）",
-    "reduces": "X 减少 / 降低 Y",
-    "increases": "X 增加 / 放大 Y",
+    "affects": "X 影响 Y（**方向和结果都不明确**；「改变」用 changes）",
+    "changes": "X 改变 / 让 Y 变化（**方向中性：增 / 减 / 波动都归这条，方向放 sign 字段 up|down**；"
+               "X 自己变用 become）",
+    "become": "X 变成 / 转变为 Y（**X 自己的状态变化**，Y 是新状态）",
     "costs": "X 的代价 / 开销是 Y",
     # 风险与暴露
     "risks": "X 带来风险 / 暴露于风险 Y",
@@ -87,6 +118,7 @@ SEMANTIC_RELATIONS: dict[str, str] = {
     "runs_in": "X 运行 / 执行于 Y（环境、宿主、平台）",
     "located_in": "X 位于 Y",
     "outside_of": "X 位于 Y 之外",
+    "comes_from": "X 来自 / 出自 Y（来源、出处、来源渠道）",
     # 顺序与比较
     "before": "X 发生在 Y 之前",
     "after": "X 发生在 Y 之后",
@@ -95,8 +127,9 @@ SEMANTIC_RELATIONS: dict[str, str] = {
     # 观测与支持
     "detects": "X 检测 / 发现 Y",
     "monitors": "X 监视 / 观测 Y",
-    "provides": "X 提供 / 给出 Y",
-    "supports": "X 支持 / 帮助 Y",
+    "indicates": "X 表明 / 显示 Y（证据 → 结论：日志显示、数据表明、信号）",
+    "provides": "X 提供 / 给出 Y（**能力、功能、资源**）",
+    "supports": "X 支持 / 帮助 / 服务于 Y（**含「为…而存在 / 目的在于」**：is designed for、exists so that、serves）",
 }
 
 # 出处/归属边（引用审计用；**不参与判同指**）

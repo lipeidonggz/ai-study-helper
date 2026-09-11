@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 from app.agent.llm import DeepSeekLLMClient, LLMMessage
+from app.compile.relations import RELATIONS, table_lines
 from app.kb.ingest import _file_units
 from app.kb.manifest import parse_manifest
 from app.storage.sqlite.kb_store import KbStore
@@ -44,14 +45,14 @@ PASS2_CLAIM_BUDGET = 40  # Pass2 每批 claim 上限（输出规模 ∝ claims�
 # ---------------------------------------------------------------------------
 # 编译系统提示词（基础件，草稿；附字段/概念定义 + 规则 + 示例）
 # ---------------------------------------------------------------------------
-PASS1_SYSTEM = """你是「知识抽取器」。把输入的「清洗后原文窗口」抽成【原子断言】列表（每条 = 一个 subject–predicate–object 的最小断言，可带角色），只输出严格 JSON。
+PASS1_SYSTEM = """你是「知识抽取器」。把输入的「清洗后原文窗口」抽成【原子断言】列表（每条 = 一个 subject–predicate–object 的最小断言，可带角色与极性），只输出严格 JSON。
 
 # 输入
 一段清洗后原文（纯段落文本、无编号、可能含多个主题）。
 
 # 输出（严格 JSON；无多余文字、无代码围栏）
-{"claims":[{"subject":"…","predicate":"…","object":"…","roles":{"instrument":["…"]},"evidence_texts":["逐字连续引文","…"]}]}
-roles 可省略。
+{"claims":[{"subject":"…","predicate":"…","object":"…","polarity":"negative","roles":{"instrument":["…"]},"evidence_texts":["逐字连续引文","…"]}]}
+polarity / roles 可省略。
 
 # A. 抽取范围
 抽：针对某个「可被点名的知识对象」（有名有姓，如 containment / model layer / egress control / Claude Cowork；仅举例，不限于此），说了「可被引证之事」的断言——是什么 / 怎么运作 / 为什么 / 有什么局限 / 未来方向 / 与谁的关系 / 谁主张什么 / 分成哪类 / 属性 / 机制。
@@ -64,7 +65,14 @@ roles 可省略。
 - 列表（一个位置多个项 A/B/C，主语或宾语皆可）→ 每条一个项；只拆「项的个数」，谓词不变、不新造动词。例：`X reads files, sockets, and env vars` → `X reads files` ／ `X reads sockets` ／ `X reads env vars`。
 
 # C. 字段约定
-- subject / object = 有名名词短语（可点名对象）；predicate = 动词。
+- subject / object = 有名名词短语（可点名对象）。
+- predicate = 原文里的动词短语（**只留动词与必要的小品词**，原样抄）。
+- 谓词只放关系词：**宾语、从句、修饰、否定、时态、情态都不许揉进谓词**。
+  · ✗ "has cost of isolation overhead" → ✓ predicate: "has cost of"、object: "isolation overhead"
+  · ✗ "has its own filesystem" → ✓ predicate: "has"、object: "filesystem"
+  · ✗ "survived more adversarial attention than" → ✓ 拆成两条（关系一条、比较对象一条）
+- 否定：谓词仍用肯定形式，另给 polarity: "negative"。例：`can't inspect` → predicate: "inspect"、polarity: "negative"。
+- 时态 / 情态不入谓词：`was` / `may be` / `have been` / `previously` 这类不写进谓语，用动词原形。
 - subject 取该断言所描述的、最具体、最像话题的核心实体。例：✗ `An important factor is caching` → ✓ `caching is an important factor`。
 - 不作 subject：抽象类别 / 属性 / 从句；报告来源 / 元主体（telemetry / we / 本文 / 作者）。
 - 动名 / 命题主语必须归约：以 granting / placing / supervising / limiting / having 或 "X that …"、"only when …" 开头的主语，改写为「施事（或核心实体）→ 谓词 → 该命题」。
@@ -73,7 +81,7 @@ roles 可省略。
 # D. 角色（n-ary 关系的限定；写在 roles 里，不占 object）
 - 「经由 / 通过 / 借助 / 用 X」这类「手段 / 工具」→ 放进 `roles.instrument`（可多值）；不要塞进 object、不要拆成新条、不要新造动词。
 - 没有角色就不要输出 `roles` 字段（不要输出空 `{}`）。
-- 例：`X repels attacks via sandboxes and VMs` → 一条：`{subject:X, predicate:repels, object:attacks, roles:{instrument:["sandboxes","VMs"]}}`。
+- 例：`X repels attacks via sandboxes and VMs` → 一条：`{subject:X, predicate:protects_against, object:attacks, roles:{instrument:["sandboxes","VMs"]}}`。
 
 # E. evidence_texts
 - 每条 claim 给逐字原文引文数组。
@@ -81,6 +89,33 @@ roles 可省略。
 - 跨段（即便相邻段）→ 拆成多个数组元素。
 - 某段找不到逐字对应 → 放弃该段；整条都找不到 → 放弃该 claim。
 """
+
+# Pass 1 · 谓词归一（独立小步）：原文动词短语 → 受控关系表 id
+# 为什么拆出来：把 36 条表塞进抽取会拖累召回（实测 1.00 → 0.80/0.85，见 memory/0028 考古层第二十六段）。
+# 这一步**只做映射，不增删 claim**，所以召回由上面那步守住。
+PASS1_NORM_SYSTEM = """你是「关系归一器」。输入是**按块组织的断言清单**：每块含 chunk_id、context（该块清洗后原文）、claims（每条含 claim_idx、subject、predicate（原文动词短语）、object）。
+**先读 context 原文，再判断每条断言的 predicate 该归到哪个关系**，只输出严格 JSON。
+
+# 受控关系表
+«关系词表»
+
+# 规则
+1. 每条输入输出一条结果（用 claim_idx 回指，全局编号），**不许增删条目**。
+2. predicate 取表内 id；**表里确实没有**才可用新词，同时给 predicate_nearest（最接近的表内 id）。
+3. 否定不算关系差异：原文是否定 → 谓词用肯定关系 + polarity: "negative"（不要用新词表示否定）。
+4. 时态 / 情态 / 修饰不算关系差异：`was` / `may be` / `previously` / `have been` → 用最贴近的关系（通常是 has_property）。
+5. 只依据给定信息判断，不要引入外部知识；拿不准选语义更宽的那条。
+6. **方向要单独给**：`changes` 这条只表示"变了"；是变多还是变少，用 `sign: "up" | "down"` 表示
+   （`grows` / `increases` / `expands` → sign:up；`reduces` / `minimizes` / `limits` → sign:down）。
+7. 情态词（can / may / must）本身不代表关系：先判这句到底说了什么关系。
+   · `bounds can be placed on X` → constrains（约束），不是 can
+   · `Claude can read files` → can（能力/权限本身）
+8. 只输出 JSON：
+{"mapping":[{"claim_idx":0,"predicate":"…","sign":"up","polarity":"negative","predicate_nearest":"…","note":"…"}]}
+sign / polarity / predicate_nearest / note 可省略。
+"""
+
+PASS1_NORM_SYSTEM = PASS1_NORM_SYSTEM.replace("«关系词表»", table_lines())
 
 
 PASS2_SYSTEM = """你是「知识图谱构建器」。把输入【按块组织的原子断言清单】组装成 KG，只输出严格 JSON，不要多余解释、不要代码围栏。不得改断言内容——证据就在每块的 context 原文里。
@@ -309,6 +344,143 @@ def _repair_json(s: str) -> str:
     return repaired
 
 
+# 谓词体检用的模式（Pass 1 质量门：把这些从谓词里赶出去）
+_CLAUSE_MARKERS = re.compile(r"\b(when|until|regardless|that|because|whether|while)\b", re.I)
+_NEG_MARKERS = re.compile(
+    r"\b(not|never|cannot|can't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|won't|couldn't|shouldn't)\b", re.I
+)
+
+
+def _validate_claims(claims: list[dict]) -> dict:
+    """Pass 1 谓词体检：长谓词 / 否定混入 / 从句混入 / 表外新词 / 缺宾语的长谓词。"""
+    long_pred: list[tuple[int, str]] = []
+    neg_in_pred: list[tuple[int, str]] = []
+    clause_in_pred: list[tuple[int, str]] = []
+    outside: list[tuple[int, str]] = []
+    empty_obj_long: list[tuple[int, str]] = []
+    kinds: set[str] = set()
+    in_table: set[str] = set()
+    for i, c in enumerate(claims):
+        surf = (c.get("predicate_surface") or "").strip()
+        pred = (c.get("predicate") or "").strip()
+        obj = (c.get("object") or "").strip()
+        wc = len(surf.split())
+        if pred:
+            kinds.add(pred)
+            if pred in RELATIONS:
+                in_table.add(pred)
+        if wc > 3 and not obj:
+            long_pred.append((i, surf))
+        if _NEG_MARKERS.search(surf) and not c.get("polarity"):
+            neg_in_pred.append((i, surf))
+        if _CLAUSE_MARKERS.search(surf):
+            clause_in_pred.append((i, surf))
+        if pred and pred not in RELATIONS and not c.get("predicate_nearest"):
+            outside.append((i, pred))
+        if not obj and wc >= 3:
+            empty_obj_long.append((i, surf))
+    return {
+        "pred_kinds": len(kinds),
+        "in_table_kinds": len(in_table),
+        "outside_kinds": len({p for _, p in outside}),
+        "long_pred": long_pred,
+        "neg_in_pred": neg_in_pred,
+        "clause_in_pred": clause_in_pred,
+        "outside": outside,
+        "empty_obj_long": empty_obj_long,
+    }
+
+
+async def _normalize_predicates(
+    client: DeepSeekLLMClient,
+    source_id: str,
+    claims: list[dict],
+    blocks: list[dict],
+    *,
+    batch: int = 60,
+) -> dict:
+    """谓词归一（独立小步）：Pass 1 的原文动词短语 → 受控关系表 id。只映射，不增删 claim。
+
+    结果写回 claim：`predicate_normalized`（受控 id）、必要时 `polarity` / `predicate_nearest`；
+    原文用词保留在 `predicate` 里（审计 + 事后收敛用）。
+
+    输入是**按块组织**的（块原文 + 该块内的断言）——短锚只够定位，不够判关系；
+    这一步必须看到完整句子/段落。块不跨批。
+    """
+    mapping: dict[int, dict] = {}
+
+    async def ask(chunk_blocks: list[dict], label: str) -> None:
+        user = json.dumps(chunk_blocks, ensure_ascii=False, indent=1)
+        part, _ = await _chat_json(
+            client,
+            [LLMMessage(role="system", content=PASS1_NORM_SYSTEM), LLMMessage(role="user", content=user)],
+            label=label,
+        )
+        for m in part.get("mapping") or []:
+            try:
+                idx = int(m.get("claim_idx"))
+            except (TypeError, ValueError):
+                continue
+            if m.get("predicate"):
+                mapping[idx] = m
+
+    # 按块分批（块不跨批），与 Pass 2 同一套切批逻辑
+    batches: list[list[dict]] = []
+    cur: list[dict] = []
+    cur_n = 0
+    for blk in blocks:
+        n = len(blk["claims"])
+        if cur and cur_n + n > batch:
+            batches.append(cur)
+            cur, cur_n = [], 0
+        cur.append(blk)
+        cur_n += n
+    if cur:
+        batches.append(cur)
+
+    chars_in = 0
+    for i, chunk in enumerate(batches, start=1):
+        chars_in += len(json.dumps(chunk, ensure_ascii=False))
+        await ask(chunk, f"谓词归一 {source_id} {i}/{len(batches)}")
+        for retry in range(1, 3):
+            ids = [it["claim_idx"] for blk in chunk for it in blk["claims"]]
+            missing = [x for x in ids if x not in mapping]
+            if not missing:
+                break
+            print(f"  [补问] 谓词归一 第 {i} 批缺 {len(missing)} 条，第 {retry} 次补问")
+            # 补问只带缺失断言所在的块（原样，保留完整上下文）
+            miss_set = set(missing)
+            sub = [
+                {"chunk_id": blk["chunk_id"], "context": blk["context"],
+                 "claims": [it for it in blk["claims"] if it["claim_idx"] in miss_set]}
+                for blk in chunk
+                if any(it["claim_idx"] in miss_set for it in blk["claims"])
+            ]
+            await ask(sub, f"谓词归一 {source_id} {i}-补{retry}")
+
+    for i, c in enumerate(claims):
+        m = mapping.get(i) or {}
+        if m.get("predicate"):
+            c["predicate_normalized"] = str(m["predicate"]).strip()
+        if m.get("polarity"):
+            c["polarity"] = m["polarity"]
+        if m.get("sign"):
+            c["sign"] = m["sign"]
+        if m.get("predicate_nearest"):
+            c["predicate_nearest"] = m["predicate_nearest"]
+
+    kinds = {c["predicate_normalized"] for c in claims if c.get("predicate_normalized")}
+    return {
+        "mapped": sum(1 for c in claims if c.get("predicate_normalized")),
+        "total": len(claims),
+        "kinds": sorted(kinds),
+        "outside": sorted(k for k in kinds if k not in RELATIONS),
+        "blocks": len(blocks),
+        "batches": len(batches),
+        "chars_in": chars_in,
+    }
+
+
 async def _chat_json(
     client: DeepSeekLLMClient,
     messages: list[LLMMessage],
@@ -442,7 +614,16 @@ def _build_pass2_blocks(claims: list[dict], clean_t: str, chunks: list[dict]) ->
             ch = next(x for x in chunks if x["chunk_id"] == cid)
             blocks[cid] = {"chunk_id": cid, "context": clean_t[ch["start_pos"]:ch["end_pos"]], "claims": []}
         blk = blocks[cid] if cid else orphan
-        item = {"claim_idx": ci, "subject": c.get("subject"), "predicate": c.get("predicate"), "object": c.get("object")}
+        item = {
+            "claim_idx": ci,
+            "subject": c.get("subject"),
+            "predicate": c.get("predicate_normalized") or c.get("predicate"),  # 边用受控关系；无归一时回落原文
+            "object": c.get("object"),
+        }
+        if c.get("predicate"):
+            item["predicate_surface"] = c["predicate"]
+        if c.get("polarity"):
+            item["polarity"] = c["polarity"]
         if c.get("roles"):
             item["roles"] = c["roles"]
         blk["claims"].append(item)
@@ -527,6 +708,27 @@ async def _compile_source(
         claims = norm
         if dropped:
             print(f"[B6] {source_id}: 结构校验剔除 {dropped} 条缺必填字段的 claim（剩余 {len(claims)}）")
+        # 谓词体检（Pass 1 质量门）：长谓词 / 否定混入 / 从句混入 / 表外新词
+        v = _validate_claims(claims)
+        print(
+            f"[B6] {source_id}: Pass1 谓词体检 谓词种数={v['pred_kinds']}"
+            f"（表内 {v['in_table_kinds']} / 表外 {v['outside_kinds']}）"
+            f" | 长谓词={len(v['long_pred'])} 否定混入={len(v['neg_in_pred'])}"
+            f" 从句混入={len(v['clause_in_pred'])} 缺宾语且长={len(v['empty_obj_long'])}"
+        )
+        if v["outside"]:
+            print(f"[B6] {source_id}: 表外新词（前 10）：{sorted({p for _, p in v['outside']})[:10]}")
+        if v["long_pred"]:
+            print(f"[B6] {source_id}: 长谓词样例（前 5）：{[s for _, s in v['long_pred'][:5]]}")
+        # 谓词归一（独立小步，只映射不增删）——按块给完整上下文（短锚只够定位，不够判关系）
+        norm_blocks = _build_pass2_blocks(claims, clean_t, chunks)
+        nv = await _normalize_predicates(client, source_id, claims, norm_blocks)
+        print(
+            f"[B6] {source_id}: 谓词归一 {nv['mapped']}/{nv['total']} 条"
+            f" | 关系种数={len(nv['kinds'])} | 表外新词={len(nv['outside'])}"
+            f" | 按块 {nv['blocks']} 块 / {nv['batches']} 批 / 输入 {nv['chars_in']} 字符"
+            + (f" {nv['outside'][:8]}" if nv["outside"] else "")
+        )
         suffix = f"_{tag}" if tag else ""
         claims_file = OUT_DIR / f"b6_claims_{source_id}{suffix}.json"
         claims_file.write_text(json.dumps(claims, ensure_ascii=False, indent=2), encoding="utf-8")
