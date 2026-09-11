@@ -93,8 +93,9 @@ polarity / roles 可省略。
 # Pass 1 · 谓词归一（独立小步）：原文动词短语 → 受控关系表 id
 # 为什么拆出来：把 36 条表塞进抽取会拖累召回（实测 1.00 → 0.80/0.85，见 memory/0028 考古层第二十六段）。
 # 这一步**只做映射，不增删 claim**，所以召回由上面那步守住。
-PASS1_NORM_SYSTEM = """你是「关系归一器」。输入是**按块组织的断言清单**：每块含 chunk_id、context（该块清洗后原文）、claims（每条含 claim_idx、subject、predicate（原文动词短语）、object）。
-**先读 context 原文，再判断每条断言的 predicate 该归到哪个关系**，只输出严格 JSON。
+PASS1_NORM_SYSTEM = """你是「关系归一器」。输入是一批断言，每条含：claim_idx、subject、predicate（原文动词短语）、object，以及三段原文——
+anchor_sentence（**这条断言就是从这句抽出来的**）、context_before / context_after（它的前后各一句）。
+**先读 anchor_sentence，再判断 predicate 该归到哪个关系**；前后句只用来消歧。只输出严格 JSON。
 
 # 受控关系表
 «关系词表»
@@ -344,6 +345,72 @@ def _repair_json(s: str) -> str:
     return repaired
 
 
+# 句子边界辅助（把短锚扩成"锚句 ± 邻句"用；内容一律从 clean_t 切，无损）
+_ABBREV = ("e.g.", "i.e.", "etc.", "vs.", "mr.", "mrs.", "ms.", "dr.", "st.", "no.", "fig.",
+           "u.s.", "a.m.", "p.m.", "al.", "cf.", "approx.")
+
+
+def _is_sentence_end(t: str, i: int) -> bool:
+    """t[i] 是否为句末标点（避开常见缩写与小数字点号）。"""
+    if t[i] not in ".!?…":
+        return False
+    if t[i] == "." and i > 0 and t[i - 1].isdigit():  # 4.7 / v1.0
+        return False
+    tail = t[max(0, i - 8) : i + 1].lower()
+    return not any(tail.endswith(a) for a in _ABBREV)
+
+
+def _sentence_bounds(t: str, pos: int) -> tuple[int, int]:
+    """pos 所在句子的 [start, end)（遇到换行也算边界）。"""
+    start = 0
+    i = pos
+    while i > 0:
+        if t[i - 1] == "\n":
+            start = i
+            break
+        if _is_sentence_end(t, i - 1):
+            start = i
+            break
+        i -= 1
+    end = len(t)
+    j = pos
+    while j < len(t):
+        if t[j] == "\n":
+            end = j
+            break
+        if _is_sentence_end(t, j):
+            end = j + 1
+            break
+        j += 1
+    return start, end
+
+
+def _anchor_window(claim: dict, clean_t: str) -> dict:
+    """把 claim 的短锚**扩成锚句 ± 邻句**（从 clean_t 无损切出，不改 Pass 1 输出）。
+
+    为什么要这一步：短锚是为"LLM 复制保真 + 程序定位"设计的，信息量不足以判关系；
+    但下游要的上下文**不该再由 LLM 复制**（越长越容易重建失真），而应由程序按锚切。
+    """
+    pos = None
+    for e in claim.get("evidence_texts") or []:
+        pos = _find_raw(e, clean_t)
+        if pos:
+            break
+    if not pos:
+        return {"anchor_sentence": " ".join((claim.get("evidence_texts") or [""])[:1])[:300], "context_before": "", "context_after": ""}
+    s, e = _sentence_bounds(clean_t, pos[0])
+    ps = pe = es = ee = None
+    if s > 0:
+        ps, pe = _sentence_bounds(clean_t, max(0, s - 1))
+    if e < len(clean_t):
+        es, ee = _sentence_bounds(clean_t, min(len(clean_t) - 1, e + 1))
+    return {
+        "anchor_sentence": clean_t[s:e].strip(),
+        "context_before": clean_t[ps:pe].strip() if ps is not None else "",
+        "context_after": clean_t[es:ee].strip() if es is not None else "",
+    }
+
+
 # 谓词体检用的模式（Pass 1 质量门：把这些从谓词里赶出去）
 _CLAUSE_MARKERS = re.compile(r"\b(when|until|regardless|that|because|whether|while)\b", re.I)
 _NEG_MARKERS = re.compile(
@@ -395,7 +462,7 @@ async def _normalize_predicates(
     client: DeepSeekLLMClient,
     source_id: str,
     claims: list[dict],
-    blocks: list[dict],
+    clean_t: str,
     *,
     batch: int = 60,
 ) -> dict:
@@ -404,13 +471,27 @@ async def _normalize_predicates(
     结果写回 claim：`predicate_normalized`（受控 id）、必要时 `polarity` / `predicate_nearest`；
     原文用词保留在 `predicate` 里（审计 + 事后收敛用）。
 
-    输入是**按块组织**的（块原文 + 该块内的断言）——短锚只够定位，不够判关系；
-    这一步必须看到完整句子/段落。块不跨批。
+    输入 = 每条断言的 **锚句 ± 邻句**（用短锚在 clean_t 里定位后**由程序无损切出**）。
+    短锚本身是为"LLM 复制保真 + 能否定位"设计的，信息量不足以判关系；但补上下文这一步
+    不该再让 LLM 复制（越长越容易重建失真），所以由程序按锚切。
     """
+    items = []
+    for i, c in enumerate(claims):
+        win = _anchor_window(c, clean_t)
+        items.append(
+            {
+                "claim_idx": i,
+                "subject": c.get("subject"),
+                "predicate": c.get("predicate"),
+                "object": c.get("object") or "",
+                **win,
+            }
+        )
+
     mapping: dict[int, dict] = {}
 
-    async def ask(chunk_blocks: list[dict], label: str) -> None:
-        user = json.dumps(chunk_blocks, ensure_ascii=False, indent=1)
+    async def ask(chunk_items: list[dict], label: str) -> None:
+        user = json.dumps(chunk_items, ensure_ascii=False, indent=1)
         part, _ = await _chat_json(
             client,
             [LLMMessage(role="system", content=PASS1_NORM_SYSTEM), LLMMessage(role="user", content=user)],
@@ -424,39 +505,17 @@ async def _normalize_predicates(
             if m.get("predicate"):
                 mapping[idx] = m
 
-    # 按块分批（块不跨批），与 Pass 2 同一套切批逻辑
-    batches: list[list[dict]] = []
-    cur: list[dict] = []
-    cur_n = 0
-    for blk in blocks:
-        n = len(blk["claims"])
-        if cur and cur_n + n > batch:
-            batches.append(cur)
-            cur, cur_n = [], 0
-        cur.append(blk)
-        cur_n += n
-    if cur:
-        batches.append(cur)
-
+    batches = [items[i : i + batch] for i in range(0, len(items), batch)]
     chars_in = 0
     for i, chunk in enumerate(batches, start=1):
         chars_in += len(json.dumps(chunk, ensure_ascii=False))
         await ask(chunk, f"谓词归一 {source_id} {i}/{len(batches)}")
         for retry in range(1, 3):
-            ids = [it["claim_idx"] for blk in chunk for it in blk["claims"]]
-            missing = [x for x in ids if x not in mapping]
+            missing = [it for it in chunk if it["claim_idx"] not in mapping]
             if not missing:
                 break
             print(f"  [补问] 谓词归一 第 {i} 批缺 {len(missing)} 条，第 {retry} 次补问")
-            # 补问只带缺失断言所在的块（原样，保留完整上下文）
-            miss_set = set(missing)
-            sub = [
-                {"chunk_id": blk["chunk_id"], "context": blk["context"],
-                 "claims": [it for it in blk["claims"] if it["claim_idx"] in miss_set]}
-                for blk in chunk
-                if any(it["claim_idx"] in miss_set for it in blk["claims"])
-            ]
-            await ask(sub, f"谓词归一 {source_id} {i}-补{retry}")
+            await ask(missing, f"谓词归一 {source_id} {i}-补{retry}")
 
     for i, c in enumerate(claims):
         m = mapping.get(i) or {}
@@ -475,7 +534,8 @@ async def _normalize_predicates(
         "total": len(claims),
         "kinds": sorted(kinds),
         "outside": sorted(k for k in kinds if k not in RELATIONS),
-        "blocks": len(blocks),
+        "no_window": sum(1 for c in claims if not _anchor_window(c, clean_t)["anchor_sentence"]),
+        "avg_window": int(sum(len(it["anchor_sentence"]) + len(it["context_before"]) + len(it["context_after"]) for it in items) / max(1, len(items))),
         "batches": len(batches),
         "chars_in": chars_in,
     }
@@ -720,13 +780,13 @@ async def _compile_source(
             print(f"[B6] {source_id}: 表外新词（前 10）：{sorted({p for _, p in v['outside']})[:10]}")
         if v["long_pred"]:
             print(f"[B6] {source_id}: 长谓词样例（前 5）：{[s for _, s in v['long_pred'][:5]]}")
-        # 谓词归一（独立小步，只映射不增删）——按块给完整上下文（短锚只够定位，不够判关系）
-        norm_blocks = _build_pass2_blocks(claims, clean_t, chunks)
-        nv = await _normalize_predicates(client, source_id, claims, norm_blocks)
+        # 谓词归一（独立小步，只映射不增删）——输入是"锚句 ± 邻句"（由程序按短锚无损切出）
+        nv = await _normalize_predicates(client, source_id, claims, clean_t)
         print(
             f"[B6] {source_id}: 谓词归一 {nv['mapped']}/{nv['total']} 条"
             f" | 关系种数={len(nv['kinds'])} | 表外新词={len(nv['outside'])}"
-            f" | 按块 {nv['blocks']} 块 / {nv['batches']} 批 / 输入 {nv['chars_in']} 字符"
+            f" | 无锚 {nv['no_window']} | 锚窗均长 {nv['avg_window']} 字符"
+            f" | {nv['batches']} 批 / 输入 {nv['chars_in']} 字符"
             + (f" {nv['outside'][:8]}" if nv["outside"] else "")
         )
         suffix = f"_{tag}" if tag else ""
