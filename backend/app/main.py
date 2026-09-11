@@ -9,7 +9,15 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from app.api import chat, eval as eval_api, health, kb as kb_api, settings as settings_api  # 起别名避免与配置变量同名
+from app.api import (  # 起别名避免与配置变量同名
+    chat,
+    compile as compile_api,
+    eval as eval_api,
+    health,
+    kb as kb_api,
+    settings as settings_api,
+)
+from app.compile.service import CompileService  # 编译层：抽取任务（Pass 1 → 体检 → 谓词归一）
 from app.config import settings  # 应用配置对象（注意：这里的 settings 不是 api 模块）
 from app.di import build_deps  # 依赖组装工厂
 from app.storage.sqlite.kb_store import KbStore
@@ -41,6 +49,8 @@ def create_app(
     app.include_router(settings_api.router)  # 注册 /api/settings
     app.include_router(eval_api.router)  # 注册 /api/eval
     app.include_router(kb_api.router)  # 注册 /api/kb
+    app.state.compile_service = CompileService()  # 编译层抽取任务（内存态 + 落盘产物）
+    app.include_router(compile_api.router)  # 注册 /api/compile
     return app
 
 

@@ -15,7 +15,8 @@ from app.kb.manifest import parse_manifest
 from scripts.compile_slice_b6 import MANIFEST_PATH, OUT_DIR, _build_clean_t, _file_units, _find_raw
 
 
-GOLD_PATH = Path(__file__).resolve().parents[1] / "eval" / "compile" / "a5_recall_gold.json"
+GOLD_DIR = Path(__file__).resolve().parents[1] / "eval" / "compile"
+GOLD_PATH = GOLD_DIR / "a5_recall_gold.json"
 
 
 def _clean_t(source: str) -> str:

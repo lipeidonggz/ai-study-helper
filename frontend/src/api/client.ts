@@ -569,3 +569,66 @@ export const kbApi = {
     })
   }
 }
+
+// ---------------- 编译层（抽取：Pass 1 → 体检 → 谓词归一） ----------------
+
+export interface CompileStatus {
+  source_id: string
+  status: 'idle' | 'running' | 'done' | 'failed'
+  stage: string
+  progress: string
+  started_at: string
+  finished_at: string
+  error: string
+  summary: Record<string, any>
+}
+
+export interface HealthDrop {
+  idx: number
+  subject: string
+  predicate: string
+  reasons: string[]
+}
+
+export interface HealthReport {
+  source: string
+  doc_subject: string
+  claims_in: number
+  claims_out: number
+  checks: Record<string, Record<string, any>>
+  verdict: Record<string, { value: number; threshold: number; pass: boolean }>
+  red_line_pass: boolean
+  recall: Record<string, any>
+  dropped: HealthDrop[]
+  rewritten: Record<string, any>[]
+  marked: Record<string, any>[]
+}
+
+export interface CompileClaim {
+  subject: string
+  predicate: string
+  predicate_normalized: string | null
+  sign: string | null
+  polarity: string | null
+  object: string | null
+  marks: string[]
+  evidence: string
+}
+
+export const compileApi = {
+  list(): Promise<Record<string, { status: string; finished_at: string; claims_kept: number; red_line_pass: boolean; progress?: string; error?: string }>> {
+    return http('/api/compile')
+  },
+  status(id: string): Promise<CompileStatus> {
+    return http(`/api/compile/${id}`)
+  },
+  extract(id: string): Promise<CompileStatus> {
+    return http(`/api/compile/${id}/extract`, { method: 'POST' })
+  },
+  report(id: string): Promise<HealthReport> {
+    return http(`/api/compile/${id}/report`)
+  },
+  claims(id: string, limit = 200): Promise<CompileClaim[]> {
+    return http(`/api/compile/${id}/claims?limit=${limit}`)
+  }
+}
