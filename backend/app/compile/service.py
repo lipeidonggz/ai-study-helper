@@ -27,6 +27,7 @@ from scripts.compile_slice_b6 import (
     PASS1_SYSTEM,
     _build_clean_t,
     _chat_json,
+    _clean_predicates,
     _file_units,
     _normalize_predicates,
     _validate_claims,
@@ -117,23 +118,29 @@ class CompileService:
             }
         return out
 
-    def claims(self, source_id: str, limit: int = 200) -> list[dict]:
+    def claims(self, source_id: str, limit: int = 0) -> list[dict]:
+        """归一后的断言清单（limit=0 → 全部）。"""
         f = self._root / source_id / "claims.json"
         if not f.exists():
             return []
         data = json.loads(f.read_text(encoding="utf-8"))
+        rows = data if not limit else data[:limit]
         out = []
-        for c in data[:limit]:
+        for c in rows:
             out.append(
                 {
                     "subject": c.get("subject"),
                     "predicate": c.get("predicate"),
+                    "predicate_clean": c.get("predicate_clean"),
                     "predicate_normalized": c.get("predicate_normalized"),
+                    "predicate_status": c.get("predicate_status"),
+                    "predicate_invented": c.get("predicate_invented"),
                     "sign": c.get("sign"),
                     "polarity": c.get("polarity"),
                     "object": c.get("object"),
                     "marks": (c.get("health") or {}).get("marks") or [],
-                    "evidence": (c.get("evidence_texts") or [""])[0][:160],
+                    "anchor": (c.get("health") or {}).get("anchor")
+                    or (c.get("evidence_texts") or [""])[0][:300],
                 }
             )
         return out
@@ -192,9 +199,63 @@ class CompileService:
             kept, report = run_health_check(claims, clean_t, job.source_id)
 
             # ---- 谓词归一（独立小步，只映射不增删）----
+            job.stage = "clean"
+            job.progress = f"谓词清洗（{len(kept)} 条）"
+            cl = await _clean_predicates(client, job.source_id, kept, clean_t)
+            print(
+                f"[B6] {job.source_id}: 谓词清洗 目标 {cl['targets']} 条"
+                f" → 清洗 {cl['cleaned']}、无变化 {cl['noop']}、护栏拒绝 {cl['rejected']}"
+            )
+
             job.stage = "normalize"
             job.progress = f"谓词归一（{len(kept)} 条）"
             nv = await _normalize_predicates(client, job.source_id, kept, clean_t)
+
+            # 归一完成 → 回填报告里"标记清单"的归一化谓词（被丢弃的 claim 没归一，UI 显示 —）
+            report["marked"] = [
+                {
+                    "idx": (c.get("health") or {}).get("src_idx", i),
+                    "subject": c.get("subject"),
+                    "predicate": c.get("predicate"),
+                    "predicate_normalized": c.get("predicate_normalized"),
+                    "sign": c.get("sign"),
+                    "polarity": c.get("polarity"),
+                    "object": c.get("object") or "",
+                    "marks": (c.get("health") or {}).get("marks") or [],
+                    "anchor": (c.get("health") or {}).get("anchor", ""),
+                }
+                for i, c in enumerate(kept)
+                if (c.get("health") or {}).get("marks")
+            ]
+            # 待定清单（谓词归不进受控关系 → 不进图；内容仍在 chunk 里，靠向量兜底）
+            report["pending"] = [
+                {
+                    "idx": (c.get("health") or {}).get("src_idx", i),
+                    "subject": c.get("subject"),
+                    "predicate": c.get("predicate"),
+                    "invented": c.get("predicate_invented"),
+                    "object": c.get("object") or "",
+                    "anchor": (c.get("health") or {}).get("anchor", ""),
+                }
+                for i, c in enumerate(kept)
+                if c.get("predicate_status") == "pending"
+            ]
+            report["predicate_status"] = {"mapped": nv["mapped"], "forced": nv["forced"], "pending": nv["pending"]}
+            report["predicate_clean"] = cl
+
+            # 表外词累积表（按篇累积，供定期收敛：补进表 或 确认丢弃）
+            tally_path = self._root / "_outside_words.json"
+            tally = json.loads(tally_path.read_text(encoding="utf-8")) if tally_path.exists() else {}
+            for c in kept:
+                w = c.get("predicate_invented")
+                if not w:
+                    continue
+                st = c.get("predicate_status") or ""
+                e = tally.setdefault(w, {"mapped": 0, "forced": 0, "pending": 0, "sources": []})
+                e[st] = e.get(st, 0) + 1
+                if job.source_id not in e["sources"]:
+                    e["sources"].append(job.source_id)
+            tally_path.write_text(json.dumps(tally, ensure_ascii=False, indent=2), encoding="utf-8")
 
             # ---- 落盘 ----
             d = self._dir(job.source_id)
@@ -211,8 +272,12 @@ class CompileService:
                 "rewritten": len(report["rewritten"]),
                 "marked": len(report["marked"]),
                 "normalized": nv["mapped"],
+                "forced": nv["forced"],
+                "pending": nv["pending"],
+                "invented_words": nv["invented"],
+                "cleaned": cl["cleaned"],
+                "clean_rejected": cl["rejected"],
                 "relations": len(nv["kinds"]),
-                "outside_words": nv["outside"],
                 "predicate_health": {
                     "kinds": pred_health["pred_kinds"],
                     "long": len(pred_health["long_pred"]),

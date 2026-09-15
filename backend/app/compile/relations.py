@@ -73,6 +73,11 @@
      `acts_on`（动作类总归处——之前只说"动作动词不进表"却没给去处，`handles` 就是这么冒出来的）、
      `comes_from`（来源/出处）、`indicates`（证据→结论）；并把 `supports` 的定义扩到含"为…而存在/目的在于"。
      表：34 → 38 条。`handles` 的成员分派留到下一轮（一次只动一个变量）。
+
+  8. **补 `isolates`（2026-09-15，来自"待定"残差）**——A5（讲 containment 的那篇）里，
+     `sub-agents can isolate untrusted content` 的谓词 `isolates` 落到**待定**：表里居然没有"隔离"这条
+     关系（而这篇文章的主题就是隔离/围隔）。这是"**待定残差 → 定期收敛 → 补表**"这条闭环的第一次实战
+     （不是我们想出来的词，是数据报上来的）。表：38 → 39 条。
 """
 
 from __future__ import annotations
@@ -94,6 +99,7 @@ SEMANTIC_RELATIONS: dict[str, str] = {
     "instructs": "X 指令 / 要求 Y 做某事（指令、提示、要求；`requires` 是「X 需要 Y」，方向与语义都不同）",
     # 约束与防护
     "constrains": "X 限制 / 约束 Y",
+    "isolates": "X 隔离 / 围隔 Y（切断接触面；与 constrains 的区别：约束是限制行为范围，隔离是不让它碰到）",
     "blocks": "X 阻断 / 拒绝 / 阻止 Y",
     "enforces": "X 强制执行 / 落实 Y",
     "protects_against": "X 防护 / 抵御 Y",
@@ -130,6 +136,16 @@ SEMANTIC_RELATIONS: dict[str, str] = {
     "indicates": "X 表明 / 显示 Y（证据 → 结论：日志显示、数据表明、信号）",
     "provides": "X 提供 / 给出 Y（**能力、功能、资源**）",
     "supports": "X 支持 / 帮助 / 服务于 Y（**含「为…而存在 / 目的在于」**：is designed for、exists so that、serves）",
+}
+
+# 关系别名（表外动词 → 受控关系）：**"造词/待定残差 → 定期收敛"的落点**。
+# 只收"同一个关系换了种说法"的（controls 就是 constrains），不收有歧义的。
+# 与实体层的 aliases 同构：主名是受控关系，别名是同一关系的另一种说法。
+RELATION_ALIASES: dict[str, str] = {
+    "controls": "constrains",
+    "allows": "can",
+    "enables": "can",
+    "prevents": "blocks",
 }
 
 # 出处/归属边（引用审计用；**不参与判同指**）

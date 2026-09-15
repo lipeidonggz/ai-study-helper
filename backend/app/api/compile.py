@@ -52,6 +52,6 @@ def report(source_id: str, request: Request):
 
 
 @router.get("/{source_id}/claims")
-def claims(source_id: str, request: Request, limit: int = 200):
-    """归一后的断言清单（供界面预览；含标记）。"""
+def claims(source_id: str, request: Request, limit: int = 0):
+    """归一后的断言清单（limit=0 返回全部；含标记与锚定原文）。"""
     return _svc(request).claims(source_id, limit=limit)

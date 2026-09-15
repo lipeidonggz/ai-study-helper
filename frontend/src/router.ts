@@ -5,6 +5,7 @@ export type Route =
   | { name: 'eval' }
   | { name: 'kb' }
   | { name: 'kb-chunks'; sourceId: string }
+  | { name: 'compile-report'; sourceId: string }
   | { name: 'run'; runId: number }
 
 export function parseHash(hash: string): Route {
@@ -19,6 +20,9 @@ export function parseHash(hash: string): Route {
   if (parts[0] === 'kb') {
     if (parts[1] === 'chunks' && parts[2]) return { name: 'kb-chunks', sourceId: parts[2] }
     return { name: 'kb' }
+  }
+  if (parts[0] === 'compile' && parts[1]) {
+    return { name: 'compile-report', sourceId: parts[1] }
   }
   return { name: 'chat' }
 }

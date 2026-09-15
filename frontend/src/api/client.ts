@@ -587,7 +587,24 @@ export interface HealthDrop {
   idx: number
   subject: string
   predicate: string
+  predicate_normalized?: string | null
+  sign?: string | null
+  polarity?: string | null
+  object?: string | null
+  anchor?: string
   reasons: string[]
+  marks?: string[]
+}
+
+export interface CheckSpec {
+  key: string
+  name: string
+  value: number
+  threshold: number
+  pass: boolean
+  red_line: boolean
+  action: string
+  note: string
 }
 
 export interface HealthReport {
@@ -596,23 +613,30 @@ export interface HealthReport {
   claims_in: number
   claims_out: number
   checks: Record<string, Record<string, any>>
+  check_spec: CheckSpec[]
   verdict: Record<string, { value: number; threshold: number; pass: boolean }>
   red_line_pass: boolean
   recall: Record<string, any>
   dropped: HealthDrop[]
   rewritten: Record<string, any>[]
   marked: Record<string, any>[]
+  pending: Record<string, any>[]
+  predicate_status: { mapped: number; forced: number; pending: number }
+  predicate_clean: { targets: number; cleaned: number; rejected: number; noop: number }
 }
 
 export interface CompileClaim {
   subject: string
   predicate: string
+  predicate_clean: string | null
   predicate_normalized: string | null
+  predicate_status: 'mapped' | 'forced' | 'pending' | null
+  predicate_invented: string | null
   sign: string | null
   polarity: string | null
   object: string | null
   marks: string[]
-  evidence: string
+  anchor: string
 }
 
 export const compileApi = {
@@ -628,7 +652,7 @@ export const compileApi = {
   report(id: string): Promise<HealthReport> {
     return http(`/api/compile/${id}/report`)
   },
-  claims(id: string, limit = 200): Promise<CompileClaim[]> {
+  claims(id: string, limit = 0): Promise<CompileClaim[]> {
     return http(`/api/compile/${id}/claims?limit=${limit}`)
   }
 }

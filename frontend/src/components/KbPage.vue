@@ -4,9 +4,6 @@ import { computed, onMounted, ref } from 'vue'
 import {
   compileApi,
   kbApi,
-  type CompileClaim,
-  type CompileStatus,
-  type HealthReport,
   type KbDocument,
   type KbSearchHit
 } from '../api/client'
@@ -26,10 +23,6 @@ const hits = ref<KbSearchHit[]>([])
 
 // 编译层：抽取（Pass 1 → 体检 → 谓词归一）
 const compileStates = ref<Record<string, { status: string; progress?: string; claims_kept?: number; red_line_pass?: boolean; error?: string }>>({})
-const compileTarget = ref('')
-const compileStatus = ref<CompileStatus | null>(null)
-const compileReport = ref<HealthReport | null>(null)
-const compileClaims = ref<CompileClaim[]>([])
 const compileBusy = ref(false)
 let compileTimer = 0
 
@@ -118,23 +111,9 @@ async function remove(id: string) {
 
 // ---------- 编译层：抽取 ----------
 
-async function openCompile(id: string) {
-  compileTarget.value = id
-  compileReport.value = null
-  compileClaims.value = []
-  await refreshCompile(id)
-}
-
-async function refreshCompile(id: string) {
-  try {
-    compileStatus.value = await compileApi.status(id)
-    if (compileStatus.value.status === 'done') {
-      compileReport.value = await compileApi.report(id)
-      compileClaims.value = await compileApi.claims(id, 200)
-    }
-  } catch (err) {
-    msg.value = `读取抽取状态失败：${err}`
-  }
+/** 体检报告在新标签页打开（独立页面：指标表 + 丢弃/标记/断言清单） */
+function openCompile(id: string) {
+  window.open('#/compile/' + id, '_blank')
 }
 
 function pollCompile(id: string) {
@@ -142,13 +121,11 @@ function pollCompile(id: string) {
   compileTimer = window.setInterval(async () => {
     try {
       const st = await compileApi.status(id)
-      compileStatus.value = st
       if (st.status !== 'running') {
         window.clearInterval(compileTimer)
         compileBusy.value = false
         compileStates.value = await compileApi.list()
-        if (st.status === 'done') await refreshCompile(id)
-        else if (st.status === 'failed') msg.value = `抽取失败：${st.error}`
+        msg.value = st.status === 'done' ? `${id} 抽取完成` : `抽取失败：${st.error}`
       }
     } catch {
       window.clearInterval(compileTimer)
@@ -158,13 +135,10 @@ function pollCompile(id: string) {
 }
 
 async function runExtract(id: string) {
-  compileTarget.value = id
-  compileReport.value = null
-  compileClaims.value = []
   compileBusy.value = true
   msg.value = ''
   try {
-    compileStatus.value = await compileApi.extract(id)
+    await compileApi.extract(id)
     msg.value = `${id} 已开始抽取（Pass 1 → 体检 → 谓词归一）`
     pollCompile(id)
   } catch (err) {
@@ -172,11 +146,6 @@ async function runExtract(id: string) {
     msg.value = `${id} 触发抽取失败：${err}`
   }
 }
-
-const verdictList = computed(() => {
-  if (!compileReport.value) return []
-  return Object.entries(compileReport.value.verdict).map(([k, v]) => ({ key: k, ...v }))
-})
 
 function compileLabel(s?: string): string {
   if (s === 'done') return '已抽取'
@@ -318,76 +287,6 @@ onMounted(load)
       </table>
     </section>
 
-    <section v-if="compileTarget" class="card kb-compile">
-      <header class="kb-compile-head">
-        <h2>抽取 · {{ compileTarget }}</h2>
-        <span class="badge" :class="compileBadge(compileStatus?.status)">{{ compileLabel(compileStatus?.status) }}</span>
-        <span class="hint">{{ compileStatus?.progress }}</span>
-        <button :disabled="compileBusy" @click="runExtract(compileTarget)">
-          {{ compileStatus?.status === 'done' ? '重抽' : '开始抽取' }}
-        </button>
-        <button @click="openCompile(compileTarget)">刷新</button>
-        <button @click="compileTarget = ''">关闭</button>
-      </header>
-
-      <template v-if="compileReport">
-        <p class="hint">
-          claim {{ compileReport.claims_in }} 条 → 保留 {{ compileReport.claims_out }} 条
-          （丢弃 {{ compileReport.dropped.length }}、改写 {{ compileReport.rewritten.length }}、标记 {{ compileReport.marked.length }}）
-          ｜ 文档主体「{{ compileReport.doc_subject }}」
-          ｜ 召回：{{ compileReport.recall?.executed ? `${compileReport.recall.must_hit}/${compileReport.recall.must_total} must` : compileReport.recall?.note }}
-        </p>
-        <p class="kb-verdict" :class="compileReport.red_line_pass ? 'ok' : 'bad'">
-          红线总判定：{{ compileReport.red_line_pass ? '通过 ✅' : '不过 ❌（该篇编译失败，需人工介入）' }}
-        </p>
-        <ul class="kb-checks">
-          <li v-for="v in verdictList" :key="v.key">
-            <span class="badge" :class="v.pass ? 'ok' : 'bad'">{{ v.pass ? '✅' : '❌' }}</span>
-            {{ v.key }}：{{ (v.value * 100).toFixed(1) }}%（阈值 {{ (v.threshold * 100).toFixed(0) }}%）
-          </li>
-        </ul>
-
-        <details v-if="compileReport.dropped.length" open>
-          <summary>丢弃清单（{{ compileReport.dropped.length }} 条）</summary>
-          <ul class="kb-list">
-            <li v-for="d in compileReport.dropped.slice(0, 30)" :key="d.idx">
-              <span class="hint">[{{ d.idx }}]</span> {{ d.subject }} / {{ d.predicate }}
-              <span class="badge bad">{{ d.reasons.join('；') }}</span>
-            </li>
-          </ul>
-        </details>
-
-        <details v-if="compileReport.marked.length">
-          <summary>标记清单（{{ compileReport.marked.length }} 条，交归一步清洗/抽检）</summary>
-          <ul class="kb-list">
-            <li v-for="m in compileReport.marked.slice(0, 30)" :key="m.idx">
-              <span class="hint">[{{ m.idx }}]</span> {{ m.subject }} / {{ m.predicate }}
-              <span class="badge run">{{ (m.marks || []).join('；') }}</span>
-            </li>
-          </ul>
-        </details>
-
-        <details>
-          <summary>断言清单（前 {{ Math.min(compileClaims.length, 60) }} / {{ compileClaims.length }} 条）</summary>
-          <table class="kb-table">
-            <thead><tr><th>主语</th><th>谓词（原文）</th><th>关系</th><th>sign/极性</th><th>宾语</th><th>标记</th></tr></thead>
-            <tbody>
-              <tr v-for="(c, i) in compileClaims.slice(0, 60)" :key="i">
-                <td>{{ c.subject }}</td>
-                <td>{{ c.predicate }}</td>
-                <td><code>{{ c.predicate_normalized || '—' }}</code></td>
-                <td>{{ [c.sign, c.polarity].filter(Boolean).join('/') || '' }}</td>
-                <td>{{ c.object || '' }}</td>
-                <td><span v-if="c.marks.length" class="badge run">{{ c.marks.join('；') }}</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </details>
-      </template>
-      <p v-else-if="compileStatus?.status === 'running'" class="hint">抽取中…（{{ compileStatus.progress }}）</p>
-      <p v-else-if="compileStatus?.status === 'failed'" class="kb-msg">抽取失败：{{ compileStatus.error }}</p>
-      <p v-else class="hint">还没有抽取产物，点"开始抽取"。</p>
-    </section>
 
   </main>
 </template>
@@ -531,69 +430,4 @@ onMounted(load)
   margin: 6px 0 0;
 }
 
-/* 编译层：抽取面板 */
-.kb-compile-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.kb-compile-head h2 {
-  margin: 0;
-  font-size: 1.1em;
-}
-.kb-compile-head button {
-  padding: 4px 12px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #fff;
-  cursor: pointer;
-}
-.kb-verdict {
-  padding: 6px 10px;
-  border-radius: 6px;
-  margin: 8px 0;
-  font-weight: 600;
-}
-.kb-verdict.ok {
-  background: #dafbe1;
-  color: #1a7f37;
-}
-.kb-verdict.bad {
-  background: #ffeef0;
-  color: #cf222e;
-}
-.kb-checks {
-  list-style: none;
-  padding-left: 0;
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-size: 0.86em;
-}
-.kb-list {
-  list-style: none;
-  padding-left: 0;
-  font-size: 0.85em;
-  max-height: 260px;
-  overflow: auto;
-}
-.kb-list li {
-  padding: 3px 0;
-  border-bottom: 1px solid #f4f4f4;
-}
-.kb-compile details {
-  margin-top: 8px;
-}
-.kb-compile summary {
-  cursor: pointer;
-  font-size: 0.88em;
-  margin-bottom: 4px;
-}
-.kb-compile code {
-  background: #f6f8fa;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 0.85em;
-}
 </style>

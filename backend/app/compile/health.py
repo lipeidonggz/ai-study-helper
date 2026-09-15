@@ -29,6 +29,45 @@ META_SUBJECTS = {
     "we", "our", "us", "this", "that", "it", "they", "there", "these", "those",
     "the author", "the paper", "the post", "本文", "作者",
 }
+# 指标说明（给界面渲染成表：指标名 / 取值 / 阈值 / 是否红线 / 动作 / 为什么需要）
+CHECK_SPEC: dict[str, dict] = {
+    "recall_must": {
+        "name": "召回（must 项）",
+        "action": "红线",
+        "note": "人工金标准里 must=true 的核心断言，其所在段落是否被某条 claim 的证据覆盖；漏一条即不过。"
+                "没提供金标准时跳过（报告标注「未执行」）。",
+    },
+    "anchor_rate": {
+        "name": "引文可锚率",
+        "action": "红线",
+        "note": "**只统计写了引文的 claim**：引文能在原文里逐字定位的比例。低于阈值＝模型在编引文，"
+                "所以它是红线（同时是幻觉探针）。",
+    },
+    "evidence_missing": {
+        "name": "没写引文占比",
+        "action": "丢弃",
+        "note": "claim 完全没给引文的比例（模型省字段或输出被截断）。这类**丢掉即可**、不涉及真假，"
+                "故阈值宽松。",
+    },
+    "meta_subject": {
+        "name": "元主语占比",
+        "action": "确定性改写",
+        "note": "主语是 we / there / this 这类没有信息的主体。程序**改写成文档主体**（不丢——丢了会丢真信息），"
+                "比例过高说明抽取在泛泛而谈。",
+    },
+    "clause_subject": {
+        "name": "从句式主语占比",
+        "action": "丢弃",
+        "note": "主语是 how to… / granting… / that…（≥3 词）这类从句式短语，不是干净概念 → **直接丢弃**；"
+                "比例高说明抽取质量在退化。",
+    },
+    "predicate_dirty": {
+        "name": "谓词需清洗占比",
+        "action": "标记（交归一步）",
+        "note": "谓词 ≥4 词或含并列（修饰/从句被揉进了谓词，如 `grows large enough that`）。**只标记不丢**，"
+                "交归一步清洗成 predicate_clean；比例高会拖累谓词归一的一致性。",
+    },
+}
 CLAUSE_SUBJECT = re.compile(r"^(how to|whether|when|why|that|which|only when|granting|having)\b", re.I)
 # 限定词开头的短名词短语（`that token`）不是从句 → 要求 ≥3 词
 CLAUSE_NEEDS_LEN3 = {"that", "which", "who"}
@@ -165,13 +204,36 @@ def run_health_check(
             marks.append("主语不在锚句（可能指代/需邻句）")
 
         if marks or rewrites:
-            c["health"] = {"marks": marks, "rewrites": rewrites}
+            c["health"] = {
+                "marks": marks,
+                "rewrites": rewrites,
+                "anchor": win["anchor_sentence"],
+                "src_idx": i,          # 在体检**输入**列表里的下标（供下游回填归一结果）
+            }
             if marks:
-                marked.append({"idx": i, "subject": subj, "predicate": pred, "marks": marks})
+                marked.append(
+                    {
+                        "idx": i,
+                        "subject": c.get("subject") or subj,
+                        "predicate": pred,
+                        "object": c.get("object") or "",
+                        "anchor": win["anchor_sentence"],
+                        "marks": marks,
+                    }
+                )
             if rewrites:
                 rewritten.append({"idx": i, "rewrites": rewrites})
         if reasons_drop:
-            dropped.append({"idx": i, "subject": subj, "predicate": pred, "reasons": reasons_drop})
+            dropped.append(
+                {
+                    "idx": i,
+                    "subject": c.get("subject") or subj,
+                    "predicate": pred,
+                    "object": c.get("object") or "",
+                    "anchor": win["anchor_sentence"],
+                    "reasons": reasons_drop,
+                }
+            )
         else:
             kept.append(c)
 
@@ -211,10 +273,26 @@ def run_health_check(
             "⑤ 否定存疑（标记，不设红线）": {"count": n_neg},
         },
         "verdict": verdict,
-        "red_line_pass": all(v["pass"] for v in verdict.values()),
         "recall": recall if recall else {"executed": False, "note": "未执行（未提供召回金标准）"},
+        "red_line_pass": all(v["pass"] for v in verdict.values()),
         "dropped": dropped,
         "rewritten": rewritten,
         "marked": marked,
     }
+    # 指标表（界面渲染用）：名称 / 取值 / 阈值 / 是否红线 / 动作 / 说明
+    order = ["recall_must", "anchor_rate", "evidence_missing", "meta_subject", "clause_subject", "predicate_dirty"]
+    report["check_spec"] = [
+        {
+            "key": k,
+            "name": CHECK_SPEC[k]["name"],
+            "value": verdict[k]["value"],
+            "threshold": verdict[k]["threshold"],
+            "pass": verdict[k]["pass"],
+            "red_line": k != "predicate_dirty",
+            "action": CHECK_SPEC[k]["action"],
+            "note": CHECK_SPEC[k]["note"],
+        }
+        for k in order
+        if k in verdict
+    ]
     return kept, report

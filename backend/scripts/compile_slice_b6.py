@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 from app.agent.llm import DeepSeekLLMClient, LLMMessage
-from app.compile.relations import RELATIONS, table_lines
+from app.compile.relations import RELATION_ALIASES, RELATIONS, table_lines
 from app.kb.ingest import _file_units
 from app.kb.manifest import parse_manifest
 from app.storage.sqlite.kb_store import KbStore
@@ -106,6 +106,8 @@ anchor_sentence（**这条断言就是从这句抽出来的**）、context_befor
 3. 否定不算关系差异：原文是否定 → 谓词用肯定关系 + polarity: "negative"（不要用新词表示否定）。
 4. 时态 / 情态 / 修饰不算关系差异：`was` / `may be` / `previously` / `have been` → 用最贴近的关系（通常是 has_property）。
 5. 只依据给定信息判断，不要引入外部知识；拿不准选语义更宽的那条。
+5b. **表外新词必须给 <code>predicate_nearest</code>**：即使词不在表里，也必须指出最接近的表内 id
+    （实在挑不出就选语义最宽的那条，如 affects / has_property）——留空会被判为"待定"，不进图。
 6. **方向要单独给**：`changes` 这条只表示"变了"；是变多还是变少，用 `sign: "up" | "down"` 表示
    （`grows` / `increases` / `expands` → sign:up；`reduces` / `minimizes` / `limits` → sign:down）。
 7. 情态词（can / may / must）本身不代表关系：先判这句到底说了什么关系。
@@ -458,6 +460,226 @@ def _validate_claims(claims: list[dict]) -> dict:
     }
 
 
+def _snap_relation(word: str) -> str | None:
+    """表外词的**确定性归一**兜底，两级：
+
+    ① 关系别名（relations.py 的 RELATION_ALIASES，如 controls→constrains、allows→can）
+       —— 这是"造词残差 → 定期收敛"的落点；
+    ② 形态/时态变体（becomes→become、running→run、placed→place）。
+    只在"折回来的词恰好是表内 id"时生效，不会把真缺口误判成表内关系。
+
+    注：系动词 be 家族（are / was / been…）**不在**这里折成 `be`——表内系动词主名是 `is`，
+    而 is / is_a / has_property 是三条不同的语义档。模型若直接吐 be 家族，交 `predicate_nearest` 强归，
+    由它选合适的那一档，比这里硬折成 `is` 更准。
+    """
+    w = (word or "").strip().lower()
+    if not w:
+        return None
+    if w in RELATION_ALIASES:
+        return RELATION_ALIASES[w]
+    cands = [w]
+    if w.endswith("ies"):
+        cands.append(w[:-3] + "y")
+    if w.endswith("es"):
+        cands.append(w[:-2])
+    if w.endswith("s"):
+        cands.append(w[:-1])
+    if w.endswith("ing"):
+        cands.extend([w[:-3], w[:-3] + "e"])
+        if len(w) > 5 and w[-4] == w[-5]:      # running → run（双写辅音）
+            cands.append(w[:-4])
+    if w.endswith("ed"):
+        cands.extend([w[:-2], w[:-1]])
+    return next((c for c in cands if c in RELATIONS), None)
+
+
+PASS1_CLEAN_SYSTEM = """你是「谓词清洗器」。输入是一批断言（每条含 claim_idx、subject、predicate（原文动词短语）、object，以及锚句 anchor_sentence 与前后句）。
+把每条断言的 predicate 清洗成**一个干净动词（原形）**，只输出 JSON。
+
+# 要清掉什么（只删、不改写）
+- **从句 / 修饰**：`expands quickly enough that the margin collapses` → `expands`
+- **并列**：`drafts and publishes` → `drafts`（另一个动作不塞进谓词）
+- **时态 / 系动词变体**：`becoming` → `become`；`has been shipped` / `will be shipped` → `ship`；`was` / `will be` → `is`
+- **否定**：谓词写**肯定形式**，否定另给 `polarity: "negative"`
+  · `should not be quietly ignored` → `ignore` + polarity negative
+- **情态**：`may relocate` → `relocate`
+- **混进谓词的宾语**：`holds a private ledger` → `holds`（`ledger` 是宾语）
+
+# 红线
+1. **只能删、不能换**：清洗后的每个词都必须来自原 predicate、且保持原顺序（允许改时态/单复数形态）。
+   凭空换成另一个动词会被程序拒绝（该条保留原谓词并标记 rejected）。
+2. 主宾与引文一个字都不许动。
+3. 只输出 JSON：
+{"cleaning":[{"claim_idx":0,"predicate_clean":"…","polarity":"negative","note":"…"}]}
+polarity / note 可省略。
+"""
+
+
+_CLAUSE_IN_PRED = re.compile(r"\b(when|until|regardless|that|because|whether|while|if|so\s+that|in\s+order\s+to)\b", re.I)
+_NEG_IN_PRED = re.compile(r"\b(not|never|cannot)\b|n't\b", re.I)
+
+
+# 系动词 be 家族：表内主名是 `is`，这里只用于**词形比对**（护栏要认 are / was ↔ be 是同一形态）。
+_BE_FORMS = {"be", "is", "are", "was", "were", "am", "been", "being"}
+
+
+def _needs_clean(pred: str) -> bool:
+    """哪些谓词要清洗：≥4 词 / 含并列 / 含从句标记 / 含否定 / 含情态词。"""
+    p = pred or ""
+    return bool(
+        len(p.split()) >= 4
+        or re.search(r"\b(and|or)\b", p, re.I)
+        or _CLAUSE_IN_PRED.search(p)
+        or _NEG_IN_PRED.search(p)
+        or re.search(r"\b(can|could|may|might|should|must|will|would)\b", p, re.I)
+    )
+
+
+# 常见不规则动词（过去式/过去分词 → 原形）：护栏要用它认"kept→keep / made→make / done→do"。
+# 与 SINGULAR_KEEP / IRREGULAR_PLURALS 同类：确定性的语言知识，封闭可枚举。
+IRREGULAR_VERBS: dict[str, str] = {
+    "kept": "keep", "made": "make", "done": "do", "did": "do", "known": "know", "knew": "know",
+    "has": "have", "had": "have", "does": "do", "goes": "go", "went": "go", "gone": "go",
+    "driven": "drive", "drove": "drive", "written": "write", "wrote": "write",
+    "taken": "take", "took": "take", "given": "give", "gave": "give", "found": "find",
+    "held": "hold", "ran": "run", "came": "come", "became": "become", "seen": "see", "saw": "see",
+    "got": "get", "sent": "send", "built": "build", "lost": "lose", "met": "meet", "paid": "pay",
+    "said": "say", "shown": "show", "spent": "spend", "told": "tell", "thought": "think",
+    "understood": "understand", "led": "lead", "left": "leave", "brought": "bring",
+    "caught": "catch", "chose": "choose", "chosen": "choose", "dealt": "deal",
+    "fell": "fall", "fallen": "fall", "fed": "feed", "fought": "fight",
+    "grew": "grow", "grown": "grow", "hidden": "hide", "begun": "begin", "began": "begin",
+    "broken": "break", "broke": "break", "bought": "buy", "drawn": "draw", "drew": "draw",
+    "eaten": "eat", "ate": "eat", "felt": "feel", "forgotten": "forget", "forgot": "forget",
+    "heard": "hear", "meant": "mean", "risen": "rise", "rose": "rise", "sold": "sell",
+    "sat": "sit", "slept": "sleep", "spoken": "speak", "spoke": "speak", "stood": "stand",
+    "taught": "teach", "worn": "wear", "wore": "wear", "won": "win",
+}
+
+
+def _stem_variants(w: str) -> set[str]:
+    """一个词的**可能词干集合**（供"子序列"校验：placed↔place、delegates↔delegate、becomes↔become）。
+
+    教训：早先只取单一词干（placed→plac）导致 3/4 条合法清洗被护栏误拒——词形要按"变体集合"比，
+    而不是"折成一个词"。
+    """
+    w = w.lower()
+    out = {w}
+    if w in _BE_FORMS:
+        out |= _BE_FORMS            # are / is / was / were / been … 都算 be 的形态
+    if w in IRREGULAR_VERBS:
+        out.add(IRREGULAR_VERBS[w])  # kept → keep / made → make / done → do
+    if w.endswith("ies") and len(w) > 4:
+        out.add(w[:-3] + "y")
+    if w.endswith("ied") and len(w) > 4:
+        out.add(w[:-3] + "y")        # applied → apply
+    if w.endswith("es") and len(w) > 3:
+        out.add(w[:-2])
+    if w.endswith("s") and len(w) > 3:
+        out.add(w[:-1])
+    if w.endswith("ing") and len(w) > 5:
+        out.update({w[:-3], w[:-3] + "e"})
+        if w[-4] == w[-5]:          # running → run
+            out.add(w[:-4])
+    if w.endswith("ed") and len(w) > 3:
+        out.update({w[:-2], w[:-1]})   # placed → plac / place ✓
+    return out
+
+
+def _is_subsequence(clean: str, original: str) -> bool:
+    """"只删不改"校验：clean 的词必须是 original 词序列的子序列（按词干变体比）。"""
+    a = [_stem_variants(w) for w in re.findall(r"[A-Za-z0-9\-']+", clean or "")]
+    b = [_stem_variants(w) for w in re.findall(r"[A-Za-z0-9\-']+", original or "")]
+    if not a:
+        return False
+    i = 0
+    for target in a:
+        while i < len(b) and not (target & b[i]):
+            i += 1
+        if i >= len(b):
+            return False
+        i += 1
+    return True
+
+
+async def _clean_predicates(
+    client: DeepSeekLLMClient,
+    source_id: str,
+    claims: list[dict],
+    clean_t: str,
+    *,
+    batch: int = 60,
+) -> dict:
+    """谓词清洗（归一步的预处理）：糊谓词 → 干净动词原形。只改谓词，不动主宾/引文。
+
+    三条护栏：① 只改 predicate 字段；② 结果必须是原谓词的**子序列**（只删不改）；③ 被拒则保留原谓词并记账。
+    为什么要排在"归一"之前：`should not be implicitly trusted` 这类整句谓词若直接强归，会被静默塞进
+    某条宽关系（悄悄错）；先清洗成 `trusted` + polarity 才是对的。
+    """
+    targets = [i for i, c in enumerate(claims) if _needs_clean(c.get("predicate") or "")]
+    items = []
+    for i in targets:
+        c = claims[i]
+        items.append(
+            {
+                "claim_idx": i,
+                "subject": c.get("subject"),
+                "predicate": c.get("predicate"),
+                "object": c.get("object") or "",
+                **_anchor_window(c, clean_t),
+            }
+        )
+
+    got: dict[int, dict] = {}
+
+    async def ask(chunk: list[dict], label: str) -> None:
+        part, _ = await _chat_json(
+            client,
+            [
+                LLMMessage(role="system", content=PASS1_CLEAN_SYSTEM),
+                LLMMessage(role="user", content=json.dumps(chunk, ensure_ascii=False, indent=1)),
+            ],
+            label=label,
+        )
+        for m in part.get("cleaning") or []:
+            try:
+                idx = int(m.get("claim_idx"))
+            except (TypeError, ValueError):
+                continue
+            if m.get("predicate_clean"):
+                got[idx] = m
+
+    batches = [items[i : i + batch] for i in range(0, len(items), batch)]
+    for bi, chunk in enumerate(batches, start=1):
+        await ask(chunk, f"谓词清洗 {source_id} {bi}/{len(batches)}")
+        for retry in range(1, 3):
+            missing = [it for it in chunk if it["claim_idx"] not in got]
+            if not missing:
+                break
+            print(f"  [补问] 谓词清洗 第 {bi} 批缺 {len(missing)} 条，第 {retry} 次补问")
+            await ask(missing, f"谓词清洗 {source_id} {bi}-补{retry}")
+
+    cleaned = rejected = noop = 0
+    for i in targets:
+        m = got.get(i)
+        c = claims[i]
+        if not m:
+            continue
+        cand = str(m["predicate_clean"]).strip()
+        if not _is_subsequence(cand, c.get("predicate") or ""):
+            c["predicate_clean_rejected"] = cand  # 记账：模型想换成别的词，被护栏拒了
+            rejected += 1
+            continue
+        if cand.lower() == (c.get("predicate") or "").strip().lower():
+            noop += 1
+            continue
+        c["predicate_clean"] = cand
+        if str(m.get("polarity") or "").lower() == "negative":  # 只在否定时写；"positive" 是默认值，不落库
+            c["polarity"] = "negative"
+        cleaned += 1
+    return {"targets": len(targets), "cleaned": cleaned, "rejected": rejected, "noop": noop}
+
+
 async def _normalize_predicates(
     client: DeepSeekLLMClient,
     source_id: str,
@@ -477,12 +699,14 @@ async def _normalize_predicates(
     """
     items = []
     for i, c in enumerate(claims):
+        # 清洗后的谓词优先（谓词清洗是归一的预处理）；原文用词仍在 c["predicate"] 里保留
+        pred_for_map = c.get("predicate_clean") or c.get("predicate")
         win = _anchor_window(c, clean_t)
         items.append(
             {
                 "claim_idx": i,
                 "subject": c.get("subject"),
-                "predicate": c.get("predicate"),
+                "predicate": pred_for_map,
                 "object": c.get("object") or "",
                 **win,
             }
@@ -517,20 +741,44 @@ async def _normalize_predicates(
             print(f"  [补问] 谓词归一 第 {i} 批缺 {len(missing)} 条，第 {retry} 次补问")
             await ask(missing, f"谓词归一 {source_id} {i}-补{retry}")
 
+    # 三态归类（决定"图里收什么"）：
+    #   mapped  = 直接归到表内关系
+    #   forced  = 造了表外词，但给了 predicate_nearest → 用它强归（模型的锅，不是表缺口）
+    #   pending = 表外词且没给 nearest（或给的不是表内 id）→ 待定：不进图、报告列出、供定期收敛
     for i, c in enumerate(claims):
         m = mapping.get(i) or {}
-        if m.get("predicate"):
-            c["predicate_normalized"] = str(m["predicate"]).strip()
-        if m.get("polarity"):
-            c["polarity"] = m["polarity"]
+        word = str(m.get("predicate") or "").strip()
+        nearest = str(m.get("predicate_nearest") or "").strip()
+        snapped = _snap_relation(word)
+        if word in RELATIONS:
+            c["predicate_normalized"] = word
+            c["predicate_status"] = "mapped"
+        elif snapped:
+            # 词形/时态变体（becomes→become）：确定性折回表内，算 mapped，记来源供审计
+            c["predicate_normalized"] = snapped
+            c["predicate_status"] = "mapped"
+            c["predicate_snapped_from"] = word
+        elif nearest in RELATIONS:
+            c["predicate_normalized"] = nearest
+            c["predicate_status"] = "forced"
+            c["predicate_invented"] = word or "(空)"
+            c["predicate_nearest"] = nearest
+        else:
+            c["predicate_status"] = "pending"
+            c["predicate_invented"] = word or "(空)"
+        if str(m.get("polarity") or "").lower() == "negative":  # 只在否定时写
+            c["polarity"] = "negative"
         if m.get("sign"):
             c["sign"] = m["sign"]
-        if m.get("predicate_nearest"):
-            c["predicate_nearest"] = m["predicate_nearest"]
 
     kinds = {c["predicate_normalized"] for c in claims if c.get("predicate_normalized")}
+    pending = [c for c in claims if c.get("predicate_status") == "pending"]
     return {
-        "mapped": sum(1 for c in claims if c.get("predicate_normalized")),
+        "mapped": sum(1 for c in claims if c.get("predicate_status") == "mapped"),
+        "forced": sum(1 for c in claims if c.get("predicate_status") == "forced"),
+        "pending": len(pending),
+        "pending_words": sorted({c.get("predicate_invented") for c in pending}),
+        "invented": sorted({c.get("predicate_invented") for c in claims if c.get("predicate_invented")}),
         "total": len(claims),
         "kinds": sorted(kinds),
         "outside": sorted(k for k in kinds if k not in RELATIONS),
@@ -659,6 +907,9 @@ def _build_pass2_blocks(claims: list[dict], clean_t: str, chunks: list[dict]) ->
     blocks: dict[str, dict] = {}
     orphan: dict = {"chunk_id": "_orphan", "context": "", "claims": []}
     for ci, c in enumerate(claims):
+        # 图里只收 mapped / forced 的断言：待定（谓词归不进受控关系）不生成边
+        if c.get("predicate_status") == "pending":
+            continue
         cid: str | None = None
         for e in c.get("evidence_texts", []):
             p = _find_raw(e, clean_t)
