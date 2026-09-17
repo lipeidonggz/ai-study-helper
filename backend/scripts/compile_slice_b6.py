@@ -39,6 +39,12 @@ KB_DB = BACKEND / "data" / "kb.db"
 MANIFEST_PATH = REPO / "data" / "kb-src" / "MANIFEST.md"  # 素材台账（仓库根 data/kb-src）
 OUT_DIR = BACKEND / "data" / "tmp"
 DEFAULT_MODEL = "deepseek-chat"
+
+# 编译层采样温度（2026-09-17 定）：**确定性任务不给随机性**。
+# 证据：同输入 37 个指代目标，温度 1.0 三遍 resolved 23/35/33（判不出 12/0/2）；
+# 温度 0.0 三遍 35/35/35，逐条三态一致率 1.000。评测侧早就这么做了（`JUDGE_TEMPERATURE = 0.0`），
+# 编译层此前漏传 = 服务端默认 1.0 → Pass1 抽取 / 谓词清洗 / 谓词归一 / S4.5 全在漂。
+COMPILE_TEMPERATURE = 0.0
 PASS2_CLAIM_BUDGET = 40  # Pass2 每批 claim 上限（输出规模 ∝ claims；按"块"累积、块不跨批）
 
 
@@ -1048,7 +1054,7 @@ async def _compile_source(
         "clean_end": len(clean_t),
         "text": clean_t,
     }
-    client = DeepSeekLLMClient(api_key=api_key, model=model)
+    client = DeepSeekLLMClient(api_key=api_key, model=model, temperature=COMPILE_TEMPERATURE)
 
     if pass2_from:
         cf = OUT_DIR / f"b6_claims_{source_id}_{pass2_from}.json"

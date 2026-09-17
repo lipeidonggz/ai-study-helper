@@ -1,0 +1,4012 @@
+[
+  {
+    "subject": "our team",
+    "predicate": "running",
+    "object": "an experiment",
+    "evidence_texts": [
+      "Over the past five months, our team has been running an experiment: building and shipping an internal beta of a software product with 0 lines of manually-written code ."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an experiment",
+    "predicate": "building",
+    "object": "an internal beta of a software product with 0 lines of manually-written code",
+    "evidence_texts": [
+      "Over the past five months, our team has been running an experiment: building and shipping an internal beta of a software product with 0 lines of manually-written code ."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an experiment",
+    "predicate": "shipping",
+    "object": "an internal beta of a software product with 0 lines of manually-written code",
+    "evidence_texts": [
+      "Over the past five months, our team has been running an experiment: building and shipping an internal beta of a software product with 0 lines of manually-written code ."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "has",
+    "object": "internal daily users",
+    "evidence_texts": [
+      "The product has internal daily users and external alpha testers."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "has",
+    "object": "external alpha testers",
+    "evidence_texts": [
+      "The product has internal daily users and external alpha testers."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "ships",
+    "evidence_texts": [
+      "It ships, deploys, breaks, and gets fixed."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "deploys",
+    "evidence_texts": [
+      "It ships, deploys, breaks, and gets fixed."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "breaks",
+    "evidence_texts": [
+      "It ships, deploys, breaks, and gets fixed."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "gets fixed",
+    "evidence_texts": [
+      "It ships, deploys, breaks, and gets fixed."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "every line of code",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 9
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "application logic",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 10
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "tests",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 11
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "CI configuration",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 12
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "documentation",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 13
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "observability",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 14
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "internal tooling",
+    "predicate": "has been written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s different is that every line of code—application logic, tests, CI configuration, documentation, observability, and internal tooling—has been written by Codex.",
+      "src_idx": 15
+    },
+    "predicate_clean": "write",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "estimate",
+    "object": "we built this in about 1/10th the time it would have taken to write the code by hand",
+    "evidence_texts": [
+      "We estimate that we built this in about 1/10th the time it would have taken to write the code by hand."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We estimate that we built this in about 1/10th the time it would have taken to write the code by hand.",
+      "src_idx": 16
+    },
+    "predicate_normalized": "indicates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Humans",
+    "predicate": "steer",
+    "evidence_texts": [
+      "Humans steer. Agents execute."
+    ],
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "execute",
+    "evidence_texts": [
+      "Humans steer. Agents execute."
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Humans steer.",
+      "src_idx": 18
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "chose",
+    "object": "this constraint",
+    "evidence_texts": [
+      "We intentionally chose this constraint so we would build what was necessary to increase engineering velocity by orders of magnitude."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We intentionally chose this constraint so we would build what was necessary to increase engineering velocity by orders of magnitude.",
+      "src_idx": 19
+    },
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the constraint that humans steer and agents execute",
+    "object_resolution_evidence": "We intentionally chose this constraint so we would build what was necessary",
+    "object_resolved": "the constraint that humans steer and agents execute"
+  },
+  {
+    "subject": "this constraint",
+    "predicate": "increase",
+    "object": "engineering velocity by orders of magnitude",
+    "evidence_texts": [
+      "We intentionally chose this constraint so we would build what was necessary to increase engineering velocity by orders of magnitude."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the constraint that humans steer and agents execute",
+    "subject_resolution_evidence": "We intentionally chose this constraint so we would build what was necessary",
+    "subject_resolved": "the constraint that humans steer and agents execute"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "had",
+    "object": "weeks",
+    "evidence_texts": [
+      "We had weeks to ship what ended up being a million lines of code."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We had weeks to ship what ended up being a million lines of code.",
+      "src_idx": 21
+    },
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "what ended up being a million lines of code",
+    "predicate": "ship",
+    "evidence_texts": [
+      "We had weeks to ship what ended up being a million lines of code."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "understand",
+    "object": "what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work",
+    "evidence_texts": [
+      "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work.",
+      "src_idx": 23
+    },
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a software engineering team’s primary job",
+    "predicate": "is",
+    "object": "no longer to write code",
+    "polarity": "negative",
+    "evidence_texts": [
+      "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a software engineering team’s primary job",
+    "predicate": "design",
+    "object": "environments",
+    "evidence_texts": [
+      "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work.",
+      "src_idx": 25
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a software engineering team’s primary job",
+    "predicate": "specify",
+    "object": "intent",
+    "evidence_texts": [
+      "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work.",
+      "src_idx": 26
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a software engineering team’s primary job",
+    "predicate": "build",
+    "object": "feedback loops that allow Codex agents to do reliable work",
+    "evidence_texts": [
+      "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "To do that, we needed to understand what changes when a software engineering team’s primary job is no longer to write code, but to design environments, specify intent, and build feedback loops that allow Codex agents to do reliable work.",
+      "src_idx": 27
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This post",
+    "predicate": "is about",
+    "object": "what we learned by building a brand new product with a team of agents",
+    "evidence_texts": [
+      "This post is about what we learned by building a brand new product with a team of agents—what broke, what compounded, and how to maximize our one truly scarce resource: human time and attention."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "this post",
+    "subject_resolution_evidence": "This post is about what we learned by building a brand new product with a team of agents",
+    "subject_resolved": "this post"
+  },
+  {
+    "subject": "our one truly scarce resource",
+    "predicate": "is",
+    "object": "human time and attention",
+    "evidence_texts": [
+      "This post is about what we learned by building a brand new product with a team of agents—what broke, what compounded, and how to maximize our one truly scarce resource: human time and attention."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The first commit to an empty repository",
+    "predicate": "landed in",
+    "object": "late August 2025",
+    "evidence_texts": [
+      "The first commit to an empty repository landed in late August 2025."
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The initial scaffold",
+    "predicate": "was generated by",
+    "object": "Codex CLI",
+    "roles": {
+      "instrument": [
+        "GPT‑5"
+      ]
+    },
+    "evidence_texts": [
+      "The initial scaffold—repository structure, CI configuration, formatting rules, package manager setup, and application framework—was generated by Codex CLI using GPT‑5, guided by a small set of existing templates."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The initial scaffold",
+    "predicate": "was guided by",
+    "object": "a small set of existing templates",
+    "evidence_texts": [
+      "The initial scaffold—repository structure, CI configuration, formatting rules, package manager setup, and application framework—was generated by Codex CLI using GPT‑5, guided by a small set of existing templates."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the initial AGENTS.md file that directs agents how to work in the repository",
+    "predicate": "was written by",
+    "object": "Codex",
+    "evidence_texts": [
+      "Even the initial AGENTS.md file that directs agents how to work in the repository was itself written by Codex."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "There",
+    "predicate": "was",
+    "object": "no pre-existing human-written code to anchor the system",
+    "polarity": "negative",
+    "evidence_texts": [
+      "There was no pre-existing human-written code to anchor the system."
+    ],
+    "subject_anaphora": "There",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "There was no pre-existing human-written code to anchor the system.",
+      "src_idx": 34
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "there",
+    "subject_resolution_status": "not_anaphora"
+  },
+  {
+    "subject": "the repository",
+    "predicate": "was shaped by",
+    "object": "the agent",
+    "evidence_texts": [
+      "From the beginning, the repository was shaped by the agent."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the repository",
+    "predicate": "contains",
+    "object": "on the order of a million lines of code across application logic, infrastructure, tooling, documentation, and internal developer utilities",
+    "evidence_texts": [
+      "Five months later, the repository contains on the order of a million lines of code across application logic, infrastructure, tooling, documentation, and internal developer utilities."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "roughly 1,500 pull requests",
+    "predicate": "have been opened and merged",
+    "evidence_texts": [
+      "Over that period, roughly 1,500 pull requests have been opened and merged with a small team of just three engineers driving Codex."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Over that period, roughly 1,500 pull requests have been opened and merged with a small team of just three engineers driving Codex.",
+      "src_idx": 37
+    },
+    "predicate_clean": "open",
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a small team of just three engineers",
+    "predicate": "driving",
+    "object": "Codex",
+    "evidence_texts": [
+      "Over that period, roughly 1,500 pull requests have been opened and merged with a small team of just three engineers driving Codex."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This",
+    "predicate": "translates to",
+    "object": "an average throughput of 3.5 PRs per engineer per day",
+    "evidence_texts": [
+      "This translates to an average throughput of 3.5 PRs per engineer per day, and surprisingly the throughput has increased as the team has grown to now seven engineers."
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This translates to an average throughput of 3.5 PRs per engineer per day, and surprisingly the throughput has increased as the team has grown to now seven engineers.",
+      "src_idx": 39
+    },
+    "predicate_normalized": "indicates",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "1,500 pull requests merged in five months",
+    "subject_resolution_evidence": "roughly 1,500 pull requests have been opened and merged with a small team of just three engineers",
+    "subject_resolved": "1,500 pull requests merged in five months"
+  },
+  {
+    "subject": "the throughput",
+    "predicate": "has increased",
+    "evidence_texts": [
+      "This translates to an average throughput of 3.5 PRs per engineer per day, and surprisingly the throughput has increased as the team has grown to now seven engineers."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "the team",
+    "predicate": "has grown to",
+    "object": "now seven engineers",
+    "evidence_texts": [
+      "This translates to an average throughput of 3.5 PRs per engineer per day, and surprisingly the throughput has increased as the team has grown to now seven engineers."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "has been used by",
+    "object": "hundreds of users internally, including daily internal power users",
+    "evidence_texts": [
+      "Importantly, this wasn’t output for output’s sake: the product has been used by hundreds of users internally, including daily internal power users."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Importantly, this wasn’t output for output’s sake: the product has been used by hundreds of users internally, including daily internal power users.",
+      "src_idx": 42
+    },
+    "predicate_clean": "use",
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "humans",
+    "predicate": "contributed",
+    "object": "any code",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Throughout the development process, humans never directly contributed any code."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "no manually-written code",
+    "predicate": "became",
+    "object": "a core philosophy for the team",
+    "evidence_texts": [
+      "This became a core philosophy for the team: no manually-written code ."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "This became a core philosophy for the team: no manually-written code .",
+      "src_idx": 44
+    },
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The lack of hands-on human coding",
+    "predicate": "introduced",
+    "object": "a different kind of engineering work, focused on systems, scaffolding, and leverage",
+    "evidence_texts": [
+      "The lack of hands-on human coding introduced a different kind of engineering work, focused on systems, scaffolding, and leverage ."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Early progress",
+    "predicate": "was slower than",
+    "object": "we expected",
+    "evidence_texts": [
+      "Early progress was slower than we expected, not because Codex was incapable, but because the environment was underspecified."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Early progress was slower than we expected, not because Codex was incapable, but because the environment was underspecified.",
+      "src_idx": 46
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the environment",
+    "predicate": "was underspecified",
+    "evidence_texts": [
+      "Early progress was slower than we expected, not because Codex was incapable, but because the environment was underspecified."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Early progress was slower than we expected, not because Codex was incapable, but because the environment was underspecified.",
+      "src_idx": 47
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "was incapable",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Early progress was slower than we expected, not because Codex was incapable, but because the environment was underspecified."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The agent",
+    "predicate": "lacked",
+    "object": "the tools, abstractions, and internal structure required to make progress toward high-level goals",
+    "evidence_texts": [
+      "The agent lacked the tools, abstractions, and internal structure required to make progress toward high-level goals."
+    ],
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "The primary job of our engineering team",
+    "predicate": "became",
+    "object": "enabling the agents to do useful work",
+    "evidence_texts": [
+      "The primary job of our engineering team became enabling the agents to do useful work."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our engineering team",
+    "predicate": "worked",
+    "object": "depth-first: breaking down larger goals into smaller building blocks (design, code, review, test, etc), prompting the agent to construct those blocks, and using them to unlock more complex tasks",
+    "evidence_texts": [
+      "In practice, this meant working depth-first: breaking down larger goals into smaller building blocks (design, code, review, test, etc), prompting the agent to construct those blocks, and using them to unlock more complex tasks."
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "In practice, this meant working depth-first: breaking down larger goals into smaller building blocks (design, code, review, test, etc), prompting the agent to construct those blocks, and using them to unlock more complex tasks.",
+      "src_idx": 51
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the fix",
+    "predicate": "was",
+    "object": "almost never “try harder.”",
+    "polarity": "negative",
+    "evidence_texts": [
+      "When something failed, the fix was almost never “try harder.”"
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "human engineers",
+    "predicate": "stepped into",
+    "object": "the task",
+    "evidence_texts": [
+      "Because the only way to make progress was to get Codex to do the work, human engineers always stepped into the task and asked: “what capability is missing, and how do we make it both legible and enforceable for the agent?”"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "human engineers",
+    "predicate": "asked",
+    "object": "“what capability is missing, and how do we make it both legible and enforceable for the agent?”",
+    "evidence_texts": [
+      "Because the only way to make progress was to get Codex to do the work, human engineers always stepped into the task and asked: “what capability is missing, and how do we make it both legible and enforceable for the agent?”"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Humans",
+    "predicate": "interact with",
+    "object": "the system",
+    "roles": {
+      "instrument": [
+        "prompts"
+      ]
+    },
+    "evidence_texts": [
+      "Humans interact with the system almost entirely through prompts: an engineer describes a task, runs the agent, and allows it to open a pull request."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an engineer",
+    "predicate": "describes",
+    "object": "a task",
+    "evidence_texts": [
+      "Humans interact with the system almost entirely through prompts: an engineer describes a task, runs the agent, and allows it to open a pull request."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an engineer",
+    "predicate": "runs",
+    "object": "the agent",
+    "evidence_texts": [
+      "Humans interact with the system almost entirely through prompts: an engineer describes a task, runs the agent, and allows it to open a pull request."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an engineer",
+    "predicate": "allows",
+    "object": "it to open a pull request",
+    "evidence_texts": [
+      "Humans interact with the system almost entirely through prompts: an engineer describes a task, runs the agent, and allows it to open a pull request."
+    ],
+    "predicate_normalized": "can",
+    "predicate_status": "mapped",
+    "object_anaphor": "it",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the agent",
+    "object_resolution_evidence": "an engineer describes a task, runs the agent, and allows it to open a pull request"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "instruct",
+    "object": "Codex to review its own changes locally, request additional specific agent reviews both locally and in the cloud, respond to any human or agent given feedback, and iterate in a loop until all agent reviewers are satisfied (effectively this is a Ralph Wiggum Loop ⁠ (opens in a new window) )",
+    "evidence_texts": [
+      "To drive a PR to completion, we instruct Codex to review its own changes locally, request additional specific agent reviews both locally and in the cloud, respond to any human or agent given feedback, and iterate in a loop until all agent reviewers are satisfied (effectively this is a Ralph Wiggum Loop ⁠ (opens in a new window) )."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "Humans interact with the system almost entirely through prompts: an engineer describes a task, runs the agent, and allows it to open a pull request. To drive a PR to completion, we instruct Codex to review its own changes locally, request additional specific agent reviews both locally and in the cloud, respond to any human or agent given feedback, and iterate in a loop until all agent reviewers are satisfied (effectively this is a Ralph Wiggum Loop ⁠ (opens in a new window) ).",
+      "src_idx": 59
+    },
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "uses",
+    "object": "our standard development tools directly (gh, local scripts, and repository-embedded skills)",
+    "evidence_texts": [
+      "Codex uses our standard development tools directly (gh, local scripts, and repository-embedded skills) to gather context without humans copying and pasting into the CLI."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "gather",
+    "object": "context",
+    "evidence_texts": [
+      "Codex uses our standard development tools directly (gh, local scripts, and repository-embedded skills) to gather context without humans copying and pasting into the CLI."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "humans",
+    "predicate": "copying and pasting into",
+    "object": "the CLI",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Codex uses our standard development tools directly (gh, local scripts, and repository-embedded skills) to gather context without humans copying and pasting into the CLI."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Codex uses our standard development tools directly (gh, local scripts, and repository-embedded skills) to gather context without humans copying and pasting into the CLI.",
+      "src_idx": 62
+    },
+    "predicate_clean": "copy",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Humans",
+    "predicate": "review",
+    "object": "pull requests",
+    "evidence_texts": [
+      "Humans may review pull requests, but aren’t required to."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Humans",
+    "predicate": "aren’t required to",
+    "object": "review",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Humans may review pull requests, but aren’t required to."
+    ],
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "pushed",
+    "object": "almost all review effort towards being handled agent-to-agent",
+    "evidence_texts": [
+      "Over time, we’ve pushed almost all review effort towards being handled agent-to-agent."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "Over time, we’ve pushed almost all review effort towards being handled agent-to-agent.",
+      "src_idx": 65
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "our bottleneck",
+    "predicate": "became",
+    "object": "human QA capacity",
+    "evidence_texts": [
+      "As code throughput increased, our bottleneck became human QA capacity."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the fixed constraint",
+    "predicate": "has been",
+    "object": "human time and attention",
+    "evidence_texts": [
+      "Because the fixed constraint has been human time and attention, we’ve worked to add more capabilities to the agent by making things like the application UI, logs, and app metrics themselves directly legible to Codex."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "worked to add",
+    "object": "more capabilities to the agent by making things like the application UI, logs, and app metrics themselves directly legible to Codex",
+    "evidence_texts": [
+      "Because the fixed constraint has been human time and attention, we’ve worked to add more capabilities to the agent by making things like the application UI, logs, and app metrics themselves directly legible to Codex."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "Because the fixed constraint has been human time and attention, we’ve worked to add more capabilities to the agent by making things like the application UI, logs, and app metrics themselves directly legible to Codex.",
+      "src_idx": 68
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "made",
+    "object": "the app bootable per git worktree",
+    "evidence_texts": [
+      "For example, we made the app bootable per git worktree, so Codex could launch and drive one instance per change."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example, we made the app bootable per git worktree, so Codex could launch and drive one instance per change.",
+      "src_idx": 69
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "could launch and drive",
+    "object": "one instance per change",
+    "evidence_texts": [
+      "For example, we made the app bootable per git worktree, so Codex could launch and drive one instance per change."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "For example, we made the app bootable per git worktree, so Codex could launch and drive one instance per change.",
+      "src_idx": 70
+    },
+    "predicate_clean": "launch",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "wired",
+    "object": "the Chrome DevTools Protocol into the agent runtime",
+    "evidence_texts": [
+      "We also wired the Chrome DevTools Protocol into the agent runtime and created skills for working with DOM snapshots, screenshots, and navigation."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We also wired the Chrome DevTools Protocol into the agent runtime and created skills for working with DOM snapshots, screenshots, and navigation.",
+      "src_idx": 71
+    },
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "created",
+    "object": "skills for working with DOM snapshots, screenshots, and navigation",
+    "evidence_texts": [
+      "We also wired the Chrome DevTools Protocol into the agent runtime and created skills for working with DOM snapshots, screenshots, and navigation."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We also wired the Chrome DevTools Protocol into the agent runtime and created skills for working with DOM snapshots, screenshots, and navigation.",
+      "src_idx": 72
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This",
+    "predicate": "enabled",
+    "object": "Codex to reproduce bugs, validate fixes, and reason about UI behavior directly",
+    "evidence_texts": [
+      "This enabled Codex to reproduce bugs, validate fixes, and reason about UI behavior directly."
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This enabled Codex to reproduce bugs, validate fixes, and reason about UI behavior directly.",
+      "src_idx": 73
+    },
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "tools Codex can use to drive the app",
+    "subject_resolution_evidence": "We also wired the Chrome DevTools Protocol into the agent runtime and created skills for working with DOM snapshots, screenshots, and navigation",
+    "subject_resolved": "tools Codex can use to drive the app"
+  },
+  {
+    "subject": "observability tooling",
+    "predicate": "did same for",
+    "object": "observability tooling",
+    "evidence_texts": [
+      "We did the same for observability tooling."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Logs, metrics, and traces",
+    "predicate": "are exposed to",
+    "object": "Codex",
+    "roles": {
+      "instrument": [
+        "a local observability stack that’s ephemeral for any given worktree"
+      ]
+    },
+    "evidence_texts": [
+      "Logs, metrics, and traces are exposed to Codex via a local observability stack that’s ephemeral for any given worktree."
+    ],
+    "predicate_normalized": "exposes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a local observability stack",
+    "predicate": "is ephemeral for",
+    "object": "any given worktree",
+    "evidence_texts": [
+      "Logs, metrics, and traces are exposed to Codex via a local observability stack that’s ephemeral for any given worktree."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "works on",
+    "object": "a fully isolated version of that app—including its logs and metrics",
+    "evidence_texts": [
+      "Codex works on a fully isolated version of that app—including its logs and metrics, which get torn down once that task is complete."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "its logs and metrics",
+    "predicate": "get torn down once",
+    "object": "that task is complete",
+    "evidence_texts": [
+      "Codex works on a fully isolated version of that app—including its logs and metrics, which get torn down once that task is complete."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Codex works on a fully isolated version of that app—including its logs and metrics, which get torn down once that task is complete.",
+      "src_idx": 78
+    },
+    "predicate_clean_rejected": "tear down",
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down",
+    "object_anaphor": "that",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the task being worked on",
+    "object_resolution_evidence": "which get torn down once that task is complete"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "can query logs with",
+    "object": "LogQL",
+    "evidence_texts": [
+      "Agents can query logs with LogQL and metrics with PromQL."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Agents can query logs with LogQL and metrics with PromQL.",
+      "src_idx": 79
+    },
+    "predicate_clean": "query",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "can query metrics with",
+    "object": "PromQL",
+    "evidence_texts": [
+      "Agents can query logs with LogQL and metrics with PromQL."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Agents can query logs with LogQL and metrics with PromQL.",
+      "src_idx": 80
+    },
+    "predicate_clean": "query",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "prompts like “ensure service startup completes in under 800ms”",
+    "predicate": "become",
+    "object": "tractable",
+    "evidence_texts": [
+      "With this context available, prompts like “ensure service startup completes in under 800ms” or “no span in these four critical user journeys exceeds two seconds” become tractable."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "With this context available, prompts like “ensure service startup completes in under 800ms” or “no span in these four critical user journeys exceeds two seconds” become tractable.",
+      "src_idx": 81
+    },
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "prompts like “no span in these four critical user journeys exceeds two seconds”",
+    "predicate": "become",
+    "object": "tractable",
+    "evidence_texts": [
+      "With this context available, prompts like “ensure service startup completes in under 800ms” or “no span in these four critical user journeys exceeds two seconds” become tractable."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "With this context available, prompts like “ensure service startup completes in under 800ms” or “no span in these four critical user journeys exceeds two seconds” become tractable.",
+      "src_idx": 82
+    },
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "single Codex runs",
+    "predicate": "work on",
+    "object": "a single task",
+    "evidence_texts": [
+      "We regularly see single Codex runs work on a single task for upwards of six hours (often while the humans are sleeping)."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "single Codex runs",
+    "predicate": "work on",
+    "object": "a single task for upwards of six hours",
+    "evidence_texts": [
+      "We regularly see single Codex runs work on a single task for upwards of six hours (often while the humans are sleeping)."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Context management",
+    "predicate": "is",
+    "object": "one of the biggest challenges in making agents effective at large and complex tasks",
+    "evidence_texts": [
+      "Context management is one of the biggest challenges in making agents effective at large and complex tasks."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "give Codex a map, not a 1,000-page instruction manual",
+    "predicate": "was",
+    "object": "one of the earliest lessons we learned",
+    "evidence_texts": [
+      "One of the earliest lessons we learned was simple: give Codex a map, not a 1,000-page instruction manual."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "One of the earliest lessons we learned was simple: give Codex a map, not a 1,000-page instruction manual.",
+      "src_idx": 86
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the “one big AGENTS.md” approach",
+    "predicate": "failed in",
+    "object": "predictable ways",
+    "evidence_texts": [
+      "We tried the “one big AGENTS.md ⁠ (opens in a new window) ” approach. It failed in predictable ways:"
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "Context",
+    "predicate": "is",
+    "object": "a scarce resource",
+    "evidence_texts": [
+      "Context is a scarce resource. A giant instruction file crowds out the task, the code, and the relevant docs—so the agent either misses key constraints or starts optimizing for the wrong ones."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A giant instruction file",
+    "predicate": "crowds out",
+    "object": "the task",
+    "evidence_texts": [
+      "A giant instruction file crowds out the task, the code, and the relevant docs—so the agent either misses key constraints or starts optimizing for the wrong ones."
+    ],
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A giant instruction file",
+    "predicate": "crowds out",
+    "object": "the code",
+    "evidence_texts": [
+      "A giant instruction file crowds out the task, the code, and the relevant docs—so the agent either misses key constraints or starts optimizing for the wrong ones."
+    ],
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A giant instruction file",
+    "predicate": "crowds out",
+    "object": "the relevant docs",
+    "evidence_texts": [
+      "A giant instruction file crowds out the task, the code, and the relevant docs—so the agent either misses key constraints or starts optimizing for the wrong ones."
+    ],
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "misses",
+    "object": "key constraints",
+    "evidence_texts": [
+      "A giant instruction file crowds out the task, the code, and the relevant docs—so the agent either misses key constraints or starts optimizing for the wrong ones."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "starts optimizing for",
+    "object": "the wrong ones",
+    "evidence_texts": [
+      "A giant instruction file crowds out the task, the code, and the relevant docs—so the agent either misses key constraints or starts optimizing for the wrong ones."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Too much guidance",
+    "predicate": "becomes",
+    "object": "non-guidance",
+    "evidence_texts": [
+      "Too much guidance becomes non-guidance ."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "end up pattern-matching locally instead of navigating intentionally",
+    "object": "pattern-matching locally",
+    "evidence_texts": [
+      "Agents end up pattern-matching locally instead of navigating intentionally."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Agents end up pattern-matching locally instead of navigating intentionally.",
+      "src_idx": 96
+    },
+    "predicate_clean": "pattern-match",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "It",
+    "predicate": "rots",
+    "object": "instantly",
+    "evidence_texts": [
+      "It rots instantly."
+    ],
+    "subject_anaphora": "It",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "It rots instantly.",
+      "src_idx": 97
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "a monolithic manual",
+    "subject_resolution_evidence": "A monolithic manual turns into a graveyard of stale rules",
+    "subject_resolved": "a monolithic manual"
+  },
+  {
+    "subject": "A monolithic manual",
+    "predicate": "turns into",
+    "object": "a graveyard of stale rules",
+    "evidence_texts": [
+      "A monolithic manual turns into a graveyard of stale rules."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "can’t tell",
+    "object": "what’s still true",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Agents can’t tell what’s still true, humans stop maintaining it, and the file quietly becomes an attractive nuisance."
+    ],
+    "predicate_clean": "tell",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "humans",
+    "predicate": "stop maintaining",
+    "object": "it",
+    "evidence_texts": [
+      "Agents can’t tell what’s still true, humans stop maintaining it, and the file quietly becomes an attractive nuisance."
+    ],
+    "predicate_normalized": "blocks",
+    "predicate_status": "mapped",
+    "polarity": "negative",
+    "object_anaphor": "it",
+    "object_resolution_status": "resolved",
+    "object_resolution": "a monolithic manual",
+    "object_resolution_evidence": "A monolithic manual turns into a graveyard of stale rules",
+    "object_resolved": "a monolithic manual"
+  },
+  {
+    "subject": "the file",
+    "predicate": "becomes",
+    "object": "an attractive nuisance",
+    "evidence_texts": [
+      "Agents can’t tell what’s still true, humans stop maintaining it, and the file quietly becomes an attractive nuisance."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "It",
+    "predicate": "is hard to verify",
+    "object": "hard to verify",
+    "evidence_texts": [
+      "It’s hard to verify."
+    ],
+    "subject_anaphora": "It",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "It’s hard to verify.",
+      "src_idx": 102
+    },
+    "predicate_clean": "verify",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "verifying a monolithic manual",
+    "subject_resolution_evidence": "A single blob doesn’t lend itself to mechanical checks",
+    "subject_resolved": "verifying a monolithic manual"
+  },
+  {
+    "subject": "A single blob",
+    "predicate": "doesn’t lend itself to",
+    "object": "mechanical checks (coverage, freshness, ownership, cross-links)",
+    "polarity": "negative",
+    "evidence_texts": [
+      "A single blob doesn’t lend itself to mechanical checks (coverage, freshness, ownership, cross-links), so drift is inevitable."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "A single blob doesn’t lend itself to mechanical checks (coverage, freshness, ownership, cross-links), so drift is inevitable.",
+      "src_idx": 103
+    },
+    "predicate_clean": "lend",
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "drift",
+    "predicate": "is",
+    "object": "inevitable",
+    "evidence_texts": [
+      "A single blob doesn’t lend itself to mechanical checks (coverage, freshness, ownership, cross-links), so drift is inevitable."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "treat",
+    "object": "it as the table of contents",
+    "evidence_texts": [
+      "So instead of treating AGENTS.md as the encyclopedia, we treat it as the table of contents ."
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "So instead of treating AGENTS.",
+      "src_idx": 105
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "polarity": "negative",
+    "object_anaphor": "it",
+    "object_resolution_status": "resolved",
+    "object_resolution": "AGENTS.md",
+    "object_resolution_evidence": "instead of treating AGENTS.md as the encyclopedia, we treat it as the table of contents"
+  },
+  {
+    "subject": "The repository’s knowledge base",
+    "predicate": "lives in",
+    "object": "a structured docs/ directory treated as the system of record",
+    "evidence_texts": [
+      "The repository’s knowledge base lives in a structured docs/ directory treated as the system of record."
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A short AGENTS.md (roughly 100 lines)",
+    "predicate": "is injected into",
+    "object": "context",
+    "evidence_texts": [
+      "A short AGENTS.md (roughly 100 lines) is injected into context and serves primarily as a map, with pointers to deeper sources of truth elsewhere."
+    ],
+    "predicate_normalized": "exposes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A short AGENTS.md (roughly 100 lines)",
+    "predicate": "serves primarily as",
+    "object": "a map",
+    "evidence_texts": [
+      "A short AGENTS.md (roughly 100 lines) is injected into context and serves primarily as a map, with pointers to deeper sources of truth elsewhere."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Design documentation",
+    "predicate": "is catalogued and indexed, including",
+    "object": "verification status",
+    "evidence_texts": [
+      "Design documentation is catalogued and indexed, including verification status and a set of core beliefs that define agent-first operating principles."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Design documentation is catalogued and indexed, including verification status and a set of core beliefs that define agent-first operating principles.",
+      "src_idx": 109
+    },
+    "predicate_clean": "catalogue",
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Design documentation",
+    "predicate": "is catalogued and indexed, including",
+    "object": "a set of core beliefs that define agent-first operating principles",
+    "evidence_texts": [
+      "Design documentation is catalogued and indexed, including verification status and a set of core beliefs that define agent-first operating principles."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Design documentation is catalogued and indexed, including verification status and a set of core beliefs that define agent-first operating principles.",
+      "src_idx": 110
+    },
+    "predicate_clean": "catalogue",
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Architecture documentation",
+    "predicate": "provides",
+    "object": "a top-level map of domains and package layering",
+    "evidence_texts": [
+      "Architecture documentation ⁠ (opens in a new window) provides a top-level map of domains and package layering."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A quality document",
+    "predicate": "grades",
+    "object": "each product domain and architectural layer",
+    "evidence_texts": [
+      "A quality document grades each product domain and architectural layer, tracking gaps over time."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A quality document",
+    "predicate": "tracks",
+    "object": "gaps over time",
+    "evidence_texts": [
+      "A quality document grades each product domain and architectural layer, tracking gaps over time."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Plans",
+    "predicate": "are treated as",
+    "object": "first-class artifacts",
+    "evidence_texts": [
+      "Plans are treated as first-class artifacts."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Ephemeral lightweight plans",
+    "predicate": "are used for",
+    "object": "small changes",
+    "evidence_texts": [
+      "Ephemeral lightweight plans are used for small changes, while complex work is captured in execution plans ⁠ (opens in a new window) with progress and decision logs that are checked into the repository."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "complex work",
+    "predicate": "is captured in",
+    "object": "execution plans with progress and decision logs that are checked into the repository",
+    "evidence_texts": [
+      "Ephemeral lightweight plans are used for small changes, while complex work is captured in execution plans ⁠ (opens in a new window) with progress and decision logs that are checked into the repository."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Active plans, completed plans, and known technical debt",
+    "predicate": "are versioned and co-located, allowing agents to operate without relying on",
+    "object": "external context",
+    "evidence_texts": [
+      "Active plans, completed plans, and known technical debt are all versioned and co-located, allowing agents to operate without relying on external context."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Active plans, completed plans, and known technical debt are all versioned and co-located, allowing agents to operate without relying on external context.",
+      "src_idx": 117
+    },
+    "predicate_clean": "version",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "This",
+    "predicate": "enables",
+    "object": "progressive disclosure",
+    "evidence_texts": [
+      "This enables progressive disclosure : agents start with a small, stable entry point and are taught where to look next, rather than being overwhelmed up front."
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This enables progressive disclosure : agents start with a small, stable entry point and are taught where to look next, rather than being overwhelmed up front.",
+      "src_idx": 118
+    },
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "versioning plans and technical debt in-repo",
+    "subject_resolution_evidence": "Active plans, completed plans, and known technical debt are all versioned and co-located",
+    "subject_resolved": "versioning plans and technical debt in-repo"
+  },
+  {
+    "subject": "agents",
+    "predicate": "start with",
+    "object": "a small, stable entry point",
+    "evidence_texts": [
+      "This enables progressive disclosure : agents start with a small, stable entry point and are taught where to look next, rather than being overwhelmed up front."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "agents",
+    "predicate": "are taught",
+    "object": "where to look next",
+    "evidence_texts": [
+      "This enables progressive disclosure : agents start with a small, stable entry point and are taught where to look next, rather than being overwhelmed up front."
+    ],
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "enforce",
+    "object": "this",
+    "roles": {
+      "instrument": [
+        "mechanically"
+      ]
+    },
+    "evidence_texts": [
+      "We enforce this mechanically."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We enforce this mechanically.",
+      "src_idx": 121
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "progressive disclosure",
+    "object_resolution_evidence": "agents start with a small, stable entry point and are taught where to look next",
+    "object_resolved": "progressive disclosure"
+  },
+  {
+    "subject": "Dedicated linters and CI jobs",
+    "predicate": "validate that",
+    "object": "the knowledge base is up to date, cross-linked, and structured correctly",
+    "evidence_texts": [
+      "Dedicated linters and CI jobs validate that the knowledge base is up to date, cross-linked, and structured correctly."
+    ],
+    "predicate_clean": "validate",
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A recurring “doc-gardening” agent",
+    "predicate": "scans for",
+    "object": "stale or obsolete documentation that does not reflect the real code behavior",
+    "evidence_texts": [
+      "A recurring “doc-gardening” agent scans for stale or obsolete documentation that does not reflect the real code behavior and opens fix-up pull requests."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "A recurring “doc-gardening” agent scans for stale or obsolete documentation that does not reflect the real code behavior and opens fix-up pull requests.",
+      "src_idx": 123
+    },
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "A recurring “doc-gardening” agent",
+    "predicate": "opens",
+    "object": "fix-up pull requests",
+    "evidence_texts": [
+      "A recurring “doc-gardening” agent scans for stale or obsolete documentation that does not reflect the real code behavior and opens fix-up pull requests."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "A recurring “doc-gardening” agent scans for stale or obsolete documentation that does not reflect the real code behavior and opens fix-up pull requests.",
+      "src_idx": 124
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex’s framework for design decisions",
+    "predicate": "needed to evolve",
+    "object": "evolve",
+    "evidence_texts": [
+      "As the codebase evolved, Codex’s framework for design decisions needed to evolve, too."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "is optimized first for",
+    "object": "Codex’s legibility",
+    "evidence_texts": [
+      "Because the repository is entirely agent-generated, it’s optimized first for Codex’s legibility ."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Because the repository is entirely agent-generated, it’s optimized first for Codex’s legibility .",
+      "src_idx": 126
+    },
+    "predicate_clean": "optimize",
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the repository",
+    "subject_resolution_evidence": "Because the repository is entirely agent-generated, it’s optimized first for Codex’s legibility",
+    "subject_resolved": "the repository"
+  },
+  {
+    "subject": "our human engineers’ goal",
+    "predicate": "was making it possible for an agent to reason about",
+    "object": "the full business domain directly from the repository itself",
+    "evidence_texts": [
+      "In the same way teams aim to improve navigability of their code for new engineering hires, our human engineers’ goal was making it possible for an agent to reason about the full business domain directly from the repository itself."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "In the same way teams aim to improve navigability of their code for new engineering hires, our human engineers’ goal was making it possible for an agent to reason about the full business domain directly from the repository itself.",
+      "src_idx": 127
+    },
+    "predicate_clean_rejected": "aim",
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "anything it can't access in-context while running",
+    "predicate": "doesn't exist",
+    "object": "",
+    "polarity": "negative",
+    "evidence_texts": [
+      "From the agent’s point of view, anything it can’t access in-context while running effectively doesn’t exist."
+    ],
+    "predicate_clean": "exist",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Knowledge that lives in Google Docs, chat threads, or people’s heads",
+    "predicate": "are not accessible to",
+    "object": "the system",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Knowledge that lives in Google Docs, chat threads, or people’s heads are not accessible to the system."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "From the agent’s point of view, anything it can’t access in-context while running effectively doesn’t exist. Knowledge that lives in Google Docs, chat threads, or people’s heads are not accessible to the system.",
+      "src_idx": 129
+    },
+    "predicate_clean": "accessible",
+    "predicate_normalized": "visible_to",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Repository-local, versioned artifacts (e.g., code, markdown, schemas, executable plans)",
+    "predicate": "are",
+    "object": "all it can see",
+    "evidence_texts": [
+      "Repository-local, versioned artifacts (e.g., code, markdown, schemas, executable plans) are all it can see."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "needed to push more and more context into",
+    "object": "the repo",
+    "roles": {
+      "temporal": [
+        "over time"
+      ]
+    },
+    "evidence_texts": [
+      "We learned that we needed to push more and more context into the repo over time."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We learned that we needed to push more and more context into the repo over time.",
+      "src_idx": 131
+    },
+    "predicate_clean": "push",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "is illegible",
+    "object": "",
+    "evidence_texts": [
+      "That Slack discussion that aligned the team on an architectural pattern? If it isn’t discoverable to the agent, it’s illegible in the same way it would be unknown to a new hire joining three months later."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "That Slack discussion that aligned the team on an architectural pattern?",
+      "src_idx": 133
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the Slack discussion",
+    "subject_resolution_evidence": "That Slack discussion that aligned the team on an architectural pattern? If it isn’t discoverable to the agent",
+    "subject_resolved": "the Slack discussion"
+  },
+  {
+    "subject": "Giving Codex more context",
+    "predicate": "means organizing and exposing the right information",
+    "object": "",
+    "evidence_texts": [
+      "Giving Codex more context means organizing and exposing the right information so the agent can reason over it, rather than overwhelming it with ad-hoc instructions."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Giving Codex more context means organizing and exposing the right information so the agent can reason over it, rather than overwhelming it with ad-hoc instructions.",
+      "src_idx": 134
+    },
+    "predicate_clean": "mean",
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Giving Codex more context",
+    "predicate": "leads to better-aligned output",
+    "object": "",
+    "evidence_texts": [
+      "In the same way you would onboard a new teammate on product principles, engineering norms, and team culture (emoji preferences included), giving the agent this information leads to better-aligned output."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "In the same way you would onboard a new teammate on product principles, engineering norms, and team culture (emoji preferences included), giving the agent this information leads to better-aligned output.",
+      "src_idx": 135
+    },
+    "predicate_clean": "lead",
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This framing",
+    "predicate": "clarified",
+    "object": "many tradeoffs",
+    "evidence_texts": [
+      "This framing clarified many tradeoffs."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the framing of giving Codex more context",
+    "subject_resolution_evidence": "Giving Codex more context means organizing and exposing the right information",
+    "subject_resolved": "the framing of giving Codex more context"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "favored",
+    "object": "dependencies and abstractions that could be fully internalized and reasoned about in-repo",
+    "evidence_texts": [
+      "We favored dependencies and abstractions that could be fully internalized and reasoned about in-repo."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We favored dependencies and abstractions that could be fully internalized and reasoned about in-repo.",
+      "src_idx": 137
+    },
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Technologies often described as “boring”",
+    "predicate": "tend to be easier for agents to model",
+    "object": "",
+    "roles": {
+      "instrument": [
+        "composability, api stability, and representation in the training set"
+      ]
+    },
+    "evidence_texts": [
+      "Technologies often described as “boring” tend to be easier for agents to model due to composability, api stability, and representation in the training set."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Technologies often described as “boring” tend to be easier for agents to model due to composability, api stability, and representation in the training set.",
+      "src_idx": 138
+    },
+    "predicate_clean": "tend",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "was cheaper to have the agent reimplement subsets of functionality",
+    "object": "",
+    "evidence_texts": [
+      "In some cases, it was cheaper to have the agent reimplement subsets of functionality than to work around opaque upstream behavior from public libraries."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "In some cases, it was cheaper to have the agent reimplement subsets of functionality than to work around opaque upstream behavior from public libraries.",
+      "src_idx": 139
+    },
+    "predicate_clean": "be",
+    "predicate_normalized": "costs",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "not_anaphora"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "implemented",
+    "object": "our own map-with-concurrency helper",
+    "evidence_texts": [
+      "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects.",
+      "src_idx": 140
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our own map-with-concurrency helper",
+    "predicate": "is tightly integrated with",
+    "object": "our OpenTelemetry instrumentation",
+    "evidence_texts": [
+      "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects.",
+      "src_idx": 141
+    },
+    "predicate_clean": "integrate",
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our own map-with-concurrency helper",
+    "predicate": "has",
+    "object": "100% test coverage",
+    "evidence_texts": [
+      "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our own map-with-concurrency helper",
+    "predicate": "behaves exactly the way",
+    "object": "our runtime expects",
+    "evidence_texts": [
+      "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "For example, rather than pulling in a generic p-limit -style package, we implemented our own map-with-concurrency helper: it’s tightly integrated with our OpenTelemetry instrumentation, has 100% test coverage, and behaves exactly the way our runtime expects.",
+      "src_idx": 143
+    },
+    "predicate_clean": "behave",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Pulling more of the system into a form the agent can inspect, validate, and modify directly",
+    "predicate": "increases",
+    "object": "leverage",
+    "evidence_texts": [
+      "Pulling more of the system into a form the agent can inspect, validate, and modify directly increases leverage—not just for Codex, but for other agents (e.g. Aardvark ) that are working on the codebase as well."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Pulling more of the system into a form the agent can inspect, validate, and modify directly increases leverage—not just for Codex, but for other agents (e.",
+      "src_idx": 144
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "Documentation alone",
+    "predicate": "doesn’t keep",
+    "object": "a fully agent-generated codebase coherent",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Documentation alone doesn’t keep a fully agent-generated codebase coherent."
+    ],
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "let agents ship fast",
+    "object": "",
+    "roles": {
+      "instrument": [
+        "enforcing invariants, not micromanaging implementations"
+      ]
+    },
+    "evidence_texts": [
+      "By enforcing invariants, not micromanaging implementations, we let agents ship fast without undermining the foundation."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "否定存疑"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "By enforcing invariants, not micromanaging implementations, we let agents ship fast without undermining the foundation.",
+      "src_idx": 146
+    },
+    "predicate_clean": "let",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "require",
+    "object": "Codex to parse data shapes at the boundary",
+    "evidence_texts": [
+      "For example, we require Codex to parse data shapes at the boundary ⁠ (opens in a new window) , but are not prescriptive on how that happens (the model seems to like Zod, but we didn’t specify that specific library)."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example, we require Codex to parse data shapes at the boundary ⁠ (opens in a new window) , but are not prescriptive on how that happens (the model seems to like Zod, but we didn’t specify that specific library).",
+      "src_idx": 147
+    },
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "are not prescriptive on",
+    "object": "how that happens",
+    "polarity": "negative",
+    "evidence_texts": [
+      "For example, we require Codex to parse data shapes at the boundary ⁠ (opens in a new window) , but are not prescriptive on how that happens (the model seems to like Zod, but we didn’t specify that specific library)."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example, we require Codex to parse data shapes at the boundary ⁠ (opens in a new window) , but are not prescriptive on how that happens (the model seems to like Zod, but we didn’t specify that specific library).",
+      "src_idx": 148
+    },
+    "predicate_clean": "be",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "didn’t specify",
+    "object": "that specific library",
+    "polarity": "negative",
+    "evidence_texts": [
+      "For example, we require Codex to parse data shapes at the boundary ⁠ (opens in a new window) , but are not prescriptive on how that happens (the model seems to like Zod, but we didn’t specify that specific library)."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example, we require Codex to parse data shapes at the boundary ⁠ (opens in a new window) , but are not prescriptive on how that happens (the model seems to like Zod, but we didn’t specify that specific library).",
+      "src_idx": 149
+    },
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped",
+    "object_anaphor": "that",
+    "object_resolution_status": "resolved",
+    "object_resolution": "Zod",
+    "object_resolution_evidence": "the model seems to like Zod, but we didn’t specify that specific library",
+    "object_resolved": "Zod"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "are most effective in",
+    "object": "environments with strict boundaries and predictable structure",
+    "evidence_texts": [
+      "Agents are most effective in environments with strict boundaries and predictable structure ⁠ (opens in a new window) , so we built the application around a rigid architectural model."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Agents are most effective in environments with strict boundaries and predictable structure ⁠ (opens in a new window) , so we built the application around a rigid architectural model.",
+      "src_idx": 150
+    },
+    "predicate_clean": "be",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Each business domain",
+    "predicate": "is divided into",
+    "object": "a fixed set of layers",
+    "evidence_texts": [
+      "Each business domain is divided into a fixed set of layers, with strictly validated dependency directions and a limited set of permissible edges."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Each business domain",
+    "predicate": "has",
+    "object": "strictly validated dependency directions",
+    "evidence_texts": [
+      "Each business domain is divided into a fixed set of layers, with strictly validated dependency directions and a limited set of permissible edges."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Each business domain",
+    "predicate": "has",
+    "object": "a limited set of permissible edges",
+    "evidence_texts": [
+      "Each business domain is divided into a fixed set of layers, with strictly validated dependency directions and a limited set of permissible edges."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "These constraints",
+    "predicate": "are enforced mechanically",
+    "object": "",
+    "roles": {
+      "instrument": [
+        "custom linters (Codex-generated, of course!) and structural tests"
+      ]
+    },
+    "evidence_texts": [
+      "These constraints are enforced mechanically via custom linters (Codex-generated, of course!) and structural tests."
+    ],
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped",
+    "subject_anaphor": "these",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "strict boundaries and predictable structure",
+    "subject_resolution_evidence": "rigid architectural model…strictly validated dependency directions and a limited set of permissible edges",
+    "subject_resolved": "strict boundaries and predictable structure"
+  },
+  {
+    "subject": "code",
+    "predicate": "can only depend “forward” through",
+    "object": "a fixed set of layers (Types → Config → Repo → Service → Runtime → UI)",
+    "polarity": "negative",
+    "evidence_texts": [
+      "The diagram below shows the rule: within each business domain (e.g. App Settings), code can only depend “forward” through a fixed set of layers (Types → Config → Repo → Service → Runtime → UI)."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "The diagram below shows the rule: within each business domain (e.",
+      "src_idx": 155
+    },
+    "predicate_clean": "depend",
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Cross-cutting concerns (auth, connectors, telemetry, feature flags)",
+    "predicate": "enter through",
+    "object": "Providers",
+    "roles": {
+      "instrument": [
+        "a single explicit interface"
+      ]
+    },
+    "evidence_texts": [
+      "Cross-cutting concerns (auth, connectors, telemetry, feature flags) enter through a single explicit interface: Providers."
+    ],
+    "predicate_normalized": "comes_from",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anything else",
+    "predicate": "is disallowed",
+    "object": "",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Anything else is disallowed and enforced mechanically."
+    ],
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the constraints",
+    "predicate": "allows",
+    "object": "speed without decay or architectural drift",
+    "evidence_texts": [
+      "With coding agents, it’s an early prerequisite: the constraints are what allows speed without decay or architectural drift."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "enforce",
+    "object": "these rules",
+    "roles": {
+      "instrument": [
+        "custom linters and structural tests",
+        "a small set of “taste invariants”"
+      ]
+    },
+    "evidence_texts": [
+      "In practice, we enforce these rules with custom linters and structural tests, plus a small set of “taste invariants.”"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "In practice, we enforce these rules with custom linters and structural tests, plus a small set of “taste invariants.",
+      "src_idx": 159
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped",
+    "object_anaphor": "these",
+    "object_resolution_status": "unresolved",
+    "object_resolution": "architectural constraints",
+    "object_resolution_evidence": "These constraints are enforced mechanically via custom linters and structural tests",
+    "object_resolved": "architectural constraints"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "enforce",
+    "object": "structured logging",
+    "evidence_texts": [
+      "For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "” For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints.",
+      "src_idx": 160
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "enforce",
+    "object": "naming conventions for schemas and types",
+    "evidence_texts": [
+      "For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "” For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints.",
+      "src_idx": 161
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "enforce",
+    "object": "file size limits",
+    "evidence_texts": [
+      "For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "” For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints.",
+      "src_idx": 162
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "enforce",
+    "object": "platform-specific reliability requirements",
+    "evidence_texts": [
+      "For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "” For example, we statically enforce structured logging, naming conventions for schemas and types, file size limits, and platform-specific reliability requirements with custom lints.",
+      "src_idx": 163
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "write",
+    "object": "the error messages to inject remediation instructions into agent context",
+    "evidence_texts": [
+      "Because the lints are custom, we write the error messages to inject remediation instructions into agent context."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "Because the lints are custom, we write the error messages to inject remediation instructions into agent context.",
+      "src_idx": 164
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "these rules",
+    "predicate": "become",
+    "object": "multipliers",
+    "evidence_texts": [
+      "With agents, they become multipliers: once encoded, they apply everywhere at once."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped",
+    "subject_anaphor": "these",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "custom lints and taste invariants",
+    "subject_resolution_evidence": "In practice, we enforce these rules with custom linters and structural tests",
+    "subject_resolved": "custom lints and taste invariants"
+  },
+  {
+    "subject": "the code",
+    "predicate": "does not always match",
+    "object": "human stylistic preferences",
+    "polarity": "negative",
+    "evidence_texts": [
+      "The resulting code does not always match human stylistic preferences, and that’s okay."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "The resulting code does not always match human stylistic preferences, and that’s okay.",
+      "src_idx": 166
+    },
+    "predicate_clean": "match",
+    "predicate_normalized": "different_from",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Human taste",
+    "predicate": "is fed back into",
+    "object": "the system",
+    "roles": {
+      "temporal": [
+        "continuously"
+      ]
+    },
+    "evidence_texts": [
+      "Human taste is fed back into the system continuously."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Human taste is fed back into the system continuously.",
+      "src_idx": 167
+    },
+    "predicate_clean": "feed",
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Review comments, refactoring pull requests, and user-facing bugs",
+    "predicate": "are captured as",
+    "object": "documentation updates",
+    "evidence_texts": [
+      "Review comments, refactoring pull requests, and user-facing bugs are captured as documentation updates or encoded directly into tooling."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped",
+    "predicate_snapped_from": "becomes"
+  },
+  {
+    "subject": "Review comments, refactoring pull requests, and user-facing bugs",
+    "predicate": "are encoded directly into",
+    "object": "tooling",
+    "evidence_texts": [
+      "Review comments, refactoring pull requests, and user-facing bugs are captured as documentation updates or encoded directly into tooling."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Review comments, refactoring pull requests, and user-facing bugs are captured as documentation updates or encoded directly into tooling.",
+      "src_idx": 169
+    },
+    "predicate_clean": "encode",
+    "predicate_normalized": "become",
+    "predicate_status": "mapped",
+    "predicate_snapped_from": "becomes"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "promote",
+    "object": "the rule into code",
+    "evidence_texts": [
+      "When documentation falls short, we promote the rule into code"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "When documentation falls short, we promote the rule into code",
+      "src_idx": 170
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "many conventional engineering norms",
+    "predicate": "became",
+    "object": "counterproductive",
+    "evidence_texts": [
+      "As Codex’s throughput increased, many conventional engineering norms became counterproductive."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "repository",
+    "predicate": "operates with",
+    "object": "minimal blocking merge gates",
+    "evidence_texts": [
+      "The repository operates with minimal blocking merge gates."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Pull requests",
+    "predicate": "are",
+    "object": "short-lived",
+    "evidence_texts": [
+      "Pull requests are short-lived."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Test flakes",
+    "predicate": "are addressed with",
+    "object": "follow-up runs",
+    "roles": {
+      "instrument": [
+        "follow-up runs"
+      ]
+    },
+    "evidence_texts": [
+      "Test flakes are often addressed with follow-up runs rather than blocking progress indefinitely."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "corrections",
+    "predicate": "are",
+    "object": "cheap",
+    "evidence_texts": [
+      "In a system where agent throughput far exceeds human attention, corrections are cheap, and waiting is expensive."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "waiting",
+    "predicate": "is",
+    "object": "expensive",
+    "evidence_texts": [
+      "In a system where agent throughput far exceeds human attention, corrections are cheap, and waiting is expensive."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This",
+    "predicate": "would be",
+    "object": "irresponsible in a low-throughput environment",
+    "polarity": "negative",
+    "evidence_texts": [
+      "This would be irresponsible in a low-throughput environment."
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This would be irresponsible in a low-throughput environment.",
+      "src_idx": 177
+    },
+    "predicate_clean": "be",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "corrections being cheap and waiting expensive",
+    "subject_resolution_evidence": "corrections are cheap, and waiting is expensive",
+    "subject_resolved": "corrections being cheap and waiting expensive"
+  },
+  {
+    "subject": "it",
+    "predicate": "is",
+    "object": "often the right tradeoff",
+    "evidence_texts": [
+      "Here, it’s often the right tradeoff."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Here, it’s often the right tradeoff.",
+      "src_idx": 178
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "corrections being cheap and waiting expensive",
+    "subject_resolution_evidence": "corrections are cheap, and waiting is expensive",
+    "subject_resolved": "corrections being cheap and waiting expensive"
+  },
+  {
+    "subject": "codebase",
+    "predicate": "is generated by",
+    "object": "Codex agents",
+    "evidence_texts": [
+      "When we say the codebase is generated by Codex agents, we mean everything in the codebase."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Product code and tests",
+    "evidence_texts": [
+      "Agents produce:\nProduct code and tests"
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "CI configuration and release tooling",
+    "evidence_texts": [
+      "CI configuration and release tooling"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "CI configuration and release tooling",
+      "src_idx": 181
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Internal developer tools",
+    "evidence_texts": [
+      "Internal developer tools"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Internal developer tools",
+      "src_idx": 182
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Documentation and design history",
+    "evidence_texts": [
+      "Documentation and design history"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Documentation and design history",
+      "src_idx": 183
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Evaluation harnesses",
+    "evidence_texts": [
+      "Evaluation harnesses"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Evaluation harnesses",
+      "src_idx": 184
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Review comments and responses",
+    "evidence_texts": [
+      "Review comments and responses"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Review comments and responses",
+      "src_idx": 185
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Scripts that manage the repository itself",
+    "evidence_texts": [
+      "Scripts that manage the repository itself"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Scripts that manage the repository itself",
+      "src_idx": 186
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "produce",
+    "object": "Production dashboard definition files",
+    "evidence_texts": [
+      "Production dashboard definition files"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Production dashboard definition files",
+      "src_idx": 187
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Humans",
+    "predicate": "remain in",
+    "object": "the loop",
+    "evidence_texts": [
+      "Humans always remain in the loop, but work at a different layer of abstraction than we used to."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Humans",
+    "predicate": "work at",
+    "object": "a different layer of abstraction than we used to",
+    "evidence_texts": [
+      "Humans always remain in the loop, but work at a different layer of abstraction than we used to."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "prioritize",
+    "object": "work",
+    "evidence_texts": [
+      "We prioritize work, translate user feedback into acceptance criteria, and validate outcomes."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We prioritize work, translate user feedback into acceptance criteria, and validate outcomes.",
+      "src_idx": 190
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "translate",
+    "object": "user feedback into acceptance criteria",
+    "evidence_texts": [
+      "We prioritize work, translate user feedback into acceptance criteria, and validate outcomes."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We prioritize work, translate user feedback into acceptance criteria, and validate outcomes.",
+      "src_idx": 191
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "validate",
+    "object": "outcomes",
+    "evidence_texts": [
+      "We prioritize work, translate user feedback into acceptance criteria, and validate outcomes."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We prioritize work, translate user feedback into acceptance criteria, and validate outcomes.",
+      "src_idx": 192
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Agents",
+    "predicate": "use",
+    "object": "our standard development tools",
+    "evidence_texts": [
+      "Agents use our standard development tools directly."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "They",
+    "predicate": "pull",
+    "object": "review feedback",
+    "evidence_texts": [
+      "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests."
+    ],
+    "subject_anaphora": "They",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests.",
+      "src_idx": 195
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "Agents use our standard development tools directly",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "They",
+    "predicate": "respond",
+    "object": "inline",
+    "evidence_texts": [
+      "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests."
+    ],
+    "subject_anaphora": "They",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests.",
+      "src_idx": 196
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "Agents use our standard development tools directly",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "They",
+    "predicate": "push",
+    "object": "updates",
+    "evidence_texts": [
+      "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests."
+    ],
+    "subject_anaphora": "They",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests.",
+      "src_idx": 197
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "Agents use our standard development tools directly",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "They",
+    "predicate": "squash and merge",
+    "object": "their own pull requests",
+    "evidence_texts": [
+      "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests."
+    ],
+    "subject_anaphora": "They",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "They pull review feedback, respond inline, push updates, and often squash and merge their own pull requests.",
+      "src_idx": 198
+    },
+    "predicate_clean": "merge",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "Agents use our standard development tools directly",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "repository",
+    "predicate": "crossed",
+    "object": "a meaningful threshold",
+    "evidence_texts": [
+      "As more of the development loop was encoded directly into the system—testing, validation, review, feedback handling, and recovery—the repository recently crossed a meaningful threshold where Codex can end-to-end drive a new feature."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "can end-to-end drive",
+    "object": "a new feature",
+    "evidence_texts": [
+      "the repository recently crossed a meaningful threshold where Codex can end-to-end drive a new feature."
+    ],
+    "predicate_clean": "drive",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Validate",
+    "object": "the current state of the codebase",
+    "evidence_texts": [
+      "Validate the current state of the codebase"
+    ],
+    "predicate_clean": "validate",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Reproduce",
+    "object": "a reported bug",
+    "evidence_texts": [
+      "Reproduce a reported bug"
+    ],
+    "predicate_clean": "reproduce",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Record",
+    "object": "a video demonstrating the failure",
+    "evidence_texts": [
+      "Record a video demonstrating the failure"
+    ],
+    "predicate_clean": "record",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Implement",
+    "object": "a fix",
+    "evidence_texts": [
+      "Implement a fix"
+    ],
+    "predicate_clean": "implement",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Validate",
+    "object": "the fix by driving the application",
+    "evidence_texts": [
+      "Validate the fix by driving the application"
+    ],
+    "predicate_clean": "validate",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Record",
+    "object": "a second video demonstrating the resolution",
+    "evidence_texts": [
+      "Record a second video demonstrating the resolution"
+    ],
+    "predicate_clean": "record",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Open",
+    "object": "a pull request",
+    "evidence_texts": [
+      "Open a pull request"
+    ],
+    "predicate_clean": "open",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Respond to",
+    "object": "agent and human feedback",
+    "evidence_texts": [
+      "Respond to agent and human feedback"
+    ],
+    "predicate_clean": "respond",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Detect and remediate",
+    "object": "build failures",
+    "evidence_texts": [
+      "Detect and remediate build failures"
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Detect and remediate build failures",
+      "src_idx": 209
+    },
+    "predicate_clean": "remediate",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Escalate to",
+    "object": "a human only when judgment is required",
+    "evidence_texts": [
+      "Escalate to a human only when judgment is required"
+    ],
+    "health": {
+      "marks": [
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Escalate to a human only when judgment is required",
+      "src_idx": 210
+    },
+    "predicate_clean": "escalate",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can Merge",
+    "object": "the change",
+    "evidence_texts": [
+      "Merge the change"
+    ],
+    "predicate_clean": "merge",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This behavior",
+    "predicate": "depends heavily on",
+    "object": "the specific structure and tooling of this repository",
+    "evidence_texts": [
+      "This behavior depends heavily on the specific structure and tooling of this repository and should not be assumed to generalize without similar investment—at least, not yet."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "This behavior depends heavily on the specific structure and tooling of this repository and should not be assumed to generalize without similar investment—at least, not yet.",
+      "src_idx": 212
+    },
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "unresolved"
+  },
+  {
+    "subject": "This behavior",
+    "predicate": "should not be assumed to generalize",
+    "object": "without similar investment",
+    "polarity": "negative",
+    "evidence_texts": [
+      "This behavior depends heavily on the specific structure and tooling of this repository and should not be assumed to generalize without similar investment—at least, not yet."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "This behavior depends heavily on the specific structure and tooling of this repository and should not be assumed to generalize without similar investment—at least, not yet.",
+      "src_idx": 213
+    },
+    "predicate_clean": "assume",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "unresolved"
+  },
+  {
+    "subject": "Full agent autonomy",
+    "predicate": "introduces",
+    "object": "novel problems",
+    "evidence_texts": [
+      "Full agent autonomy also introduces novel problems."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Codex",
+    "predicate": "replicates",
+    "object": "patterns that already exist in the repository",
+    "evidence_texts": [
+      "Codex replicates patterns that already exist in the repository—even uneven or suboptimal ones."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this",
+    "predicate": "leads to",
+    "object": "drift",
+    "evidence_texts": [
+      "Over time, this inevitably leads to drift."
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Over time, this inevitably leads to drift.",
+      "src_idx": 216
+    },
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Codex replicating existing patterns",
+    "subject_resolution_evidence": "Codex replicates patterns that already exist in the repository—even uneven or suboptimal ones",
+    "subject_resolved": "Codex replicating existing patterns"
+  },
+  {
+    "subject": "humans",
+    "predicate": "addressed",
+    "object": "this manually",
+    "evidence_texts": [
+      "Initially, humans addressed this manually."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "pattern drift",
+    "object_resolution_evidence": "Over time, this inevitably leads to drift",
+    "object_resolved": "pattern drift"
+  },
+  {
+    "subject": "Our team",
+    "predicate": "used to spend",
+    "object": "every Friday (20% of the week)",
+    "evidence_texts": [
+      "Our team used to spend every Friday (20% of the week) cleaning up “AI slop.”"
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "that",
+    "predicate": "did not",
+    "object": "scale",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Unsurprisingly, that didn’t scale."
+    ],
+    "subject_anaphora": "that",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "” Unsurprisingly, that didn’t scale.",
+      "src_idx": 219
+    },
+    "predicate_clean_rejected": "scale",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "that",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "cleaning up AI slop manually",
+    "subject_resolution_evidence": "Our team used to spend every Friday (20% of the week) cleaning up “AI slop.”",
+    "subject_resolved": "cleaning up AI slop manually"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "started encoding",
+    "object": "“golden principles” directly into the repository",
+    "evidence_texts": [
+      "Instead, we started encoding what we call “golden principles” directly into the repository and built a recurring cleanup process."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "Instead, we started encoding what we call “golden principles” directly into the repository and built a recurring cleanup process.",
+      "src_idx": 220
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "built",
+    "object": "a recurring cleanup process",
+    "evidence_texts": [
+      "Instead, we started encoding what we call “golden principles” directly into the repository and built a recurring cleanup process."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "Instead, we started encoding what we call “golden principles” directly into the repository and built a recurring cleanup process.",
+      "src_idx": 221
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "These principles",
+    "predicate": "are",
+    "object": "opinionated, mechanical rules that keep the codebase legible and consistent for future agent runs",
+    "evidence_texts": [
+      "These principles are opinionated, mechanical rules that keep the codebase legible and consistent for future agent runs."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "these",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "golden principles",
+    "subject_resolution_evidence": "we started encoding what we call “golden principles” directly into the repository",
+    "subject_resolved": "golden principles"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "prefer",
+    "object": "shared utility packages over hand-rolled helpers to keep invariants centralized",
+    "evidence_texts": [
+      "we prefer shared utility packages over hand-rolled helpers to keep invariants centralized"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example: (1) we prefer shared utility packages over hand-rolled helpers to keep invariants centralized, and (2) we don’t probe data “YOLO-style”—we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes.",
+      "src_idx": 223
+    },
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "do not probe",
+    "object": "data “YOLO-style”",
+    "polarity": "negative",
+    "evidence_texts": [
+      "we don’t probe data “YOLO-style”—we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example: (1) we prefer shared utility packages over hand-rolled helpers to keep invariants centralized, and (2) we don’t probe data “YOLO-style”—we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes.",
+      "src_idx": 224
+    },
+    "predicate_clean": "probe",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "validate",
+    "object": "boundaries",
+    "evidence_texts": [
+      "we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example: (1) we prefer shared utility packages over hand-rolled helpers to keep invariants centralized, and (2) we don’t probe data “YOLO-style”—we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes.",
+      "src_idx": 225
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "rely on",
+    "object": "typed SDKs",
+    "evidence_texts": [
+      "we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "For example: (1) we prefer shared utility packages over hand-rolled helpers to keep invariants centralized, and (2) we don’t probe data “YOLO-style”—we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes.",
+      "src_idx": 226
+    },
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "can not accidentally build on",
+    "object": "guessed shapes",
+    "polarity": "negative",
+    "evidence_texts": [
+      "we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes"
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "For example: (1) we prefer shared utility packages over hand-rolled helpers to keep invariants centralized, and (2) we don’t probe data “YOLO-style”—we validate boundaries or rely on typed SDKs so the agent can’t accidentally build on guessed shapes.",
+      "src_idx": 227
+    },
+    "predicate_clean": "build",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "have",
+    "object": "a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests",
+    "evidence_texts": [
+      "On a regular cadence, we have a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "On a regular cadence, we have a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests.",
+      "src_idx": 228
+    },
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "background Codex tasks",
+    "predicate": "scan for",
+    "object": "deviations",
+    "evidence_texts": [
+      "we have a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests"
+    ],
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "background Codex tasks",
+    "predicate": "update",
+    "object": "quality grades",
+    "evidence_texts": [
+      "we have a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "background Codex tasks",
+    "predicate": "open",
+    "object": "targeted refactoring pull requests",
+    "evidence_texts": [
+      "we have a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Most of these",
+    "predicate": "can be reviewed in",
+    "object": "under a minute",
+    "evidence_texts": [
+      "Most of these can be reviewed in under a minute and automerged."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Most of these can be reviewed in under a minute and automerged.",
+      "src_idx": 232
+    },
+    "predicate_clean": "review",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Most of these",
+    "predicate": "can be",
+    "object": "automerged",
+    "evidence_texts": [
+      "Most of these can be reviewed in under a minute and automerged."
+    ],
+    "predicate_clean_rejected": "automerged",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This",
+    "predicate": "functions like",
+    "object": "garbage collection",
+    "evidence_texts": [
+      "This functions like garbage collection."
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This functions like garbage collection.",
+      "src_idx": 234
+    },
+    "predicate_normalized": "similar_to",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "unresolved",
+    "subject_resolution": "the recurring cleanup process",
+    "subject_resolution_evidence": "we have a set of background Codex tasks that scan for deviations, update quality grades, and open targeted refactoring pull requests",
+    "subject_resolved": "the recurring cleanup process"
+  },
+  {
+    "subject": "Technical debt",
+    "predicate": "is like",
+    "object": "a high-interest loan",
+    "evidence_texts": [
+      "Technical debt is like a high-interest loan: it’s almost always better to pay it down continuously in small increments than to let it compound and tackle it in painful bursts."
+    ],
+    "predicate_normalized": "similar_to",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Human taste",
+    "predicate": "is captured once, then enforced continuously on",
+    "object": "every line of code",
+    "evidence_texts": [
+      "Human taste is captured once, then enforced continuously on every line of code."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Human taste is captured once, then enforced continuously on every line of code.",
+      "src_idx": 236
+    },
+    "predicate_clean": "enforce",
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This",
+    "predicate": "lets us catch and resolve",
+    "object": "bad patterns on a daily basis",
+    "evidence_texts": [
+      "This also lets us catch and resolve bad patterns on a daily basis, rather than letting them spread in the code base for days or weeks."
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "This also lets us catch and resolve bad patterns on a daily basis, rather than letting them spread in the code base for days or weeks.",
+      "src_idx": 237
+    },
+    "predicate_clean": "let",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the recurring cleanup process",
+    "subject_resolution_evidence": "Human taste is captured once, then enforced continuously on every line of code",
+    "subject_resolved": "the recurring cleanup process"
+  },
+  {
+    "subject": "This strategy",
+    "predicate": "has so far worked well up through",
+    "object": "internal launch and adoption at OpenAI",
+    "evidence_texts": [
+      "This strategy has so far worked well up through internal launch and adoption at OpenAI."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "This strategy has so far worked well up through internal launch and adoption at OpenAI.",
+      "src_idx": 238
+    },
+    "predicate_clean": "work",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "unresolved",
+    "subject_resolution": "the cleanup process with golden principles",
+    "subject_resolution_evidence": "Most of these can be reviewed in under a minute and automerged",
+    "subject_resolved": "the cleanup process with golden principles"
+  },
+  {
+    "subject": "Building a real product for real users",
+    "predicate": "helped anchor",
+    "object": "our investments in reality",
+    "evidence_texts": [
+      "Building a real product for real users helped anchor our investments in reality and guide us towards long-term maintainability."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Building a real product for real users",
+    "predicate": "guide us towards",
+    "object": "long-term maintainability",
+    "evidence_texts": [
+      "Building a real product for real users helped anchor our investments in reality and guide us towards long-term maintainability."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "What we don’t yet know",
+    "predicate": "is",
+    "object": "how architectural coherence evolves over years in a fully agent-generated system",
+    "evidence_texts": [
+      "What we don’t yet know is how architectural coherence evolves over years in a fully agent-generated system."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "are still learning",
+    "object": "where human judgment adds the most leverage",
+    "evidence_texts": [
+      "We’re still learning where human judgment adds the most leverage and how to encode that judgment so it compounds."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We’re still learning where human judgment adds the most leverage and how to encode that judgment so it compounds.",
+      "src_idx": 242
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "are still learning",
+    "object": "how to encode that judgment so it compounds",
+    "evidence_texts": [
+      "We’re still learning where human judgment adds the most leverage and how to encode that judgment so it compounds."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We’re still learning where human judgment adds the most leverage and how to encode that judgment so it compounds.",
+      "src_idx": 243
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "OpenAI",
+    "predicate": "do not know",
+    "object": "how this system will evolve as models continue to become more capable over time",
+    "polarity": "negative",
+    "evidence_texts": [
+      "We also don’t know how this system will evolve as models continue to become more capable over time."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "OpenAI"
+        }
+      ],
+      "anchor": "We also don’t know how this system will evolve as models continue to become more capable over time.",
+      "src_idx": 244
+    },
+    "predicate_clean": "know",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "building software",
+    "predicate": "still demands",
+    "object": "discipline",
+    "evidence_texts": [
+      "What’s become clear: building software still demands discipline, but the discipline shows up more in the scaffolding rather than the code."
+    ],
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the discipline",
+    "predicate": "shows up more in",
+    "object": "the scaffolding rather than the code",
+    "evidence_texts": [
+      "the discipline shows up more in the scaffolding rather than the code"
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "What’s become clear: building software still demands discipline, but the discipline shows up more in the scaffolding rather than the code.",
+      "src_idx": 246
+    },
+    "predicate_clean": "show",
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The tooling, abstractions, and feedback loops that keep the codebase coherent",
+    "predicate": "are increasingly",
+    "object": "important",
+    "evidence_texts": [
+      "The tooling, abstractions, and feedback loops that keep the codebase coherent are increasingly important."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "Our most difficult challenges",
+    "predicate": "center on",
+    "object": "designing environments, feedback loops, and control systems that help agents accomplish our goal",
+    "evidence_texts": [
+      "Our most difficult challenges now center on designing environments, feedback loops, and control systems that help agents accomplish our goal: build and maintain complex, reliable software at scale."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "agents like Codex",
+    "predicate": "take on",
+    "object": "larger portions of the software lifecycle",
+    "evidence_texts": [
+      "As agents like Codex take on larger portions of the software lifecycle, these questions will matter even more."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Jalapeño",
+    "predicate": "show",
+    "object": "industry-leading speed in AI inference",
+    "evidence_texts": [
+      "Jalapeño’s first results show industry-leading speed and efficiency in AI inference"
+    ],
+    "predicate_normalized": "indicates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Jalapeño",
+    "predicate": "show",
+    "object": "industry-leading efficiency in AI inference",
+    "evidence_texts": [
+      "Jalapeño’s first results show industry-leading speed and efficiency in AI inference"
+    ],
+    "predicate_normalized": "indicates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Continuous voice interaction",
+    "predicate": "with",
+    "object": "GPT Live",
+    "evidence_texts": [
+      "Continuous voice interaction with GPT Live"
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "GPT-5.6",
+    "predicate": "fuses",
+    "object": "frontier intelligence",
+    "evidence_texts": [
+      "How GPT-5.6 fuses frontier intelligence with frontier efficiency"
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "GPT-5.6",
+    "predicate": "fuses",
+    "object": "frontier efficiency",
+    "evidence_texts": [
+      "How GPT-5.6 fuses frontier intelligence with frontier efficiency"
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  }
+]

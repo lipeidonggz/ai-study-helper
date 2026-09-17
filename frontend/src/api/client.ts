@@ -613,10 +613,14 @@ export interface AnaphoraRow {
   anaphor: string
   kind: 'bare' | 'phrase' | 'embedded'
   field_text: string
+  subject: string
+  predicate: string
+  object: string
   status: 'resolved' | 'unresolved' | 'not_anaphora'
   resolution: string | null
   evidence: string
   evidence_verbatim: boolean
+  window: string
 }
 
 export interface HealthReport {

@@ -6,7 +6,14 @@
   ③ **形式主语不给硬塞主语**：`there / it`（存在句、形式主语）由提示词判 not_anaphora，程序不猜。
 """
 
-from app.compile.anaphora import apply_evidence_guard, apply_resolutions, classify, evidence_verbatim
+from app.compile.anaphora import (
+    apply_evidence_guard,
+    apply_resolutions,
+    classify,
+    context_window,
+    evidence_verbatim,
+    parse_results,
+)
 
 WINDOW = (
     "The share of agent context keeps growing—this includes product memory, CLAUDE.md files, "
@@ -26,6 +33,40 @@ def test_classify_kinds():
 
 
 # ---------- 依据护栏：只删不改 ----------
+
+def test_parse_results_handles_bare_array_and_fences():
+    """模型偶尔返回**裸数组**——不能因此丢一整批（2026-09-17 实测踩过）。"""
+    wrapped = '```json\n{"results":[{"claim_idx":1,"position":"subject","status":"resolved"}]}\n```'
+    bare = '```json\n[{"claim_idx":1,"position":"subject","status":"resolved"},{"claim_idx":2,"position":"object"}]\n```'
+    plain_bare = '[{"claim_idx":3,"position":"subject"}]'
+    assert [r["claim_idx"] for r in parse_results(wrapped)] == [1]
+    assert [r["claim_idx"] for r in parse_results(bare)] == [1, 2]     # 裸数组两条都要在
+    assert [r["claim_idx"] for r in parse_results(plain_bare)] == [3]
+    assert parse_results("完全不是 JSON") == []
+    assert parse_results("") == []
+
+def test_context_window_reaches_far_back_and_stops_at_anchor():
+    """窗口口径（2026-09-17 三改）：前向铺得够长、锚句完整、**后向不留**。
+
+    实测依据：先行词会在 875 / ~1300 字符之前（`[157]` / `[209]`）；而"锚句之后的文本"
+    0/95 条用到，故后向不额外留。
+    """
+    intro = "The rigid architectural model fixes the layers and the permissible edges. " * 20  # ≈1400 字符
+    text = intro + "In practice, we enforce these rules with custom linters. Following sentence about something else."
+    w = context_window({"evidence_texts": ["In practice, we enforce these rules with custom linters."]}, text)
+    assert "In practice, we enforce these rules" in w["window"]          # 锚句完整
+    assert "The rigid architectural model" in w["window"]                # 前向铺得够长
+    assert "Following sentence about something else" not in w["window"]  # 后向不留
+    assert w["anchor_quote"].startswith("In practice")
+
+
+def test_context_window_keeps_trailing_quote_anchor_without_extra_sentence():
+    """锚句以引号结尾（`…“taste invariants.”`）时，不该多带后面一句。"""
+    text = "Line one is here. In practice, we enforce these rules, plus a set of “taste invariants.” For example, we statically enforce logging."
+    w = context_window({"evidence_texts": ["In practice, we enforce these rules, plus a set of “taste invariants.”"]}, text)
+    assert w["window"].endswith("“taste invariants.”")
+    assert "For example" not in w["window"]
+
 
 def test_evidence_verbatim_accepts_exact_and_elision():
     assert evidence_verbatim("this includes product memory, CLAUDE.md files", WINDOW)     # 精确

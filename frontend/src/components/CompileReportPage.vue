@@ -66,6 +66,12 @@ const marked = computed(() => report.value?.marked || [])
 const dropped = computed(() => report.value?.dropped || [])
 const pending = computed(() => report.value?.pending || [])
 const anaphora = computed(() => report.value?.anaphora_list || [])
+const anaphoraFilter = ref<'all' | 'unresolved' | 'resolved' | 'not_anaphora'>('all')
+const anaphoraShown = computed(() => {
+  const rows = anaphora.value
+  if (anaphoraFilter.value === 'all') return rows
+  return rows.filter((r) => r.status === anaphoraFilter.value)
+})
 
 /** 失败横幅：区分"体检红线不过（产物是本轮的，可看）"与"任务异常失败（报告可能是上一次的）" */
 const failBanner = computed(() => {
@@ -207,16 +213,29 @@ onUnmounted(() => window.clearInterval(timer))
           依据必须是原文逐字片段（程序校验；不通过会被降级为 unresolved）。
         </p>
         <p v-if="!anaphora.length" class="hint">（无）</p>
-        <table v-else class="tbl">
+        <p v-else class="hint">
+          筛选：
+          <select v-model="anaphoraFilter">
+            <option value="all">全部（{{ anaphora.length }}）</option>
+            <option value="unresolved">只看判不出（{{ anaphora.filter((r) => r.status === 'unresolved').length }}）</option>
+            <option value="resolved">只看已解（{{ anaphora.filter((r) => r.status === 'resolved').length }}）</option>
+            <option value="not_anaphora">只看非指代（{{ anaphora.filter((r) => r.status === 'not_anaphora').length }}）</option>
+          </select>
+          ｜ 展开「上下文窗口」可判断"到底是判不出，还是模型保守"
+        </p>
+        <table v-if="anaphoraShown.length" class="tbl">
           <thead>
-            <tr><th>#</th><th>位置</th><th>指代词</th><th>原字段</th><th>状态</th><th>消解结果</th><th>依据（逐字）</th></tr>
+            <tr><th>#</th><th>位置</th><th>指代词</th><th>断言（主 ｜ 谓 ｜ 宾）<br /><small>待消解的原字段</small></th><th>状态</th><th>消解结果</th><th>依据（逐字）/ 上下文窗口</th></tr>
           </thead>
           <tbody>
-            <tr v-for="a in anaphora" :key="'a' + a.idx + a.position">
+            <tr v-for="a in anaphoraShown" :key="'a' + a.idx + a.position">
               <td>{{ a.idx }}</td>
               <td>{{ a.position === 'subject' ? '主语' : '宾语' }}</td>
               <td><code>{{ a.anaphor }}</code><br /><small>{{ a.kind }}</small></td>
-              <td>{{ a.field_text }}</td>
+              <td>
+                <div><strong>{{ a.subject }}</strong> ｜ {{ a.predicate }} ｜ {{ a.object || '—' }}</div>
+                <div style="margin-top: 3px"><code>{{ a.field_text }}</code> <small>（本次待消解）</small></div>
+              </td>
               <td>
                 <span class="badge" :class="a.status === 'resolved' ? 'ok' : a.status === 'not_anaphora' ? 'idle' : 'run'">
                   {{ a.status }}
@@ -226,10 +245,15 @@ onUnmounted(() => window.clearInterval(timer))
               <td class="note">
                 {{ a.evidence }}
                 <span v-if="!a.evidence_verbatim" class="badge bad">依据非法</span>
+                <details style="margin-top: 4px">
+                  <summary style="cursor: pointer">上下文窗口</summary>
+                  <div style="white-space: pre-wrap; font-size: 11.5px; color: #57606a">{{ a.window }}</div>
+                </details>
               </td>
             </tr>
           </tbody>
         </table>
+        <p v-else class="hint">（该筛选下无条目）</p>
       </section>
 
       <section class="card">

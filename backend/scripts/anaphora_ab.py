@@ -35,6 +35,8 @@ async def main() -> None:
     ap.add_argument("--model", default="deepseek-chat")
     ap.add_argument("--out-tag", default="", help="产物文件名后缀（区分同名变体的多次跑，如窗口改版）")
     ap.add_argument("--claims-file", default="", help="固定输入：用指定 claims.json（金标准打分必须对固定输入）")
+    ap.add_argument("--temperature", type=float, default=None, help="采样温度；不传=服务端默认 1.0")
+    ap.add_argument("--rounds", type=int, default=1, help="同配置重复几遍（看稳定性）")
     args = ap.parse_args()
 
     settings = SqliteSettingStore(APP_DB).get_llm_settings()
@@ -55,33 +57,45 @@ async def main() -> None:
         kinds[f"{t['position']}/{t['kind']}"] = kinds.get(f"{t['position']}/{t['kind']}", 0) + 1
     print(f"[S4.5] {args.source}：入库 claim {len(claims)} 条 → 待消解目标 {len(targets)} 个 {kinds}")
 
-    client = DeepSeekLLMClient(api_key=settings.api_key, model=model)
-    all_stats = {}
+    client = DeepSeekLLMClient(api_key=settings.api_key, model=model, temperature=args.temperature)
+    win = {(t["claim_idx"], t["position"]): t["window"] for t in targets}
+    all_stats: dict[str, dict] = {}
+    rounds: dict[str, list[dict]] = {}          # 每遍的逐条结果（看稳定性用）
     for variant in [v.strip() for v in args.variants.split(",") if v.strip()]:
-        out = await resolve_targets(client, args.source, targets, variant=variant, batch=args.batch)
-        # 「依据逐字」按修正口径重算：归一化匹配 + **空依据算不通过**
-        #（旧口径把"没给依据"算通过了，A 版因此虚高 6 条）
-        win = {(t["claim_idx"], t["position"]): t["window"] for t in targets}
-        for r in out["results"]:
-            r["evidence_verbatim"] = evidence_verbatim(r.get("evidence") or "", win[(r["claim_idx"], r["position"])])
-        raw = dict(out["stats"])
-        raw["evidence_verbatim"] = sum(1 for r in out["results"] if r["evidence_verbatim"])
-        raw["empty_evidence"] = sum(1 for r in out["results"] if not (r.get("evidence") or "").strip())
-        guard = apply_evidence_guard(out["results"], targets)          # 程序护栏：依据非逐字 → 降 unresolved
-        all_stats[variant] = {"llm": raw, "guarded": {**raw, **guard}}
-        tag = args.out_tag or variant
-        p = OUT_DIR / f"anaphora_ab_{args.source}_{tag}.json"
-        p.write_text(
-            json.dumps({"stats": all_stats[variant]["guarded"], "llm_stats": raw,
-                        "targets": targets, "results": out["results"]},
-                       ensure_ascii=False, indent=1),
-            encoding="utf-8",
-        )
-        print(f"[S4.5] {variant} 版 → {p.name}")
-        print(f"        LLM 原始：三态 {raw['resolved']}/{raw['unresolved']}/{raw['not_anaphora']}"
-              f"、依据逐字 {raw['evidence_verbatim']}/{raw['targets']}（空依据 {raw['empty_evidence']}）")
-        print(f"        过护栏后：resolved {guard['resolved']}、unresolved {guard['unresolved']}"
-              f"（被护栏降级 {guard['demoted']} 条）")
+        for rd in range(1, args.rounds + 1):
+            label = f"{variant}#{rd}" if args.rounds > 1 else variant
+            out = await resolve_targets(client, args.source, targets, variant=variant, batch=args.batch)
+            # 「依据逐字」按修正口径重算：归一化匹配 + **空依据算不通过**
+            for r in out["results"]:
+                r["evidence_verbatim"] = evidence_verbatim(r.get("evidence") or "", win[(r["claim_idx"], r["position"])])
+            raw = dict(out["stats"])
+            raw["evidence_verbatim"] = sum(1 for r in out["results"] if r["evidence_verbatim"])
+            raw["empty_evidence"] = sum(1 for r in out["results"] if not (r.get("evidence") or "").strip())
+            guard = apply_evidence_guard(out["results"], targets)      # 程序护栏：依据非逐字 → 降 unresolved
+            all_stats[label] = {"llm": raw, "guarded": {**raw, **guard}}
+            rounds[label] = out["results"]
+            tag = f"{args.out_tag}_{variant}{'' if args.rounds == 1 else '_r' + str(rd)}" if args.out_tag else label
+            p = OUT_DIR / f"anaphora_ab_{args.source}_{tag}.json"
+            p.write_text(
+                json.dumps({"stats": guard, "llm_stats": raw, "targets": targets, "results": out["results"]},
+                           ensure_ascii=False, indent=1),
+                encoding="utf-8",
+            )
+            print(f"[S4.5] {label} → {p.name}")
+            print(f"        LLM 原始：三态 {raw['resolved']}/{raw['unresolved']}/{raw['not_anaphora']}"
+                  f"、依据逐字 {raw['evidence_verbatim']}/{raw['targets']}（空证据 {raw['empty_evidence']}）"
+                  f" | 过护栏：resolved {guard['resolved']}、unresolved {guard['unresolved']}（降级 {guard['demoted']}）")
+
+    if args.rounds > 1 and len(rounds) > 1:
+        print("\n=== 稳定性：同输入多遍的逐条一致率 ===")
+        for label, rows in rounds.items():
+            base = next(iter(rounds.values()))
+            bm = {(r["claim_idx"], r["position"]): r for r in base}
+            same = sum(
+                1 for r in rows
+                if bm.get((r["claim_idx"], r["position"]), {}).get("status") == r["status"]
+            )
+            print(f"  {label}: 与首遍三态一致 {same}/{len(rows)} = {same / len(rows):.3f}")
 
     print("\n=== A/B 指标对比 ===")
     keys = ["targets", "answered", "resolved", "unresolved", "not_anaphora", "evidence_verbatim", "empty_evidence", "batches", "failed_batches"]
@@ -89,7 +103,7 @@ async def main() -> None:
     for k in keys:
         print(k.ljust(18) + "".join(str(all_stats[v]["llm"].get(k, "-")).rjust(10) for v in all_stats))
 
-    if len(all_stats) == 2:
+    if set(all_stats) == {"A", "B"}:          # 只有跑 A/B 两版且没加 tag 时才做逐条对照
         a = json.loads((OUT_DIR / f"anaphora_ab_{args.source}_A.json").read_text(encoding="utf-8"))
         b = json.loads((OUT_DIR / f"anaphora_ab_{args.source}_B.json").read_text(encoding="utf-8"))
         ra = {(r["claim_idx"], r["position"]): r for r in a["results"]}

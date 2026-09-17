@@ -5,6 +5,7 @@ TODO：目前复用 `scripts/compile_slice_b6.py` 里的提示词与工具函数
       后续应把它们搬进 app/compile/（text.py / prompts.py），让 app 层不再依赖 scripts。
 
 红线闸门：体检没过红线 → 任务判 failed、不进入下一步（产物照旧落盘，供人工排查）。
+采样温度：全链路用 `COMPILE_TEMPERATURE = 0.0`（确定性任务不给随机性，与评测侧 JUDGE_TEMPERATURE 对齐）。
 
 产物（backend/data/compile/<source_id>/）：
   claims_raw.json  Pass 1 原始输出（体检前）
@@ -26,6 +27,7 @@ from app.compile.anaphora import resolve_source
 from app.compile.health import run_health_check
 from app.kb.manifest import parse_manifest
 from scripts.compile_slice_b6 import (
+    COMPILE_TEMPERATURE,
     MANIFEST_PATH,
     PASS1_SYSTEM,
     _build_clean_t,
@@ -213,7 +215,7 @@ class CompileService:
         try:
             _ft, sections = _file_units(src)[0]
             clean_t = _build_clean_t(sections)
-            client = DeepSeekLLMClient(api_key=api_key, model=model)
+            client = DeepSeekLLMClient(api_key=api_key, model=model, temperature=COMPILE_TEMPERATURE)
 
             # ---- Pass 1：按窗口抽断言（宽召回）----
             windows = _window_text(clean_t, 5000)

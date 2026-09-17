@@ -15,8 +15,12 @@
      的才再写一个可直接替换的 `*_resolved`；
   ③ **只依据给定上下文**：不许用内置知识猜——`evidence` 必须逐字出现在窗口里（程序可校验）。
 
-窗口 ＝ **锚句所在段（整段）+ 上一段尾句**。实测（A5 38 / O2 28 条）所指需回溯 ≥2 句的占
-58% / 36%，还有跨段的 → 句级窗口（"锚句 ± 邻句"）**不够**。
+窗口 ＝ **锚句完整 + 前向 ~1600 字符**（按句界对齐、**允许跨标题**），后向不额外留。三次实测逼出来的口径：
+  · 最初用"锚句 ± 邻句"→ 不够（所指需回溯 ≥2 句的占 58%/36%）；
+  · 改成"锚句所在段 + 上一段尾 2 句"→ 仍不够：`[157]` 的先行词在 **875 字符前**，
+    `[209]` 在 **~1300 字符前且跨了标题**（锚句前是"Given a single prompt, the agent can now:" + 11 项列表）；
+  · 后向（锚句之后的文本）实测 **0/95 条**用到 → 砍掉（只保留"锚句完整"，同句内的后向由它覆盖）。
+另：输入带 `anchor_quote`（Pass-1 抽这条断言时锚定的原文句）——**对齐 &gt; 信息量**：窗口给材料，锚句给重点。
 
 TODO（沿用 service.py 那笔）：`_find_raw` / `_chat_json` 目前在 scripts/ 里，这里先 import 复用，
       以后统一搬进 app/compile/。
@@ -80,50 +84,51 @@ def classify(text: str) -> tuple[str, str] | None:
     return ("embedded", anaphor)
 
 
-def paragraph_window(claim: dict, clean_t: str, *, max_chars: int = 1500, prev_tail: int = 200) -> dict:
-    """切出该 claim 的上下文窗口：锚句所在段（必要时按锚句裁剪）+ 上一段尾句。"""
+def _snap_back(text: str, i: int) -> int:
+    """把起点回退到**句首**（i 落在句子中间时）——别把句子从中间切开。"""
+    if i <= 0:
+        return 0
+    ends = [m.end() for m in re.finditer(r"[.!?]\s", text[:i])]
+    return ends[-1] if ends else 0
+
+
+def _snap_forward(text: str, i: int) -> int:
+    """把终点前进到**句末**（含标点）；锚句本身已是完整句就不动。
+
+    注意"已是完整句"要**跳过尾部引号/括号**：实测锚句常以 `…“taste invariants.”` 结尾，
+    若只看 `text[i-1]` 会误判成未结束，于是多带一句（后向本来是 0 条用到的）。
+    """
+    j = i - 1
+    while j >= 0 and text[j] in "\"')]}”’":
+        j -= 1
+    if j >= 0 and text[j] in ".!?":
+        return i
+    m = re.search(r"[.!?]", text[i:])
+    return i + m.start() + 1 if m else len(text)
+
+
+def context_window(
+    claim: dict,
+    clean_t: str,
+    *,
+    back_chars: int = 1600,
+    max_chars: int = 1800,
+) -> dict:
+    """切出该 claim 的上下文窗口：**锚句完整 + 前向 ~1600 字符**（句界对齐、可跨标题）。
+
+    为什么不是"段落"：段落边界正是切掉先行词的东西——实测 `[209]` 的锚句紧跟一个标题，
+    按段落取就断在标题处；`[157]` 的先行词在两段之前。
+    为什么后向不留：实测 0/95 条用到（只保留"锚句完整"）。
+    """
     ev = next((e for e in (claim.get("evidence_texts") or []) if isinstance(e, str) and e), "")
     pos = _find_raw(ev, clean_t) if ev else None
     if pos is None:
         pos = (0, 1)
-    start = clean_t.rfind("\n", 0, pos[0]) + 1
-    end = clean_t.find("\n", pos[1])
-    if end < 0:
-        end = len(clean_t)
-    para = clean_t[start:end]
-    if len(para) > max_chars:                      # 超长段：围着锚句裁（不丢它前面的所指）
-        a = max(0, (pos[0] - start) - int(max_chars * 0.6))
-        b = min(len(para), (pos[1] - start) + int(max_chars * 0.25))
-        # **按句界对齐**：否则窗口在句子中间切断，模型照抄整句时会"逐字对不上"（实测 2 条被护栏误判成编造）
-        ends = [m.end() for m in re.finditer(r"[.!?]\s", para[:a])]
-        if ends:
-            a = ends[-1]
-        nxt = re.search(r"[.!?]\s", para[b:])
-        if nxt:
-            b = b + nxt.start() + 1
-        para = para[a:b]
-    prev_start = clean_t.rfind("\n", 0, max(0, start - 1)) + 1
-    prev = clean_t[prev_start:start].strip()
-    prev_win = _tail_sentences(prev, prev_tail)
-    window = (prev_win + "\n" if prev_win else "") + para
-    return {"window": window.strip(), "paragraph": para.strip(), "prev_tail": prev_win}
-
-
-def _tail_sentences(text: str, max_chars: int, keep: int = 2) -> str:
-    """取上一段尾部的**最后 keep 个完整句**。
-
-    两个坑都踩过：① 机械截 N 字符会把句子切成半句，模型照抄"整句"时逐字对不上（被护栏误判成编造）；
-    ② 只保留最后一句又会**把指代所在的那句丢掉**（实测 A5 `[77]`：`these defenses` 的所指在倒数第二句）。
-    """
-    if not text:
-        return ""
-    ends = [m.end() for m in re.finditer(r"[.!?]\s", text)]
-    if len(ends) <= keep:
-        return text.strip()
-    s = text[ends[len(ends) - keep]:].strip()
-    if len(s) > max_chars and ends:                      # 太长就退到只剩最后一句
-        s = text[ends[-1]:].strip()
-    return s
+    lo = _snap_back(clean_t, max(0, pos[0] - back_chars))
+    hi = _snap_forward(clean_t, pos[1])
+    if hi - lo > max_chars:                        # 上限：从锚句往前收，收的时候仍按句界
+        lo = _snap_back(clean_t, max(0, hi - max_chars))
+    return {"window": clean_t[lo:hi].strip(), "anchor_quote": ev.strip()}
 
 
 def find_targets(claims: list[dict], clean_t: str) -> list[dict]:
@@ -136,7 +141,7 @@ def find_targets(claims: list[dict], clean_t: str) -> list[dict]:
             if not got:
                 continue
             kind, anaphor = got
-            win = paragraph_window(c, clean_t)
+            win = context_window(c, clean_t)
             out.append(
                 {
                     "claim_idx": i,
@@ -148,6 +153,7 @@ def find_targets(claims: list[dict], clean_t: str) -> list[dict]:
                     "predicate": c.get("predicate"),
                     "object": c.get("object") or "",
                     "window": win["window"],
+                    "anchor_quote": win["anchor_quote"],
                     "anchor": (c.get("health") or {}).get("anchor") or "",
                 }
             )
@@ -212,14 +218,55 @@ _RULES_V4 = _RULES_V2 + """
 """
 PROMPTS["B4"] = _RULES_V4 + _SCHEMA_B
 
+# v5：B4 + 教它怎么用 `anchor_quote`（对齐 > 信息量：窗口给材料、锚句给重点）。
+# 起因：`[157]` / `[209]` 的先行词在窗口里但离锚句很远（875 / ~1300 字符），模型读漏。
+_RULES_V5 = _RULES_V4 + """
+# 怎么用 anchor_quote
+- 输入里的 `anchor_quote` 是这条断言**抽取时锚定的原文句**（它就在 window 里）：
+  **所指通常在这句里、或它紧邻的上下句** → 先在它附近找。
+- 在锚句附近找不到，再看 window 的其余部分（window 从锚句往前铺开，铺得很长）。
+- 两处都没有 → `unresolved`（不许用你自己的知识补）。
+"""
+PROMPTS["B5"] = _RULES_V5 + _SCHEMA_B
+
+
+def parse_results(raw: str) -> list[dict]:
+    """从**原始响应**里取出结果数组，兼容两种形态：
+
+      ① 我们要的 `{"results":[…]}`；
+      ② **裸数组** `[ {…}, {…} ]` —— 模型偶尔这么返回（实测 2026-09-17 吃过一次）。
+
+    为什么不能直接用 `_extract_json` 的返回值：它按"第一个 `{` 到最后一个 `}`"切片，
+    对裸数组会切出 `{…}, {…}`，解析失败后回退 `raw_decode` → **只拿到第一个对象** →
+    没有 `results` 键 → **一整批静默变 unresolved**（那次的"判不出率 9→6→5 波动"就有它的份）。
+    """
+    text = (raw or "").strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
+    text = re.sub(r"\s*```$", "", text)
+    cands = [text]
+    if "[" in text and "]" in text:
+        cands.append(text[text.find("["): text.rfind("]") + 1])
+    for chunk in cands:
+        if not chunk:
+            continue
+        try:
+            val = json.loads(chunk)
+        except Exception:
+            continue
+        if isinstance(val, list):
+            return [x for x in val if isinstance(x, dict)]
+        if isinstance(val, dict) and isinstance(val.get("results"), list):
+            return [x for x in val["results"] if isinstance(x, dict)]
+    return []
+
 
 async def resolve_targets(
     client: DeepSeekLLMClient,
     source_id: str,
     targets: list[dict],
     *,
-    variant: str = "B4",          # 基线：依据先行 + 形态/出口 + 收窄防循环（A/B 实验见 scripts/anaphora_ab.py）
-    batch: int = 40,
+    variant: str = "B5",          # 基线：依据先行 + 形态/出口 + 防循环 + anchor_quote 指引（实验见 scripts/anaphora_ab.py）
+    batch: int = 20,              # 批小一点：payload 越大越容易schema漂移（实测 37 条一次喂 → 裸数组）
 ) -> dict:
     """调 LLM 消解一批目标；返回 {results, stats}。不改 claims（回填交给 apply_resolutions）。"""
     system = PROMPTS[variant]
@@ -237,10 +284,11 @@ async def resolve_targets(
                 "predicate": t["predicate"],
                 "object": t["object"],
                 "window": t["window"],
+                "anchor_quote": t["anchor_quote"],
             }
             for t in chunk
         ]
-        part, _ = await _chat_json(
+        part, raw = await _chat_json(
             client,
             [
                 LLMMessage(role="system", content=system),
@@ -248,7 +296,8 @@ async def resolve_targets(
             ],
             label=label,
         )
-        for r in part.get("results") or []:
+        rows = parse_results(raw) or (part.get("results") if isinstance(part, dict) else None) or []
+        for r in rows:
             try:
                 key = (int(r.get("claim_idx")), str(r.get("position")))
             except (TypeError, ValueError):
@@ -261,6 +310,15 @@ async def resolve_targets(
         except Exception as exc:                      # 单批失败不阻断：这批目标留待 unresolved
             failed_batches += 1
             print(f"  [S4.5] 第 {bi} 批失败（{exc}）→ 该批目标按未判处理")
+        for retry in range(1, 3):                     # 漏条补问（同 _clean_predicates / _normalize_predicates）
+            missing = [t for t in chunk if (t["claim_idx"], t["position"]) not in got]
+            if not missing:
+                break
+            print(f"  [S4.5] 第 {bi} 批缺 {len(missing)} 条，第 {retry} 次补问")
+            try:
+                await ask(missing, f"S4.5 {variant} {source_id} {bi}-补{retry}")
+            except Exception as exc:
+                print(f"  [S4.5] 补问失败（{exc}）")
 
     results = []
     for t in targets:
@@ -321,7 +379,7 @@ async def resolve_source(
     claims: list[dict],
     clean_t: str,
     *,
-    variant: str = "B4",
+    variant: str = "B5",
     batch: int = 40,
 ) -> dict:
     """线上入口：检出目标 → 调 LLM → 过依据护栏 → 回填 claims。返回统计 + 清单。"""
@@ -348,12 +406,18 @@ async def resolve_source(
             "anaphor": r["anaphor"],
             "kind": r["kind"],
             "field_text": r["field_text"],
+            "anchor_quote": t["anchor_quote"],
+            # 断言三件套：判断"该不该解得出来"必须看到这条断言在说什么（只看原字段不够）
+            "subject": t["subject"],
+            "predicate": t["predicate"],
+            "object": t["object"],
             "status": r["status"],
             "resolution": r["resolution"],
             "evidence": r["evidence"],
             "evidence_verbatim": r["evidence_verbatim"],
+            "window": t["window"],          # 判断"是不是真判不出"必须看窗口，故一并带上报告
         }
-        for r in out["results"]
+        for r, t in zip(out["results"], targets)
     ]
     return {"stats": stats, "list": rows}
 
