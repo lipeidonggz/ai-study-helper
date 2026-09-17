@@ -69,30 +69,43 @@ const entities = computed(() => {
 const mainEntities = computed(() => entities.value.slice(0, 12))
 const shownEntities = computed(() => entities.value.slice(0, entLimit.value))
 
-/** 边清单排序：点列头切 from / to，再点一次切升降序。一元边（to 空）永远排最后。 */
-const sortKey = ref<'from' | 'to'>('from')
+/** 边清单排序：点列头切 from / 谓词 / to，再点一次切升降序。按 to 排序时一元边（to 空）永远垫底。 */
+type SortKey = 'from' | 'predicate' | 'to'
+const sortKey = ref<SortKey>('from')
 const sortDir = ref<1 | -1>(1)
-function toggleSort(k: 'from' | 'to') {
+function toggleSort(k: SortKey) {
   if (sortKey.value === k) sortDir.value = sortDir.value === 1 ? -1 : 1
   else {
     sortKey.value = k
     sortDir.value = 1
   }
 }
-const sortMark = (k: 'from' | 'to') => (sortKey.value === k ? (sortDir.value === 1 ? '▲' : '▼') : '⇅')
+const sortMark = (k: SortKey) => (sortKey.value === k ? (sortDir.value === 1 ? '▲' : '▼') : '⇅')
 const sortedEdges = computed(() => {
   const k = sortKey.value
-  const key = (e: GraphEdge) => (k === 'from' ? e.from : e.to || '')
+  const dir = sortDir.value
+  const tail = (a: GraphEdge, b: GraphEdge) =>
+    a.from.localeCompare(b.from) || (a.to || '').localeCompare(b.to || '') || a.claim_idx - b.claim_idx
   return [...(graph.value?.edges || [])].sort((a, b) => {
-    const ea = k === 'to' && !a.to ? 1 : 0
-    const eb = k === 'to' && !b.to ? 1 : 0
-    if (ea !== eb) return ea - eb                       // 一元边垫底，不受升降序影响
-    return (
-      sortDir.value * (key(a).localeCompare(key(b)) || a.predicate.localeCompare(b.predicate)) ||
-      a.from.localeCompare(b.from) ||
-      (a.to || '').localeCompare(b.to || '')
-    )
+    if (k === 'to') {
+      const ea = a.to ? 0 : 1
+      const eb = b.to ? 0 : 1
+      if (ea !== eb) return ea - eb                     // 一元边垫底，不受升降序影响
+      return dir * (a.to || '').localeCompare(b.to || '') || a.predicate.localeCompare(b.predicate) || tail(a, b)
+    }
+    if (k === 'predicate') {
+      // 同谓词内部固定按 from → to → claim 排，方便一眼看"这个谓词都连了谁"
+      return dir * a.predicate.localeCompare(b.predicate) || tail(a, b)
+    }
+    return dir * a.from.localeCompare(b.from) || a.predicate.localeCompare(b.predicate) || tail(a, b)
   })
+})
+
+/** 谓词计数：按谓词排序时在表头下方给出分布，方便判断哪个关系被用得最多 */
+const predicateCounts = computed(() => {
+  const m = new Map<string, number>()
+  for (const e of graph.value?.edges || []) m.set(e.predicate, (m.get(e.predicate) || 0) + 1)
+  return [...m.entries()].sort((a, b) => b[1] - a[1])
 })
 
 /** 合并重复边后的边（同 from|pred|to → 一条 + 出现次数 n） */
@@ -249,7 +262,13 @@ onMounted(load)
 
         <section class="card gr-lists">
           <details open>
-            <summary>边清单（{{ graph.edges.length }}）— <b>点列头切换排序</b>（from / to），点 from / to 切焦点</summary>
+            <summary>边清单（{{ graph.edges.length }}）— <b>点列头切换排序</b>（from / 谓词 / to），点 from / to 切焦点</summary>
+            <p v-if="sortKey === 'predicate'" class="hint pred-dist">
+              <b>谓词分布</b>（{{ predicateCounts.length }} 种）：
+              <span v-for="([p, n], i) in predicateCounts" :key="'pc' + p">
+                <code>{{ p }}</code> {{ n }}<template v-if="i < predicateCounts.length - 1"> · </template>
+              </span>
+            </p>
             <div v-if="picked" class="edge-detail">
               <b>{{ picked.from }}</b> —<code>{{ picked.predicate }}</code>→ <b>{{ picked.to || '∅' }}</b>
               <button class="x" @click="picked = null">×</button>
@@ -265,7 +284,7 @@ onMounted(load)
                 <tr>
                   <th>#</th>
                   <th class="sortable" @click="toggleSort('from')">from {{ sortMark('from') }}</th>
-                  <th>谓词</th>
+                  <th class="sortable" @click="toggleSort('predicate')">谓词 {{ sortMark('predicate') }}</th>
                   <th class="sortable" @click="toggleSort('to')">to {{ sortMark('to') }}</th>
                   <th>标记</th>
                 </tr>
@@ -355,4 +374,6 @@ summary { cursor: pointer; padding: 6px 8px; font-weight: 600; background: #f6f8
 .edge-detail .ev { margin-top: 4px; color: #57606a; background: #fff; border-radius: 5px; padding: 4px 6px; }
 .err { color: #cf222e; }
 .hint { color: #57606a; font-size: 12px; }
+.pred-dist { margin: 6px 0 2px; line-height: 1.9; }
+.pred-dist code { background: #eef4ff; border-radius: 4px; padding: 0 3px; }
 </style>
