@@ -55,3 +55,12 @@ def report(source_id: str, request: Request):
 def claims(source_id: str, request: Request, limit: int = 0):
     """归一后的断言清单（limit=0 返回全部；含标记与锚定原文）。"""
     return _svc(request).claims(source_id, limit=limit)
+
+
+@router.get("/{source_id}/graph")
+def graph(source_id: str, request: Request):
+    """S5 图组装产物（实体 / 边 / 未建边的 claim / 对账表）——供界面画"一跳关系视图"。"""
+    g = _svc(request).graph(source_id)
+    if g is None:
+        raise HTTPException(404, f"{source_id} 尚未跑图组装（S5）")
+    return g

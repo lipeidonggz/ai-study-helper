@@ -12,6 +12,7 @@ import { navigate, parseHash, type Route } from './router'
 import ChunkPreviewPage from './components/ChunkPreviewPage.vue'
 import CompileReportPage from './components/CompileReportPage.vue'
 import EvalPage from './components/EvalPage.vue'
+import GraphReviewPage from './components/GraphReviewPage.vue'
 import KbPage from './components/KbPage.vue'
 import RunDetailPage from './components/RunDetailPage.vue'
 
@@ -112,6 +113,7 @@ async function send() {
     <KbPage v-else-if="route.name === 'kb'" />
     <ChunkPreviewPage v-else-if="route.name === 'kb-chunks'" :source-id="route.sourceId" />
     <CompileReportPage v-else-if="route.name === 'compile-report'" :source-id="route.sourceId" />
+    <GraphReviewPage v-else-if="route.name === 'graph'" :source-id="route.sourceId" />
     <RunDetailPage v-else-if="route.name === 'run'" :run-id="route.runId" />
     <template v-else>
     <header class="bar">

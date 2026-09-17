@@ -624,6 +624,40 @@ export interface AnaphoraRow {
   window: string
 }
 
+export interface GraphEntity {
+  name: string
+  type: string
+  aliases: string[]
+}
+
+export interface GraphEdge {
+  from: string
+  predicate: string
+  to: string | null
+  claim_idx: number
+  passive_flipped?: boolean
+  chunk_id?: string | null
+  roles?: Record<string, string[]>
+}
+
+export interface CompileGraph {
+  entities: GraphEntity[]
+  edges: GraphEdge[]
+  skipped: { claim_idx: number; reason: string }[]
+  audit: { claim_idx: number; status: 'edge' | 'skipped'; reason: string }[]
+  chunk_sections: Record<string, string>
+  stats: {
+    claims_in: number
+    claims_with_edge: number
+    claims_skipped: number
+    entities: number
+    edges: number
+    normalize_targets: number
+    normalize_batches: number
+    normalize_failed_batches: number
+  }
+}
+
 export interface HealthReport {
   source: string
   doc_subject: string
@@ -673,5 +707,8 @@ export const compileApi = {
   },
   claims(id: string, limit = 0): Promise<CompileClaim[]> {
     return http(`/api/compile/${id}/claims?limit=${limit}`)
+  },
+  graph(id: string): Promise<CompileGraph> {
+    return http(`/api/compile/${id}/graph`)
   }
 }

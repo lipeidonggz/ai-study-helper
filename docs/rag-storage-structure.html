@@ -56,7 +56,7 @@
     <h1>学习助手的检索存储结构 · 架构设计文档</h1>
     <p class="sub">数据模型（V1 草案，2026-09-09；④ 编译层 2026-09-15 按“已实现 / 已定稿未实现”重写）· 面向"理解并实现检索层"的读者 · 演变与考古见 <a class="alink" href="../../memory/0028-rag-storage-architecture.html">0028 考古笔记</a></p>
 
-    <div class="toc"><b>目录</b>：① 架构概览　② 组件定义　③ 架构决策　④ 编译层（<b>A</b> 流水线全景 S0–S9　<b>B</b> 已上线：断言层　<b>C</b> 已定稿未接线上　<b>D</b> 关键决策　<b>E</b> 输出 schema　<b>F</b> 质检分工与验收　<b>G</b> 未实现 / 待定清单）　（附录：演进与决策来龙去脉见 0028）</div>
+    <div class="toc"><b>目录</b>：① 架构概览　② 组件定义　③ 架构决策　④ 编译层（<b>A</b> 流水线全景 S0–S9　<b>B</b> 已上线：断言层　<b>C</b> 已定稿未接线上（S6–S9）＋ S4.5 / S5 已上线留档　<b>D</b> 关键决策　<b>E</b> 输出 schema　<b>F</b> 质检分工与验收　<b>G</b> 未实现 / 待定清单）　（附录：演进与决策来龙去脉见 0028）</div>
 
     <div class="section">
       <h2>① 架构概览</h2>
@@ -198,7 +198,7 @@
       <h2>④ 编译层：从清洗后原文 → 对象图</h2>
       <p style="font-size:13.5px;line-height:1.8;margin:0 0 12px;">编译层把语料"编译"成对象图（概念 / 文档 / 异名 + 具体化陈述 + 边）。它是<b>索引 / 地图</b>，不是事实源——每条产物都要能逐字指回原文（引文锚定），最终落到 chunk 作证据（见第 3 条硬约束、决策 6）。</p>
       <div class="chain">
-        <b>本节怎么读</b>：<b>A 全景</b>（十段流水线 + 每段状态，先建整体概念）→ <b>B 已上线</b>（断言层：Pass 1 → 体检 → 谓词清洗 → 谓词归一）→ <b>C 已定稿、尚未接进线上</b>（建图三件套 / 引文锚定 / 落库与检索接线）→ <b>D 关键决策</b>→ <b>E 输出 schema</b>（含"两类谓词别混"的澄清）→ <b>F 质检分工与验收</b>→ <b>G 未实现 / 待定清单</b>。<br>
+        <b>本节怎么读</b>：<b>A 全景</b>（十段流水线 + 每段状态，先建整体概念）→ <b>B 已上线</b>（断言层：Pass 1 → 体检 → 谓词清洗 → 谓词归一）→ <b>C 已定稿、尚未接进线上</b>（S6 归并 / S7 分类 / 引文锚定 / 落库与检索接线；<b>S4.5 与 S5 已上线，留档说明也在这一节</b>）→ <b>D 关键决策</b>→ <b>E 输出 schema</b>（含"两类谓词别混"的澄清）→ <b>F 质检分工与验收</b>→ <b>G 未实现 / 待定清单</b>。<br>
         <b>状态图例</b>：<b>✅ 已上线</b>（界面可触发、产物落盘、有真实跑批数据）｜<b>◐ 已落地或已跑通，但未接进线上</b>｜<b>○ 已定稿、未实现</b>。
       </div>
 
@@ -243,9 +243,9 @@
         </tr>
         <tr>
           <td>S5</td><td><b>图组装</b>（Pass 2①）</td>
-          <td>claims → <code>entities + edges</code>：实体口径＝<b>可点名的名词概念</b>；两端都是实体才建边；手段/路径进 <code>roles.instrument</code>；<b>不去重、不分类</b></td>
-          <td>claims → entities + edges</td><td>◐</td>
-          <td><code>PASS2_STEP1_SYSTEM</code>（脚本跑通）</td>
+          <td><b>LLM 只把端点规范成"可点名概念"，组图全部由程序做</b>：一条 claim 至多一条边、方向由被动规则定、<code>roles</code> / <code>polarity</code> 从 claim 带、<code>claim_idx</code> 恒定；<b>不出别名</b>（同指判定属 S6）；不给块原文</td>
+          <td>claims → entities + edges（+ 全量对账）</td><td>✅</td>
+          <td><code>app/compile/assemble.py</code></td>
         </tr>
         <tr>
           <td>S6</td><td><b>归并 / 消解</b>（Pass 2②）</td>
@@ -272,7 +272,7 @@
           <td>（待实现）</td>
         </tr>
       </table>
-      <div class="chain" style="margin-top:10px;"><b>一句话读法</b>：<b>S1–S4 ＝把原文读成"受控断言"</b>（已上线，产物是 claim 列表 + 体检报告）；<b>S4.5 指代消解</b>是接 S5 前的最后一步（未实现，但它的原料已被体检<b>保留并标好</b>——实测 A5 38 条 / O2 28 条）；<b>S5–S7 ＝把断言组装成图</b>（三件套已分别用真实语料跑通，尚未接成一条线）；<b>S8–S9 ＝把图挂回原文并落库</b>（锚定已有脚本，落库与检索接线未做）。<b>也就是说：现在线上跑通的是一条"读得对、但还没画成图"的流水线</b>——这是当前进度最该记住的一点，也是后续排期的起点。</div>
+      <div class="chain" style="margin-top:10px;"><b>一句话读法</b>：<b>S1–S4 ＝把原文读成"受控断言"</b>（已上线，产物是 claim 列表 + 体检报告）；<b>S4.5 指代消解</b>（已上线，定指端点补 <code>*_resolved</code> + 依据，不改原文）；<b>S5 图组装</b>（已上线，<b>LLM 只规范端点、组图由程序做</b>，产物 <code>graph.json</code> + 复盘页 <code>#/graph/{id}</code>）；<b>S6–S7 ＝归并 / 分类</b>（S6 的形合并 L1/L2 已落地在 <code>merge.py</code>，义合并未做；S7 未实现）；<b>S8–S9 ＝把图挂回原文并落库</b>（锚定已有脚本，落库与检索接线未做）。<b>也就是说：现在线上跑通的是一条"读得对、也已经画得出初步的图"的流水线</b>——但图还没归并、没分类、没落库接检索，这是当前进度最该记住的一点，也是后续排期的起点。</div>
 
       <h3 style="margin:16px 0 6px;font-size:14px;">B · 已上线：断言层（S1–S4）</h3>
       <div class="chain"><b>B1 · 触发与产物</b>：界面知识库页"抽取 / 重抽"按钮，或 <code>POST /api/compile/{id}/extract</code>；<code>GET /api/compile/{id}</code> 给状态与阶段进度（<code>pass1 → health → clean → normalize</code>）；产物落 <code>backend/data/compile/&lt;源&gt;/{claims_raw,claims,report,summary}.json</code>，外加全局台账 <code>_outside_words.json</code>。<b>体检报告走独立标签页</b> <code>#/compile/{id}</code>：指标表（名称 / 取值 / 阈值 / 是否红线 / 动作 / 为什么需要）+ 丢弃 / 待定 / 标记 / 断言四张清单，每条都带<b>锚定原文</b>。</div>
@@ -346,13 +346,13 @@ roles 可省略。
       </table>
       <div class="chain" style="margin-top:10px;"><b>表外词台账</b> <code>backend/data/compile/_outside_words.json</code>：按词累积 <code>mapped/forced/pending</code> 次数与出现过的源，是"<b>残差 → 定期收敛（补表 or 确认丢弃）</b>"的落点。<b>已两次产出真实收获</b>：<code>isolates</code>（讲隔离的那篇文章，表里居然没有"隔离"）就是这么补进表的；<code>intercepts</code> 当前待收敛。<code>_snap_relation</code> 另做两级确定性兜底：<b>关系别名</b>（<code>RELATION_ALIASES</code>：controls→constrains、allows/enables→can、prevents→blocks）+ <b>形态/时态折叠</b>（becomes→become）——只在"折回来的恰好是表内 id"时生效，绝不把真缺口硬塞进表。</div>
 
-      <h3 style="margin:18px 0 6px;font-size:14px;">C · 已定稿、尚未接进线上（S5–S9）</h3>
+      <h3 style="margin:18px 0 6px;font-size:14px;">C · 已定稿、尚未接进线上（S6–S9）<span style="font-weight:400;font-size:12.5px;color:#8c5760">　＋ S4.5 / S5 已上线的留档说明</span></h3>
 
       <h4 style="margin:12px 0 4px;font-size:13px;">C1 · 指代消解（S4.5）——<b>已上线</b>，留档说明</h4>
       <div class="chain"><b>为什么单独一步</b>：① <b>它需要上下文</b>——所指常在两段甚至更前（实测：<code>[157]</code> 需回溯 <b>875</b> 字符、<code>[209]</code> 需 <b>~1300</b> 且<b>跨标题</b>），故窗口 = <b>锚句完整 + 前向 1600 字符</b>（句界对齐、可跨标题），<b>后向不额外留</b>（实测"锚句之后的文本"被用到 <b>0/95 条</b>；同句内后向由"锚句完整"覆盖）；② <b>它是"改写／推断"</b>——消解出的概念是<b>原文里不在这个位置</b>的词，所以<b>不能覆盖 <code>subject</code></b>，只能新增字段（<code>subject</code> 原文保留 + <code>*_resolved</code> 供建图 + <code>*_resolution_evidence</code> 依据），可审计可回滚；③ <b>独立成步才能单独验收</b>——Pass 2 当初就是被"一个 prompt 混了抽・合・分类"憋坏才拆三步的。<br><b>为什么不放别处</b>：<b>Pass 1 做不了</b>（契约是"逐字引文 + 主宾照抄"，消解＝写出原文没有的词，冲撞"编译层不能成为事实源"）；<b>S6 的"消解"是异名消解</b>（VM vs virtual machine，两个已有东西是否同一），方向相反；<b>塞进 S5 会让它变胖</b>。<br><b>落地形态</b>：三态 <code>resolved / unresolved / not_anaphora</code>（形式主语没有所指）；<b>范围含宾语位</b>（S5 的规则是"任一端不是实体 → 该 claim 不生成边"，宾语不消解＝整条丢）；<b>依据护栏</b>"只删不改"（省略合法、改词即编造；空依据不算通过）；<b>输入显式给 <code>anchor_quote</code></b>（Pass-1 证据句，对齐 &gt; 信息量）；<b>响应解析要认两种形态</b>（<code>{"results":[…]}</code> 与<b>裸数组</b>——模型偶尔返回裸数组，旧解析会只取第一个对象、整批静默丢）。<br><b>验收</b>：金标准 <code>eval/compile/a5_anaphora_gold.json</code>（58 项，<b>绑固定输入</b> <code>a5_anaphora_input.json</code>——Pass 1 非确定性，换一遍 claim 集就不可比）；闭环检查器第 ⑨ 项"指代闭环"（每个指代字段必须有状态 + 原字段没被覆盖）。</div>
 
-      <h4 style="margin:12px 0 4px;font-size:13px;">C2 · 图组装（Pass 2①）：claims → entities + edges</h4>
-      <div class="chain"><b>实体口径＝"可点名的名词概念"</b>（判据：能自然地问"什么是 X？"）；<b>抽取阶段不做价值判断</b>——泛名词等低价值节点不在这一步清（实测做过两轮各 3 遍："改判据为专名/领域术语"会误伤 88 个真术语、目标却只清掉 4/12），精筛留给可度量的下游。<b>边规则</b>：<code>from / to</code> 两端都必须是实体，任一端是描写/从句 → <b>该端不建实体、且这条 claim 不生成边</b>（不为凑边硬造脏实体）；一元断言（object 空）→ <code>to</code> 留空。<b>不与下游重复</b>：不去重、不判 claim_type / reify（S6 / S7 做），同一实体与边可重复出现。<b>状态</b>：脚本已用 O2/A5 跑通，未接进线上。</div>
+      <h4 style="margin:12px 0 4px;font-size:13px;">C2 · 图组装（S5）——<b>已上线</b>，留档说明：<b>LLM 只规范端点，组图全部由程序做</b></h4>
+      <div class="chain"><b>职责切分（2026-09-17 定，<u>本条是 S5 的核心口径</u>）</b>：<b>LLM 只做一件事</b>——把 claim 的端点（不规范的短语）转成"<b>可点名的名词概念</b>"（判据：能自然地问"什么是 X？"）；<b>组图交给程序</b>：一条 claim 至多一条边（列表早在 Pass 1 拆开）、方向由被动规则定、<code>roles</code> / <code>polarity</code> 从 claim 带、<code>claim_idx</code> 恒定。<br><b>为什么不让 LLM 出图（实测依据）</b>：旧形态（LLM 直接输出 <code>entities+edges</code>，输入含块原文）实测——O2 的 314 条 claim 里 <b>133 条（42%）被模型自己决定不建边且完全不记账</b>、A5 是 170/379（45%）；还有 16 条边是"一条 claim 建了 2–3 条"；以及 36–44 个"声明了却没被任何边引用"的孤立实体（含从块原文顺手抽的概念）。病根是同一个：<b>让 LLM 决定"图长什么样"</b>。改形态后这四类问题在<b>结构上不可能发生</b>，且每条 claim 的处置都可对账。<br><b>输入</b>：只给 claims（<code>claim_idx + subject + object + 归一谓语</code>，紧凑 JSON）——<b>不给块原文</b>（需要上下文的定指端点在 S4.5 已处理；给了反而诱导它从原文抽概念；实测输入可省 ~30%）。<br><b>端点取值</b>：S4.5 已解的 <code>*_resolved</code> 直接用（<b>不再送 LLM</b>）；指代未解 / 光杆代词 → 端点不可用 → 该 claim 不建边；非指代的原文短语 → 送 LLM 规范化。<br><b>两条程序护栏</b>：端点名<b>可点名</b>（非代词 / 非从句式 / ≤6 词 / 有字母）+ <b>不造名</b>（实词须能在原文找到，容忍引号/逗号/单复数形态差异；S4.5 的 <code>*_resolved</code> 放行）。<br><b>对账</b>：每条 claim 必落在「建边 / 因某端取不出概念丢弃（带原因）/ 谓词待定」之一——<b>实体表＝边的端点集合，因此不存在孤立实体</b>。<br><b>不出别名</b>：同指判定属 S6（形归并 / 义归并 + 候选生成），S5 手里没有"这两个名字同指"的判据。<br><b>实测收益（同 O2/A5）</b>：边 <code>184→247 / 197→269</code>、未建边从"10+133 黑箱 / 20+170 黑箱"变成 <b>53 / 109 全部带原因</b>、耗时 ~90 秒 → <b>~30–60 秒</b>。</div>
       <div class="chain" style="margin-top:10px;"><b>补充口径（2026-09-17）：<code>summary</code> 类未消解的 claim 走「文档级陈述」，不造概念节点</b>。S4.5 把"判不出"分成两类：<code>recheck</code>（中心词在锚句前出现过 / 光杆代词 → 可能是窗口不足或模型漏解，值得复查）与 <code>summary</code>（指代词 + 抽象名词，且该名词在锚句前从未出现 → 多半是<b>总结性指代</b>，指向一串"我们还不知道…"的句子，原文<b>没有</b>可回指的名词短语）。<br><b>为什么 <code>summary</code> 类不硬解</b>：解出来的名字必然是我们<b>造的</b>——不可引文锚定、与"编译层不能成为事实源"冲突、且每篇措辞不同、跨源聚合对不上；而它进图后是个 <b>degree=1 的孤立节点</b>（实测 <code>[273]</code>：<code>these questions</code> 若解出即<br><code>the open questions about agent-generated software —[has_property]→ ∅</code>），对路由零贡献。<br><b>但也不能整条丢</b>：这类句式（<code>these questions / challenges / risks / limitations</code>）恰好是作者陈述<b>局限/展望</b>的典型句式，而"按角色过滤"（各文的局限是什么）正是 claim_type 的核心用途——该路径走的是 <code>文档 —asserts→ statement（带 claim_type）→ evidence chunk</code>，<b>并不要求 subject 是概念节点</b>。<br><b>故处置</b>：<code>summary</code> 类的 claim → 保留 <code>subject</code> 原文 surface、<code>about</code> 为空、挂在 <code>doc</code> 上（<code>asserted_by</code>）、证据锚回 chunk —— <b>不造概念、不丢断言、可锚定</b>。已知代价：它们不参与概念路由（跨文的纯概念问法捞不到），若将来需要，可把 <code>about</code> 指向<b>上文原文已有的概念</b>并标 <code>about_source: context</code>（留到做 S5 时定）。<br><b>顺带记一个观察</b>：<code>[273]</code> 锚句所在 chunk 的 section 是 <code>What we're still learning</code> ——原文其实用<b>章节标题</b>给这片内容起过名字。但拿它当节点＝重新引入"topic 节点"，与决策 3（不设独立 topic 类别）冲突，故<b>不开口子</b>。</div>
 
       <h4 style="margin:12px 0 4px;font-size:13px;">C3 · 归并 / 消解（Pass 2②）：三档判据</h4>
@@ -483,10 +483,13 @@ roles 可省略。
       <h3 style="margin:18px 0 6px;font-size:14px;">G · 未实现 / 待定清单</h3>
       <table>
         <tr><th>项</th><th>现状</th><th>为什么挂起 / 下一步</th></tr>
-        <tr><td><b>建图三件套接进线上</b>（S5–S7）</td><td>三个脚本各自跑通，线上只到 S4</td><td>按 S5 → S6 → S7 依次接线；每步单独验收（用户定过"一个个步骤做，混一起不好弄"）</td></tr>
-        <tr><td><b>S5–S7 接进线上</b>（图组装 / 归并 / 分类）</td><td>三个脚本各自跑通，线上只到 S4.5</td><td>顺序 S5 → S6 → S7，各自独立验收；S4.5 已完成，可作为它们的输入契约样板</td></tr>
+        <tr><td><b>S6 / S7 接进线上</b>（归并 / 分类）</td><td><b>S5 已上线</b>（<code>graph.json</code> + <code>GET /api/compile/{id}/graph</code> + 复盘页 <code>#/graph/{id}</code>）；S6 的 L1/L2 已落地在 <code>merge.py</code>、L3 未做；S7 未实现</td><td>顺序 S6 → S7，各自独立验收（"一个个步骤做"）；S5 的"全量对账 + 程序护栏"可作为它们的样板</td></tr>
+        <tr><td><b>S5 的验收红线还没定</b></td><td>拟三条：<b>边可回溯</b>（每条边都带有效 <code>claim_idx</code>）/ <b>端点可点名</b>（非代词·非从句式·≤6 词）/ <b>不造名</b>（实词出自原文或 S4.5 的 resolved）</td><td>定完接进闭环检查器（现在 S5 <b>不进</b>编译通过/失败判定）；顺带把"每条 claim 的处置可对账"作为第四项</td></tr>
+        <tr><td><b>别名候选的召回率未量</b>（S6 的验收项）</td><td>S5 按新口径<b>不出别名</b>；S6 靠自己生成候选（缩写首字母 / 括号 / 词集改写互不包含 / 向量互近邻）</td><td>当年那 11 个探测对里"抽取步声明"覆盖 5–6 对，但<b>去掉声明后候选生成能捞回几对没量过</b>——要做成 S6 的验收项；召回不行再加"上游顺手声明候选"这一路</td></tr>
+        <tr><td><b>S5 的健壮性两件</b></td><td>① 没有"解析失败拆半批"兜底（离线版有）：一次失败会抛异常；② <b>落盘在 S5 之后</b>——S5 失败会让前面 Pass1→S4.5 全部白跑（实测踩过：一次字段改名漏改日志，A5 白跑 2 分钟）</td><td>① 拆半批重试；② 把 Pass1 / S4.5 的产物<b>先落一次盘</b>，S5 失败不至于白跑</td></tr>
+        <tr><td><b>宾语内嵌的指代</b></td><td>S4.5 的指代检测只认"<b>以指代词开头</b>"的字段；<code>how to cap it</code> 里的 <code>it</code> 不在覆盖内 → 到 S5 只能判"取不出概念"</td><td>影响有限（这类本来也多半取不出干净概念），但属覆盖缺口；扩检测时一起做</td></tr>
         <tr><td><b>指代消解的已知粗糙处</b></td><td>① "指代文档自身"（<code>This post</code>）没归位到<b>文档实体</b>（正好对应 <code>asserted_by</code>），现在解成同形词等于没解；② O2 的判不出率偏高（9/38，A5 只 2/58）——文体差异还是提示词过保守待判</td><td>① 加一条"文档自身指代 → 文档实体"的出口；② 翻 O2 那 9 条再定；均属 S4.5 的打磨项，不阻塞 S5</td></tr>
-        <tr><td><b><code>summary</code> 类未消解 claim 的落地</b></td><td>S4.5 已把"判不出"分成 <code>summary</code> / <code>recheck</code> 两类并在报告单列；<b>S5 尚未实现</b>，故它们目前停在 claims 里</td><td>做 S5 时按 C2 的补充口径落地：<b>走文档级陈述（doc —asserts→ statement），不造概念节点、不丢断言</b></td></tr>
+        <tr><td><b><code>summary</code> 类未消解 claim 的落地</b></td><td>S4.5 已把"判不出"分成 <code>summary</code> / <code>recheck</code> 两类并在报告单列；<b>S5 现在的处置＝不建边 + 记账</b>（端点不可用 → 进 <code>skipped</code>）</td><td>口径不变：<b>不造概念节点、不丢断言</b>；真正"挂到文档"（<code>doc —asserts→ statement</code>）由 <b>S7 的 reify</b> 统一产出（statement 是 reify 的产物，不该在 S5 造）</td></tr>
         <tr><td><b>Pass 1 偶发"整窗丢引文"</b></td><td>已加<b>补问一次</b>（只补引文不重抽断言，补问结果同样过逐字护栏；<code>summary.evidence_fix{missing,fixed}</code> 记账）。构造性验证 25/25 补回</td><td>事故本身未复现（偶发）；下次真机触发时看 <code>evidence_fix</code> 是否生效</td></tr>
         <tr><td><b>L3 义合并</b>（LLM 判 same|different）</td><td>候选生成已落地，判定未做</td><td>拿几个真同指对 + 反例探针标定；阈值不能当判定线（区间重叠）</td></tr>
         <tr><td><b>别名反污染校验 + 泛名词停用表</b></td><td>未实现</td><td>归并的收尾两件；停用表只删"单独出现的通名"，可度量可回滚</td></tr>

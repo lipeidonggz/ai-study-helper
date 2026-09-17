@@ -1,4 +1,4 @@
-"""抽取服务：线上流水线（Pass 1 → 体检 → 谓词清洗 → 谓词归一 → S4.5 指代消解 + 红线闸门），供 API / 界面触发。
+"""抽取服务：线上流水线（Pass 1 → 体检 → 谓词清洗 → 谓词归一 → S4.5 指代消解 → S5 图组装 + 红线闸门）。
 
 为什么在 app/ 而不是 scripts/：这是**线上流程**的一部分（界面可触发），scripts/ 里是离线实验脚本。
 TODO：目前复用 `scripts/compile_slice_b6.py` 里的提示词与工具函数（单一来源，避免两份实现漂移）；
@@ -11,6 +11,7 @@ TODO：目前复用 `scripts/compile_slice_b6.py` 里的提示词与工具函数
   claims_raw.json  Pass 1 原始输出（体检前）
   claims.json      体检后 + 已归一 + 已消解指代（带 predicate_normalized / *_resolution）
   report.json      体检报告（七项指标 + 红线判定 + 丢弃/改写/标记/指代消解清单）
+  graph.json       S5 图组装产物（entities / edges / skipped / audit + 统计）
   summary.json     元信息（模型、时间、条数、红线结论）
 """
 
@@ -24,10 +25,13 @@ from pathlib import Path
 
 from app.agent.llm import DeepSeekLLMClient, LLMMessage
 from app.compile.anaphora import resolve_source
+from app.compile.assemble import assemble
 from app.compile.health import run_health_check
 from app.kb.manifest import parse_manifest
+from app.storage.sqlite.kb_store import KbStore
 from scripts.compile_slice_b6 import (
     COMPILE_TEMPERATURE,
+    KB_DB,
     MANIFEST_PATH,
     PASS1_SYSTEM,
     _build_clean_t,
@@ -139,6 +143,11 @@ class CompileService:
 
     def report(self, source_id: str) -> dict | None:
         f = self._root / source_id / "report.json"
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+    def graph(self, source_id: str) -> dict | None:
+        """S5 图组装产物（entities / edges / skipped / audit + 统计）。"""
+        f = self._root / source_id / "graph.json"
         return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
 
     def all_statuses(self) -> dict[str, dict]:
@@ -299,6 +308,19 @@ class CompileService:
             report["anaphora"] = an["stats"]
             report["anaphora_list"] = an["list"]
 
+            # ---- S5 图组装（claims → entities + edges；不去重、不分类）----
+            job.stage = "graph"
+            job.progress = f"图组装（{len(kept)} 条 claim）"
+            chunks = KbStore(KB_DB).list_chunk_offsets(job.source_id)
+            gr = await assemble(client, job.source_id, kept, clean_t, chunks)
+            print(
+                f"[B6] {job.source_id}: 图组装 实体 {gr['stats']['entities']}"
+                f"、边 {gr['stats']['edges']}"
+                f"（建边 {gr['stats']['claims_with_edge']} / 未建边 {gr['stats']['claims_skipped']}）"
+                f"、端点规范化 {gr['stats']['normalize_targets']} 个 / {gr['stats']['normalize_batches']} 批"
+            )
+            report["graph"] = gr["stats"]
+
             # 归一完成 → 回填报告里"标记清单"的归一化谓词（被丢弃的 claim 没归一，UI 显示 —）
             report["marked"] = [
                 {
@@ -350,6 +372,7 @@ class CompileService:
             (d / "claims_raw.json").write_text(json.dumps(claims, ensure_ascii=False, indent=2), encoding="utf-8")
             (d / "claims.json").write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
             (d / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            (d / "graph.json").write_text(json.dumps(gr, ensure_ascii=False, indent=2), encoding="utf-8")
             summary = {
                 "source_id": job.source_id,
                 "model": model,
@@ -366,6 +389,7 @@ class CompileService:
                 "cleaned": cl["cleaned"],
                 "clean_rejected": cl["rejected"],
                 "anaphora": an["stats"],
+                "graph": gr["stats"],
                 "evidence_fix": {"missing": n_missing_ev, "fixed": n_fixed_ev},
                 "relations": len(nv["kinds"]),
                 "predicate_health": {

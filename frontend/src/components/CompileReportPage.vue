@@ -109,6 +109,7 @@ onUnmounted(() => window.clearInterval(timer))
       <span v-if="status?.progress" class="hint">{{ status.progress }}</span>
       <button :disabled="busy" @click="reExtract">{{ status?.status === 'done' ? '重抽' : '开始抽取' }}</button>
       <button :disabled="busy" @click="loadAll">刷新</button>
+      <button v-if="report" @click="navigate('#/graph/' + sourceId)">看概念图（S5）</button>
       <button @click="navigate('#/kb')">← 返回知识库管理</button>
     </header>
 
