@@ -1,8 +1,10 @@
-"""抽取服务：线上流水线前三步（Pass 1 → 体检 → 谓词归一），供 API / 界面触发。
+"""抽取服务：线上流水线（Pass 1 → 体检 → 谓词清洗 → 谓词归一 + 红线闸门），供 API / 界面触发。
 
 为什么在 app/ 而不是 scripts/：这是**线上流程**的一部分（界面可触发），scripts/ 里是离线实验脚本。
 TODO：目前复用 `scripts/compile_slice_b6.py` 里的提示词与工具函数（单一来源，避免两份实现漂移）；
       后续应把它们搬进 app/compile/（text.py / prompts.py），让 app 层不再依赖 scripts。
+
+红线闸门：体检没过红线 → 任务判 failed、不进入下一步（产物照旧落盘，供人工排查）。
 
 产物（backend/data/compile/<source_id>/）：
   claims_raw.json  Pass 1 原始输出（体检前）
@@ -42,6 +44,46 @@ def _now() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def red_line_gate(report: dict) -> tuple[bool, str]:
+    """体检红线闸门：红线不过 → 该篇编译失败、**不进入下一步**。
+
+    返回 (是否放行, 未通过的原因)。原因是给人看的，按红线项逐条列。
+    兼容没有 check_spec 的旧报告（退化为读 verdict）。
+    """
+    if report.get("red_line_pass"):
+        return True, ""
+    bad = [c for c in (report.get("check_spec") or []) if c.get("red_line") and not c.get("pass")]
+    if not bad:
+        # 老报告没有 check_spec：退化为读 verdict；有 red_line 标记就只认红线的，
+        # 没有标记（更老的产物）才把所有不过项都算上——宁可严，不可放行。
+        bad = [
+            {"key": k, "value": v.get("value"), "threshold": v.get("threshold")}
+            for k, v in (report.get("verdict") or {}).items()
+            if v.get("pass") is False and ("red_line" not in v or v.get("red_line"))
+        ]
+    detail = (
+        "；".join(
+            f"{b.get('name') or b.get('key')}（实测 {b.get('value')}，阈值 {b.get('threshold')}）"
+            for b in bad
+        )
+        or "详见体检报告"
+    )
+    return False, f"体检红线未通过：{detail}。该篇不进入下一步（产物保留供排查）"
+
+
+def summary_verdict(summary: dict) -> tuple[bool, str]:
+    """从**落盘 summary** 还原闸门结论（进程重启后走这条）。
+
+    优先用 `_run` 落下的 `red_line_gate`（带具体是哪条红线不过）；
+    老产物没有它时退化为只看 `red_line_pass`——宁可给一句兜底原因，也不放行。
+    """
+    g = summary.get("red_line_gate") or {}
+    if g:
+        passed = bool(g.get("passed"))
+        return passed, "" if passed else (g.get("reason") or "体检红线未通过（详见体检报告）")
+    return red_line_gate(summary)
+
+
 @dataclass
 class Job:
     """一次抽取任务的状态（内存态；进程重启后由落盘 summary.json 推导）。"""
@@ -77,15 +119,17 @@ class CompileService:
             return asdict(job)
         f = self._root / source_id / "summary.json"
         if f.exists():
+            s = json.loads(f.read_text(encoding="utf-8"))
+            ok, why = summary_verdict(s)
             return {
                 "source_id": source_id,
-                "status": "done",
-                "stage": "done",
-                "progress": "完成（来自落盘产物）",
+                "status": "done" if ok else "failed",
+                "stage": "done" if ok else "failed",
+                "progress": "完成（来自落盘产物）" if ok else "体检红线未通过（来自落盘产物）",
                 "started_at": "",
                 "finished_at": "",
-                "error": "",
-                "summary": json.loads(f.read_text(encoding="utf-8")),
+                "error": why,
+                "summary": s,
             }
         return asdict(Job(source_id=source_id))
 
@@ -101,11 +145,13 @@ class CompileService:
                 f = d / "summary.json"
                 if d.is_dir() and f.exists():
                     s = json.loads(f.read_text(encoding="utf-8"))
+                    ok, why = summary_verdict(s)
                     out[d.name] = {
-                        "status": "done",
+                        "status": "done" if ok else "failed",
                         "finished_at": s.get("finished_at", ""),
                         "claims_kept": s.get("claims_kept", 0),
                         "red_line_pass": s.get("red_line_pass", False),
+                        "error": why,
                     }
         for sid, job in self._jobs.items():
             out[sid] = {
@@ -286,13 +332,23 @@ class CompileService:
                 },
                 "red_line_pass": report["red_line_pass"],
             }
+            # 体检红线闸门：不过 → 该篇编译失败、不进入下一步（产物已落盘，供人工排查）
+            ok, why = red_line_gate(report)
+            summary["red_line_gate"] = {"passed": ok, "reason": why}
             (d / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
-            job.status = "done"
-            job.stage = "done"
-            job.progress = "完成"
             job.finished_at = _now()
             job.summary = summary
+            if ok:
+                job.status = "done"
+                job.stage = "done"
+                job.progress = "完成"
+            else:
+                job.status = "failed"
+                job.stage = "failed"
+                job.progress = "体检红线未通过"
+                job.error = why
+                print(f"[B6] {job.source_id}: {why}")
         except Exception as exc:  # 任务失败不抛出（状态里可见）
             job.status = "failed"
             job.error = str(exc)[:500]

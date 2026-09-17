@@ -22,7 +22,8 @@ async function loadStatus() {
 
 async function loadAll() {
   await loadStatus()
-  if (status.value?.status === 'done') {
+  // 红线不过时任务判 failed，但产物仍在——报告要能看（上方会亮失败横幅）
+  if (status.value?.status === 'done' || status.value?.status === 'failed') {
     report.value = await compileApi.report(props.sourceId)
     claims.value = await compileApi.claims(props.sourceId) // limit=0 → 全部
   }
@@ -36,8 +37,7 @@ function poll() {
       if (status.value?.status !== 'running') {
         window.clearInterval(timer)
         busy.value = false
-        if (status.value?.status === 'done') await loadAll()
-        else if (status.value?.status === 'failed') error.value = `抽取失败：${status.value.error}`
+        await loadAll()   // 成功 / 红线不过 都重新载入报告；真失败（异常）由下面的 catch 接
       }
     } catch (err) {
       window.clearInterval(timer)
@@ -65,6 +65,15 @@ async function reExtract() {
 const marked = computed(() => report.value?.marked || [])
 const dropped = computed(() => report.value?.dropped || [])
 const pending = computed(() => report.value?.pending || [])
+
+/** 失败横幅：区分"体检红线不过（产物是本轮的，可看）"与"任务异常失败（报告可能是上一次的）" */
+const failBanner = computed(() => {
+  const s = status.value
+  if (!s || s.status !== 'failed' || !s.error) return ''
+  return s.error.startsWith('体检红线未通过')
+    ? `⛔ ${s.error}`
+    : `⛔ 本次任务失败：${s.error}（下方报告若有，可能来自上一次成功运行）`
+})
 
 onMounted(async () => {
   try {
@@ -101,6 +110,7 @@ onUnmounted(() => window.clearInterval(timer))
     <p v-else-if="status?.status === 'running'" class="hint">抽取中…（{{ status.progress }}）</p>
 
     <template v-else-if="report">
+      <p v-if="failBanner" class="err">{{ failBanner }}</p>
       <p class="cr-summary">
         claim {{ report.claims_in }} 条 → 保留 <strong>{{ report.claims_out }}</strong> 条
         （丢弃 {{ dropped.length }}、改写 {{ report.rewritten.length }}、标记 {{ marked.length }}）

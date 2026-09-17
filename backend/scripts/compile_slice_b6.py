@@ -75,6 +75,9 @@ polarity / roles 可省略。
 - 时态 / 情态不入谓词：`was` / `may be` / `have been` / `previously` 这类不写进谓语，用动词原形。
 - subject 取该断言所描述的、最具体、最像话题的核心实体。例：✗ `An important factor is caching` → ✓ `caching is an important factor`。
 - 不作 subject：抽象类别 / 属性 / 从句；报告来源 / 元主体（telemetry / we / 本文 / 作者）。
+- **指代不要自行消解**：主语若是 `this / it / they / that / these` 这类代词或指示词，**照抄原文形式即可**，
+  不要替换成你推断出的所指（消解由后续步骤做——它们看得到上下文；你在这里替它消解就会写出原文里没有的词，
+  破坏"引文可锚"）。这条不违反"宁多勿漏"：断言照抽，主语照抄。
 - 动名 / 命题主语必须归约：以 granting / placing / supervising / limiting / having 或 "X that …"、"only when …" 开头的主语，改写为「施事（或核心实体）→ 谓词 → 该命题」。
 - 定义 / 归类断言（is / is a / has…）：把被归类 / 被描述的实体放 subject。
 
