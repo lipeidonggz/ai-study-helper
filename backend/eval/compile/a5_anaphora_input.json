@@ -1,0 +1,5034 @@
+[
+  {
+    "subject": "agents",
+    "predicate": "grow more capable",
+    "object": "",
+    "evidence_texts": [
+      "As agents grow more capable, so does their potential blast radius."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "their potential blast radius",
+    "predicate": "grow",
+    "object": "",
+    "evidence_texts": [
+      "As agents grow more capable, so does their potential blast radius."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "the engineering question",
+    "predicate": "is",
+    "object": "how to cap it",
+    "evidence_texts": [
+      "The engineering question is how to cap it."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "learned",
+    "object": "building containment for claude.ai, Claude Code, and Cowork",
+    "evidence_texts": [
+      "Here’s what we’ve learned building containment for claude.ai, Claude Code, and Cowork."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Here’s what we’ve learned building containment for claude.",
+      "src_idx": 3
+    },
+    "predicate_normalized": "uses",
+    "predicate_status": "forced",
+    "predicate_invented": "learned",
+    "predicate_nearest": "uses"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "rejected",
+    "object": "the idea of granting Claude access sufficient to take down an internal Anthropic service",
+    "evidence_texts": [
+      "Twelve months ago, we'd have rejected out of hand the idea of granting Claude access sufficient to take down an internal Anthropic service."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Twelve months ago, we'd have rejected out of hand the idea of granting Claude access sufficient to take down an internal Anthropic service.",
+      "src_idx": 4
+    },
+    "predicate_status": "pending",
+    "predicate_invented": "rejects",
+    "polarity": "negative"
+  },
+  {
+    "subject": "Anthropic developers",
+    "predicate": "are more productive",
+    "object": "",
+    "evidence_texts": [
+      "Today that level of access is routine, and Anthropic developers are more productive for it."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the risk of these deployments",
+    "predicate": "has",
+    "object": "two components",
+    "evidence_texts": [
+      "The risk of these deployments has two components: how likely a failure is, and how much damage one could do."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the risk of these deployments",
+    "predicate": "has components",
+    "object": "how likely a failure is",
+    "evidence_texts": [
+      "The risk of these deployments has two components: how likely a failure is, and how much damage one could do."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the risk of these deployments",
+    "predicate": "has components",
+    "object": "how much damage one could do",
+    "evidence_texts": [
+      "The risk of these deployments has two components: how likely a failure is, and how much damage one could do."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "progress on safeguards and model training",
+    "predicate": "driven down",
+    "object": "the first",
+    "evidence_texts": [
+      "Progress on safeguards and model training has steadily driven down the first; the second—the theoretical blast radius—only grows as capabilities and access expand."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down"
+  },
+  {
+    "subject": "the second—the theoretical blast radius",
+    "predicate": "grows",
+    "object": "",
+    "evidence_texts": [
+      "Progress on safeguards and model training has steadily driven down the first; the second—the theoretical blast radius—only grows as capabilities and access expand."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "the cost of not deploying",
+    "predicate": "grows",
+    "object": "",
+    "evidence_texts": [
+      "Yet as agents become capable of doing work that once required a person or even a team, the cost of not deploying grows large enough that the risk-reward calculation tips heavily toward adoption, as long as products can be made safe."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Yet as agents become capable of doing work that once required a person or even a team, the cost of not deploying grows large enough that the risk-reward calculation tips heavily toward adoption, as long as products can be made safe.",
+      "src_idx": 12
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "the risk-reward calculation",
+    "predicate": "tips",
+    "object": "heavily toward adoption",
+    "evidence_texts": [
+      "Yet as agents become capable of doing work that once required a person or even a team, the cost of not deploying grows large enough that the risk-reward calculation tips heavily toward adoption, as long as products can be made safe."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Yet as agents become capable of doing work that once required a person or even a team, the cost of not deploying grows large enough that the risk-reward calculation tips heavily toward adoption, as long as products can be made safe.",
+      "src_idx": 13
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "the engineering question",
+    "predicate": "becomes",
+    "object": "how to cap the blast radius",
+    "evidence_texts": [
+      "The engineering question becomes how to cap the blast radius."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "high-utility capabilities",
+    "predicate": "can motivate",
+    "object": "deployment",
+    "evidence_texts": [
+      "When bounds can be placed on the relative damage of an autonomous agent—such as through control over its environment—high-utility capabilities can motivate deployment."
+    ],
+    "predicate_clean": "motivate",
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Mythos Preview",
+    "predicate": "is",
+    "object": "an example of a model whose blast radius was deemed too high to ship in April 2026",
+    "evidence_texts": [
+      "Claude Mythos Preview is an example of a model whose blast radius was deemed too high to ship in April 2026."
+    ],
+    "predicate_normalized": "is_a",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "expect",
+    "object": "broader release of models with similar levels of capability to become appropriate as defenders harden critical systems and safeguards mature",
+    "evidence_texts": [
+      "However, we expect broader release of models with similar levels of capability to become appropriate as defenders harden critical systems and safeguards mature—even though some risk will always remain."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Claude Mythos Preview is an example of a model whose blast radius was deemed too high to ship in April 2026. However, we expect broader release of models with similar levels of capability to become appropriate as defenders harden critical systems and safeguards mature—even though some risk will always remain.",
+      "src_idx": 17
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "some risk",
+    "predicate": "remain",
+    "object": "",
+    "evidence_texts": [
+      "However, we expect broader release of models with similar levels of capability to become appropriate as defenders harden critical systems and safeguards mature—even though some risk will always remain."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Model capability",
+    "predicate": "is",
+    "object": "an important factor in the total risk of an agent’s deployment",
+    "evidence_texts": [
+      "Model capability is an important factor in the total risk of an agent’s deployment."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "There",
+    "predicate": "are",
+    "object": "broadly two ways to do this",
+    "evidence_texts": [
+      "There are broadly two ways to do this."
+    ],
+    "subject_anaphora": "There",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "There are broadly two ways to do this.",
+      "src_idx": 20
+    },
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped",
+    "subject_anaphor": "there",
+    "subject_resolution_status": "not_anaphora"
+  },
+  {
+    "subject": "The first",
+    "predicate": "is",
+    "object": "to supervise the agent’s behavior via a human-in-the-loop",
+    "evidence_texts": [
+      "The first is to supervise the agent’s behavior via a human-in-the-loop."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "previously protected against",
+    "object": "agents taking unintended actions",
+    "evidence_texts": [
+      "Claude Code previously protected against agents taking unintended actions by asking users for permission at each turn."
+    ],
+    "predicate_normalized": "protects_against",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "protected",
+    "object": "agents taking unintended actions",
+    "roles": {
+      "instrument": [
+        "asking users for permission at each turn"
+      ]
+    },
+    "evidence_texts": [
+      "Claude Code previously protected against agents taking unintended actions by asking users for permission at each turn."
+    ],
+    "predicate_normalized": "protects_against",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "that",
+    "predicate": "works",
+    "object": "",
+    "evidence_texts": [
+      "Theoretically that works, but we’ve found the approach to be fallible."
+    ],
+    "subject_anaphora": "that",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Theoretically that works, but we’ve found the approach to be fallible.",
+      "src_idx": 24
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "that",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "supervising the agent’s behavior via a human-in-the-loop",
+    "subject_resolution_evidence": "Theoretically that works, but we’ve found the approach to be fallible",
+    "subject_resolved": "supervising the agent’s behavior via a human-in-the-loop"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "found",
+    "object": "the approach to be fallible",
+    "evidence_texts": [
+      "Theoretically that works, but we’ve found the approach to be fallible."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Theoretically that works, but we’ve found the approach to be fallible.",
+      "src_idx": 25
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Our telemetry",
+    "predicate": "showed",
+    "object": "users approved roughly 93% of permission prompts",
+    "evidence_texts": [
+      "Our telemetry showed users approved roughly 93% of permission prompts."
+    ],
+    "predicate_normalized": "indicates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "users",
+    "predicate": "approved",
+    "object": "roughly 93% of permission prompts",
+    "evidence_texts": [
+      "Our telemetry showed users approved roughly 93% of permission prompts."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The more approvals a user sees",
+    "predicate": "pay",
+    "object": "the less attention to each",
+    "polarity": "negative",
+    "evidence_texts": [
+      "The more approvals a user sees, the less attention they pay to each, becoming over time much less diligent in their supervision."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down"
+  },
+  {
+    "subject": "they",
+    "predicate": "becoming",
+    "object": "over time much less diligent in their supervision",
+    "evidence_texts": [
+      "The more approvals a user sees, the less attention they pay to each, becoming over time much less diligent in their supervision."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "The more approvals a user sees, the less attention they pay to each, becoming over time much less diligent in their supervision.",
+      "src_idx": 29
+    },
+    "predicate_normalized": "become",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "users",
+    "subject_resolution_evidence": "The more approvals a user sees, the less attention they pay to each, becoming over time much less diligent in their supervision",
+    "subject_resolved": "users"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "built",
+    "object": "Claude Code auto mode",
+    "evidence_texts": [
+      "We recently built Claude Code auto mode, which automates safer approvals in order to reduce this approval fatigue."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "We recently built Claude Code auto mode, which automates safer approvals in order to reduce this approval fatigue.",
+      "src_idx": 30
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code auto mode",
+    "predicate": "automates",
+    "object": "safer approvals",
+    "evidence_texts": [
+      "We recently built Claude Code auto mode, which automates safer approvals in order to reduce this approval fatigue."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code auto mode",
+    "predicate": "reduce",
+    "object": "this approval fatigue",
+    "evidence_texts": [
+      "We recently built Claude Code auto mode, which automates safer approvals in order to reduce this approval fatigue."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "approval fatigue",
+    "object_resolution_evidence": "We recently built Claude Code auto mode, which automates safer approvals in order to reduce this approval fatigue",
+    "object_resolved": "approval fatigue"
+  },
+  {
+    "subject": "vulnerabilities",
+    "predicate": "remain",
+    "object": "",
+    "evidence_texts": [
+      "Still, vulnerabilities remain—any probabilistic defense has a non-zero miss rate."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "any probabilistic defense",
+    "predicate": "has",
+    "object": "a non-zero miss rate",
+    "evidence_texts": [
+      "Still, vulnerabilities remain—any probabilistic defense has a non-zero miss rate."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The second approach to capping the blast radius",
+    "predicate": "is",
+    "object": "containment",
+    "evidence_texts": [
+      "The second approach to capping the blast radius—and the focus of much of this post—is containment."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "containment",
+    "predicate": "is",
+    "object": "the focus of much of this post",
+    "evidence_texts": [
+      "The second approach to capping the blast radius—and the focus of much of this post—is containment."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "supervise",
+    "object": "what it’s able to do",
+    "evidence_texts": [
+      "Rather than supervising what the agent does, we supervise what it’s able to do by enforcing access boundaries through, for example, sandboxes, virtual machines, and egress controls."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Rather than supervising what the agent does, we supervise what it’s able to do by enforcing access boundaries through, for example, sandboxes, virtual machines, and egress controls.",
+      "src_idx": 37
+    },
+    "predicate_normalized": "monitors",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "enforcing access boundaries",
+    "object": "",
+    "roles": {
+      "instrument": [
+        "sandboxes",
+        "virtual machines",
+        "egress controls"
+      ]
+    },
+    "evidence_texts": [
+      "Rather than supervising what the agent does, we supervise what it’s able to do by enforcing access boundaries through, for example, sandboxes, virtual machines, and egress controls."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Rather than supervising what the agent does, we supervise what it’s able to do by enforcing access boundaries through, for example, sandboxes, virtual machines, and egress controls.",
+      "src_idx": 38
+    },
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic engineering",
+    "predicate": "devoted",
+    "object": "the most effort",
+    "evidence_texts": [
+      "This is where Anthropic engineering has devoted the most effort, and also where many of the most surprising security failures have occurred."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "many of the most surprising security failures",
+    "predicate": "occurred",
+    "object": "",
+    "evidence_texts": [
+      "This is where Anthropic engineering has devoted the most effort, and also where many of the most surprising security failures have occurred."
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "forced",
+    "predicate_invented": "occurs",
+    "predicate_nearest": "located_in"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "shipped",
+    "object": "three primary agentic products: claude.ai, Claude Code, and Claude Cowork",
+    "evidence_texts": [
+      "Over the past two years, we’ve shipped three primary agentic products: claude.ai , Claude Code, and Claude Cowork."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Over the past two years, we’ve shipped three primary agentic products: claude.",
+      "src_idx": 41
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "serves",
+    "object": "a different audience",
+    "evidence_texts": [
+      "Each serves a different audience, requiring a different containment architecture."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "serves",
+    "object": "a different audience",
+    "evidence_texts": [
+      "Each serves a different audience, requiring a different containment architecture."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "serves",
+    "object": "a different audience",
+    "evidence_texts": [
+      "Each serves a different audience, requiring a different containment architecture."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "requiring",
+    "object": "a different containment architecture",
+    "evidence_texts": [
+      "Each serves a different audience, requiring a different containment architecture."
+    ],
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "requiring",
+    "object": "a different containment architecture",
+    "evidence_texts": [
+      "Each serves a different audience, requiring a different containment architecture."
+    ],
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "requiring",
+    "object": "a different containment architecture",
+    "evidence_texts": [
+      "Each serves a different audience, requiring a different containment architecture."
+    ],
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This article",
+    "predicate": "shares",
+    "object": "what’s held up, what’s broken, and what we’ve learned about agent security along the way",
+    "evidence_texts": [
+      "This article shares what’s held up, what’s broken, and what we’ve learned about agent security along the way."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "this article",
+    "subject_resolution_evidence": "This article shares what’s held up, what’s broken, and what we’ve learned about agent security along the way",
+    "subject_resolved": "this article"
+  },
+  {
+    "subject": "Security risks to agents",
+    "predicate": "fall into",
+    "object": "one of three categories",
+    "evidence_texts": [
+      "Security risks to agents fall into one of three categories:"
+    ],
+    "predicate_normalized": "part_of",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "User misuse",
+    "predicate": "is",
+    "object": "a user—either maliciously or through carelessness—directs the agent to do something harmful",
+    "evidence_texts": [
+      "User misuse: A user—either maliciously or through carelessness—directs the agent to do something harmful."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "User misuse",
+    "predicate": "includes",
+    "object": "asking the agent to bypass a check they find annoying",
+    "evidence_texts": [
+      "This includes everything from asking the agent to bypass a check they find annoying, to running a destructive command they don’t understand, to specifying intentional harm."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "User misuse",
+    "predicate": "includes",
+    "object": "running a destructive command they don’t understand",
+    "evidence_texts": [
+      "This includes everything from asking the agent to bypass a check they find annoying, to running a destructive command they don’t understand, to specifying intentional harm."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "User misuse",
+    "predicate": "includes",
+    "object": "specifying intentional harm",
+    "evidence_texts": [
+      "This includes everything from asking the agent to bypass a check they find annoying, to running a destructive command they don’t understand, to specifying intentional harm."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Model misbehavior",
+    "predicate": "is",
+    "object": "the agent takes a harmful action no one asked for",
+    "evidence_texts": [
+      "Model misbehavior: The agent takes a harmful action no one asked for."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Model misbehavior: The agent takes a harmful action no one asked for.",
+      "src_idx": 54
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our models",
+    "predicate": "become more aligned",
+    "object": "on most behavior evaluations",
+    "evidence_texts": [
+      "As our models have improved, they have become more aligned on most behavior evaluations, but this doesn’t mean risk necessarily shrinks."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this",
+    "predicate": "mean",
+    "object": "risk necessarily shrinks",
+    "polarity": "negative",
+    "evidence_texts": [
+      "As our models have improved, they have become more aligned on most behavior evaluations, but this doesn’t mean risk necessarily shrinks."
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "As our models have improved, they have become more aligned on most behavior evaluations, but this doesn’t mean risk necessarily shrinks.",
+      "src_idx": 56
+    },
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "models becoming more aligned on behavior evaluations",
+    "subject_resolution_evidence": "they have become more aligned on most behavior evaluations, but this doesn’t mean risk necessarily shrinks",
+    "subject_resolved": "models becoming more aligned on behavior evaluations"
+  },
+  {
+    "subject": "Less capable models",
+    "predicate": "are more likely",
+    "object": "to misread a situation and make obvious errors",
+    "evidence_texts": [
+      "Less capable models are more likely to misread a situation and make obvious errors."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "More capable models",
+    "predicate": "make",
+    "object": "fewer mistakes",
+    "evidence_texts": [
+      "More capable models make fewer mistakes, but they’re also better at finding unexpected paths to a goal, often by routing around restrictions nobody thought to write down."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down"
+  },
+  {
+    "subject": "More capable models",
+    "predicate": "are better at",
+    "object": "finding unexpected paths to a goal",
+    "evidence_texts": [
+      "More capable models make fewer mistakes, but they’re also better at finding unexpected paths to a goal, often by routing around restrictions nobody thought to write down."
+    ],
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "More capable models",
+    "predicate": "routing around",
+    "object": "restrictions nobody thought to write down",
+    "evidence_texts": [
+      "More capable models make fewer mistakes, but they’re also better at finding unexpected paths to a goal, often by routing around restrictions nobody thought to write down."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude models",
+    "predicate": "escape",
+    "object": "a sandbox",
+    "evidence_texts": [
+      "At Anthropic, we’ve seen Claude models “helpfully” escape a sandbox in order to complete a task, examine git history to find answers to a coding test , and spontaneously identify the benchmark it was being run on in order to decrypt its answer key ."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude models",
+    "predicate": "examine",
+    "object": "git history",
+    "evidence_texts": [
+      "At Anthropic, we’ve seen Claude models “helpfully” escape a sandbox in order to complete a task, examine git history to find answers to a coding test , and spontaneously identify the benchmark it was being run on in order to decrypt its answer key ."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude models",
+    "predicate": "identify",
+    "object": "the benchmark it was being run on",
+    "evidence_texts": [
+      "At Anthropic, we’ve seen Claude models “helpfully” escape a sandbox in order to complete a task, examine git history to find answers to a coding test , and spontaneously identify the benchmark it was being run on in order to decrypt its answer key ."
+    ],
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Each model",
+    "predicate": "brings",
+    "object": "a new set of capabilities that are sometimes put to work in unexpected ways",
+    "evidence_texts": [
+      "Each model brings a new set of capabilities that are sometimes put to work in unexpected ways."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "External attackers",
+    "predicate": "is",
+    "object": "the agent is attacked through external vectors such as tools, files, or network access",
+    "evidence_texts": [
+      "External attackers: The agent is attacked through external vectors such as tools, files, or network access."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This category",
+    "predicate": "includes",
+    "object": "prompt injection",
+    "evidence_texts": [
+      "This category includes both prompt injection and conventional attacks on the agent's runtime, orchestration layer, or proxy."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "external attackers",
+    "subject_resolution_evidence": "External attackers: The agent is attacked through external vectors such as tools, files, or network access. This category includes both prompt injection and conventional attacks",
+    "subject_resolved": "external attackers"
+  },
+  {
+    "subject": "This category",
+    "predicate": "includes",
+    "object": "conventional attacks on the agent's runtime, orchestration layer, or proxy",
+    "evidence_texts": [
+      "This category includes both prompt injection and conventional attacks on the agent's runtime, orchestration layer, or proxy."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "external attackers",
+    "subject_resolution_evidence": "External attackers: The agent is attacked through external vectors such as tools, files, or network access. This category includes both prompt injection and conventional attacks",
+    "subject_resolved": "external attackers"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "apply",
+    "object": "defenses to three main components",
+    "evidence_texts": [
+      "When building containment and defense systems, we apply defenses to three main components:"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "When building containment and defense systems, we apply defenses to three main components:",
+      "src_idx": 68
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "constrain",
+    "object": "where and how an agent can act",
+    "roles": {
+      "instrument": [
+        "process sandboxes",
+        "VMs",
+        "filesystem boundaries",
+        "egress controls"
+      ]
+    },
+    "evidence_texts": [
+      "We constrain where and how an agent can act with process sandboxes, VMs, filesystem boundaries, and egress controls."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "We constrain where and how an agent can act with process sandboxes, VMs, filesystem boundaries, and egress controls.",
+      "src_idx": 69
+    },
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The goal",
+    "predicate": "is",
+    "object": "to set a hard boundary on what an agent can reach",
+    "evidence_texts": [
+      "The goal is to set a hard boundary on what an agent can reach."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "credentials",
+    "predicate": "enter",
+    "object": "the sandbox",
+    "polarity": "negative",
+    "evidence_texts": [
+      "For example, if credentials never enter the sandbox, they can't be exfiltrated, regardless of whether the cause is a user, a model finding a “creative” path, or an attacker."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "they",
+    "predicate": "exfiltrated",
+    "object": "",
+    "polarity": "negative",
+    "evidence_texts": [
+      "For example, if credentials never enter the sandbox, they can't be exfiltrated, regardless of whether the cause is a user, a model finding a “creative” path, or an attacker."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "For example, if credentials never enter the sandbox, they can't be exfiltrated, regardless of whether the cause is a user, a model finding a “creative” path, or an attacker.",
+      "src_idx": 72
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "credentials",
+    "subject_resolution_evidence": "if credentials never enter the sandbox, they can't be exfiltrated",
+    "subject_resolved": "credentials"
+  },
+  {
+    "subject": "a tight perimeter",
+    "predicate": "means",
+    "object": "you can relax oversight",
+    "evidence_texts": [
+      "A tight perimeter also means you can relax oversight."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code's reference devcontainer",
+    "predicate": "exists",
+    "object": "so that the agent can run unattended, without per-action approvals",
+    "evidence_texts": [
+      "Claude Code’s reference devcontainer exists precisely so that the agent can run unattended, without per-action approvals."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the model the agent consults",
+    "predicate": "include",
+    "object": "system prompts",
+    "evidence_texts": [
+      "The mechanisms here include system prompts, classifiers, probes, and training modifications."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the model the agent consults",
+    "predicate": "include",
+    "object": "classifiers",
+    "evidence_texts": [
+      "The mechanisms here include system prompts, classifiers, probes, and training modifications."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the model the agent consults",
+    "predicate": "include",
+    "object": "probes",
+    "evidence_texts": [
+      "The mechanisms here include system prompts, classifiers, probes, and training modifications."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the model the agent consults",
+    "predicate": "include",
+    "object": "training modifications",
+    "evidence_texts": [
+      "The mechanisms here include system prompts, classifiers, probes, and training modifications."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "these",
+    "predicate": "shape",
+    "object": "only what the agent tends to do, not what it is theoretically capable of doing",
+    "evidence_texts": [
+      "Because models are probabilistic, these shape only what the agent tends to do, not what it is theoretically capable of doing."
+    ],
+    "subject_anaphora": "these",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Because models are probabilistic, these shape only what the agent tends to do, not what it is theoretically capable of doing.",
+      "src_idx": 79
+    },
+    "predicate_normalized": "affects",
+    "predicate_status": "mapped",
+    "subject_anaphor": "these",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the mechanisms in the model layer",
+    "subject_resolution_evidence": "The mechanisms here include system prompts, classifiers, probes, and training modifications. Because models are probabilistic, these shape only what the agent tends to do",
+    "subject_resolved": "the mechanisms in the model layer"
+  },
+  {
+    "subject": "these defenses",
+    "predicate": "are",
+    "object": "strong",
+    "evidence_texts": [
+      "These defenses are strong."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "these",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "model-layer defenses",
+    "subject_resolution_evidence": "These defenses are strong. On Gray Swan's Agent Red Teaming benchmark",
+    "subject_resolved": "model-layer defenses"
+  },
+  {
+    "subject": "Claude Opus 4.7",
+    "predicate": "holds",
+    "object": "attack success to roughly 0.1% on single attempts, and around 5–6% after 100 adaptive attempts",
+    "evidence_texts": [
+      "On Gray Swan's Agent Red Teaming benchmark, which tests susceptibility to prompt injection, Claude Opus 4.7 holds attack success to roughly 0.1% on single attempts, and around 5–6% after 100 adaptive attempts."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code auto mode",
+    "predicate": "catches",
+    "object": "roughly 83% of overeager behaviors before they execute",
+    "evidence_texts": [
+      "Claude Code auto mode catches roughly 83% of overeager behaviors before they execute ."
+    ],
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "protection in the model layer",
+    "predicate": "will be",
+    "object": "100% effective",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Yet even with best-in-class defenses, protection in the model layer will never be 100% effective, which is why it can't stand alone."
+    ],
+    "predicate_clean": "be",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "stand",
+    "object": "alone",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Yet even with best-in-class defenses, protection in the model layer will never be 100% effective, which is why it can't stand alone."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Yet even with best-in-class defenses, protection in the model layer will never be 100% effective, which is why it can't stand alone.",
+      "src_idx": 84
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "protection in the model layer",
+    "subject_resolution_evidence": "protection in the model layer will never be 100% effective, which is why it can't stand alone",
+    "subject_resolved": "protection in the model layer"
+  },
+  {
+    "subject": "MCP servers",
+    "predicate": "feed",
+    "object": "content into the agent's context from sources you don't control",
+    "evidence_texts": [
+      "MCP servers, third-party plugins, and web search tools all feed content into the agent’s context from sources you don’t control."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "third-party plugins",
+    "predicate": "feed",
+    "object": "content into the agent's context from sources you don't control",
+    "evidence_texts": [
+      "MCP servers, third-party plugins, and web search tools all feed content into the agent’s context from sources you don’t control."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "web search tools",
+    "predicate": "feed",
+    "object": "content into the agent's context from sources you don't control",
+    "evidence_texts": [
+      "MCP servers, third-party plugins, and web search tools all feed content into the agent’s context from sources you don’t control."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an audited connector",
+    "predicate": "is",
+    "object": "the same as audited data",
+    "polarity": "negative",
+    "evidence_texts": [
+      "An audited connector isn’t the same as audited data—a GitHub connector, for instance, can load a poisoned README straight into the model’s context despite passing malware checks."
+    ],
+    "predicate_normalized": "different_from",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a GitHub connector",
+    "predicate": "can load",
+    "object": "a poisoned README straight into the model's context despite passing malware checks",
+    "evidence_texts": [
+      "An audited connector isn’t the same as audited data—a GitHub connector, for instance, can load a poisoned README straight into the model’s context despite passing malware checks."
+    ],
+    "predicate_clean": "load",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "granularly limiting tool permissions",
+    "predicate": "can help limit",
+    "object": "the blast radius",
+    "evidence_texts": [
+      "Granularly limiting tool permissions can help limit the blast radius."
+    ],
+    "predicate_clean": "limit",
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an agent with read-only DB access",
+    "predicate": "can be deployed",
+    "object": "far more broadly than one that writes to prod",
+    "evidence_texts": [
+      "An agent with read-only DB access, for instance, can be deployed far more broadly than one that writes to prod."
+    ],
+    "predicate_clean": "deploy",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "defenses",
+    "predicate": "should overlap",
+    "object": "and complement each other",
+    "evidence_texts": [
+      "Defenses should overlap and complement each other."
+    ],
+    "predicate_clean": "overlap",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "defenses",
+    "predicate": "should complement",
+    "object": "each other",
+    "evidence_texts": [
+      "Defenses should overlap and complement each other."
+    ],
+    "predicate_clean": "complement",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the model layer",
+    "predicate": "has to pick up",
+    "object": "the slack",
+    "evidence_texts": [
+      "When environmental defenses aren’t available, the model layer has to pick up the slack (this is precisely what Claude Code’s auto mode is designed for)."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "When environmental defenses aren’t available, the model layer has to pick up the slack (this is precisely what Claude Code’s auto mode is designed for).",
+      "src_idx": 94
+    },
+    "predicate_clean": "pick up",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code's auto mode",
+    "predicate": "is designed for",
+    "object": "picking up the slack",
+    "evidence_texts": [
+      "When environmental defenses aren’t available, the model layer has to pick up the slack (this is precisely what Claude Code’s auto mode is designed for)."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the environment and model defenses",
+    "predicate": "can guard against",
+    "object": "malicious tool outputs",
+    "evidence_texts": [
+      "Locally, the environment and model defenses can guard against malicious tool outputs, but defenses can be added higher up the chain by limiting the tool’s capabilities and access."
+    ],
+    "predicate_clean": "guard against",
+    "predicate_normalized": "protects_against",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "defenses",
+    "predicate": "can be added",
+    "object": "higher up the chain",
+    "evidence_texts": [
+      "Locally, the environment and model defenses can guard against malicious tool outputs, but defenses can be added higher up the chain by limiting the tool’s capabilities and access."
+    ],
+    "predicate_clean": "add",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "defenses",
+    "predicate": "can be added",
+    "object": "higher up the chain",
+    "roles": {
+      "instrument": [
+        "limiting the tool’s capabilities and access"
+      ]
+    },
+    "evidence_texts": [
+      "Locally, the environment and model defenses can guard against malicious tool outputs, but defenses can be added higher up the chain by limiting the tool’s capabilities and access."
+    ],
+    "predicate_clean": "add",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "three components",
+    "predicate": "to defend",
+    "object": "the model, the environment in which it runs, and the external content the agent can reach",
+    "evidence_texts": [
+      "Three components to defend: the model, the environment in which it runs, and the external content the agent can reach."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "describe",
+    "object": "three isolation patterns and how they're tailored for each Claude platform— claude.ai , Claude Code, and Cowork",
+    "evidence_texts": [
+      "Focusing on the environment layer, we describe three isolation patterns and how they’re tailored for each Claude platform— claude.ai , Claude Code, and Cowork."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Focusing on the environment layer, we describe three isolation patterns and how they’re tailored for each Claude platform— claude.",
+      "src_idx": 100
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "writes",
+    "object": "code",
+    "evidence_texts": [
+      "Though best known as a chat interface, claude.ai also writes and runs code, generates files, and calls connectors."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "runs",
+    "object": "code",
+    "evidence_texts": [
+      "Though best known as a chat interface, claude.ai also writes and runs code, generates files, and calls connectors."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "generates",
+    "object": "files",
+    "evidence_texts": [
+      "Though best known as a chat interface, claude.ai also writes and runs code, generates files, and calls connectors."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "calls",
+    "object": "connectors",
+    "evidence_texts": [
+      "Though best known as a chat interface, claude.ai also writes and runs code, generates files, and calls connectors."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "runs",
+    "object": "code inside claude.ai",
+    "evidence_texts": [
+      "When Claude runs code inside claude.ai, it does so in a gVisor container on isolated infrastructure."
+    ],
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "runs",
+    "object": "code",
+    "roles": {
+      "instrument": [
+        "gVisor container on isolated infrastructure"
+      ]
+    },
+    "evidence_texts": [
+      "When Claude runs code inside claude.ai, it does so in a gVisor container on isolated infrastructure."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "is",
+    "object": "entirely server-side",
+    "evidence_texts": [
+      "The agent is entirely server-side; no code runs on the local machine, and the filesystem is ephemeral (per-session)."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "The agent is entirely server-side; no code runs on the local machine, and the filesystem is ephemeral (per-session).",
+      "src_idx": 107
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the filesystem",
+    "predicate": "is",
+    "object": "ephemeral (per-session)",
+    "evidence_texts": [
+      "The agent is entirely server-side; no code runs on the local machine, and the filesystem is ephemeral (per-session)."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "The agent is entirely server-side; no code runs on the local machine, and the filesystem is ephemeral (per-session).",
+      "src_idx": 108
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the blast radius",
+    "predicate": "is",
+    "object": "minimal",
+    "evidence_texts": [
+      "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem.",
+      "src_idx": 109
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the ceiling on what Claude can do",
+    "predicate": "is",
+    "object": "minimal",
+    "evidence_texts": [
+      "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem.",
+      "src_idx": 110
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "has",
+    "object": "a persistent workspace",
+    "polarity": "negative",
+    "evidence_texts": [
+      "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "has",
+    "object": "access to the user's filesystem",
+    "polarity": "negative",
+    "evidence_texts": [
+      "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem."
+    ],
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "claude.ai",
+    "predicate": "makes",
+    "object": "this also subject to a more traditional threat model",
+    "evidence_texts": [
+      "This also makes claude.ai subject to a more traditional threat model."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "claude.ai’s minimal blast radius and limited capability ceiling",
+    "object_resolution_evidence": "The blast radius is minimal, but so is the ceiling on what Claude can do—there's no persistent workspace and no access to the user's filesystem.\nThis also makes claude.ai subject to a more traditional threat model"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "are protecting",
+    "object": "our own infrastructure and each tenant from one another",
+    "polarity": "negative",
+    "evidence_texts": [
+      "We're not protecting user machines from agents; we're protecting our own infrastructure and each tenant from one another."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "We're not protecting user machines from agents; we're protecting our own infrastructure and each tenant from one another.",
+      "src_idx": 114
+    },
+    "predicate_normalized": "protects_against",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "are protecting",
+    "object": "our own infrastructure and each tenant from one another",
+    "evidence_texts": [
+      "We're not protecting user machines from agents; we're protecting our own infrastructure and each tenant from one another."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "We're not protecting user machines from agents; we're protecting our own infrastructure and each tenant from one another.",
+      "src_idx": 115
+    },
+    "predicate_normalized": "protects_against",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our pre-launch work for claude.ai",
+    "predicate": "was dominated by",
+    "object": "traditional security work like network configuration, internal service auth, and orchestration",
+    "evidence_texts": [
+      "Our pre-launch work for claude.ai was dominated by traditional security work like network configuration, internal service auth, and orchestration."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the weakest layer",
+    "predicate": "is",
+    "object": "the one you built yourself",
+    "evidence_texts": [
+      "That work reinforced the oldest lesson in security: the weakest layer is the one you built yourself."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "gVisor and seccomp",
+    "predicate": "have been hardened",
+    "object": "against well-resourced adversaries for far longer than agentic AI has existed",
+    "evidence_texts": [
+      "gVisor and seccomp have been hardened against well-resourced adversaries for far longer than agentic AI has existed, so the review effort went into the newer pieces we'd built around them."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "runs",
+    "object": "on a user's machine and has access to their filesystem, shell, and network",
+    "evidence_texts": [
+      "Claude Code runs on a user's machine and has access to their filesystem, shell, and network."
+    ],
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "is imperative to find a way to grant that access safely",
+    "evidence_texts": [
+      "Without this, coding agents have limited usefulness, so it’s imperative to find a way to grant that access safely."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Without this, coding agents have limited usefulness, so it’s imperative to find a way to grant that access safely.",
+      "src_idx": 120
+    },
+    "predicate_clean": "find",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "granting that access safely",
+    "subject_resolution_evidence": "Without this, coding agents have limited usefulness, so it’s imperative to find a way to grant that access safely",
+    "subject_resolved": "granting that access safely"
+  },
+  {
+    "subject": "one approach",
+    "predicate": "is",
+    "object": "to rely on a human-in-the-loop",
+    "evidence_texts": [
+      "One approach is to rely on a human-in-the-loop."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this",
+    "predicate": "is",
+    "object": "only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments",
+    "evidence_texts": [
+      "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week."
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week.",
+      "src_idx": 122
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "relying on a human-in-the-loop",
+    "subject_resolution_evidence": "One approach is to rely on a human-in-the-loop. This is only a tractable solution for Claude Code",
+    "subject_resolved": "relying on a human-in-the-loop"
+  },
+  {
+    "subject": "they",
+    "predicate": "can read",
+    "object": "bash",
+    "evidence_texts": [
+      "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week.",
+      "src_idx": 123
+    },
+    "predicate_clean": "read",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Code users",
+    "subject_resolution_evidence": "the average user is a developer who’s familiar with coding environments: they can read bash",
+    "subject_resolved": "Claude Code users"
+  },
+  {
+    "subject": "they",
+    "predicate": "understand",
+    "object": "what rm -rf does",
+    "evidence_texts": [
+      "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week.",
+      "src_idx": 124
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Code users",
+    "subject_resolution_evidence": "the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does",
+    "subject_resolved": "Claude Code users"
+  },
+  {
+    "subject": "they",
+    "predicate": "already run",
+    "object": "npm install from untrusted sources several times a week",
+    "evidence_texts": [
+      "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "This is only a tractable solution for Claude Code because the average user is a developer who’s familiar with coding environments: they can read bash, they understand what rm -rf does, and they already run npm install from untrusted sources several times a week.",
+      "src_idx": 125
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Code users",
+    "subject_resolution_evidence": "they already run npm install from untrusted sources several times a week",
+    "subject_resolved": "Claude Code users"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "launched with",
+    "object": "the simplest possible defense: allow reads, require approval for write, bash, and network access",
+    "evidence_texts": [
+      "Given this, Claude Code launched with the simplest possible defense: allow reads, require approval for write, bash, and network access."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "approval fatigue",
+    "predicate": "showed up",
+    "object": "within weeks",
+    "evidence_texts": [
+      "However, as mentioned, approval fatigue showed up within weeks."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a feature",
+    "predicate": "could arguably have",
+    "object": "the opposite effect",
+    "evidence_texts": [
+      "Ironically, this meant that a feature originally designed to provide oversight could arguably have the opposite effect—some users might simply stop paying attention."
+    ],
+    "predicate_clean": "have",
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "some users",
+    "predicate": "might simply stop paying attention",
+    "evidence_texts": [
+      "Ironically, this meant that a feature originally designed to provide oversight could arguably have the opposite effect—some users might simply stop paying attention."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Ironically, this meant that a feature originally designed to provide oversight could arguably have the opposite effect—some users might simply stop paying attention.",
+      "src_idx": 129
+    },
+    "predicate_clean": "stop paying attention",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "shipped",
+    "object": "an OS-level sandbox (Seatbelt on macOS, bubblewrap on Linux) that hardens the boundary",
+    "evidence_texts": [
+      "As a first step to mitigate incautious approvals, we shipped an OS-level sandbox (Seatbelt on macOS, bubblewrap on Linux) that hardens the boundary: reads are allowed, writes are allowed inside the workspace, but network is denied by default."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "As a first step to mitigate incautious approvals, we shipped an OS-level sandbox (Seatbelt on macOS, bubblewrap on Linux) that hardens the boundary: reads are allowed, writes are allowed inside the workspace, but network is denied by default.",
+      "src_idx": 130
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the agent",
+    "predicate": "runs",
+    "object": "largely without interruption",
+    "evidence_texts": [
+      "Within the sandbox, the agent runs largely without interruption."
+    ],
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the result",
+    "predicate": "was",
+    "object": "an 84% reduction in permission prompts",
+    "evidence_texts": [
+      "The result was an 84% reduction in permission prompts, and we open-sourced the runtime , so the boundary is auditable."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "open-sourced",
+    "object": "the runtime , so the boundary is auditable",
+    "evidence_texts": [
+      "The result was an 84% reduction in permission prompts, and we open-sourced the runtime , so the boundary is auditable."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "The result was an 84% reduction in permission prompts, and we open-sourced the runtime , so the boundary is auditable.",
+      "src_idx": 133
+    },
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "experienced users",
+    "predicate": "auto-approve",
+    "object": "roughly twice as often as new users",
+    "evidence_texts": [
+      "experienced users auto-approve roughly twice as often as new users"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "experienced users",
+    "predicate": "interrupt",
+    "object": "the agent mid-execution",
+    "evidence_texts": [
+      "they also interrupt the agent mid-execution more frequently"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "experienced users",
+    "predicate": "supervise",
+    "object": "the agent",
+    "evidence_texts": [
+      "experienced users are more likely to supervise the agent only when it goes off track"
+    ],
+    "predicate_normalized": "monitors",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this",
+    "predicate": "is",
+    "object": "fallible",
+    "evidence_texts": [
+      "this too is fallible"
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "While this may be a natural evolution in how people prefer to work with agents, this too is fallible, requiring users to be technical and attentive enough to notice drift in the first place.",
+      "src_idx": 137
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "supervising the agent only when it goes off track",
+    "subject_resolution_evidence": "While this may be a natural evolution in how people prefer to work with agents, this too is fallible",
+    "subject_resolved": "supervising the agent only when it goes off track"
+  },
+  {
+    "subject": "this",
+    "predicate": "requiring",
+    "object": "users to be technical and attentive enough to notice drift",
+    "evidence_texts": [
+      "requiring users to be technical and attentive enough to notice drift in the first place"
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "While this may be a natural evolution in how people prefer to work with agents, this too is fallible, requiring users to be technical and attentive enough to notice drift in the first place.",
+      "src_idx": 138
+    },
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "supervising the agent only when it goes off track",
+    "subject_resolution_evidence": "this too is fallible, requiring users to be technical and attentive enough to notice drift in the first place",
+    "subject_resolved": "supervising the agent only when it goes off track"
+  },
+  {
+    "subject": "agents",
+    "predicate": "writing",
+    "object": "increasingly ambitious bash",
+    "evidence_texts": [
+      "agents begin writing increasingly ambitious bash"
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "becomes harder to notice",
+    "object": "any such drift",
+    "evidence_texts": [
+      "it becomes harder to notice any such drift"
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "As model capabilities improve and agents begin writing increasingly ambitious bash, it becomes harder to notice any such drift.",
+      "src_idx": 140
+    },
+    "predicate_clean": "become harder to notice",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "not_anaphora"
+  },
+  {
+    "subject": "this approach",
+    "predicate": "is",
+    "object": "much less likely to be an effective oversight strategy",
+    "evidence_texts": [
+      "this approach is also much less likely to be an effective oversight strategy"
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "supervising the agent only when it goes off track",
+    "subject_resolution_evidence": "And as users move to multi-agent systems, this approach is also much less likely to be an effective oversight strategy",
+    "subject_resolved": "supervising the agent only when it goes off track"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "received",
+    "object": "reports of vulnerabilities in Claude Code",
+    "evidence_texts": [
+      "we received reports of vulnerabilities in Claude Code through our responsible disclosure program"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Between mid-2025 and January 2026, we received reports of vulnerabilities in Claude Code through our responsible disclosure program.",
+      "src_idx": 142
+    },
+    "predicate_normalized": "comes_from",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Three of these vulnerabilities",
+    "predicate": "targeted",
+    "object": "code that executes before the user has consented to anything",
+    "evidence_texts": [
+      "Three of these vulnerabilities targeted code that executes before the user has consented to anything"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a developer",
+    "predicate": "clones",
+    "object": "a repository",
+    "evidence_texts": [
+      "a developer clones a repository to review a pull request"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "that repository",
+    "predicate": "contains",
+    "object": "a .claude/settings.json",
+    "evidence_texts": [
+      "that repository contains a .claude/settings.json which defines a hook"
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped",
+    "subject_anaphor": "that",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the cloned repository",
+    "subject_resolution_evidence": "a developer clones a repository to review a pull request, and that repository contains a .claude/settings.json",
+    "subject_resolved": "the cloned repository"
+  },
+  {
+    "subject": "a .claude/settings.json",
+    "predicate": "defines",
+    "object": "a hook",
+    "evidence_texts": [
+      "a .claude/settings.json which defines a hook"
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Code",
+    "predicate": "reads",
+    "object": "project settings",
+    "evidence_texts": [
+      "Claude Code reads project settings during startup"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the hook",
+    "predicate": "execute",
+    "object": "automatically",
+    "evidence_texts": [
+      "the hook the attacker had authored and committed would execute automatically"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "input from the not-yet-trusted directory",
+    "predicate": "was parsed",
+    "object": "before the trust boundary had been established",
+    "evidence_texts": [
+      "input from the not-yet-trusted directory was parsed before the trust boundary had been established"
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "The remaining cases looked structurally similar, in which input from the not-yet-trusted directory was parsed before the trust boundary had been established.",
+      "src_idx": 149
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The fix in each case",
+    "predicate": "had",
+    "object": "the same shape",
+    "evidence_texts": [
+      "The fix in each case had the same shape"
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The fix in each case",
+    "predicate": "defer",
+    "object": "parsing and execution of project-local configuration until after the user accepts the trust prompt",
+    "evidence_texts": [
+      "defer parsing and execution of project-local configuration until after the user accepts the trust prompt"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "project-open, config-load, and localhost listeners",
+    "predicate": "treat",
+    "object": "the way you'd treat any inbound request from the internet",
+    "evidence_texts": [
+      "treat project-open, config-load, and localhost listeners the way you'd treat any inbound request from the internet"
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "They",
+    "predicate": "shouldn't be implicitly trusted",
+    "object": "just because they feel local and arrive before the user has consented",
+    "evidence_texts": [
+      "They shouldn’t be implicitly trusted just because they feel local and arrive before the user has consented"
+    ],
+    "subject_anaphora": "They",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "They shouldn’t be implicitly trusted just because they feel local and arrive before the user has consented.",
+      "src_idx": 153
+    },
+    "predicate_clean": "trust",
+    "polarity": "negative",
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "project-open, config-load, and localhost listeners",
+    "subject_resolution_evidence": "treat project-open, config-load, and localhost listeners the way you'd treat any inbound request from the internet. They shouldn’t be implicitly trusted",
+    "subject_resolved": "project-open, config-load, and localhost listeners"
+  },
+  {
+    "subject": "a researcher",
+    "predicate": "phished",
+    "object": "an employee into launching Claude Code with a malicious prompt",
+    "evidence_texts": [
+      "a researcher successfully phished an employee into launching Claude Code with a malicious prompt"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The phish",
+    "predicate": "looked like",
+    "object": "ordinary collaboration",
+    "evidence_texts": [
+      "The phish looked like ordinary collaboration"
+    ],
+    "predicate_normalized": "similar_to",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the prompt",
+    "predicate": "read like",
+    "object": "routine task instructions",
+    "evidence_texts": [
+      "the prompt itself read like routine task instructions"
+    ],
+    "predicate_normalized": "similar_to",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "asked",
+    "object": "Claude to read ~/.aws/credentials, encode the contents, and POST them to an external endpoint",
+    "evidence_texts": [
+      "it gently asked Claude to read ~/.aws/credentials, encode the contents, and POST them to an external endpoint"
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "But somewhere among the setup steps, it gently asked Claude to read ~/.",
+      "src_idx": 157
+    },
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the prompt",
+    "subject_resolution_evidence": "the prompt itself read like routine task instructions. But somewhere among the setup steps, it gently asked Claude to read ~/.aws/credentials",
+    "subject_resolved": "the prompt"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "completed",
+    "object": "the exfiltration",
+    "evidence_texts": [
+      "Claude completed the exfiltration 24 times"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This",
+    "predicate": "is",
+    "object": "a direct prompt injection",
+    "evidence_texts": [
+      "This is a direct prompt injection"
+    ],
+    "subject_anaphora": "This",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "This is a direct prompt injection—the attacker's instructions arrived through the user, not through tool output or fetched content.",
+      "src_idx": 159
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "unresolved"
+  },
+  {
+    "subject": "the attacker's instructions",
+    "predicate": "arrived",
+    "object": "through the user, not through tool output or fetched content",
+    "evidence_texts": [
+      "the attacker's instructions arrived through the user, not through tool output or fetched content"
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "This is a direct prompt injection—the attacker's instructions arrived through the user, not through tool output or fetched content.",
+      "src_idx": 160
+    },
+    "predicate_normalized": "comes_from",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Our model-layer defenses",
+    "predicate": "anchor on",
+    "object": "user intent",
+    "evidence_texts": [
+      "Our model-layer defenses anchor on user intent"
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "there",
+    "predicate": "is",
+    "object": "nothing anomalous for a classifier to catch",
+    "polarity": "negative",
+    "evidence_texts": [
+      "there's nothing anomalous for a classifier to catch"
+    ],
+    "subject_anaphora": "there",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Our model-layer defenses anchor on user intent—when the user is the one typing the instruction, there's nothing anomalous for a classifier to catch.",
+      "src_idx": 162
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "there",
+    "subject_resolution_status": "not_anaphora"
+  },
+  {
+    "subject": "A human contractor",
+    "predicate": "would have done",
+    "object": "the same thing",
+    "evidence_texts": [
+      "A human contractor handed the same script would have done the same thing"
+    ],
+    "predicate_clean": "do",
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "egress controls",
+    "predicate": "block",
+    "object": "the POST",
+    "evidence_texts": [
+      "egress controls that block the POST regardless of intent and filesystem boundaries that keep ~/.aws out of reach in the first place"
+    ],
+    "predicate_normalized": "blocks",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "filesystem boundaries",
+    "predicate": "keep",
+    "object": "~/.aws out of reach",
+    "evidence_texts": [
+      "filesystem boundaries that keep ~/.aws out of reach in the first place"
+    ],
+    "predicate_normalized": "isolates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The payload",
+    "predicate": "was",
+    "object": "ambient",
+    "evidence_texts": [
+      "The payload was now ambient"
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "added",
+    "object": "a canary string to the thread",
+    "evidence_texts": [
+      "We added a canary string to the thread"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "We",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "We added a canary string to the thread so we'd notice if anything picked it up.",
+      "src_idx": 167
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the investigation tooling",
+    "predicate": "is",
+    "object": "also an attack surface",
+    "evidence_texts": [
+      "the investigation tooling is also an attack surface"
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "runs",
+    "object": "on a user's desktop with access to a workspace folder selected by the user",
+    "evidence_texts": [
+      "Claude Cowork runs on a user's desktop with access to a workspace folder selected by the user"
+    ],
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the platform",
+    "predicate": "is built for",
+    "object": "general knowledge work, not software engineering",
+    "evidence_texts": [
+      "the platform is built for general knowledge work, not software engineering"
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Because the platform is built for general knowledge work, not software engineering, the average user is much less likely to be fluent in bash.",
+      "src_idx": 170
+    },
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the average user",
+    "predicate": "is",
+    "object": "much less likely to be fluent in bash",
+    "evidence_texts": [
+      "the average user is much less likely to be fluent in bash"
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Because the platform is built for general knowledge work, not software engineering, the average user is much less likely to be fluent in bash.",
+      "src_idx": 171
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the human-in-the-loop sandbox strategy",
+    "predicate": "may not transfer",
+    "object": "",
+    "evidence_texts": [
+      "the human-in-the-loop sandbox strategy may not transfer"
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "As a result, the human-in-the-loop sandbox strategy may not transfer; a non-technical knowledge worker shouldn’t be expected to judge bash incantations such as find .",
+      "src_idx": 172
+    },
+    "predicate_clean": "transfer",
+    "polarity": "negative",
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a non-technical knowledge worker",
+    "predicate": "shouldn't be expected to judge",
+    "object": "bash incantations",
+    "evidence_texts": [
+      "a non-technical knowledge worker shouldn’t be expected to judge bash incantations such as find . -name \"*.tmp\" -exec rm {} \\;"
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "As a result, the human-in-the-loop sandbox strategy may not transfer; a non-technical knowledge worker shouldn’t be expected to judge bash incantations such as find .",
+      "src_idx": 173
+    },
+    "predicate_clean": "expect to judge",
+    "polarity": "negative",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "admins",
+    "predicate": "should set",
+    "object": "a boundary that is absolute and always-on",
+    "evidence_texts": [
+      "admins should set a boundary that is absolute and always-on"
+    ],
+    "predicate_clean": "set",
+    "predicate_normalized": "constrains",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our first version of Claude Cowork",
+    "predicate": "ran",
+    "object": "inside a full virtual machine",
+    "evidence_texts": [
+      "our first version of Claude Cowork ran inside a full virtual machine using the platform's vendor hypervisor (Apple's Virtualization framework on macOS, HCS on Windows)"
+    ],
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The VM",
+    "predicate": "has",
+    "object": "its own Linux kernel",
+    "evidence_texts": [
+      "The VM has its own Linux kernel"
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The VM",
+    "predicate": "has",
+    "object": "its own filesystem",
+    "evidence_texts": [
+      "its own filesystem"
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The VM",
+    "predicate": "has",
+    "object": "its own process table",
+    "evidence_texts": [
+      "its own process table"
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "The user's selected workspace and .claude folder",
+    "predicate": "are mounted",
+    "object": "",
+    "evidence_texts": [
+      "The user's selected workspace and .claude folder are mounted"
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "nothing else on the host",
+    "predicate": "is visible",
+    "object": "",
+    "polarity": "negative",
+    "evidence_texts": [
+      "nothing else on the host is visible"
+    ],
+    "predicate_normalized": "visible_to",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Credentials",
+    "predicate": "stay",
+    "object": "in the host's keychain",
+    "evidence_texts": [
+      "Credentials stay in the host's keychain"
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Credentials stay in the host's keychain and never enter the guest machine.",
+      "src_idx": 181
+    },
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Credentials",
+    "predicate": "enter",
+    "object": "the guest machine",
+    "polarity": "negative",
+    "evidence_texts": [
+      "never enter the guest machine"
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "This design",
+    "predicate": "protects against",
+    "object": "the possibility that Claude will, at some point, behave in a misaligned manner",
+    "evidence_texts": [
+      "This design protects against the possibility that Claude will, at some point, behave in a misaligned manner"
+    ],
+    "predicate_normalized": "protects_against",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Cowork’s full-VM architecture",
+    "subject_resolution_evidence": "This design protects against the possibility that Claude will, at some point, behave in a misaligned manner",
+    "subject_resolved": "Claude Cowork’s full-VM architecture"
+  },
+  {
+    "subject": "A compromised Claude",
+    "predicate": "could still damage",
+    "object": "what's inside the workspace folder",
+    "evidence_texts": [
+      "A compromised Claude could still damage what's inside the workspace folder"
+    ],
+    "predicate_clean": "damage",
+    "predicate_normalized": "affects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the architecture",
+    "predicate": "is designed to make sure",
+    "object": "that's the only thing it can reach",
+    "evidence_texts": [
+      "the architecture is designed to make sure that's the only thing it can reach (until the user adds connectors)"
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "A compromised Claude could still damage what's inside the workspace folder, so the architecture is designed to make sure that's the only thing it can reach (until the user adds connectors), and that the user controls what's mounted there.",
+      "src_idx": 185
+    },
+    "predicate_clean": "design to make sure",
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped",
+    "object_anaphor": "that",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the workspace folder",
+    "object_resolution_evidence": "so the architecture is designed to make sure that's the only thing it can reach"
+  },
+  {
+    "subject": "the user",
+    "predicate": "controls",
+    "object": "what's mounted there",
+    "evidence_texts": [
+      "the user controls what's mounted there"
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "agent loop",
+    "predicate": "ran inside",
+    "object": "guest",
+    "evidence_texts": [
+      "In the original architecture—what we call full-VM mode—the agent loop itself ran inside the guest, so Claude executed as an ordinary Linux user with no awareness it was sandboxed."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "In the original architecture—what we call full-VM mode—the agent loop itself ran inside the guest, so Claude executed as an ordinary Linux user with no awareness it was sandboxed.",
+      "src_idx": 187
+    },
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "executed as",
+    "object": "ordinary Linux user",
+    "evidence_texts": [
+      "In the original architecture—what we call full-VM mode—the agent loop itself ran inside the guest, so Claude executed as an ordinary Linux user with no awareness it was sandboxed."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "In the original architecture—what we call full-VM mode—the agent loop itself ran inside the guest, so Claude executed as an ordinary Linux user with no awareness it was sandboxed.",
+      "src_idx": 188
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "had awareness",
+    "object": "it was sandboxed",
+    "polarity": "negative",
+    "evidence_texts": [
+      "In the original architecture—what we call full-VM mode—the agent loop itself ran inside the guest, so Claude executed as an ordinary Linux user with no awareness it was sandboxed."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "object_anaphor": "it",
+    "object_resolution_status": "resolved",
+    "object_resolution": "Claude",
+    "object_resolution_evidence": "so Claude executed as an ordinary Linux user with no awareness it was sandboxed"
+  },
+  {
+    "subject": "a privileged process",
+    "predicate": "sits outside",
+    "object": "the sandbox",
+    "evidence_texts": [
+      "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed."
+    ],
+    "predicate_normalized": "outside_of",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a privileged process",
+    "predicate": "decides per-command whether to enforce",
+    "object": "it",
+    "evidence_texts": [
+      "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed.",
+      "src_idx": 191
+    },
+    "predicate_clean": "decide per-command whether to enforce",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped",
+    "object_anaphor": "it",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the sandbox",
+    "object_resolution_evidence": "a privileged process sits outside the sandbox deciding per-command whether to enforce it",
+    "object_resolved": "the sandbox"
+  },
+  {
+    "subject": "a persuasive injected prompt",
+    "predicate": "can get to run",
+    "object": "something un-sandboxed",
+    "roles": {
+      "instrument": [
+        "that process"
+      ]
+    },
+    "evidence_texts": [
+      "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed.",
+      "src_idx": 192
+    },
+    "predicate_clean": "get to run",
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a fatigued approval click",
+    "predicate": "can get to run",
+    "object": "something un-sandboxed",
+    "roles": {
+      "instrument": [
+        "that process"
+      ]
+    },
+    "evidence_texts": [
+      "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Compare this to Claude Code, where a privileged process sits outside the sandbox deciding per-command whether to enforce it; a persuasive injected prompt or a fatigued approval click can get that process to run something un-sandboxed.",
+      "src_idx": 193
+    },
+    "predicate_clean": "get to run",
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an outer process",
+    "predicate": "holding",
+    "object": "an escape-hatch key",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Here, there was no outer process holding an escape-hatch key, and so no component with the authority to grant an exception."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a component",
+    "predicate": "has authority to grant",
+    "object": "an exception",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Here, there was no outer process holding an escape-hatch key, and so no component with the authority to grant an exception."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Here, there was no outer process holding an escape-hatch key, and so no component with the authority to grant an exception.",
+      "src_idx": 195
+    },
+    "predicate_clean": "have authority to grant",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork’s VM",
+    "predicate": "has",
+    "object": "six main isolation mechanisms",
+    "evidence_texts": [
+      "The six main isolation mechanisms of Claude Cowork’s VM."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "two",
+    "predicate": "are enforced outside",
+    "object": "the guest kernel",
+    "evidence_texts": [
+      "Two are enforced outside the guest kernel and would thus survive the agent achieving root-level access within the VM."
+    ],
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "two",
+    "predicate": "would survive",
+    "object": "the agent achieving root-level access within the VM",
+    "evidence_texts": [
+      "Two are enforced outside the guest kernel and would thus survive the agent achieving root-level access within the VM."
+    ],
+    "predicate_clean": "survive",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the other four",
+    "predicate": "are",
+    "object": "guest-enforced",
+    "evidence_texts": [
+      "The other four are guest-enforced and kept deliberately minimal because the outer layers carry the rest."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the other four",
+    "predicate": "kept deliberately minimal",
+    "object": "the other four",
+    "evidence_texts": [
+      "The other four are guest-enforced and kept deliberately minimal because the outer layers carry the rest."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "running the whole agent in full-VM mode",
+    "predicate": "caused",
+    "object": "practical problems",
+    "evidence_texts": [
+      "However, we soon realized that running the whole agent in full-VM mode caused practical problems: any failure during VM startup made Cowork unusable."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "any failure during VM startup",
+    "predicate": "made unusable",
+    "object": "Cowork",
+    "evidence_texts": [
+      "However, we soon realized that running the whole agent in full-VM mode caused practical problems: any failure during VM startup made Cowork unusable."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down"
+  },
+  {
+    "subject": "moving the agent loop outside of the VM",
+    "predicate": "allowed",
+    "object": "Claude to still respond to the user and help debug issues rather than freeze on an error",
+    "evidence_texts": [
+      "Moving the agent loop outside of the VM, while keeping code execution inside of it, allowed Claude to still respond to the user and help debug issues rather than freeze on an error."
+    ],
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this change",
+    "predicate": "caused",
+    "object": "minimal security impact",
+    "evidence_texts": [
+      "This change caused minimal security impact because the VM still enforces filesystem and network controls over code executed by the agent."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "moving the agent loop outside of the VM",
+    "subject_resolution_evidence": "Moving the agent loop outside of the VM, while keeping code execution inside of it, allowed Claude to still respond to the user and help debug issues rather than freeze on an error. This change caused minimal security impact",
+    "subject_resolved": "moving the agent loop outside of the VM"
+  },
+  {
+    "subject": "the VM",
+    "predicate": "enforces",
+    "object": "filesystem controls",
+    "evidence_texts": [
+      "This change caused minimal security impact because the VM still enforces filesystem and network controls over code executed by the agent."
+    ],
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the VM",
+    "predicate": "enforces",
+    "object": "network controls",
+    "evidence_texts": [
+      "This change caused minimal security impact because the VM still enforces filesystem and network controls over code executed by the agent."
+    ],
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "local MCP servers",
+    "predicate": "moved outside",
+    "object": "the VM",
+    "evidence_texts": [
+      "Separately, we also moved local MCP servers outside the VM."
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "running them inside the VM",
+    "predicate": "made hard to audit",
+    "object": "them",
+    "evidence_texts": [
+      "Running them inside the VM made them harder to audit, created brittle dependency issues when the VM updated, and didn’t support MCPs that required interaction with local processes such as databases—such servers had to run on the host regardless."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Running them inside the VM made them harder to audit, created brittle dependency issues when the VM updated, and didn’t support MCPs that required interaction with local processes such as databases—such servers had to run on the host regardless.",
+      "src_idx": 208
+    },
+    "predicate_clean": "make hard to audit",
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down",
+    "object_anaphor": "them",
+    "object_resolution_status": "resolved",
+    "object_resolution": "local MCP servers",
+    "object_resolution_evidence": "Running them inside the VM made them harder to audit",
+    "object_resolved": "local MCP servers"
+  },
+  {
+    "subject": "running them inside the VM",
+    "predicate": "created",
+    "object": "brittle dependency issues when the VM updated",
+    "evidence_texts": [
+      "Running them inside the VM made them harder to audit, created brittle dependency issues when the VM updated, and didn’t support MCPs that required interaction with local processes such as databases—such servers had to run on the host regardless."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "running them inside the VM",
+    "predicate": "supported",
+    "object": "MCPs that required interaction with local processes such as databases",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Running them inside the VM made them harder to audit, created brittle dependency issues when the VM updated, and didn’t support MCPs that required interaction with local processes such as databases—such servers had to run on the host regardless."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "such servers",
+    "predicate": "had to run on",
+    "object": "the host",
+    "evidence_texts": [
+      "Running them inside the VM made them harder to audit, created brittle dependency issues when the VM updated, and didn’t support MCPs that required interaction with local processes such as databases—such servers had to run on the host regardless."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Running them inside the VM made them harder to audit, created brittle dependency issues when the VM updated, and didn’t support MCPs that required interaction with local processes such as databases—such servers had to run on the host regardless.",
+      "src_idx": 211
+    },
+    "predicate_clean": "have to run on",
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped",
+    "subject_anaphor": "such",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "MCPs that required interaction with local processes such as databases",
+    "subject_resolution_evidence": "MCPs that required interaction with local processes such as databases—such servers had to run on the host",
+    "subject_resolved": "MCPs that required interaction with local processes such as databases"
+  },
+  {
+    "subject": "the change",
+    "predicate": "brings in line with",
+    "object": "how local MCP servers already work in Claude Desktop",
+    "evidence_texts": [
+      "The change brings Claude Cowork in line with how local MCP servers already work in Claude Desktop: treating them like any software a user might choose to install and entrusting admins to decide which local MCPs to enable (if any)."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "The change brings Claude Cowork in line with how local MCP servers already work in Claude Desktop: treating them like any software a user might choose to install and entrusting admins to decide which local MCPs to enable (if any).",
+      "src_idx": 212
+    },
+    "predicate_clean": "bring in line with",
+    "predicate_normalized": "similar_to",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the change",
+    "predicate": "treats like",
+    "object": "any software a user might choose to install",
+    "evidence_texts": [
+      "The change brings Claude Cowork in line with how local MCP servers already work in Claude Desktop: treating them like any software a user might choose to install and entrusting admins to decide which local MCPs to enable (if any)."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the change",
+    "predicate": "entrusts",
+    "object": "admins to decide which local MCPs to enable (if any)",
+    "evidence_texts": [
+      "The change brings Claude Cowork in line with how local MCP servers already work in Claude Desktop: treating them like any software a user might choose to install and entrusting admins to decide which local MCPs to enable (if any)."
+    ],
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Remote MCP servers",
+    "predicate": "are unaffected",
+    "object": "Remote MCP servers",
+    "evidence_texts": [
+      "Remote MCP servers are unaffected since they do not run on the user's machine."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Remote MCP servers are unaffected since they do not run on the user's machine.",
+      "src_idx": 215
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Remote MCP servers",
+    "predicate": "do not run on",
+    "object": "the user's machine",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Remote MCP servers are unaffected since they do not run on the user's machine."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Remote MCP servers are unaffected since they do not run on the user's machine.",
+      "src_idx": 216
+    },
+    "predicate_clean": "run on",
+    "predicate_normalized": "runs_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "any failure in the VM",
+    "predicate": "caused to become unusable",
+    "object": "Cowork",
+    "evidence_texts": [
+      "Having the agent loop inside the VM meant that any failure in the VM caused Cowork to become unusable."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Having the agent loop inside the VM meant that any failure in the VM caused Cowork to become unusable.",
+      "src_idx": 218
+    },
+    "predicate_clean": "cause to become unusable",
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Host-mode",
+    "predicate": "is",
+    "object": "more reliable",
+    "evidence_texts": [
+      "Host-mode is more reliable because the agent can still respond if the VM crashes, and it still provides important security guarantees by isolating code execution."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Host-mode",
+    "predicate": "provides",
+    "object": "important security guarantees",
+    "evidence_texts": [
+      "Host-mode is more reliable because the agent can still respond if the VM crashes, and it still provides important security guarantees by isolating code execution."
+    ],
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Host-mode",
+    "predicate": "isolates",
+    "object": "code execution",
+    "roles": {
+      "instrument": [
+        "isolating code execution"
+      ]
+    },
+    "evidence_texts": [
+      "Host-mode is more reliable because the agent can still respond if the VM crashes, and it still provides important security guarantees by isolating code execution."
+    ],
+    "predicate_normalized": "isolates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "needs to be able to access",
+    "object": "some files on the host",
+    "evidence_texts": [
+      "Claude needs to be able to access some files on the host in order to be useful, but we wanted to minimize the blast radius and provide transparency to the user about local file access."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Claude needs to be able to access some files on the host in order to be useful, but we wanted to minimize the blast radius and provide transparency to the user about local file access.",
+      "src_idx": 222
+    },
+    "predicate_clean": "need to be able to access",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "offering different file-mount modes",
+    "predicate": "helps to granularly control",
+    "object": "risk",
+    "evidence_texts": [
+      "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete.",
+      "src_idx": 223
+    },
+    "predicate_clean": "help to granularly control",
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "offers",
+    "object": "read-only",
+    "evidence_texts": [
+      "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete.",
+      "src_idx": 224
+    },
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "offers",
+    "object": "read-write",
+    "evidence_texts": [
+      "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete.",
+      "src_idx": 225
+    },
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "offers",
+    "object": "read-write-no-delete",
+    "evidence_texts": [
+      "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete.",
+      "src_idx": 226
+    },
+    "predicate_normalized": "provides",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "symlink resolution",
+    "predicate": "has to happen before",
+    "object": "path validation",
+    "evidence_texts": [
+      "One potential gotcha here is that symlink resolution has to happen before path validation, not after, or a symlink inside an authorized folder can point outside and escape."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "One potential gotcha here is that symlink resolution has to happen before path validation, not after, or a symlink inside an authorized folder can point outside and escape.",
+      "src_idx": 227
+    },
+    "predicate_clean": "have to happen before",
+    "predicate_normalized": "before",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a symlink inside an authorized folder",
+    "predicate": "can point outside and escape",
+    "object": "a symlink inside an authorized folder",
+    "evidence_texts": [
+      "One potential gotcha here is that symlink resolution has to happen before path validation, not after, or a symlink inside an authorized folder can point outside and escape."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "One potential gotcha here is that symlink resolution has to happen before path validation, not after, or a symlink inside an authorized folder can point outside and escape.",
+      "src_idx": 228
+    },
+    "predicate_clean": "point outside and escape",
+    "predicate_normalized": "outside_of",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "allow admins to control",
+    "object": "this",
+    "roles": {
+      "instrument": [
+        "mount-path allowlists in MDM settings"
+      ]
+    },
+    "evidence_texts": [
+      "For enterprise customers, we allow admins to control this via mount-path allowlists in MDM settings."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "For enterprise customers, we allow admins to control this via mount-path allowlists in MDM settings.",
+      "src_idx": 229
+    },
+    "predicate_normalized": "can",
+    "predicate_status": "mapped",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "file-mount modes",
+    "object_resolution_evidence": "We found that offering different file-mount modes helps to granularly control risk; Claude Cowork offers read-only, read-write, and read-write-no-delete. [...] For enterprise customers, we allow admins to control this via mount-path allowlists",
+    "object_resolved": "file-mount modes"
+  },
+  {
+    "subject": "Claude Cowork's egress allowlist",
+    "predicate": "passed traffic to",
+    "object": "api.anthropic.com",
+    "evidence_texts": [
+      "Claude Cowork's egress allowlist correctly passed traffic to api.anthropic.com—the product can't function without calling our own API."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the product",
+    "predicate": "can function without calling",
+    "object": "our own API",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Claude Cowork's egress allowlist correctly passed traffic to api.anthropic.com—the product can't function without calling our own API."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗",
+        "主语不在锚句（可能指代/需邻句）"
+      ],
+      "rewrites": [],
+      "anchor": "Claude Cowork's egress allowlist correctly passed traffic to api.",
+      "src_idx": 231
+    },
+    "predicate_clean": "function without calling",
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a malicious file placed in the user's mounted workspace",
+    "predicate": "carried",
+    "object": "hidden instructions along with an API key controlled by the attacker",
+    "evidence_texts": [
+      "In this case, a malicious file placed in the user's mounted workspace carried hidden instructions along with an API key controlled by the attacker."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "read",
+    "object": "other files in the workspace",
+    "evidence_texts": [
+      "Claude, following the instructions, read other files in the workspace and called Anthropic's Files API using the attacker's key."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude",
+    "predicate": "called",
+    "object": "Anthropic's Files API",
+    "roles": {
+      "instrument": [
+        "the attacker's key"
+      ]
+    },
+    "evidence_texts": [
+      "Claude, following the instructions, read other files in the workspace and called Anthropic's Files API using the attacker's key."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the egress proxy",
+    "predicate": "checked",
+    "object": "the destination",
+    "evidence_texts": [
+      "The egress proxy checked the destination, saw api.anthropic.com, and let it through."
+    ],
+    "predicate_normalized": "monitors",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the egress proxy",
+    "predicate": "saw",
+    "object": "api.anthropic.com",
+    "evidence_texts": [
+      "The egress proxy checked the destination, saw api.anthropic.com, and let it through."
+    ],
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the egress proxy",
+    "predicate": "let through",
+    "object": "it",
+    "evidence_texts": [
+      "The egress proxy checked the destination, saw api.anthropic.com, and let it through."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped",
+    "object_anaphor": "it",
+    "object_resolution_status": "resolved",
+    "object_resolution": "traffic to api.anthropic.com",
+    "object_resolution_evidence": "The egress proxy checked the destination, saw api.anthropic.com, and let it through",
+    "object_resolved": "traffic to api.anthropic.com"
+  },
+  {
+    "subject": "the files",
+    "predicate": "were uploaded to",
+    "object": "the attacker's Anthropic account",
+    "evidence_texts": [
+      "The files were uploaded to the attacker's Anthropic account."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the sandbox",
+    "predicate": "worked",
+    "object": "the sandbox",
+    "evidence_texts": [
+      "The sandbox worked perfectly, and yet the data was exfiltrated."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the data",
+    "predicate": "was exfiltrated",
+    "object": "the data",
+    "evidence_texts": [
+      "The sandbox worked perfectly, and yet the data was exfiltrated."
+    ],
+    "predicate_normalized": "exposes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the allowlist",
+    "predicate": "was conceptualized as",
+    "object": "a destination filter",
+    "evidence_texts": [
+      "Previously, we’d conceptualized the allowlist as a destination filter, something that told Claude these domains are okay to talk to."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the allowlist",
+    "predicate": "told",
+    "object": "Claude these domains are okay to talk to",
+    "evidence_texts": [
+      "Previously, we’d conceptualized the allowlist as a destination filter, something that told Claude these domains are okay to talk to."
+    ],
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the allowlist",
+    "predicate": "may be conceptualized as",
+    "object": "a capability grant",
+    "evidence_texts": [
+      "But it may be better conceptualized as a capability grant."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "But it may be better conceptualized as a capability grant.",
+      "src_idx": 243
+    },
+    "predicate_clean": "be conceptualized as",
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "every function reachable through any domain on an allowlist",
+    "predicate": "is",
+    "object": "an attack surface",
+    "evidence_texts": [
+      "Every function reachable through any domain on an allowlist is now an attack surface."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "allowing api.anthropic.com",
+    "predicate": "meant",
+    "object": "allowing file uploads to arbitrary Anthropic accounts",
+    "evidence_texts": [
+      "Allowing api.anthropic.com meant allowing file uploads to arbitrary Anthropic accounts."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a defensive man-in-the-middle proxy inside the VM",
+    "predicate": "intercepts",
+    "object": "traffic to our API",
+    "evidence_texts": [
+      "We fixed it using a defensive man-in-the-middle proxy inside the VM that intercepts traffic to our API."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "passes",
+    "object": "requests carrying the VM's own provisioned session token",
+    "evidence_texts": [
+      "It only passes requests carrying the VM's own provisioned session token; an attacker-embedded key is rejected by the proxy."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "It only passes requests carrying the VM's own provisioned session token; an attacker-embedded key is rejected by the proxy.",
+      "src_idx": 247
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the defensive man-in-the-middle proxy",
+    "subject_resolution_evidence": "We fixed it using a defensive man-in-the-middle proxy inside the VM that intercepts traffic to our API. It only passes requests carrying the VM's own provisioned session token",
+    "subject_resolved": "the defensive man-in-the-middle proxy"
+  },
+  {
+    "subject": "an attacker-embedded key",
+    "predicate": "is rejected by",
+    "object": "the proxy",
+    "evidence_texts": [
+      "It only passes requests carrying the VM's own provisioned session token; an attacker-embedded key is rejected by the proxy."
+    ],
+    "predicate_normalized": "blocks",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "blocks",
+    "object": "headers that would enable server-side fetch",
+    "evidence_texts": [
+      "It also blocks headers that would enable server-side fetch."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "It also blocks headers that would enable server-side fetch.",
+      "src_idx": 249
+    },
+    "predicate_normalized": "blocks",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the defensive man-in-the-middle proxy",
+    "subject_resolution_evidence": "It also blocks headers that would enable server-side fetch",
+    "subject_resolved": "the defensive man-in-the-middle proxy"
+  },
+  {
+    "subject": "the proxy",
+    "predicate": "sits inside",
+    "object": "the VM",
+    "evidence_texts": [
+      "The proxy sits inside the VM rather than on our servers because only the VM knows provenance—from the server's perspective, a Cowork request is indistinguishable from any other API client."
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "only the VM",
+    "predicate": "knows",
+    "object": "provenance",
+    "evidence_texts": [
+      "The proxy sits inside the VM rather than on our servers because only the VM knows provenance—from the server's perspective, a Cowork request is indistinguishable from any other API client."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a Cowork request",
+    "predicate": "is indistinguishable from",
+    "object": "any other API client",
+    "evidence_texts": [
+      "The proxy sits inside the VM rather than on our servers because only the VM knows provenance—from the server's perspective, a Cowork request is indistinguishable from any other API client."
+    ],
+    "predicate_normalized": "different_from",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "traffic to api.anthropic.com",
+    "predicate": "is let through",
+    "object": "traffic to api.anthropic.com",
+    "evidence_texts": [
+      "Top: traffic to api.anthropic.com is let through, resulting in egress."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the hypervisor",
+    "predicate": "have been",
+    "object": "dependable",
+    "evidence_texts": [
+      "The hypervisor, seccomp, and gVisor across our products have been dependable."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "seccomp",
+    "predicate": "have been",
+    "object": "dependable",
+    "evidence_texts": [
+      "The hypervisor, seccomp, and gVisor across our products have been dependable."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "gVisor",
+    "predicate": "have been",
+    "object": "dependable",
+    "evidence_texts": [
+      "The hypervisor, seccomp, and gVisor across our products have been dependable."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our custom allowlist proxy",
+    "predicate": "was",
+    "object": "the piece that failed",
+    "evidence_texts": [
+      "Our custom allowlist proxy was the piece that failed."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "enterprise security teams",
+    "predicate": "asked",
+    "object": "\"Why can't our EDR see inside?\"",
+    "evidence_texts": [
+      "When evaluating Claude Cowork, enterprise security teams asked, \"Why can't our EDR see inside?\""
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "When evaluating Claude Cowork, enterprise security teams asked, \"Why can't our EDR see inside?",
+      "src_idx": 258
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the same isolation",
+    "predicate": "kept",
+    "object": "host-based endpoint detection and response out",
+    "evidence_texts": [
+      "The answer was that the same isolation keeping Claude contained also kept host-based endpoint detection and response out."
+    ],
+    "predicate_normalized": "isolates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the same isolation",
+    "predicate": "kept",
+    "object": "Claude contained",
+    "evidence_texts": [
+      "The answer was that the same isolation keeping Claude contained also kept host-based endpoint detection and response out."
+    ],
+    "predicate_normalized": "isolates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork",
+    "predicate": "is",
+    "object": "an opaque hypervisor process",
+    "evidence_texts": [
+      "From the EDR's perspective, Claude Cowork is an opaque hypervisor process."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "inspect",
+    "object": "the guest",
+    "polarity": "negative",
+    "evidence_texts": [
+      "It can't inspect the guest."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "It can't inspect the guest.",
+      "src_idx": 262
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the EDR",
+    "subject_resolution_evidence": "From the EDR's perspective, Claude Cowork is an opaque hypervisor process. It can't inspect the guest",
+    "subject_resolved": "the EDR"
+  },
+  {
+    "subject": "isolation",
+    "predicate": "reduces",
+    "object": "visibility",
+    "evidence_texts": [
+      "Isolation reduces visibility, and opacity is problematic for teams whose compliance posture depends on endpoint visibility."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down"
+  },
+  {
+    "subject": "opacity",
+    "predicate": "is problematic for",
+    "object": "teams whose compliance posture depends on endpoint visibility",
+    "evidence_texts": [
+      "Isolation reduces visibility, and opacity is problematic for teams whose compliance posture depends on endpoint visibility."
+    ],
+    "predicate_normalized": "affects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our current mitigation",
+    "predicate": "is",
+    "object": "to use pull-based OTLP exports",
+    "evidence_texts": [
+      "Our current mitigation is to use pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Our current mitigation is to use pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring.",
+      "src_idx": 265
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "pull-based OTLP exports",
+    "predicate": "let",
+    "object": "administrators retrieve event logs after the fact",
+    "evidence_texts": [
+      "Our current mitigation is to use pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Our current mitigation is to use pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring.",
+      "src_idx": 266
+    },
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this",
+    "predicate": "is",
+    "object": "the same as live monitoring",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Our current mitigation is to use pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring."
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Our current mitigation is to use pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring.",
+      "src_idx": 267
+    },
+    "predicate_normalized": "different_from",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "pull-based OTLP exports",
+    "subject_resolution_evidence": "pull-based OTLP exports that let administrators retrieve event logs after the fact, but this is not the same as live monitoring",
+    "subject_resolved": "pull-based OTLP exports"
+  },
+  {
+    "subject": "enterprises",
+    "predicate": "ask",
+    "object": "us how to secure MCP connections",
+    "evidence_texts": [
+      "Enterprises often ask us how to secure MCP connections."
+    ],
+    "predicate_normalized": "instructs",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "any external resource provided to an agent",
+    "predicate": "represents",
+    "object": "a code execution risk",
+    "evidence_texts": [
+      "Any external resource provided to an agent represents two risks at once: a code execution risk, in the traditional supply-chain sense, and a prompt injection vector."
+    ],
+    "predicate_normalized": "risks",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "any external resource provided to an agent",
+    "predicate": "represents",
+    "object": "a prompt injection vector",
+    "evidence_texts": [
+      "Any external resource provided to an agent represents two risks at once: a code execution risk, in the traditional supply-chain sense, and a prompt injection vector."
+    ],
+    "predicate_normalized": "risks",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "traditional dependency auditing",
+    "predicate": "addresses",
+    "object": "the first",
+    "evidence_texts": [
+      "Traditional dependency auditing (pinning versions, verifying signatures, reviewing source) addresses the first, but misses the second."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "traditional dependency auditing",
+    "predicate": "misses",
+    "object": "the second",
+    "evidence_texts": [
+      "Traditional dependency auditing (pinning versions, verifying signatures, reviewing source) addresses the first, but misses the second."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped",
+    "polarity": "negative"
+  },
+  {
+    "subject": "a locally installed tool",
+    "predicate": "is",
+    "object": "auditable",
+    "evidence_texts": [
+      "A locally installed tool is auditable."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "you",
+    "predicate": "read",
+    "object": "the code",
+    "evidence_texts": [
+      "You can read the code, pin the version, and know it won't change under you."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "You can read the code, pin the version, and know it won't change under you.",
+      "src_idx": 274
+    },
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "you",
+    "predicate": "pin",
+    "object": "the version",
+    "evidence_texts": [
+      "You can read the code, pin the version, and know it won't change under you."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "You can read the code, pin the version, and know it won't change under you.",
+      "src_idx": 275
+    },
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "change",
+    "object": "under you",
+    "polarity": "negative",
+    "evidence_texts": [
+      "You can read the code, pin the version, and know it won't change under you."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "You can read the code, pin the version, and know it won't change under you.",
+      "src_idx": 276
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the code",
+    "subject_resolution_evidence": "know it won't change under you",
+    "subject_resolved": "the code"
+  },
+  {
+    "subject": "a remote tool",
+    "predicate": "change",
+    "object": "behavior",
+    "evidence_texts": [
+      "A remote tool—a hosted MCP server, a cloud connector—can change behavior at any point after you’ve approved it; your install-time trust decision may no longer apply."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "A remote tool—a hosted MCP server, a cloud connector—can change behavior at any point after you’ve approved it; your install-time trust decision may no longer apply.",
+      "src_idx": 277
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "your install-time trust decision",
+    "predicate": "apply",
+    "object": "",
+    "polarity": "negative",
+    "evidence_texts": [
+      "A remote tool—a hosted MCP server, a cloud connector—can change behavior at any point after you’ve approved it; your install-time trust decision may no longer apply."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our connector directory",
+    "predicate": "addresses",
+    "object": "this",
+    "roles": {
+      "instrument": [
+        "ongoing review"
+      ]
+    },
+    "evidence_texts": [
+      "Our connector directory addresses this through ongoing review, but anything outside it should be treated as untrusted."
+    ],
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped",
+    "object_anaphor": "this",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the mutable behavior of remote tools",
+    "object_resolution_evidence": "a remote tool—a hosted MCP server, a cloud connector—can change behavior at any point after you’ve approved it",
+    "object_resolved": "the mutable behavior of remote tools"
+  },
+  {
+    "subject": "anything outside it",
+    "predicate": "treated as",
+    "object": "untrusted",
+    "evidence_texts": [
+      "Our connector directory addresses this through ongoing review, but anything outside it should be treated as untrusted."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "run",
+    "object": "against fake data",
+    "evidence_texts": [
+      "Run it against fake data first, in an environment where the blast radius of a malicious tool is contained."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Run it against fake data first, in an environment where the blast radius of a malicious tool is contained.",
+      "src_idx": 281
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the tool",
+    "subject_resolution_evidence": "anything outside it should be treated as untrusted",
+    "subject_resolved": "the tool"
+  },
+  {
+    "subject": "tool output",
+    "predicate": "is",
+    "object": "an attack surface even when the tool is trusted",
+    "evidence_texts": [
+      "Tool output is an attack surface even when the tool is trusted."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "any input scanning applied to web pages",
+    "predicate": "needs to be applied to",
+    "object": "network-enabled tool results",
+    "evidence_texts": [
+      "any input scanning applied to web pages needs to be applied to network-enabled tool results with the same rigor."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "The GitHub README example mentioned earlier is exactly this case; any input scanning applied to web pages needs to be applied to network-enabled tool results with the same rigor.",
+      "src_idx": 283
+    },
+    "predicate_clean": "need to be applied to",
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "err toward",
+    "object": "live inspection",
+    "evidence_texts": [
+      "Even though this adds latency and isn't a perfect defense, we err toward live inspection: once a poisoned tool return has steered the agent into exfiltrating data, the log just shows a successful, authorized API call."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Even though this adds latency and isn't a perfect defense, we err toward live inspection: once a poisoned tool return has steered the agent into exfiltrating data, the log just shows a successful, authorized API call.",
+      "src_idx": 284
+    },
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the log",
+    "predicate": "shows",
+    "object": "a successful, authorized API call",
+    "evidence_texts": [
+      "once a poisoned tool return has steered the agent into exfiltrating data, the log just shows a successful, authorized API call."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Even though this adds latency and isn't a perfect defense, we err toward live inspection: once a poisoned tool return has steered the agent into exfiltrating data, the log just shows a successful, authorized API call.",
+      "src_idx": 285
+    },
+    "predicate_normalized": "indicates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "there",
+    "predicate": "is",
+    "object": "no after-the-fact signal to find",
+    "polarity": "negative",
+    "evidence_texts": [
+      "There's no after-the-fact signal to find."
+    ],
+    "subject_anaphora": "there",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "There's no after-the-fact signal to find.",
+      "src_idx": 286
+    },
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped",
+    "subject_anaphor": "there",
+    "subject_resolution_status": "not_anaphora"
+  },
+  {
+    "subject": "tool calls",
+    "predicate": "route through",
+    "object": "proxies that enforce network and file policy",
+    "evidence_texts": [
+      "In Claude Code and Claude Cowork, tool calls route through proxies that enforce network and file policy and can inspect return values before they enter the model's context."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "proxies",
+    "predicate": "enforce",
+    "object": "network and file policy",
+    "evidence_texts": [
+      "In Claude Code and Claude Cowork, tool calls route through proxies that enforce network and file policy and can inspect return values before they enter the model's context."
+    ],
+    "predicate_normalized": "enforces",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "proxies",
+    "predicate": "inspect",
+    "object": "return values before they enter the model's context",
+    "evidence_texts": [
+      "In Claude Code and Claude Cowork, tool calls route through proxies that enforce network and file policy and can inspect return values before they enter the model's context."
+    ],
+    "predicate_normalized": "detects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the classifier that does the inspection",
+    "predicate": "is",
+    "object": "a small, fast model",
+    "evidence_texts": [
+      "The classifier that does the inspection can be a small, fast model; it doesn't need to be the one doing the reasoning."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "The classifier that does the inspection can be a small, fast model; it doesn't need to be the one doing the reasoning.",
+      "src_idx": 290
+    },
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "need to be",
+    "object": "the one doing the reasoning",
+    "polarity": "negative",
+    "evidence_texts": [
+      "The classifier that does the inspection can be a small, fast model; it doesn't need to be the one doing the reasoning."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "The classifier that does the inspection can be a small, fast model; it doesn't need to be the one doing the reasoning.",
+      "src_idx": 291
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the classifier",
+    "subject_resolution_evidence": "The classifier that does the inspection can be a small, fast model; it doesn't need to be the one doing the reasoning.",
+    "subject_resolved": "the classifier"
+  },
+  {
+    "subject": "models and products",
+    "predicate": "advancing",
+    "object": "fast",
+    "evidence_texts": [
+      "Models and products are advancing fast."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "risks",
+    "predicate": "morph and evolve",
+    "object": "",
+    "evidence_texts": [
+      "As they do, risks morph and evolve, and our mitigations must keep pace to meet them."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "Models and products are advancing fast. As they do, risks morph and evolve, and our mitigations must keep pace to meet them.",
+      "src_idx": 293
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our mitigations",
+    "predicate": "keep pace",
+    "object": "",
+    "evidence_texts": [
+      "As they do, risks morph and evolve, and our mitigations must keep pace to meet them."
+    ],
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an injection that lands in any of these",
+    "predicate": "is reloaded",
+    "object": "each time the agent starts",
+    "evidence_texts": [
+      "An injection that lands in any of these is reloaded each time the agent starts."
+    ],
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "threatened by",
+    "object": "new persistence mechanisms in the classic post-exploitation sense",
+    "evidence_texts": [
+      "As more agent state survives the session, we are threatened by new persistence mechanisms in the classic post-exploitation sense."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "As more agent state survives the session, we are threatened by new persistence mechanisms in the classic post-exploitation sense.",
+      "src_idx": 296
+    },
+    "predicate_normalized": "threatens",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "good classifiers on session startup",
+    "predicate": "need to become",
+    "object": "more commonplace",
+    "evidence_texts": [
+      "Good classifiers on session startup will need to become more commonplace."
+    ],
+    "predicate_normalized": "become",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "sub-agents",
+    "predicate": "isolate",
+    "object": "untrusted content",
+    "evidence_texts": [
+      "On the one hand, sub-agents can isolate untrusted content, returning structured facts rather than raw text up to the main agent."
+    ],
+    "predicate_normalized": "isolates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this",
+    "predicate": "abused",
+    "object": "",
+    "evidence_texts": [
+      "On the other hand, this can be abused: if a sub-agent's output is treated as higher-trust than raw tool results, because such output came from “us,” a new vector for prompt injection is introduced."
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "On the other hand, this can be abused: if a sub-agent's output is treated as higher-trust than raw tool results, because such output came from “us,” a new vector for prompt injection is introduced.",
+      "src_idx": 299
+    },
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "treating sub-agent output as higher-trust",
+    "subject_resolution_evidence": "if a sub-agent's output is treated as higher-trust than raw tool results, because such output came from “us,” a new vector for prompt injection is introduced",
+    "subject_resolved": "treating sub-agent output as higher-trust"
+  },
+  {
+    "subject": "a sub-agent's output",
+    "predicate": "is treated as higher-trust than",
+    "object": "raw tool results",
+    "evidence_texts": [
+      "if a sub-agent's output is treated as higher-trust than raw tool results, because such output came from “us,” a new vector for prompt injection is introduced."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "On the other hand, this can be abused: if a sub-agent's output is treated as higher-trust than raw tool results, because such output came from “us,” a new vector for prompt injection is introduced.",
+      "src_idx": 300
+    },
+    "predicate_clean": "be treated as higher-trust than",
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a new vector for prompt injection",
+    "predicate": "is introduced",
+    "object": "",
+    "evidence_texts": [
+      "because such output came from “us,” a new vector for prompt injection is introduced."
+    ],
+    "predicate_normalized": "creates",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "multi-agent systems",
+    "predicate": "have",
+    "object": "a tradeoff between allocating differing trust levels and becoming liable to trust escalation",
+    "evidence_texts": [
+      "In multi-agent systems, there is a tradeoff between allocating differing trust levels and becoming liable to trust escalation."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Claude Cowork's answer to agent identity",
+    "predicate": "are",
+    "object": "concrete",
+    "evidence_texts": [
+      "Claude Cowork's answer to agent identity is concrete: credentials stay in the host keychain, the VM gets a per-session scoped-down token, and that token can be revoked independently of the user's."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "credentials",
+    "predicate": "stay in",
+    "object": "the host keychain",
+    "evidence_texts": [
+      "credentials stay in the host keychain, the VM gets a per-session scoped-down token, and that token can be revoked independently of the user's."
+    ],
+    "predicate_normalized": "located_in",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the VM",
+    "predicate": "gets",
+    "object": "a per-session scoped-down token",
+    "evidence_texts": [
+      "the VM gets a per-session scoped-down token, and that token can be revoked independently of the user's."
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "that token",
+    "predicate": "revoked independent of",
+    "object": "the user's",
+    "evidence_texts": [
+      "that token can be revoked independently of the user's."
+    ],
+    "predicate_normalized": "can",
+    "predicate_status": "mapped",
+    "subject_anaphor": "that",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "the per-session scoped-down token",
+    "subject_resolution_evidence": "the VM gets a per-session scoped-down token, and that token can be revoked independently of the user's",
+    "subject_resolved": "the per-session scoped-down token"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "grapple with",
+    "object": "the broader question of cross-platform agent identity",
+    "evidence_texts": [
+      "However, we are starting to grapple with the broader question of cross-platform agent identity."
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "However, we are starting to grapple with the broader question of cross-platform agent identity.",
+      "src_idx": 307
+    },
+    "predicate_normalized": "handles",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "an agent",
+    "predicate": "possess",
+    "object": "its own principal identity",
+    "evidence_texts": [
+      "Should an agent possess its own principal identity, or should it act as an extension of the user and inherit the user’s permissions?"
+    ],
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "act as",
+    "object": "an extension of the user",
+    "evidence_texts": [
+      "Should an agent possess its own principal identity, or should it act as an extension of the user and inherit the user’s permissions?"
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Should an agent possess its own principal identity, or should it act as an extension of the user and inherit the user’s permissions?",
+      "src_idx": 309
+    },
+    "predicate_normalized": "is",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "an agent",
+    "subject_resolution_evidence": "Should an agent possess its own principal identity, or should it act as an extension of the user",
+    "subject_resolved": "an agent"
+  },
+  {
+    "subject": "it",
+    "predicate": "inherit",
+    "object": "the user’s permissions",
+    "evidence_texts": [
+      "Should an agent possess its own principal identity, or should it act as an extension of the user and inherit the user’s permissions?"
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Should an agent possess its own principal identity, or should it act as an extension of the user and inherit the user’s permissions?",
+      "src_idx": 310
+    },
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "an agent",
+    "subject_resolution_evidence": "should it act as an extension of the user and inherit the user’s permissions",
+    "subject_resolved": "an agent"
+  },
+  {
+    "subject": "the answer",
+    "predicate": "may be",
+    "object": "a blend of the two",
+    "evidence_texts": [
+      "Ultimately, the answer may be a blend of the two."
+    ],
+    "predicate_clean": "be",
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "attack surfaces",
+    "predicate": "are shifting",
+    "object": "",
+    "evidence_texts": [
+      "As agents grow more capable, attack surfaces are constantly shifting."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "up"
+  },
+  {
+    "subject": "types of failures",
+    "predicate": "are likely to be repeated across",
+    "object": "industries and labs",
+    "evidence_texts": [
+      "The types of failures we’ve seen are likely to be repeated across industries and labs."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "The types of failures we’ve seen are likely to be repeated across industries and labs.",
+      "src_idx": 313
+    },
+    "predicate_clean": "be likely to be repeated across",
+    "predicate_normalized": "after",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "need collective investment in",
+    "object": "agent-specific security posture",
+    "evidence_texts": [
+      "We need collective investment in agent-specific security posture, from shared benchmarks and disclosure norms to common identity standards and cross-vendor red-teaming."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "We need collective investment in agent-specific security posture, from shared benchmarks and disclosure norms to common identity standards and cross-vendor red-teaming.",
+      "src_idx": 314
+    },
+    "predicate_normalized": "requires",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "this piece",
+    "predicate": "focus on",
+    "object": "containment",
+    "evidence_texts": [
+      "We focus on containment in this piece, but that's only one part of the security picture for agents."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "this piece",
+    "subject_resolution_evidence": "We focus on containment in this piece",
+    "subject_resolved": "this piece"
+  },
+  {
+    "subject": "containment",
+    "predicate": "is only one part of",
+    "object": "the security picture for agents",
+    "evidence_texts": [
+      "We focus on containment in this piece, but that's only one part of the security picture for agents."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [],
+      "anchor": "We focus on containment in this piece, but that's only one part of the security picture for agents.",
+      "src_idx": 316
+    },
+    "predicate_clean": "be only one part of",
+    "predicate_normalized": "part_of",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Glasswing initiative",
+    "predicate": "is",
+    "object": "one contribution",
+    "evidence_texts": [
+      "Our Glasswing initiative is one contribution, but we look forward to working with both partners and competitors on this critical issue."
+    ],
+    "predicate_normalized": "is_a",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "look forward to working with",
+    "object": "partners and competitors",
+    "evidence_texts": [
+      "Our Glasswing initiative is one contribution, but we look forward to working with both partners and competitors on this critical issue."
+    ],
+    "health": {
+      "marks": [
+        "谓词需清洗"
+      ],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "Our Glasswing initiative is one contribution, but we look forward to working with both partners and competitors on this critical issue.",
+      "src_idx": 318
+    },
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "Anthropic",
+    "predicate": "keep returning to",
+    "object": "a few principles",
+    "evidence_texts": [
+      "In short, there are a few principles we keep returning to:"
+    ],
+    "health": {
+      "marks": [],
+      "rewrites": [
+        {
+          "field": "subject",
+          "from": "we",
+          "to": "Anthropic"
+        }
+      ],
+      "anchor": "In short, there are a few principles we keep returning to:",
+      "src_idx": 319
+    },
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "containment",
+    "predicate": "design for at",
+    "object": "the environment layer",
+    "roles": {
+      "instrument": [
+        "the environment layer"
+      ]
+    },
+    "evidence_texts": [
+      "Design for containment at the environment layer first, then steer behavior at the model layer."
+    ],
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "behavior",
+    "predicate": "steer at",
+    "object": "the model layer",
+    "roles": {
+      "instrument": [
+        "the model layer"
+      ]
+    },
+    "evidence_texts": [
+      "Design for containment at the environment layer first, then steer behavior at the model layer."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the employee phish",
+    "predicate": "were",
+    "object": "cases of egress",
+    "evidence_texts": [
+      "Two of the incidents that taught us the most—the employee phish and the third-party allowlist disclosure—were both cases of egress, in which data left through a permitted path."
+    ],
+    "predicate_normalized": "is_a",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the third-party allowlist disclosure",
+    "predicate": "were",
+    "object": "cases of egress",
+    "evidence_texts": [
+      "Two of the incidents that taught us the most—the employee phish and the third-party allowlist disclosure—were both cases of egress, in which data left through a permitted path."
+    ],
+    "predicate_normalized": "is_a",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "data",
+    "predicate": "left through",
+    "object": "a permitted path",
+    "evidence_texts": [
+      "Two of the incidents that taught us the most—the employee phish and the third-party allowlist disclosure—were both cases of egress, in which data left through a permitted path."
+    ],
+    "predicate_normalized": "uses",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the model layer",
+    "predicate": "could help",
+    "object": "",
+    "polarity": "negative",
+    "evidence_texts": [
+      "In each, the model layer couldn't help; there was nothing anomalous for it to catch."
+    ],
+    "predicate_clean": "help",
+    "predicate_normalized": "supports",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the deterministic boundary",
+    "predicate": "is",
+    "object": "what gets hit when everything probabilistic misses",
+    "evidence_texts": [
+      "The deterministic boundary is what gets hit when everything probabilistic misses."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "isolation strength",
+    "predicate": "match to",
+    "object": "the user's capacity for oversight",
+    "evidence_texts": [
+      "Match isolation strength to the user's capacity for oversight."
+    ],
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a developer who can read bash",
+    "predicate": "are not running",
+    "object": "the same threat model",
+    "polarity": "negative",
+    "evidence_texts": [
+      "A developer who can read bash and a knowledge worker who can't are not running the same threat model."
+    ],
+    "predicate_clean": "run",
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a knowledge worker who can't",
+    "predicate": "are not running",
+    "object": "the same threat model",
+    "polarity": "negative",
+    "evidence_texts": [
+      "A developer who can read bash and a knowledge worker who can't are not running the same threat model."
+    ],
+    "predicate_clean": "run",
+    "predicate_normalized": "has_part",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a user",
+    "predicate": "can evaluate",
+    "object": "what an agent is about to do",
+    "evidence_texts": [
+      "The question of whether a user can evaluate what an agent is about to do should help determine the containment strategy, and answering it wrong in either direction—too much friction for experts, too much trust for non-experts—is its own failure."
+    ],
+    "predicate_clean": "evaluate",
+    "predicate_normalized": "can",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "a user can evaluate what an agent is about to do",
+    "predicate": "should help determine",
+    "object": "the containment strategy",
+    "evidence_texts": [
+      "The question of whether a user can evaluate what an agent is about to do should help determine the containment strategy, and answering it wrong in either direction—too much friction for experts, too much trust for non-experts—is its own failure."
+    ],
+    "predicate_clean": "help determine",
+    "predicate_normalized": "affects",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "answering it wrong in either direction—too much friction for experts, too much trust for non-experts",
+    "predicate": "is",
+    "object": "its own failure",
+    "evidence_texts": [
+      "The question of whether a user can evaluate what an agent is about to do should help determine the containment strategy, and answering it wrong in either direction—too much friction for experts, too much trust for non-experts—is its own failure."
+    ],
+    "predicate_normalized": "is",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "hypervisors",
+    "predicate": "have survived",
+    "object": "more adversarial attention",
+    "evidence_texts": [
+      "Battle-tested hypervisors, syscall filters, and container runtimes have survived more adversarial attention than anything you'll build."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "syscall filters",
+    "predicate": "have survived",
+    "object": "more adversarial attention",
+    "evidence_texts": [
+      "Battle-tested hypervisors, syscall filters, and container runtimes have survived more adversarial attention than anything you'll build."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "container runtimes",
+    "predicate": "have survived",
+    "object": "more adversarial attention",
+    "evidence_texts": [
+      "Battle-tested hypervisors, syscall filters, and container runtimes have survived more adversarial attention than anything you'll build."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "the standard primitives",
+    "predicate": "held",
+    "object": "",
+    "evidence_texts": [
+      "Across every deployment described here, the standard primitives held while our own work around them exposed flaws."
+    ],
+    "predicate_normalized": "has_property",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "our own work around them",
+    "predicate": "exposed",
+    "object": "flaws",
+    "evidence_texts": [
+      "Across every deployment described here, the standard primitives held while our own work around them exposed flaws."
+    ],
+    "predicate_normalized": "exposes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "agents",
+    "predicate": "may be",
+    "object": "a new category of software",
+    "evidence_texts": [
+      "Ultimately, while agents may be a new category of software, their system-level interactions are not."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Ultimately, while agents may be a new category of software, their system-level interactions are not.",
+      "src_idx": 338
+    },
+    "predicate_clean": "be",
+    "predicate_normalized": "is_a",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "their system-level interactions",
+    "predicate": "are",
+    "object": "not",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Ultimately, while agents may be a new category of software, their system-level interactions are not."
+    ],
+    "predicate_normalized": "different_from",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "they",
+    "predicate": "read",
+    "object": "files",
+    "evidence_texts": [
+      "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense.",
+      "src_idx": 340
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "They still read files, open sockets, and spawn processes",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "they",
+    "predicate": "open",
+    "object": "sockets",
+    "evidence_texts": [
+      "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense.",
+      "src_idx": 341
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "They still read files, open sockets, and spawn processes",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "they",
+    "predicate": "spawn",
+    "object": "processes",
+    "evidence_texts": [
+      "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense."
+    ],
+    "subject_anaphora": "they",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense.",
+      "src_idx": 342
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped",
+    "subject_anaphor": "they",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "agents",
+    "subject_resolution_evidence": "They still read files, open sockets, and spawn processes",
+    "subject_resolved": "agents"
+  },
+  {
+    "subject": "this",
+    "predicate": "makes",
+    "object": "containment with mature tooling a crucially viable defense",
+    "evidence_texts": [
+      "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense."
+    ],
+    "subject_anaphora": "this",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "They still read files, open sockets, and spawn processes; this makes containment with mature tooling a crucially viable defense.",
+      "src_idx": 343
+    },
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped",
+    "subject_anaphor": "this",
+    "subject_resolution_status": "unresolved"
+  },
+  {
+    "subject": "the risk-reward balance of deployments",
+    "predicate": "will keep shifting",
+    "object": "",
+    "evidence_texts": [
+      "The risk-reward balance of deployments will keep shifting as AI develops, but placing a hard limit on blast radius often forces that balance into the right direction."
+    ],
+    "predicate_clean": "keep shifting",
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "placing a hard limit on blast radius",
+    "predicate": "forces",
+    "object": "that balance into the right direction",
+    "evidence_texts": [
+      "The risk-reward balance of deployments will keep shifting as AI develops, but placing a hard limit on blast radius often forces that balance into the right direction."
+    ],
+    "predicate_normalized": "causes",
+    "predicate_status": "mapped",
+    "object_anaphor": "that",
+    "object_resolution_status": "resolved",
+    "object_resolution": "the risk-reward balance of deployments",
+    "object_resolution_evidence": "The risk-reward balance of deployments will keep shifting as AI develops, but placing a hard limit on blast radius often forces that balance into the right direction"
+  },
+  {
+    "subject": "Claude Code auto mode",
+    "predicate": "delegates",
+    "object": "command approvals",
+    "roles": {
+      "instrument": [
+        "a model-based classifier"
+      ]
+    },
+    "evidence_texts": [
+      "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one."
+    ],
+    "health": {
+      "marks": [
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one.",
+      "src_idx": 346
+    },
+    "predicate_normalized": "acts_on",
+    "predicate_status": "mapped"
+  },
+  {
+    "subject": "it",
+    "predicate": "minimizes",
+    "object": "friction",
+    "evidence_texts": [
+      "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one.",
+      "src_idx": 347
+    },
+    "predicate_normalized": "changes",
+    "predicate_status": "mapped",
+    "sign": "down",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Code auto mode",
+    "subject_resolution_evidence": "Claude Code auto mode delegates command approvals to a model-based classifier",
+    "subject_resolved": "Claude Code auto mode"
+  },
+  {
+    "subject": "it",
+    "predicate": "is",
+    "object": "one layer of defense-in-depth inside a sandbox",
+    "evidence_texts": [
+      "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）",
+        "否定存疑"
+      ],
+      "rewrites": [],
+      "anchor": "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one.",
+      "src_idx": 348
+    },
+    "predicate_normalized": "is_a",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Code auto mode",
+    "subject_resolution_evidence": "Claude Code auto mode delegates command approvals to a model-based classifier",
+    "subject_resolved": "Claude Code auto mode"
+  },
+  {
+    "subject": "it",
+    "predicate": "is",
+    "object": "a substitute for one",
+    "polarity": "negative",
+    "evidence_texts": [
+      "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one."
+    ],
+    "subject_anaphora": "it",
+    "needs_resolution": true,
+    "health": {
+      "marks": [
+        "指代主语（待消解）"
+      ],
+      "rewrites": [],
+      "anchor": "Claude Code auto mode delegates command approvals to a model-based classifier; it minimizes friction (roughly 0.4% of benign commands blocked) at the cost of missing a fraction of risky ones (~17% of overeager actions get through), so it's one layer of defense-in-depth inside a sandbox, not a substitute for one.",
+      "src_idx": 349
+    },
+    "predicate_normalized": "different_from",
+    "predicate_status": "mapped",
+    "subject_anaphor": "it",
+    "subject_resolution_status": "resolved",
+    "subject_resolution": "Claude Code auto mode",
+    "subject_resolution_evidence": "Claude Code auto mode delegates command approvals to a model-based classifier",
+    "subject_resolved": "Claude Code auto mode"
+  }
+]

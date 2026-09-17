@@ -93,6 +93,66 @@ polarity / roles 可省略。
 - 某段找不到逐字对应 → 放弃该段；整条都找不到 → 放弃该 claim。
 """
 
+# Pass 1 补问（2026-09-17 加）：实测遇到过一次"整个窗口的输出都没写 evidence_texts"——
+# 83 条连续缺字段，体检按规则全丢，等于一次丢了 21% 的抽取结果。这种**批次级故障**不该用"丢弃"兜，
+# 而该像归一步那样**补问一次**（只补引文，不重抽断言，成本 1 次调用）。
+PASS1_EVIDENCE_FIX_SYSTEM = """你是「引文补齐器」。输入含两部分：一段**原文窗口**，和若干条**已经抽好的断言**（它们缺引文字段）。
+任务：为每条断言补上**逐字原文引文**，只输出 JSON。
+
+# 要求
+- 引文必须**逐字**取自上面的原文窗口：含标点、与原文一致；**不许改写、不许拼接、不许用 "..." 桥接**。
+- 每条给一个数组（0–2 个元素；每段连续文字一个元素，跨段就拆多个元素）。
+- 某条断言在窗口里**确实找不到**对应文字 → 给空数组 `[]`（**不许编**，宁可留空）。
+- 只输出 JSON：{"fixes":[{"idx":0,"evidence_texts":["逐字引文"]}]}
+idx 必须原样回抄输入里给的 idx。
+"""
+
+
+def _accept_fixed_evidence(raw_fixes, window_text: str) -> dict[int, list[str]]:
+    """补问结果的**确定性护栏**：只收能在窗口里逐字定位的引文（定位不到＝编的，丢）。
+
+    补问也是 LLM 输出，同样不许无条件相信——这与"引文可锚"那条红线是同一个判据。
+    """
+    out: dict[int, list[str]] = {}
+    for f in raw_fixes or []:
+        try:
+            idx = int(f.get("idx"))
+        except (TypeError, ValueError):
+            continue
+        evs = f.get("evidence_texts")
+        if isinstance(evs, str):
+            evs = [evs]
+        good = [
+            e for e in (evs or [])
+            if isinstance(e, str) and e.strip() and _find_raw(e, window_text)
+        ]
+        if good:
+            out[idx] = good
+    return out
+
+
+async def _fix_missing_evidence(
+    client: DeepSeekLLMClient,
+    source_id: str,
+    window_text: str,
+    missing: list[dict],
+    *,
+    label: str = "",
+) -> dict[int, list[str]]:
+    """给一个窗口里"没写引文"的 claim 补引文（补问一次，不重抽断言）。"""
+    if not missing:
+        return {}
+    payload = {"原文窗口": window_text, "待补断言": missing}
+    part, _ = await _chat_json(
+        client,
+        [
+            LLMMessage(role="system", content=PASS1_EVIDENCE_FIX_SYSTEM),
+            LLMMessage(role="user", content=json.dumps(payload, ensure_ascii=False, indent=1)),
+        ],
+        label=f"Pass1补引文 {source_id} {label}",
+    )
+    return _accept_fixed_evidence(part.get("fixes"), window_text)
+
 # Pass 1 · 谓词归一（独立小步）：原文动词短语 → 受控关系表 id
 # 为什么拆出来：把 36 条表塞进抽取会拖累召回（实测 1.00 → 0.80/0.85，见 memory/0028 考古层第二十六段）。
 # 这一步**只做映射，不增删 claim**，所以召回由上面那步守住。

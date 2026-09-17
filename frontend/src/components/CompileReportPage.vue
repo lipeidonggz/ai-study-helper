@@ -65,6 +65,7 @@ async function reExtract() {
 const marked = computed(() => report.value?.marked || [])
 const dropped = computed(() => report.value?.dropped || [])
 const pending = computed(() => report.value?.pending || [])
+const anaphora = computed(() => report.value?.anaphora_list || [])
 
 /** 失败横幅：区分"体检红线不过（产物是本轮的，可看）"与"任务异常失败（报告可能是上一次的）" */
 const failBanner = computed(() => {
@@ -117,6 +118,8 @@ onUnmounted(() => window.clearInterval(timer))
         ｜ 归一：mapped {{ report.predicate_status?.mapped ?? '—' }} · forced {{ report.predicate_status?.forced ?? '—' }}
         · <strong>待定 {{ report.predicate_status?.pending ?? 0 }}</strong>
         ｜ 谓词清洗：{{ report.predicate_clean?.cleaned ?? 0 }} / 目标 {{ report.predicate_clean?.targets ?? 0 }}
+        ｜ 指代消解：已解 {{ report.anaphora?.resolved ?? '—' }} · 判不出 {{ report.anaphora?.unresolved ?? 0 }}
+        · 非指代 {{ report.anaphora?.not_anaphora ?? 0 }}
         ｜ 文档主体「{{ report.doc_subject }}」
         ｜ 召回：{{
           report.recall?.executed
@@ -190,6 +193,40 @@ onUnmounted(() => window.clearInterval(timer))
               <td><span class="badge bad">{{ p.invented }}</span></td>
               <td>{{ p.object || '' }}</td>
               <td class="note">{{ p.anchor }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>指代消解清单（S4.5 · {{ anaphora.length }} 个目标）</h2>
+        <p class="hint">
+          指代（<code>this / it / they…</code>）的所指**由上下文判定**：resolved = 已消解到某个可点名概念
+          （原文主宾<strong>不被覆盖</strong>，结果另存 <code>*_resolved</code>）；unresolved = 判不出
+          （**宁缺勿错**，丢不丢留给建图边界）；not_anaphora = 形式主语（<code>there is …</code>），本就没有所指。
+          依据必须是原文逐字片段（程序校验；不通过会被降级为 unresolved）。
+        </p>
+        <p v-if="!anaphora.length" class="hint">（无）</p>
+        <table v-else class="tbl">
+          <thead>
+            <tr><th>#</th><th>位置</th><th>指代词</th><th>原字段</th><th>状态</th><th>消解结果</th><th>依据（逐字）</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in anaphora" :key="'a' + a.idx + a.position">
+              <td>{{ a.idx }}</td>
+              <td>{{ a.position === 'subject' ? '主语' : '宾语' }}</td>
+              <td><code>{{ a.anaphor }}</code><br /><small>{{ a.kind }}</small></td>
+              <td>{{ a.field_text }}</td>
+              <td>
+                <span class="badge" :class="a.status === 'resolved' ? 'ok' : a.status === 'not_anaphora' ? 'idle' : 'run'">
+                  {{ a.status }}
+                </span>
+              </td>
+              <td><strong>{{ a.resolution || '—' }}</strong></td>
+              <td class="note">
+                {{ a.evidence }}
+                <span v-if="!a.evidence_verbatim" class="badge bad">依据非法</span>
+              </td>
             </tr>
           </tbody>
         </table>

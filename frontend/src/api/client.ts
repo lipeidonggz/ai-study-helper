@@ -607,6 +607,18 @@ export interface CheckSpec {
   note: string
 }
 
+export interface AnaphoraRow {
+  idx: number
+  position: 'subject' | 'object'
+  anaphor: string
+  kind: 'bare' | 'phrase' | 'embedded'
+  field_text: string
+  status: 'resolved' | 'unresolved' | 'not_anaphora'
+  resolution: string | null
+  evidence: string
+  evidence_verbatim: boolean
+}
+
 export interface HealthReport {
   source: string
   doc_subject: string
@@ -623,6 +635,8 @@ export interface HealthReport {
   pending: Record<string, any>[]
   predicate_status: { mapped: number; forced: number; pending: number }
   predicate_clean: { targets: number; cleaned: number; rejected: number; noop: number }
+  anaphora: { targets: number; resolved: number; unresolved: number; not_anaphora: number; demoted: number; evidence_verbatim: number; variant: string }
+  anaphora_list: AnaphoraRow[]
 }
 
 export interface CompileClaim {

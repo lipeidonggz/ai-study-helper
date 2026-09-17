@@ -12,6 +12,8 @@
   ⑥ 清洗护栏自洽  留下的 predicate_clean 必须"只删不改"可还原；被判拒的必须确实不可还原
   ⑦ 可锚闭环      每条 claim 有非空锚句（health.anchor 或 evidence_texts 首段）
   ⑧ 清单可回溯    dropped / marked / pending 的 idx 都落在 claims_raw 范围内
+  ⑨ 指代闭环      每个指代型字段（主语/宾语）都有 *_resolution_status；
+                   且**原字段没被覆盖**（有 *_resolved 的，原字段仍须是"指代词"）
 
 用法：cd backend && .venv\\Scripts\\python.exe -m scripts.compile_loop_check --source A5
 退出码：0 全过 / 1 有不过（便于串进脚本）。
@@ -25,6 +27,7 @@ import sys
 from pathlib import Path
 
 from app.compile.relations import RELATIONS
+from app.compile.anaphora import classify
 from app.compile.service import summary_verdict
 from scripts.compile_slice_b6 import _is_subsequence
 
@@ -115,6 +118,22 @@ def check(source_id: str, root: Path) -> list[tuple[str, bool, str]]:
     n = len(raw)
     bad_idx = [x.get("idx") for x in dropped + marked + pending if not isinstance(x.get("idx"), int) or not (0 <= x["idx"] < n)]
     out.append(("⑧ 清单可回溯", not bad_idx, f"越界 idx {len(bad_idx)}{' · ' + str(bad_idx[:4]) if bad_idx else ''}"))
+
+    # ⑨ 指代闭环（S4.5）
+    no_status, overwritten, anaphora_n = [], [], 0
+    for i, c in enumerate(kept):
+        for pos in ("subject", "object"):
+            txt = (c.get(pos) or "").strip()
+            if not classify(txt):
+                if c.get(f"{pos}_resolved"):           # 有消解结果，原字段却不是指代词 → 被覆盖了
+                    overwritten.append((i, pos))
+                continue
+            anaphora_n += 1
+            if not c.get(f"{pos}_resolution_status"):
+                no_status.append((i, pos))
+    ok9 = not no_status and not overwritten
+    out.append(("⑨ 指代闭环", ok9,
+                f"指代字段 {anaphora_n}；缺状态 {len(no_status)}{no_status[:3]}；疑似被覆盖 {len(overwritten)}{overwritten[:3]}"))
     return out
 
 

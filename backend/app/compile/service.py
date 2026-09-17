@@ -1,4 +1,4 @@
-"""抽取服务：线上流水线（Pass 1 → 体检 → 谓词清洗 → 谓词归一 + 红线闸门），供 API / 界面触发。
+"""抽取服务：线上流水线（Pass 1 → 体检 → 谓词清洗 → 谓词归一 → S4.5 指代消解 + 红线闸门），供 API / 界面触发。
 
 为什么在 app/ 而不是 scripts/：这是**线上流程**的一部分（界面可触发），scripts/ 里是离线实验脚本。
 TODO：目前复用 `scripts/compile_slice_b6.py` 里的提示词与工具函数（单一来源，避免两份实现漂移）；
@@ -8,8 +8,8 @@ TODO：目前复用 `scripts/compile_slice_b6.py` 里的提示词与工具函数
 
 产物（backend/data/compile/<source_id>/）：
   claims_raw.json  Pass 1 原始输出（体检前）
-  claims.json      体检后 + 已归一（每条带 predicate_normalized）
-  report.json      体检报告（五项 + 红线判定 + 丢弃/改写/标记清单）
+  claims.json      体检后 + 已归一 + 已消解指代（带 predicate_normalized / *_resolution）
+  report.json      体检报告（七项指标 + 红线判定 + 丢弃/改写/标记/指代消解清单）
   summary.json     元信息（模型、时间、条数、红线结论）
 """
 
@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from app.agent.llm import DeepSeekLLMClient, LLMMessage
+from app.compile.anaphora import resolve_source
 from app.compile.health import run_health_check
 from app.kb.manifest import parse_manifest
 from scripts.compile_slice_b6 import (
@@ -31,6 +32,7 @@ from scripts.compile_slice_b6 import (
     _chat_json,
     _clean_predicates,
     _file_units,
+    _fix_missing_evidence,
     _normalize_predicates,
     _validate_claims,
     _window_text,
@@ -216,6 +218,7 @@ class CompileService:
             # ---- Pass 1：按窗口抽断言（宽召回）----
             windows = _window_text(clean_t, 5000)
             claims: list[dict] = []
+            n_missing_ev = n_fixed_ev = 0
             for wi, w in enumerate(windows, start=1):
                 job.progress = f"Pass1 抽取窗口 {wi}/{len(windows)}"
                 user = (
@@ -227,7 +230,32 @@ class CompileService:
                     [LLMMessage(role="system", content=PASS1_SYSTEM), LLMMessage(role="user", content=user)],
                     label=f"Pass1 {job.source_id} 窗口{wi}/{len(windows)}",
                 )
-                claims.extend(part.get("claims") or [])
+                got = part.get("claims") or []
+                # 补问：这一窗若有"没写引文"的（实测遇到过整窗缺字段），补一次引文，别让体检白丢
+                missing = [
+                    {
+                        "idx": j,
+                        "subject": c.get("subject"),
+                        "predicate": c.get("predicate"),
+                        "object": c.get("object") or "",
+                    }
+                    for j, c in enumerate(got)
+                    if not (c.get("evidence_texts") or [])
+                ]
+                if missing:
+                    n_missing_ev += len(missing)
+                    job.progress = f"Pass1 第 {wi} 窗补引文（{len(missing)} 条）"
+                    fixed = await _fix_missing_evidence(
+                        client, job.source_id, w, missing, label=f"窗口{wi}/{len(windows)}"
+                    )
+                    for j, evs in fixed.items():
+                        got[j]["evidence_texts"] = evs
+                    n_fixed_ev += len(fixed)
+                    print(
+                        f"[B6] {job.source_id}: 窗口 {wi}/{len(windows)} 缺引文 {len(missing)} 条"
+                        f" → 补回 {len(fixed)} 条"
+                    )
+                claims.extend(got)
 
             # 结构校验（去空 roles、剔除缺 subject/predicate）
             norm: list[dict] = []
@@ -256,6 +284,18 @@ class CompileService:
             job.stage = "normalize"
             job.progress = f"谓词归一（{len(kept)} 条）"
             nv = await _normalize_predicates(client, job.source_id, kept, clean_t)
+
+            # ---- S4.5 指代消解（只补信息、不做取舍；判不出留 unresolved）----
+            job.stage = "anaphora"
+            job.progress = f"指代消解（{len(kept)} 条里找目标）"
+            an = await resolve_source(client, job.source_id, kept, clean_t)
+            print(
+                f"[B6] {job.source_id}: 指代消解 目标 {an['stats']['targets']}"
+                f" → 已解 {an['stats']['resolved']}、判不出 {an['stats']['unresolved']}"
+                f"、非指代 {an['stats']['not_anaphora']}、依据护栏降级 {an['stats']['demoted']}"
+            )
+            report["anaphora"] = an["stats"]
+            report["anaphora_list"] = an["list"]
 
             # 归一完成 → 回填报告里"标记清单"的归一化谓词（被丢弃的 claim 没归一，UI 显示 —）
             report["marked"] = [
@@ -323,6 +363,8 @@ class CompileService:
                 "invented_words": nv["invented"],
                 "cleaned": cl["cleaned"],
                 "clean_rejected": cl["rejected"],
+                "anaphora": an["stats"],
+                "evidence_fix": {"missing": n_missing_ev, "fixed": n_fixed_ev},
                 "relations": len(nv["kinds"]),
                 "predicate_health": {
                     "kinds": pred_health["pred_kinds"],
