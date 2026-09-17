@@ -13,6 +13,7 @@ from app.compile.anaphora import (
     context_window,
     evidence_verbatim,
     parse_results,
+    unresolved_reason,
 )
 
 WINDOW = (
@@ -44,6 +45,33 @@ def test_parse_results_handles_bare_array_and_fences():
     assert [r["claim_idx"] for r in parse_results(plain_bare)] == [3]
     assert parse_results("完全不是 JSON") == []
     assert parse_results("") == []
+
+
+# ---------- 判不出的原因分类（summary vs recheck）----------
+
+def test_unresolved_reason_summary_when_head_never_appears_before_anchor():
+    """`these questions` 类：中心词在锚句前没出现过 → 总结性指代（不造概念名）。"""
+    t = {
+        "kind": "phrase",
+        "field_text": "these questions",
+        "anchor_quote": "As agents take on more of the lifecycle, these questions will matter even more.",
+        "window": "What we don't yet know is how coherence evolves. We're still learning where judgment helps. "
+                  "As agents take on more of the lifecycle, these questions will matter even more.",
+    }
+    assert unresolved_reason(t) == "summary"
+
+
+def test_unresolved_reason_recheck_when_head_appears_before_anchor():
+    """中心词在锚句前出现过却仍没解 → 值得复查（窗口不足 or 模型漏解）。"""
+    t = {
+        "kind": "phrase",
+        "field_text": "these rules",
+        "anchor_quote": "These rules are enforced mechanically.",
+        "window": "We defined three layering rules for the repository. These rules are enforced mechanically.",
+    }
+    assert unresolved_reason(t) == "recheck"
+    # 光杆代词一律进"待复查"（规则判不了它是哪种）
+    assert unresolved_reason({"kind": "bare", "field_text": "it", "window": "x", "anchor_quote": "x"}) == "recheck"
 
 def test_context_window_reaches_far_back_and_stops_at_anchor():
     """窗口口径（2026-09-17 三改）：前向铺得够长、锚句完整、**后向不留**。

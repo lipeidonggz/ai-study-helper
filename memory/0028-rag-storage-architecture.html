@@ -634,6 +634,19 @@
       <p><strong>⑥ 两处诚实的保留</strong>：(a) <b>温度 0 没让 Pass 1 完全确定</b>（O2 仍 309/282/282，差 10%）→ 还有别的变异源，是"稳定性"主题的下一块；(b) 此前"依据先行 86.2% vs 结论先行 67.7%"的 A/B 是<b>单遍</b>、掺了温度噪声，不能当定论——温度 0 下 B4/B5 完全相同（35/0/2），说明**在 O2 上起决定作用的是窗口，不是提示词那点差异**。</p>
       <p><strong>沉淀</strong>：① <b>把随机性留给该随机的地方</b>——判官/编译这类"照规则干"的任务必须温度 0，"多遍不稳定"里有多少是真不确定、有多少只是采样，得先分开。② <b>"给够了材料"要能被证否</b>：我两次判断"窗口够"都是凭窗口里"看起来有东西"，正确的做法是**把窗口前后的原文都摊开看**（沛东的追问方式）。③ <b>一个指标波动时，先怀疑测量工具</b>（裸数组解析 bug 伪装成了"模型不稳定"）。④ <b>没数据支持的保险要主动砍</b>——后向 300 字符是"cataphora 也许存在"的预设，实测 0/95。</p>
 
+      <h3>考古层第三十七段 · "这种提取出来意义也不大"：一次把消解边界往回拉的判断（2026-09-17 三轮）</h3>
+      <p><strong>起题</strong>：沛东翻到 O2 唯一剩下那条判不出的 <code>[273] these questions</code>，说"上下文里看应该是比较明显的指代"。摊开查清：**全文在锚句之前从未出现过 <code>question</code> 这个词**——它指的是前面三句"我们还不知道…／我们仍在学习…／我们最大的挑战是…"，是**总结性指代**，原文**没有给这组东西起过名字**。模型之所以卡住很讽刺：它**把那三句原文都引出来当依据了**（逐字通过护栏），却因为"resolution 要写成术语式名词短语、不许用自己知识补"而选了 unresolved。</p>
+      <p><strong>沛东的判断把方向拉回来了</strong>："我觉得这种，即便提取出来了，也意义不大。" 我逐条核对后**同意，而且比原方案更对**：</p>
+      <ul>
+        <li><b>连接度＝1</b>：<code>[273]</code> 是一元断言（object 空），归一后 <code>has_property</code>；硬解出来就是 <code>the open questions about agent-generated software —[has_property]→ ∅</code>——图里一个孤立节点，对路由零贡献。</li>
+        <li><b>名字是造的</b>：原文没有对应 NP → 不可引文锚定，直接冲撞"编译层不能成为事实源"；对照 <code>These constraints → the rigid architectural model constraints</code>、<code>these rules → the custom linter rules</code>、<code>These principles → the golden principles</code> 全是**回指原文已有 NP**（该解），只有 <code>these questions</code> 是**总结**（不该造）。</li>
+        <li><b>跨源对不上</b>：每篇会造出不同措辞，跨文聚合失效——而那是图相对向量的卖点。</li>
+      </ul>
+      <p><strong>但"意义不大"≠"整条丢"</strong>：这类句式（<code>these questions / challenges / risks / limitations</code>）正是作者陈述**局限/展望**的典型句式，而"按角色过滤"是 claim_type 的核心用途；关键认识是——**那条路径走的是 <code>文档 —asserts→ statement（带 claim_type）→ chunk</code>，并不要求 subject 是概念节点**。于是形成处置：<b><code>summary</code> 类保留原文 surface、<code>about</code> 为空、挂 doc、证据锚回 chunk</b>——不造概念、不丢断言、可锚定。已知代价：不参与概念路由（跨文纯概念问法捞不到），若将来需要可把 <code>about</code> 指向上文原文已有的概念并标 <code>about_source: context</code>（留到 S5 定）。</p>
+      <p><strong>顺带两个观察</strong>：① <code>[273]</code> 锚句所在 chunk 的 section 是 <code>What we're still learning</code>——原文其实用**章节标题**给这片内容起过名字；但拿它当节点＝重开"topic 节点"，与决策 3 冲突，<b>不开口子</b>。② A5 有两条 <code>that …</code> 被当"嵌入式指代"处理（<code>that a feature originally designed…</code>、<code>that some internal agents read Slack</code>），它们是**宾语从句**（<code>that</code> 作引导词）——属于早就列为"另一类、不进 S4.5"的东西，现在确认它确实会混进 <code>embedded</code>，记成待处理的检测规则。</p>
+      <p><strong>落地</strong>：<code>unresolved</code> 按原因三分类（<code>summary</code> / <code>recheck</code> / <code>evidence</code>），程序侧确定性判定（判据＝"中心词在锚句前出现过没有"），写进 claim 字段、报告 JSON 与前端清单（状态列标「总结性指代 / 待复查 / 依据不逐字」）；架构文档 C2 写入"<code>summary</code> 类走文档级陈述"的口径，G 表加对应待办。实测：O2 46 目标 → 已解 42 / summary 1（<code>these questions</code>）/ evidence 1 / 非指代 2；A5 73 目标 → 已解 64 / recheck 3；依据 A5 73/73=100%；闭环 9/9；全量 247 passed。单测 11 条（含 summary 与 recheck 两例）。</p>
+      <p><strong>沉淀</strong>：① <b>"能解出来"和"解出来有用"是两件事</b>——判断一个消解该不该做，要问"结果进图后是什么形态"（这里是 degree=1 的孤立节点），而不是"技术上能不能做"；② <b>回指 vs 总结要分开</b>：回指（原文有 NP）该解、总结（原文没名字）不该造——这条边界是这次才钉住的；③ <b>"不造名"不等于"丢信息"</b>：同一份信息可以有不同挂法（概念节点 / 文档级陈述），选哪种取决于下游用哪条路径去够它；④ 又一次印证"<b>指标要分桶</b>"——<code>unresolved</code> 混作一团时看不出"哪些不用管、哪些要修"。</p>
+
       <h3>决策记录与未决（时间精确到分）</h3>
       <ul>
         <li>2026-09-08 上午：沛东拍板开 0028，考古层第一段先记录问题、分析、初步方向；开宗明义采用"RAG 本义被窄化"讨论；</li>

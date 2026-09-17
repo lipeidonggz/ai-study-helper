@@ -240,6 +240,16 @@ onUnmounted(() => window.clearInterval(timer))
                 <span class="badge" :class="a.status === 'resolved' ? 'ok' : a.status === 'not_anaphora' ? 'idle' : 'run'">
                   {{ a.status }}
                 </span>
+                <br v-if="a.status === 'unresolved' && a.reason" />
+                <small v-if="a.status === 'unresolved' && a.reason === 'summary'" title="所指是一组抽象项、原文没有对应名词短语（总结性指代）——不造概念名，交 S5 走文档级陈述">
+                  总结性指代
+                </small>
+                <small v-else-if="a.status === 'unresolved' && a.reason === 'recheck'" title="中心词出现过却仍没解出，或光杆代词——可能是窗口不足或模型漏解，值得复查">
+                  待复查
+                </small>
+                <small v-else-if="a.status === 'unresolved' && a.reason === 'evidence'" title="模型给了结论，但依据不是逐字（没通过依据护栏）——结论不可信，已降级">
+                  依据不逐字
+                </small>
               </td>
               <td><strong>{{ a.resolution || '—' }}</strong></td>
               <td class="note">

@@ -131,6 +131,31 @@ def context_window(
     return {"window": clean_t[lo:hi].strip(), "anchor_quote": ev.strip()}
 
 
+def unresolved_reason(target: dict) -> str:
+    """判不出时，**程序侧**区分原因（确定性规则，不动提示词）：
+
+    · `summary`：形状是"指代词 + 抽象名词"（these questions / these challenges），
+      且该名词**在锚句之前从未出现** → 原文没有可回指的名词短语，多半是**总结性指代**
+      （指向前文一串"我们还不知道…"的句子）。这类**不该造概念名**——名字会是编的、
+      不可锚、跨文对不上；处置留给 S5（走文档级陈述，见架构文档 C2）。
+    · `recheck`：其它情况（中心词出现过、或光杆代词）→ 值得人工复核：可能是窗口不足、也可能是模型漏解。
+
+    另有第三种原因由依据护栏填：`evidence`＝模型给了结论但**依据不是逐字**（结论没站住）。
+
+    说明：这是**启发式**（判据只用"中心词在锚句前出现过没有"），不是语义判断；
+    它只负责把"判不出"分成"不用管"和"要看一眼"两堆。
+    """
+    if target.get("kind") != "phrase":
+        return "recheck"
+    head = re.sub(r"[^A-Za-z\-]", "", (target.get("field_text") or "").split()[-1].lower())
+    if not head:
+        return "recheck"
+    window = target.get("window") or ""
+    anchor = target.get("anchor_quote") or ""
+    before = window[: window.rfind(anchor)] if anchor and anchor in window else window
+    return "recheck" if head in before.lower() else "summary"
+
+
 def find_targets(claims: list[dict], clean_t: str) -> list[dict]:
     """列出所有待消解的目标：主语位 + 宾语位（光杆 / 指代短语 / 嵌入式）。"""
     out: list[dict] = []
@@ -338,6 +363,7 @@ async def resolve_targets(
                 "resolution": resolution,
                 "evidence": evidence,
                 "evidence_verbatim": evidence_verbatim(evidence, t["window"]),
+                "reason": unresolved_reason(t) if status == "unresolved" else None,
                 "answered": (t["claim_idx"], t["position"]) in got,
             }
         )
@@ -347,6 +373,9 @@ async def resolve_targets(
         "resolved": sum(1 for r in results if r["status"] == "resolved"),
         "unresolved": sum(1 for r in results if r["status"] == "unresolved"),
         "not_anaphora": sum(1 for r in results if r["status"] == "not_anaphora"),
+        "unresolved_summary": sum(1 for r in results if r["status"] == "unresolved" and r.get("reason") == "summary"),
+        "unresolved_recheck": sum(1 for r in results if r["status"] == "unresolved" and r.get("reason") == "recheck"),
+        "unresolved_evidence": sum(1 for r in results if r["status"] == "unresolved" and r.get("reason") == "evidence"),
         "evidence_verbatim": sum(1 for r in results if r["evidence_verbatim"]),
         "failed_batches": failed_batches,
         "batches": len(batches),
@@ -395,6 +424,9 @@ async def resolve_source(
         "resolved": guard["resolved"],
         "unresolved": guard["unresolved"],
         "not_anaphora": guard["not_anaphora"],
+        "unresolved_summary": out["stats"]["unresolved_summary"],
+        "unresolved_recheck": out["stats"]["unresolved_recheck"],
+        "unresolved_evidence": out["stats"]["unresolved_evidence"],
         "demoted": guard["demoted"],
         "evidence_verbatim": sum(1 for r in out["results"] if r["evidence_verbatim"]),
         "variant": variant,
@@ -413,6 +445,7 @@ async def resolve_source(
             "object": t["object"],
             "status": r["status"],
             "resolution": r["resolution"],
+            "reason": r.get("reason"),          # 判不出的原因：summary（总结性指代，不造名）/ recheck（待复查）
             "evidence": r["evidence"],
             "evidence_verbatim": r["evidence_verbatim"],
             "window": t["window"],          # 判断"是不是真判不出"必须看窗口，故一并带上报告
@@ -437,6 +470,7 @@ def apply_evidence_guard(results: list[dict], targets: list[dict]) -> dict:
         if not ok and r["status"] == "resolved":
             r["status"] = "unresolved"
             r["evidence_not_verbatim"] = True
+            r["reason"] = "evidence"          # 原因第三类：结论给了，但依据不是逐字
             demoted.append((r["claim_idx"], r["position"], r.get("resolution")))
     return {
         "demoted": len(demoted),

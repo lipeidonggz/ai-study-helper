@@ -618,6 +618,7 @@ export interface AnaphoraRow {
   object: string
   status: 'resolved' | 'unresolved' | 'not_anaphora'
   resolution: string | null
+  reason: 'summary' | 'recheck' | 'evidence' | null
   evidence: string
   evidence_verbatim: boolean
   window: string
