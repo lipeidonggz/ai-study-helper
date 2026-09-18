@@ -271,3 +271,325 @@ def group_by_similarity(vectors: list[list[float]], threshold: float) -> list[li
     for i in range(n):
         groups.setdefault(find(i), []).append(i)
     return sorted(groups.values(), key=lambda g: (-len(g), g[0]))
+
+
+# ---------------------------------------------------------------------------
+# L3 的**结构证据**（确定性，2026-09-17 定）
+# ---------------------------------------------------------------------------
+#
+# 背景（memory/0028 考古层第二十五段 + 第四十段后的复测）：
+#   · 当初（第二十五段）想用"同谓词 + 同宾语 → 同指候选"，实测被否，归因是"图太薄"；
+#   · 2026-09-17 复查发现还有第二层原因：**信号与目标错位**——别名分裂时边也跟着分裂，
+#     真同指对（VM ↔ virtual machine、EDR ↔ 全称）**共享 0 个具体关系对**；
+#     而"同类不同实例"（MCP server / plugin / web search tool 都 provides content）共享满。
+#   故本信号的正确位置是：**L3 判定的证据（加分项）+ 否决倾向（减分项）**，不是候选源。
+
+
+def _profile(edges: list[dict]) -> dict[str, set[tuple[str, str, str]]]:
+    """实体 → 具体关系轮廓：{(方向, 谓词, 另一端的实体 id)}。"""
+    prof: dict[str, set[tuple[str, str, str]]] = {}
+    for e in edges:
+        f, t, p = e.get("from"), e.get("to"), e.get("predicate")
+        if not f or not p:
+            continue
+        prof.setdefault(f, set()).add(("out", p, t or ""))
+        if t:
+            prof.setdefault(t, set()).add(("in", p, f))
+    return prof
+
+
+def structure_evidence(
+    entities: list[dict],
+    edges: list[dict],
+    pairs: list[tuple[str, str]],
+) -> dict[tuple[str, str], dict]:
+    """给每对候选算结构证据（确定性、不调 LLM）。
+
+    返回 {pair: {shared, conflict, degree_a, degree_b, shared_pairs, conflict_pairs}}：
+      · **shared**  = 两者共享的「同一方向 + 同一谓词 + 同一端点」对（同一物的两个名字常连同样的东西）
+      · **conflict** = 两者在同一方向 + 同一谓词下**各自指向不同端点**的对数（更像两个不同物）
+      · shared ≥ 2 才提示"结构支持"（2026-09-10 的教训：1 条边撞上就是 100% 相似，没有证明力）
+    """
+    name_to_id = {}
+    for e in entities:
+        name_to_id[e.get("name") or ""] = e.get("id")
+        for a in e.get("aliases") or []:
+            name_to_id[a] = e.get("id")
+    prof = _profile(edges)
+
+    def pid(x: str) -> str:
+        return name_to_id.get(x) or x
+
+    out: dict[tuple[str, str], dict] = {}
+    for a, b in pairs:
+        pa, pb = prof.get(pid(a), set()), prof.get(pid(b), set())
+        shared = sorted(pa & pb)
+        # conflict：同方向 + 同谓词，但另一端不同
+        conflict = 0
+        by_key_a: dict[tuple[str, str], set[str]] = {}
+        by_key_b: dict[tuple[str, str], set[str]] = {}
+        for d, p, o in pa:
+            by_key_a.setdefault((d, p), set()).add(o)
+        for d, p, o in pb:
+            by_key_b.setdefault((d, p), set()).add(o)
+        for k in by_key_a.keys() & by_key_b.keys():
+            if by_key_a[k] ^ by_key_b[k]:      # 同方向 + 同谓词，另一端不同
+                conflict += 1
+        deg_a, deg_b = len(pa), len(pb)
+        out[(a, b)] = {
+            "shared": len(shared),
+            "conflict": conflict,
+            "degree_a": deg_a,
+            "degree_b": deg_b,
+            "shared_pairs": ["·".join(x) for x in shared[:6]],
+            # 否决倾向只给"两边都有一定规模、且同谓词下指向不同端点"的情形——
+            # 否则"一个只有 1 条边的实体"随便撞上就成冲突，等于噪声（2026-09-10 的教训）。
+            "veto_candidate": bool(conflict >= 2 and min(deg_a, deg_b) >= 3),
+        }
+    return out
+
+
+# ---------------------------------------------------------------------------
+# L3 判定（LLM 带证据判 same / different）——**提示词是基础件，改动需人工过目**
+# ---------------------------------------------------------------------------
+
+L3_PROMPT = """你是「实体同指判定器」。输入是一批**候选对**（A / B），每对附：
+  · 候选信号（acronym = 词首字母匹配；rewrite = 词集高度重合但互不包含；bracket = 括号限定）
+  · 各自代表边（谓词 + 另一端 + **逐字原文引文**）——引文是最终依据
+  · 各自在原文里的出处块
+
+任务：对每一对判 same / different，并给出**逐字原文依据**。
+
+判据（从严）：
+1. **same**：仅当两者在原文里**指同一个事物**——只是叫法不同（缩写与全称、括号补充、改写或语序差异、冠词 / 所有格 / 单复数差异）。
+2. **different**：以下情形一律判 different——
+   · 上下位 / 包含 / 从属（一者是另一者的一类、一部分、一个实例）
+   · 一者是另一者的**属性、度量、约束或状态**（不是那个事物本身）
+   · **同一角色的不同实例**（功能相同但不是同一个东西）
+   · 一方比另一方**多了会改变所指的限定词**（否定、范围、条件、程度、序数等）
+3. **拿不准判 different**——本项目红线：错合比漏合危险（合并会污染检索路由，漏合只是少一次优化）。
+4. 依据必须**逐字**出现在上面给出的引文里；写不出逐字依据 → 判 different。
+5. 不要用你自己的世界知识补全（只依据原文）。
+6. `canonical`（same 时的规范名）必须用**原文的语言**写（本语料是英文），不要翻译。
+
+输出（严格 JSON，无多余文字、无代码围栏）：
+{"results":[{"id":0,"verdict":"same","reason":"一句话理由","evidence":"逐字原文片段","canonical":"same 时给推荐规范名：取更完整、更常见的那个"}]}
+id 必须原样回抄；verdict 只允许 same / different。"""
+
+
+def _edge_line(e: dict, claims: list[dict], side: str = "out", id2name: dict[str, str] | None = None) -> str:
+    """一条代表边的一行描述（含原文引文）。
+
+    方向**始终**按 from —谓词→ to 渲染（side 只用于挑选"离本实体最近的那条"，
+    不能拿来翻转箭头——否则入边会把两端渲染成同一个名字）。
+    端点一律渲染成**名字**：id 对 LLM 没有意义。
+    """
+    mapping = id2name or {}
+
+    def nm(x: str | None) -> str:
+        return mapping.get(x, x) if x else "∅"
+
+    frm = nm(e.get("from")) if e.get("from") else "∅"
+    to = nm(e.get("to"))
+    idx = e.get("claim_idx")
+    quote = ""
+    if isinstance(idx, int) and 0 <= idx < len(claims):
+        evs = claims[idx].get("evidence_texts") or []
+        quote = (evs[0] if evs else "")[:160]
+    return f"{frm} —{e.get('predicate')}→ {to} ｜原文：{quote}"
+
+
+def build_l3_user(
+    entities: list[dict],
+    edges: list[dict],
+    pairs: list[tuple[str, str]],
+    claims: list[dict],
+    evidence: dict[tuple[str, str], dict] | None = None,
+    *,
+    max_edges: int = 3,
+) -> tuple[str, dict[int, list[str]]]:
+    """组装 L3 的 user 输入。返回 (文本, {配对序号: 该对可用的引文池})。
+
+    引文池用于**逐字依据护栏**：模型给的 evidence 必须能在池子里原样找到。
+    """
+    ev = evidence or {}
+    name_to_id = {}
+    id2name: dict[str, str] = {}
+    for e in entities:
+        name_to_id[e.get("name") or ""] = e.get("id")
+        if e.get("id"):
+            id2name[e["id"]] = e.get("name") or e["id"]
+        for a in e.get("aliases") or []:
+            name_to_id[a] = e.get("id")
+    by_id: dict[str, list[dict]] = {}
+    for e in edges:
+        by_id.setdefault(e.get("from"), []).append(e)
+        if e.get("to"):
+            by_id.setdefault(e["to"], []).append(e)
+
+    lines: list[str] = []
+    pools: dict[int, list[str]] = {}
+    for i, (a, b) in enumerate(pairs):
+        info = ev.get((a, b), {})
+        lines.append(f'[{i}] A = "{a}"　B = "{b}"')
+        if info.get("signals"):
+            lines.append(f"  候选信号：{', '.join(info['signals'])}")
+        pool: list[str] = []
+        for label, name in (("A", a), ("B", b)):
+            eid = name_to_id.get(name)
+            rel = [e for e in by_id.get(eid or "", [])]
+            if not rel:
+                lines.append(f"  {label} 的代表边：（无）")
+                continue
+            lines.append(f"  {label} 的代表边：")
+            for e in rel[:max_edges]:
+                line = _edge_line(e, claims, "out", id2name)
+                lines.append("    - " + line)
+                if "｜原文：" in line:
+                    q = line.split("｜原文：", 1)[1].strip()
+                    if q:
+                        pool.append(q)
+        # 同一条边可能同时挂在 A/B 两侧（A→B），引文池去重（保序）
+        pools[i] = list(dict.fromkeys(pool))
+    return "\n".join(lines), pools
+
+
+def parse_l3(
+    raw: str | dict,
+    pools: dict[int, list[str]] | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """解析 L3 响应并做**逐字依据护栏**：依据不在引文池里 → 降级 different（记账）。
+
+    与 S4.5 的「只删不改」同源纪律：模型可以省，但不能编。
+    """
+    import json as _json
+
+    if isinstance(raw, dict):
+        data = raw
+    else:
+        text = (raw or "").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.find("{") :] if "{" in text else text
+        data = _json.loads(text)
+    items = data.get("results") if isinstance(data, dict) else data
+    out: list[dict] = []
+    demoted: list[dict] = []
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        rec = {
+            "id": it.get("id"),
+            "verdict": (it.get("verdict") or "").strip().lower(),
+            "reason": (it.get("reason") or "").strip(),
+            "evidence": (it.get("evidence") or "").strip(),
+            "canonical": (it.get("canonical") or "").strip() or None,
+        }
+        if rec["verdict"] not in ("same", "different"):
+            rec["verdict"] = "different"
+            rec["reason"] = rec["reason"] or "verdict 非法 → 保守判 different"
+        if rec["verdict"] == "same":
+            pool = (pools or {}).get(rec["id"]) if isinstance(rec["id"], int) else None
+            ok = bool(rec["evidence"]) and (
+                pool is None or any(rec["evidence"] in q or q in rec["evidence"] for q in pool)
+            )
+            if not ok:
+                demoted.append(dict(rec, demoted_from="same", why="依据不逐字/缺失"))
+                rec["verdict"] = "different"
+                rec["reason"] = (rec["reason"] + "｜依据护栏降级") if rec["reason"] else "依据护栏降级"
+        out.append(rec)
+    return out, demoted
+
+
+def split_by_veto(
+    pairs: list[tuple[str, str]],
+    evidence: dict[tuple[str, str], dict],
+) -> tuple[list[int], list[dict]]:
+    """**确定性前置**：结构上命中否决的候选对直接判 different，不送 LLM。
+
+    为什么放在这里而不是写进提示词（2026-09-18 沛东指出的问题）：
+      "基于结构证据的否定"是**确定性操作**（同方向 + 同谓词、端点不同、两边都有规模），
+      交给 LLM 既没必要、又会污染它的语义判断。确定性的事由程序做，LLM 只做语义判断。
+
+    返回 (送 LLM 的下标列表, 被否决的记录)。否决口径见 `structure_evidence.veto_candidate`：
+    conflict ≥ 2 且两边度数都 ≥ 3——否则"只有 1 条边的实体"随便撞上就成冲突（噪声）。
+    """
+    keep: list[int] = []
+    vetoed: list[dict] = []
+    for i, pair in enumerate(pairs):
+        info = evidence.get(pair, {})
+        if info.get("veto_candidate"):
+            vetoed.append({
+                "id": i,
+                "a": pair[0],
+                "b": pair[1],
+                "verdict": "different",
+                "by": "structure_veto",
+                "reason": f"结构否决：同谓词下端点不同 {info.get('conflict', 0)} 处，"
+                          f"两边度数 {info.get('degree_a', 0)}/{info.get('degree_b', 0)}",
+                "evidence": "",
+                "canonical": None,
+            })
+        else:
+            keep.append(i)
+    return keep, vetoed
+
+
+async def judge_pairs(
+    client,
+    entities: list[dict],
+    edges: list[dict],
+    pairs: list[tuple[str, str]],
+    claims: list[dict],
+    evidence: dict[tuple[str, str], dict] | None = None,
+) -> dict:
+    """L3 判定编排：**确定性否决先用**，剩下的才送 LLM；逐字依据护栏兜底。
+
+    返回 {"results": [...], "vetoed": [...], "demoted": [...], "skipped_ids": [...], "raw": str}
+    —— 每个候选对都必须有结论（same / different / 否决 / 降级），不许静默。
+    """
+    from app.agent.llm import LLMMessage
+    from scripts.compile_slice_b6 import _chat_json
+
+    ev = evidence or {}
+    keep_ids, vetoed = split_by_veto(pairs, ev)
+    results: list[dict] = []
+    demoted: list[dict] = []
+    raw = ""
+    error = ""
+    if keep_ids:
+        sub_ev = {}
+        for i in keep_ids:
+            a, b = pairs[i]
+            sub_ev[(a, b)] = ev.get((a, b), {})
+        text, pools = build_l3_user(entities, edges, [pairs[i] for i in keep_ids], claims, sub_ev)
+        try:
+            obj, raw = await _chat_json(
+                client,
+                [LLMMessage(role="system", content=L3_PROMPT), LLMMessage(role="user", content=text)],
+                label="S6-L3",
+            )
+        except Exception as exc:      # 调用失败 → 全部候选留待下次（不猜、不静默丢）
+            error = f"{type(exc).__name__}: {exc}"
+            obj = {"results": []}
+        recs, demoted = parse_l3(obj, pools)
+        # 把子编号（0..n-1）映回原下标
+        for r in recs:
+            if isinstance(r.get("id"), int) and 0 <= r["id"] < len(keep_ids):
+                r["id"] = keep_ids[r["id"]]
+        for d in demoted:
+            if isinstance(d.get("id"), int) and 0 <= d["id"] < len(keep_ids):
+                d["id"] = keep_ids[d["id"]]
+        results = recs
+    answered = {r["id"] for r in results if isinstance(r.get("id"), int)} | {
+        v["id"] for v in vetoed
+    }
+    skipped_ids = [i for i in range(len(pairs)) if i not in answered]
+    return {
+        "results": sorted(results + vetoed, key=lambda r: r.get("id") or 0),
+        "vetoed": vetoed,
+        "demoted": demoted,
+        "skipped_ids": skipped_ids,
+        "error": error,
+        "raw": raw,
+    }

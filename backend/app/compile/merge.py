@@ -190,11 +190,14 @@ def merge_entities(
     *,
     id_prefix: str = "ent",
     provenance: dict[str, set[str]] | None = None,
+    drop_isolated: bool = False,
 ) -> dict:
     """对 ① 的产物做形合并：实体归一 + 边 remap + 自环丢弃，返回新 bundle + audit。
 
     实体 id 用确定性序号（便于跨遍对比）；真实入库时换成无业务含义的唯一 id。
     provenance（名字 → 出处 chunk 集合）可选：给了就启用 L2「共现才合并」。
+    drop_isolated：合并 + 丢自环后"边被丢光"的实体是否移除。默认 False（通用行为）；
+    **S6-A 线上接线传 True**——S5 立了"实体表＝边端点集合"的不变式，无边实体无法参与路由。
     """
     groups: dict[str, list[dict]] = {}
     for e in entities:
@@ -308,12 +311,31 @@ def merge_entities(
         "self_loops_dropped": len(self_loops),
         "dangling_endpoints": sorted(set(dangling)),
     }
+    # 合并 + 丢自环之后，可能有个别实体"边被丢光"（只可能由自环造成）。
+    # 保持 S5 立下的不变式：**实体表 ＝ 边端点集合**（无边实体无法参与路由，属纯噪声）——
+    # 但必须记账、可回溯（名称 + 别名 + 为什么），所以单列 isolated_dropped。
+    isolated_dropped: list[dict] = []
+    if drop_isolated:
+        used_ids = {x for e in out_edges for x in (e.get("from"), e.get("to")) if x}
+        isolated_dropped = [
+            {"id": e["id"], "name": e["name"], "aliases": e.get("aliases") or [], "reason": "合并后无边（原边为自环）"}
+            for e in out_entities
+            if e["id"] not in used_ids
+        ]
+        if isolated_dropped:
+            drop_ids = {e["id"] for e in isolated_dropped}
+            out_entities = [e for e in out_entities if e["id"] not in drop_ids]
+        audit["entities_out"] = len(out_entities)
+        audit["isolated_dropped"] = len(isolated_dropped)
+
     return {
         "entities": out_entities,
         "edges": out_edges,
         "merge_log": merge_log,
         "dup_log": dup_log,
         "review_log": review_log,
+        "self_loops": self_loops,   # 被丢弃的自环（合并前是"同一物的两种写法"之间的关系）→ 必须可追溯
+        "isolated_dropped": isolated_dropped,  # 因边被丢光而无边的实体（纯噪声）→ 必须可追溯
         "audit": audit,
     }
 
@@ -432,3 +454,62 @@ def alias_collisions(entities: list[dict]) -> list[tuple[str, list[str]]]:
             if n:
                 owners.setdefault(n, set()).add(eid)
     return sorted((n, sorted(ids)) for n, ids in owners.items() if len(ids) > 1)
+
+
+# ---------------------------------------------------------------------------
+# S6-A 接线：把上面的确定性合并接到线上流水线（输入＝S5 的图 bundle）
+# ---------------------------------------------------------------------------
+
+def merge_stage(
+    graph: dict,
+    clean_t: str = "",
+    chunks: list[dict] | None = None,
+    *,
+    id_prefix: str = "ent",
+) -> dict:
+    """S6-A：S5 产物 → **确定性形合并**（L1 形归一 + L2 出处置信度 + 边 remap + 审计）。
+
+    职责边界（与用户 2026-09-17 确认的规则集一致）：
+      · 只做"同一形态 key 下多个写法"的多合一——单形不改写（改名＝造名）；
+      · 语义合并（缩写全称 / 改写 / 同义异名）**不在这里**，归 L3（S6-B）；
+      · 不删除任何实体；跨文章异名消解仍然后置。
+
+    输入形状＝S5 的 graph.json（entities: name/type/aliases；edges: from/to 用**名字**）；
+    输出形状＝同名 bundle，但实体带 `id`、边的 `from/to` **remap 成实体 id**，
+    并附 merge_log / dup_log / review_log / audit / stats。
+
+    出处（L2 置信度）由程序从原文确定性推导（`provenance_for`），不依赖 LLM 自报。
+    """
+    ents = [e for e in (graph.get("entities") or []) if (e.get("name") or "").strip()]
+    edges = list(graph.get("edges") or [])
+    names = [e["name"] for e in ents]
+    prov = provenance_for(names, clean_t, chunks or []) if (clean_t and chunks) else None
+
+    # drop_isolated=True：S6-A 依赖并维持 S5 的不变式"实体表＝边端点集合"
+    bundle = merge_entities(ents, edges, id_prefix=id_prefix, provenance=prov, drop_isolated=True)
+    audit = bundle["audit"]
+    # 保留 S5 侧的记账（未建边清单 / 逐 claim 对账表 / 段落表 / S5 统计），便于下游一次读全。
+    # 注意：merge 自己的 audit 是"合并审计 dict"，S5 的 audit 是"逐 claim 对账 list" → 后者改名 claim_audit。
+    for k in ("skipped", "chunk_sections"):
+        if k in graph:
+            bundle.setdefault(k, graph[k])
+    if "stats" in graph:
+        bundle["graph_stats"] = graph["stats"]
+    if "audit" in graph:
+        bundle["claim_audit"] = graph["audit"]
+
+    bundle["stats"] = {
+        "entities_in": audit["entities_in"],
+        "entities_out": audit["entities_out"],
+        "edges_in": audit["edges_in"],
+        "edges_out": audit["edges_out"],
+        "form_merged_groups": audit["form_merged_groups"],
+        "form_merged_names": audit["form_merged_names"],
+        "exact_dup_groups": audit["exact_dup_groups"],
+        "low_confidence_merges": audit["low_confidence_merges"],
+        "self_loops_dropped": audit["self_loops_dropped"],
+        "isolated_dropped": audit["isolated_dropped"],
+        "dangling_endpoints": len(audit["dangling_endpoints"]),
+        "aliases_total": sum(len(e.get("aliases") or []) for e in bundle["entities"]),
+    }
+    return bundle

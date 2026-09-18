@@ -13,12 +13,27 @@ const error = ref('')
 const loading = ref(true)
 const entLimit = ref(30)
 const picked = ref<GraphEdge | null>(null)
+/** s5 = 图组装原始产物；s6 = S6-A 确定性形合并后的产物（实体带 id、边端点换 id） */
+const stage = ref<'s5' | 's6'>('s5')
+/** S6 产物里 id → 名字（界面一律按名字工作；边端点先映射回名字再展示） */
+const idToName = ref<Record<string, string>>({})
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    graph.value = await compileApi.graph(props.sourceId)
+    const g = await compileApi.graph(props.sourceId, stage.value)
+    // S6 产物：边端点存的是实体 id → 先映射回名字，界面其余逻辑（按名字索引）不变
+    const map: Record<string, string> = {}
+    for (const e of g.entities) if (e.id) map[e.id] = e.name
+    idToName.value = map
+    if (stage.value === 's6' && Object.keys(map).length) {
+      for (const ed of g.edges) {
+        ed.from = map[ed.from] || ed.from
+        if (ed.to) ed.to = map[ed.to] || ed.to
+      }
+    }
+    graph.value = g
     claims.value = await compileApi.claims(props.sourceId) // 顺序与 claim_idx 一致
     focusName.value = mainEntities.value[0]?.name || graph.value.entities[0]?.name || ''
   } catch (err) {
@@ -26,6 +41,13 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function switchStage(next: 's5' | 's6') {
+  if (stage.value === next) return
+  stage.value = next
+  picked.value = null
+  await load()
 }
 
 /** 每个实体的三个量：跨节数 / 度 / 关系族数（与离线复核页同口径） */
@@ -108,6 +130,26 @@ const predicateCounts = computed(() => {
   return [...m.entries()].sort((a, b) => b[1] - a[1])
 })
 
+/** 护栏命中数（程序侧拒掉的端点）：未建边总数里，减去"模型判 null"和"谓词待定"的部分 */
+const guardHits = computed(() => {
+  const cats = graph.value?.skip_categories
+  if (!cats) return 0            // 老产物没有分类字段 → 不显示（避免把"全部未建边"误报成护栏命中）
+  const notGuard = (cats['取不出可点名概念'] || 0) + (cats['其他'] || 0) + (cats['谓词待定'] || 0)
+  return Math.max(0, (graph.value?.skipped?.length || 0) - notGuard)
+})
+
+/** 端点规范化映射（S5 审计）：默认只看带 derived_from 的（概括/溯源），其余折叠 */
+const normLimit = ref(60)
+const normOnlyDerived = ref(false)
+const normOnlyGeneralized = ref(false)
+const normalizeRows = computed(() => {
+  let rows = graph.value?.normalize_map || []
+  if (normOnlyGeneralized.value) rows = rows.filter((r) => r.tier === 'generalized')
+  else if (normOnlyDerived.value) rows = rows.filter((r) => (r.derived_from || []).length > 0)
+  return rows
+})
+const derivedCount = computed(() => (graph.value?.normalize_map || []).filter((r) => (r.derived_from || []).length > 0).length)
+
 /** 合并重复边后的边（同 from|pred|to → 一条 + 出现次数 n） */
 type MergedEdge = GraphEdge & { n: number }
 
@@ -185,14 +227,31 @@ onMounted(load)
 <template>
   <main class="gr-page">
     <header class="gr-head">
-      <h1>{{ sourceId }} · 概念图复核（S5）</h1>
+      <h1>{{ sourceId }} · 概念图复核（S5 原始 / S6 形合并）</h1>
+      <span class="stage-switch">
+        <button :class="{ on: stage === 's5' }" @click="switchStage('s5')">S5 原始</button>
+        <button :class="{ on: stage === 's6' }" @click="switchStage('s6')">S6 形合并</button>
+      </span>
       <button :disabled="loading" @click="load">刷新</button>
       <button @click="navigate('#/compile/' + sourceId)">← 体检报告</button>
       <button @click="navigate('#/kb')">知识库</button>
       <span v-if="graph" class="hint">
-        claim {{ graph.stats.claims_in }} → 建边 <strong>{{ graph.stats.claims_with_edge }}</strong>
-        （未建边 {{ graph.stats.claims_skipped }}，均带原因）｜ 实体 <strong>{{ graph.stats.entities }}</strong>
-        ｜ 端点规范化 {{ graph.stats.normalize_targets }} 个 / {{ graph.stats.normalize_batches }} 批
+        <template v-if="stage === 's5'">
+          claim {{ graph.stats.claims_in }} → 建边 <strong>{{ graph.stats.claims_with_edge }}</strong>
+          （未建边 {{ graph.stats.claims_skipped }}，均带原因）｜ 实体 <strong>{{ graph.stats.entities }}</strong>
+          ｜ 端点规范化 {{ graph.stats.normalize_targets }} 个 / {{ graph.stats.normalize_batches }} 批
+          <template v-if="graph.stats.bleed_retried">
+            ｜ <b>串味修正</b> {{ graph.stats.bleed_fixed }}/{{ graph.stats.bleed_retried }}
+            <template v-if="graph.stats.bleed_remaining">（仍串味 {{ graph.stats.bleed_remaining }}）</template>
+          </template>
+        </template>
+        <template v-else>
+          实体 <strong>{{ graph.stats.entities_in }} → {{ graph.stats.entities_out }}</strong>
+          （合并 {{ graph.stats.form_merged_groups }} 组 / {{ graph.stats.form_merged_names }} 个名字）｜
+          边 {{ graph.stats.edges_in }} → {{ graph.stats.edges_out }}（自环丢 {{ graph.stats.self_loops_dropped }}）｜
+          别名 {{ graph.stats.aliases_total }}｜ 悬挂 {{ graph.stats.dangling_endpoints }}｜
+          低置信待抽检 {{ graph.stats.low_confidence_merges }}
+        </template>
       </span>
     </header>
 
@@ -328,16 +387,117 @@ onMounted(load)
             </button>
           </details>
 
+          <details v-if="graph.normalize_map?.length">
+            <summary>
+              端点规范化映射（{{ graph.normalize_map.length }}）— S5 把每个端点短语规范成了什么
+              <template v-if="derivedCount">｜ 带溯源词 {{ derivedCount }}</template>
+              <template v-if="(graph.generalized || []).length">｜ C 档待抽检 {{ (graph.generalized || []).length }}</template>
+            </summary>
+            <p class="hint">
+              <b>raw → concept</b>：概念名是怎么从原文端点来的。带 <code>derived_from</code> 的是"概括/名词化"
+              （概念是新词，但列出了取自 raw 的来源词）——这是可回溯的关键：名字不是原文措辞时，
+              必须能说出它由哪些原文词而来。
+              <b>档位</b>：<code>ok</code>＝原文措辞｜<code>derived</code>＝词形派生｜<code>generalized</code>＝语义概括（待抽检）。
+              <span v-if="graph.name_tiers" style="margin-left:6px">
+                （本图：ok {{ graph.name_tiers.ok || 0 }} · derived {{ graph.name_tiers.derived || 0 }} ·
+                generalized {{ graph.name_tiers.generalized || 0 }}）
+              </span>
+              <label style="margin-left:8px"><input v-model="normOnlyDerived" type="checkbox" @change="normOnlyGeneralized = false" /> 只看带溯源词的</label>
+              <label style="margin-left:8px"><input v-model="normOnlyGeneralized" type="checkbox" @change="normOnlyDerived = false" /> 只看 C 档（语义概括）</label>
+            </p>
+            <table class="tbl">
+              <thead><tr><th>idx</th><th>raw（原文端点）</th><th>concept（规范化结果）</th><th>档位</th><th>derived_from</th></tr></thead>
+              <tbody>
+                <tr v-for="r in normalizeRows.slice(0, normLimit)" :key="'nm' + r.idx">
+                  <td><small>{{ r.idx }}</small></td>
+                  <td>{{ r.raw }}</td>
+                  <td><b v-if="r.concept">{{ r.concept }}</b><span v-else style="color:#8c959f">null（取不出）</span></td>
+                  <td>
+                    <small v-if="r.tier === 'generalized'" class="badge">概括·待抽检</small>
+                    <small v-else-if="r.tier === 'derived'" class="badge">词形派生</small>
+                    <small v-else-if="r.tier">原文</small>
+                  </td>
+                  <td><small>{{ (r.derived_from || []).join(' / ') || '—' }}</small></td>
+                </tr>
+              </tbody>
+            </table>
+            <button v-if="normalizeRows.length > normLimit" @click="normLimit = normalizeRows.length">
+              展开全部 {{ normalizeRows.length }} 条（还有 {{ normalizeRows.length - normLimit }} 条）
+            </button>
+          </details>
+
           <details>
-            <summary>未建边的 claim（{{ graph.skipped.length }}）</summary>
+            <summary>
+              未建边的 claim（{{ graph.skipped.length }}）
+              <template v-if="guardHits">
+                — 其中 <b>护栏命中 {{ guardHits }}</b>（端点名不合格/自造/串味等，程序侧拒）
+              </template>
+            </summary>
             <p class="hint">
               每条 claim 的去向都可对账：建边 {{ graph.stats.claims_with_edge }} 条、未建边 {{ graph.skipped.length }} 条（原因在下面）。
               <b>组图由程序做</b>（LLM 只负责把端点规范成可点名的概念），所以数量关系是确定的。
             </p>
+            <p v-if="graph.skip_categories" class="hint">
+              <b>护栏命中分类</b>（全在程序侧）：
+              <span v-for="(n, k, i) in graph.skip_categories" :key="'sc' + k">
+                <code>{{ k }}</code> {{ n }}<template v-if="i < Object.keys(graph.skip_categories).length - 1"> · </template>
+              </span>
+            </p>
             <table class="tbl">
-              <thead><tr><th>claim</th><th>原因</th></tr></thead>
-              <tbody><tr v-for="s in graph.skipped" :key="'s' + s.claim_idx"><td>c{{ s.claim_idx }}</td><td>{{ s.reason }}</td></tr></tbody>
+              <thead><tr><th>claim（三件套）</th><th>原因</th></tr></thead>
+              <tbody>
+                <tr v-for="s in graph.skipped" :key="'s' + s.claim_idx">
+                  <td>
+                    <small>c{{ s.claim_idx }}</small>
+                    <a class="lnk" @click="focusName = claimOf(s.claim_idx)?.subject || ''">{{ claimOf(s.claim_idx)?.subject }}</a>
+                    <code>{{ claimOf(s.claim_idx)?.predicate_normalized || claimOf(s.claim_idx)?.predicate }}</code>
+                    <span v-if="claimOf(s.claim_idx)?.object">{{ claimOf(s.claim_idx)?.object }}</span>
+                    <span v-else style="color: #8c959f">∅</span>
+                  </td>
+                  <td>{{ s.reason }}</td>
+                </tr>
+              </tbody>
             </table>
+          </details>
+
+          <details v-if="stage === 's6'">
+            <summary>
+              S6 形合并记录（{{ (graph.merge_log || []).length }} 组合并
+              <template v-if="(graph.review_log || []).length">，{{ (graph.review_log || []).length }} 组低置信待抽检</template>）
+            </summary>
+            <p class="hint">
+              <b>确定性合并</b>（不调 LLM）：同一形态 key 下出现多种写法才合并——单形不改写（改名＝造名）；
+              原名一律进 <code>aliases</code>，检索两个方向都能命中。<b>置信度</b>＝两形在原文里的出处是否共现
+              （程序从原文算，不靠模型自报）：相交＝high；都有出处但不交＝low（合并照做，进待抽检）；只有一形有出处＝unknown。
+            </p>
+            <table class="tbl">
+              <thead><tr><th>canonical</th><th>合并进来的写法（次数）</th><th>置信度</th></tr></thead>
+              <tbody>
+                <tr v-for="m in graph.merge_log || []" :key="'ml' + m.canonical">
+                  <td><a class="lnk" @click="focusName = m.canonical">{{ m.canonical }}</a></td>
+                  <td>
+                    <span v-for="(n, v) in m.variants" :key="'v' + v">
+                      <template v-if="v !== m.canonical">{{ v }}<small>（{{ n }}）</small>　</template>
+                    </span>
+                  </td>
+                  <td>{{ m.confidence || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-if="(graph.self_loops || []).length" class="hint">
+              <b>被丢弃的自环 {{ (graph.self_loops || []).length }} 条</b>（合并前是"同一物的两种写法"之间的关系，
+              合并后变成自己指向自己——<u>不是</u>凭空丢边，明细如下）：
+              <span v-for="(s, i) in graph.self_loops" :key="'sl' + i">
+                <code>c{{ s.claim_idx }}</code> {{ s.from }} —{{ s.predicate }}→ {{ s.to }}<template v-if="i < (graph.self_loops || []).length - 1">；</template>
+              </span>
+            </p>
+            <p v-if="(graph.isolated_dropped || []).length" class="hint">
+              <b>无边移除 {{ (graph.isolated_dropped || []).length }} 个实体</b>（合并 + 丢自环后它一条边都不剩——
+              保持"实体表＝边端点集合"的不变式；明细可回溯）：
+              <span v-for="(d, i) in graph.isolated_dropped" :key="'iso' + i">
+                <code>{{ d.name }}</code>{{ d.aliases?.length ? '（别名 ' + d.aliases.join(' / ') + '）' : '' }}<template v-if="i < (graph.isolated_dropped || []).length - 1">；</template>
+              </span>
+            </p>
           </details>
 
         </section>
@@ -350,6 +510,8 @@ onMounted(load)
 .gr-page { padding: 12px 16px 24px; }
 .gr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .gr-head h1 { font-size: 17px; margin: 0; }
+.stage-switch button { font-size: 12px; padding: 2px 8px; }
+.stage-switch button.on { background: #0969da; color: #fff; border-color: #0969da; }
 .chips { position: sticky; top: 0; z-index: 3; background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 7px 10px; margin-bottom: 10px; }
 .chips-title { font-weight: 700; font-size: 12.5px; margin-right: 6px; }
 .chip { display: inline-block; font-size: 12px; background: #eef4ff; border: 1px solid #6b9aff; color: #0969da; border-radius: 14px; padding: 2px 9px; margin: 2px 4px 2px 0; cursor: pointer; }

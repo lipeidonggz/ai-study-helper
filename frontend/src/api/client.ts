@@ -625,9 +625,13 @@ export interface AnaphoraRow {
 }
 
 export interface GraphEntity {
+  /** S6-A 形合并后才有：稳定实体 id（S5 原始图用名字做端点） */
+  id?: string
   name: string
   type: string
   aliases: string[]
+  merge?: { method: string; from: string; count?: number }[]
+  merge_confidence?: string
 }
 
 export interface GraphEdge {
@@ -644,18 +648,55 @@ export interface CompileGraph {
   entities: GraphEntity[]
   edges: GraphEdge[]
   skipped: { claim_idx: number; reason: string }[]
-  audit: { claim_idx: number; status: 'edge' | 'skipped'; reason: string }[]
+  /** 端点规范化全量映射（S5 审计用）：raw → concept + 结构化溯源词 derived_from */
+  normalize_map?: {
+    idx: string
+    raw: string
+    concept: string | null
+    derived_from: string[]
+    /** 端点名档位：ok＝原文措辞 / derived＝词形派生 / generalized＝语义概括（待抽检） */
+    tier?: string
+  }[]
+  /** 端点名档位计数 */
+  name_tiers?: Record<string, number>
+  /** C 档（语义概括 + 来源词）：通过但进待抽检清单 */
+  generalized?: { idx: string; raw: string; concept: string; derived_from: string[]; claim_idx: number }[]
+  /** 护栏命中分类（程序侧标记：超过 6 词 / 代词 / 从句式 / 疑似自造 / …） */
+  skip_categories?: Record<string, number>
+  audit?: { claim_idx: number; status: 'edge' | 'skipped'; reason: string }[]
+  /** S6-A 形合并审计（只有 stage=s6 才有） */
+  merge_log?: { canonical: string; key: string; variants: Record<string, number>; confidence?: string }[]
+  review_log?: { canonical: string; variants: Record<string, number>; chunks?: Record<string, string[]> }[]
+  dup_log?: { name: string; records: number }[]
+  /** 合并后被丢弃的自环（同一物的两种写法之间的关系）——留明细以便追溯 */
+  self_loops?: { from: string; predicate: string; to: string; claim_idx: number }[]
+  /** 合并后边被丢光而被移除的实体（纯噪声，留明细可回溯） */
+  isolated_dropped?: { id: string; name: string; aliases: string[]; reason: string }[]
   chunk_sections: Record<string, string>
+  /** S5 与 S6 的统计字段不完全一样：各自有的名列在这里，其余走索引签名 */
   stats: {
-    claims_in: number
-    claims_with_edge: number
-    claims_skipped: number
-    entities: number
-    edges: number
-    normalize_targets: number
-    normalize_batches: number
-    normalize_failed_batches: number
+    claims_in?: number
+    claims_with_edge?: number
+    claims_skipped?: number
+    entities?: number
+    edges?: number
+    normalize_targets?: number
+    normalize_batches?: number
+    bleed_retried?: number
+    bleed_fixed?: number
+    bleed_remaining?: number
+    entities_in?: number
+    entities_out?: number
+    form_merged_groups?: number
+    form_merged_names?: number
+    low_confidence_merges?: number
+    self_loops_dropped?: number
+    dangling_endpoints?: number
+    aliases_total?: number
+    [k: string]: number | undefined
   }
+  /** S6 侧保留的 S5 统计（stage=s6） */
+  graph_stats?: Record<string, number>
 }
 
 export interface HealthReport {
@@ -708,7 +749,7 @@ export const compileApi = {
   claims(id: string, limit = 0): Promise<CompileClaim[]> {
     return http(`/api/compile/${id}/claims?limit=${limit}`)
   },
-  graph(id: string): Promise<CompileGraph> {
-    return http(`/api/compile/${id}/graph`)
+  graph(id: string, stage: 's5' | 's6' = 's5'): Promise<CompileGraph> {
+    return http(`/api/compile/${id}/graph?stage=${stage}`)
   }
 }

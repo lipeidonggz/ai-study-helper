@@ -14,6 +14,9 @@
   ⑧ 清单可回溯    dropped / marked / pending 的 idx 都落在 claims_raw 范围内
   ⑨ 指代闭环      每个指代型字段（主语/宾语）都有 *_resolution_status；
                    且**原字段没被覆盖**（有 *_resolved 的，原字段仍须是"指代词"）
+  ⑩ S6 合并闭环    S6-A 形合并（graph_merged.json）：① 边不丢（只允许丢自环）；
+                   ② 原名可回溯（每个被合并的写法都能在 canonical 或 aliases 里找到）；
+                   ③ 实体表＝边端点集合（无悬挂、无孤立）；④ 无别名冲突
 
 用法：cd backend && .venv\\Scripts\\python.exe -m scripts.compile_loop_check --source A5
 退出码：0 全过 / 1 有不过（便于串进脚本）。
@@ -28,6 +31,7 @@ from pathlib import Path
 
 from app.compile.relations import RELATIONS
 from app.compile.anaphora import classify
+from app.compile.merge import alias_collisions
 from app.compile.service import summary_verdict
 from scripts.compile_slice_b6 import _is_subsequence
 
@@ -134,6 +138,52 @@ def check(source_id: str, root: Path) -> list[tuple[str, bool, str]]:
     ok9 = not no_status and not overwritten
     out.append(("⑨ 指代闭环", ok9,
                 f"指代字段 {anaphora_n}；缺状态 {len(no_status)}{no_status[:3]}；疑似被覆盖 {len(overwritten)}{overwritten[:3]}"))
+
+    # ⑩ S6 合并闭环（S6-A 形合并；该篇没跑 S6-A 则跳过）
+    merged = _load(d / "graph_merged.json")
+    if merged is None:
+        out.append(("⑩ S6 合并闭环", True, "跳过：无 graph_merged.json（该篇未跑 S6-A）"))
+        return out
+
+    m_ents = merged.get("entities") or []
+    m_edges = merged.get("edges") or []
+    g5 = _load(d / "graph.json") or {}
+    mg_audit = merged.get("audit") or {}
+    self_loops = int(mg_audit.get("self_loops_dropped") or 0)
+    edges5 = len(g5.get("edges") or [])
+    ents5 = len(g5.get("entities") or [])
+
+    # ① 边不丢：合并后边数 = S5 边数 − 自环丢弃数
+    lost = edges5 - self_loops - len(m_edges)
+    ok10a = lost == 0
+
+    # ② 原名可回溯：被合并掉的每个写法，都能在 canonical 或 aliases 里找到
+    reachable: set[str] = set()
+    for e in m_ents:
+        reachable.add(e.get("name") or "")
+        reachable.update(e.get("aliases") or [])
+    missing = [v for m in (merged.get("merge_log") or []) for v in (m.get("variants") or {}) if v not in reachable]
+    ok10b = not missing
+
+    # ③ 实体表＝边端点集合（无悬挂、无孤立）
+    eids = {e.get("id") for e in m_ents}
+    used = {x for ed in m_edges for x in (ed.get("from"), ed.get("to")) if x}
+    dangling = sorted(x for x in used if x not in eids)
+    isolated = sorted(x for x in eids if x not in used)
+    ok10c = not dangling and not isolated
+
+    # ④ 无别名冲突（同一个名字挂到多个实体）
+    collisions = alias_collisions(m_ents)
+    ok10d = not collisions
+
+    ok10 = ok10a and ok10b and ok10c and ok10d
+    out.append((
+        "⑩ S6 合并闭环", ok10,
+        f"实体 {ents5}→{len(m_ents)}／边 {edges5}→{len(m_edges)}（丢边 {lost}、自环 {self_loops}）"
+        f"｜原名缺失 {len(missing)}{missing[:3]}｜悬挂 {len(dangling)}／孤立 {len(isolated)}"
+        f"｜别名冲突 {len(collisions)}{collisions[:2]}"
+        f"｜无边移除 {int(mg_audit.get('isolated_dropped') or 0)}",
+    ))
     return out
 
 

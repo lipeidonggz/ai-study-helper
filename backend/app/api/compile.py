@@ -58,9 +58,15 @@ def claims(source_id: str, request: Request, limit: int = 0):
 
 
 @router.get("/{source_id}/graph")
-def graph(source_id: str, request: Request):
-    """S5 图组装产物（实体 / 边 / 未建边的 claim / 对账表）——供界面画"一跳关系视图"。"""
-    g = _svc(request).graph(source_id)
+def graph(source_id: str, request: Request, stage: str = "s5"):
+    """图产物——供界面画"一跳关系视图"。
+
+    stage=s5（默认）：S5 图组装产物（实体 / 边 / 未建边 / 逐 claim 对账）；
+    stage=s6：S6-A 确定性形合并后的产物（实体带 id + aliases、边端点换成实体 id、附合并审计）。
+    """
+    merged = (stage or "s5").lower() in ("s6", "merged", "merge")
+    g = _svc(request).graph(source_id, merged=merged)
     if g is None:
-        raise HTTPException(404, f"{source_id} 尚未跑图组装（S5）")
+        what = "S6 形合并" if merged else "图组装（S5）"
+        raise HTTPException(404, f"{source_id} 尚未跑{what}——先在这篇上点「抽取/重抽」跑一遍")
     return g

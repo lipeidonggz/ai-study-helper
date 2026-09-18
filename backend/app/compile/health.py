@@ -13,6 +13,7 @@ import json
 import re
 
 from app.kb.manifest import parse_manifest
+from app.compile.merge import form_key
 from scripts.analyze_pass1_recall import GOLD_DIR, _para_index
 from scripts.compile_slice_b6 import MANIFEST_PATH, _anchor_window, _find_raw
 
@@ -23,7 +24,7 @@ from scripts.compile_slice_b6 import MANIFEST_PATH, _anchor_window, _find_raw
 #   · recall_must  漏了关键内容 → 不可恢复（金标准；没提供则跳过）
 #   · anchor_rate  在编引文（幻觉探针）→ 不可恢复
 # 告警线（不过也不拦，供人发现"抽取在退化"）：
-#   · evidence_missing / self_reference / deictic_subject / clause_subject / predicate_dirty
+#   · evidence_missing / self_reference / deictic_subject / clause_subject / predicate_dirty / self_loop_risk
 RED_LINES = {
     "recall_must": 1.0,
     "anchor_rate": 0.95,       # 只统计写了引文的那些
@@ -34,6 +35,9 @@ WARN_LINES = {
     "deictic_subject": 0.15,   # 指代（this/it/they…）→ **保留 + 标记**，交下游「指代消解」
     "clause_subject": 0.02,    # 从句式主语占比（丢弃）
     "predicate_dirty": 0.25,   # 谓词不干净（≥4 词 或 含并列）→ 交清洗步
+    # 自环风险（**Pass 1 层可见的那半**）：主语与宾语形归一后相同 → 伪 claim（同义反复）。
+    # 实测 A5/O2 均为 0；阈值取 1% 当探针（0 是常态，一旦冒头说明抽取在退化成"复述名词短语"）。
+    "self_loop_risk": 0.01,
 }
 THRESHOLDS = {**RED_LINES, **WARN_LINES}
 
@@ -89,6 +93,15 @@ CHECK_SPEC: dict[str, dict] = {
         "action": "标记（交归一步，告警线）",
         "note": "谓词 ≥4 词或含并列（修饰/从句被揉进了谓词，如 `grows large enough that`）。**只标记不丢**，"
                 "交归一步清洗成 predicate_clean；比例高会拖累谓词归一的一致性。",
+    },
+    "self_loop_risk": {
+        "name": "自环风险（伪 claim）",
+        "action": "标记（告警线）",
+        "note": "主语与宾语**形归一后相同**（如 `the model the agent consults is the model the agent consults`）"
+                "→ 同义反复，进图必然成自环。**只标记不丢**（与「体检只保信息」一致），由 S5/S6 按既有规则处置。"
+                "注意这**只是自环的一半**：另一半由 S5 端点规范化造成（把描述性主语取中心词后与宾语撞名，"
+                "如 A5 的 `Every function reachable through any domain on an allowlist is an attack surface` "
+                "→ 两端都变 `attack surface`）——那半在体检时还看不见，记在 S5/S6 的账上（graph/merge 统计 + 闭环 ⑩）。",
     },
 }
 CLAUSE_SUBJECT = re.compile(r"^(how to|whether|when|why|that|which|only when|granting|having)\b", re.I)
@@ -179,7 +192,7 @@ def run_health_check(
     dropped: list[dict] = []
     rewritten: list[dict] = []
     marked: list[dict] = []
-    anchor_ok = n_self = n_deictic = n_clause = n_dirty = n_neg = n_no_ev = 0
+    anchor_ok = n_self = n_deictic = n_clause = n_dirty = n_neg = n_no_ev = n_selfloop = 0
 
     for i, raw in enumerate(claims):
         c = dict(raw)
@@ -231,6 +244,11 @@ def run_health_check(
         if NEG.search(win["anchor_sentence"]) and not c.get("polarity"):
             n_neg += 1
             marks.append("否定存疑")
+        # ⑤b 自环风险：主语与宾语形归一后相同 → 伪 claim（只标记，交 S5/S6 处置）
+        obj = (c.get("object") or "").strip()
+        if obj and subj and form_key(subj) and form_key(subj) == form_key(obj):
+            n_selfloop += 1
+            marks.append("主语==宾语（伪 claim）")
         sj = {w.lower() for w in _words(subj)}
         if sj and not (sj & {w.lower() for w in _words(win["anchor_sentence"] + " " + win["context_before"])}):
             marks.append("主语不在锚句（可能指代/需邻句）")
@@ -276,6 +294,7 @@ def run_health_check(
         "deictic_subject": n_deictic / n if n else 0.0,
         "clause_subject": n_clause / n if n else 0.0,
         "predicate_dirty": n_dirty / n if n else 0.0,
+        "self_loop_risk": n_selfloop / n if n else 0.0,
     }
     verdict = {}
     for k, v in ratios.items():
@@ -324,7 +343,7 @@ def run_health_check(
     order = [
         "recall_must", "anchor_rate",                                   # 红线（不可恢复）
         "evidence_missing", "self_reference", "deictic_subject",        # 告警 + 动作
-        "clause_subject", "predicate_dirty",
+        "clause_subject", "predicate_dirty", "self_loop_risk",
     ]
     report["check_spec"] = [
         {

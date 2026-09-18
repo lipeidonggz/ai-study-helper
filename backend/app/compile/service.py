@@ -26,6 +26,7 @@ from pathlib import Path
 from app.agent.llm import DeepSeekLLMClient, LLMMessage
 from app.compile.anaphora import resolve_source
 from app.compile.assemble import assemble
+from app.compile.merge import merge_stage
 from app.compile.health import run_health_check
 from app.kb.manifest import parse_manifest
 from app.storage.sqlite.kb_store import KbStore
@@ -145,9 +146,9 @@ class CompileService:
         f = self._root / source_id / "report.json"
         return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
 
-    def graph(self, source_id: str) -> dict | None:
-        """S5 图组装产物（entities / edges / skipped / audit + 统计）。"""
-        f = self._root / source_id / "graph.json"
+    def graph(self, source_id: str, merged: bool = False) -> dict | None:
+        """图产物：默认 S5（`graph.json`）；merged=True 取 S6-A 形合并后的 `graph_merged.json`。"""
+        f = self._root / source_id / ("graph_merged.json" if merged else "graph.json")
         return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
 
     def all_statuses(self) -> dict[str, dict]:
@@ -321,6 +322,19 @@ class CompileService:
             )
             report["graph"] = gr["stats"]
 
+            # ---- S6-A 确定性形合并（同 key 多写法 → 一实体 + aliases；边 remap；只增不改）----
+            job.stage = "merge"
+            job.progress = f"实体形合并（{gr['stats']['entities']} 个实体）"
+            mg = merge_stage(gr, clean_t, chunks)
+            print(
+                f"[B6] {job.source_id}: 形合并 实体 {mg['stats']['entities_in']} → {mg['stats']['entities_out']}"
+                f"（合并 {mg['stats']['form_merged_groups']} 组 / {mg['stats']['form_merged_names']} 个名字）"
+                f"、边 {mg['stats']['edges_in']} → {mg['stats']['edges_out']}"
+                f"、自环丢弃 {mg['stats']['self_loops_dropped']}、悬挂 {mg['stats']['dangling_endpoints']}"
+                f"、低置信 {mg['stats']['low_confidence_merges']}"
+            )
+            report["merge"] = mg["audit"]
+
             # 归一完成 → 回填报告里"标记清单"的归一化谓词（被丢弃的 claim 没归一，UI 显示 —）
             report["marked"] = [
                 {
@@ -373,6 +387,7 @@ class CompileService:
             (d / "claims.json").write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
             (d / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             (d / "graph.json").write_text(json.dumps(gr, ensure_ascii=False, indent=2), encoding="utf-8")
+            (d / "graph_merged.json").write_text(json.dumps(mg, ensure_ascii=False, indent=2), encoding="utf-8")
             summary = {
                 "source_id": job.source_id,
                 "model": model,
@@ -390,6 +405,7 @@ class CompileService:
                 "clean_rejected": cl["rejected"],
                 "anaphora": an["stats"],
                 "graph": gr["stats"],
+                "merge": mg["stats"],
                 "evidence_fix": {"missing": n_missing_ev, "fixed": n_fixed_ev},
                 "relations": len(nv["kinds"]),
                 "predicate_health": {
