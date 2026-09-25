@@ -32,7 +32,7 @@
       <h2>地图 · 先建立全局认识（一屏看完）</h2>
 
       <h3>0 · 这是什么，读完能得到什么</h3>
-      <p>GraphRAG 的"索引"＝<b>把一堆原始文档，变成一组"能被检索和总结的结构化材料"</b>的过程。它主要干两件事：先把语料抽成一张<b>实体关系图</b>，再把图切成一棵<b>社区树</b>，并给每个社区写一份<b>报告</b>。</p>
+      <p>GraphRAG 的"索引"＝<b>把一堆原始文档，变成一组"能被检索和总结的结构化材料"</b>的过程。它主要干两件事：先把语料抽成一张<b>实体关系图</b>，再把图切成一片<b>社区森林</b>（每个顶层社区各自是一棵树，彼此不相交），并给每个社区写一份<b>报告</b>。</p>
       <p><b>读完这份你能：</b>① 说清索引产出什么、每样给谁用；② 用最小配置把索引跑通（并知道最小链条为什么最小）；③ 知道跑完先检查什么（因为它的失败大多是静默的）；④ 知道参数挂在哪一步、该怎么挑；⑤ 知道它不擅长什么。</p>
 
       <div class="chain"><b>本文引用的两篇语料</b>（后面提到就只用括号里的简称，不需要看别的材料）：
@@ -80,22 +80,23 @@ weight: 7.0     combined_degree: 7     text_unit_ids: 1 个块</pre>
       <p>这两条边的语义完全不同——一条说"是同义简称"，一条说"是操作化定义"——但<b>这个差别只存在于那句话里，表里没有任何字段能区分它们</b>。在 RDF 里，"把某类关系全查出来"是一条 SPARQL；在这里，你只能对描述文本做模糊匹配。<span class="ok">✅ 实测</span>：这一轮 120 条关系里，<b>没有任何一对 (source, target) 出现两次</b>——多块文本提到同一对实体就合并成一条、强度相加（有 14 条关系的证据块不止一个）。所以"同一对实体之间存在多种关系"这件事，在这个数据模型里<b>表达不出来</b>。</p>
 
       <h3>2 · 完整流水线：十个步骤，每一环在决定什么</h3>
-      <p>官方 <code>--method standard</code>（标准索引链）就是下面这十步。注意最后两步是<b>嵌入（embedding，把文本变成向量，供查询时按语义找近似）</b>——它们才是真实环境里必配的环节：</p>
+      <p>官方 <code>--method standard</code>（标准索引链）就是下面这十步。其中<b>真正写向量库的只有第十步</b>（<b>嵌入</b>＝embedding，把文本变成向量，供查询时按语义找近似），它才是真实环境里必配的环节：</p>
       <table>
-        <thead><tr><th>步骤</th><th>它在决定什么</th><th>贵不贵 / 会不会静默出错</th></tr></thead>
+        <thead><tr><th>#</th><th>步骤</th><th>它在决定什么</th><th>贵不贵 / 会不会静默出错</th></tr></thead>
         <tbody>
-          <tr><td><code>load_input_documents</code></td><td>读 <code>input/</code> 下的文档 → <code>documents</code> 表（标题默认＝文件名）</td><td>不花钱；<b>多文件源只取第一个文件</b>是已知限制 📄</td></tr>
-          <tr><td><code>create_base_text_units</code></td><td><b>切块</b> → <code>text_units</code> 表。chunk 是后续一切引用的落点（"事实源"）</td><td>不花钱（纯本地）</td></tr>
-          <tr><td><code>create_final_documents</code></td><td>整理出对外版 <code>documents</code> 表</td><td>不花钱</td></tr>
-          <tr><td><code>extract_graph</code></td><td><b>抽实体与关系</b>——<b>范围</b>由实体类型表（靶子）＋提示词决定</td><td><b>最贵</b>（每块 1＋gleanings 次调用，默认 2 次）</td></tr>
-          <tr><td><code>finalize_graph</code></td><td>合并与裁剪：丢掉"引用了不存在实体"的边</td><td>不花钱；<b>会静默丢</b>（只打 warning）</td></tr>
-          <tr><td><span class="muted"><code>extract_covariates</code></span></td><td><span class="muted">抽 claim（关于某个实体的、可能带时间限定的断言）</span></td><td><span class="muted">默认<b>关闭</b> 📄</span></td></tr>
-          <tr><td><code>create_communities</code></td><td><b>层次聚类</b>成一棵社区树 → <code>communities</code> 表</td><td>不花钱；<code>use_lcc</code> 会<b>静默排除</b>一部分实体（见 5.1）</td></tr>
-          <tr><td><code>create_final_text_units</code></td><td>整理出对外版 <code>text_units</code>（把实体 / 关系 / claim 的引用挂上去）</td><td>不花钱</td></tr>
-          <tr><td><code>create_community_reports</code></td><td>为每个社区写一份报告（喂给 LLM 的材料）</td><td>较贵（每社区一次）；<b>失败静默</b>（见第 4 节）</td></tr>
-          <tr><td><code>generate_text_embeddings</code></td><td><b>算向量并写向量库</b>（详见 2.2）</td><td>按 token 计费</td></tr>
+          <tr><td>1</td><td><code>load_input_documents</code></td><td>读 <code>input/</code> 下的文档 → <code>documents</code> 表（标题默认＝文件名）</td><td>不花钱；<b>多文件源只取第一个文件</b>是已知限制 📄</td></tr>
+          <tr><td>2</td><td><code>create_base_text_units</code></td><td><b>切块</b> → <code>text_units</code> 表。chunk 是后续一切引用的落点（"事实源"）</td><td>不花钱（纯本地）</td></tr>
+          <tr><td>3</td><td><code>create_final_documents</code></td><td>整理出对外版 <code>documents</code> 表</td><td>不花钱</td></tr>
+          <tr><td>4</td><td><code>extract_graph</code></td><td><b>抽实体与关系</b>——<b>范围</b>由实体类型表（靶子）＋提示词决定</td><td><b>最贵</b>（每块 1＋gleanings 次调用，默认 2 次）</td></tr>
+          <tr><td>5</td><td><code>finalize_graph</code></td><td>合并与裁剪：丢掉"引用了不存在实体"的边</td><td>不花钱；<b>会静默丢</b>（只打 warning）</td></tr>
+          <tr><td>6</td><td><span class="muted"><code>extract_covariates</code></span></td><td><span class="muted">抽 claim（关于某个实体的、可能带时间限定的断言）</span></td><td><span class="muted">默认<b>关闭</b> 📄</span></td></tr>
+          <tr><td>7</td><td><code>create_communities</code></td><td><b>层次聚类</b>成一片社区森林 → <code>communities</code> 表</td><td>不花钱；<code>use_lcc</code> 会<b>静默排除</b>一部分实体（见 5.1）</td></tr>
+          <tr><td>8</td><td><code>create_final_text_units</code></td><td>给每个 chunk 挂上<b>反向引用</b>（这个块里出了哪些实体 / 关系 / claim），<b>就地重写</b> <code>text_units</code> 表</td><td>不花钱；<b>与嵌入无关</b>（见 2.2）</td></tr>
+          <tr><td>9</td><td><code>create_community_reports</code></td><td>为每个社区写一份报告（喂给 LLM 的材料）</td><td>较贵（每社区一次）；<b>失败静默</b>（见第 4 节）</td></tr>
+          <tr><td>10</td><td><code>generate_text_embeddings</code></td><td><b>算向量并写向量库</b>——<b>唯一</b>的嵌入步骤（详见 2.2）</td><td>按 token 计费</td></tr>
         </tbody>
       </table>
+      <p class="muted"><b>补一句"树还是森林"</b>：是<b>森林</b>。算法是<b>层次 Leiden</b>（hierarchical Leiden，📄 <code>graphs/hierarchical_leiden.py</code>），它在整张图上一次划出<b>若干互不相交的顶层社区</b>，每个顶层社区自己再往下分层成子社区——所以 <code>communities</code> 表里 <code>level = 0</code> 的行有<b>好几个</b>，它们是各棵树的根（<code>parent</code> 为 −1），而不是只有一个根。<span class="ok">✅ 实测</span>：判官篇那一轮 8 个根、Anthropic 篇 9 个、两篇混跑 14 个。顺带一个观察：<b>这些根的"深浅"并不一样</b>——判官篇 8 个根里有 4 个一个子社区都没有（它的最细粒度就是顶层），另 4 个往下分了 3–4 个子社区。这正是 <a href="0031-graphrag-search-modes.html">0031</a> 里"顶层社区天然大小不同 ⇒ 让用户指定层级不是个好设计"那条结论的数据来源。</p>
 
       <h4>2.1 官方三种套餐，以及全部 22 个可配环节</h4>
       <p>流水线不是一个写死的程序，而是一份<b>"只跑我要的步骤"的清单</b>（配置项 <code>workflows</code>，组合逻辑在 <code>index/workflows/factory.py</code> 📄）——这是所有小实验能成立的前提。官方内置三种组合：</p>
@@ -117,7 +118,7 @@ weight: 7.0     combined_degree: 7     text_unit_ids: 1 个块</pre>
           <tr><td><code>extract_graph</code> / <code>extract_graph_nlp</code></td><td>LLM 抽实体与关系 / 句法抽图（不调 LLM）</td></tr>
           <tr><td><code>prune_graph</code> / <code>finalize_graph</code></td><td>剪掉低频节点（fast 链）/ 合并与裁剪</td></tr>
           <tr><td><code>extract_covariates</code></td><td>抽 claim（关于实体的、可能带时间限定的断言）</td></tr>
-          <tr><td><code>create_communities</code></td><td>层次聚类成社区树</td></tr>
+          <tr><td><code>create_communities</code></td><td>层次聚类成社区森林</td></tr>
           <tr><td><code>create_community_reports</code> / <code>create_community_reports_text</code></td><td>写社区报告（图上下文 / 文本块原文上下文）</td></tr>
           <tr><td><code>generate_text_embeddings</code></td><td>算向量、写向量库</td></tr>
           <tr><td><code>update_*</code>（八个）</td><td>增量链：文档 / 实体关系 / 文本块 / claim / 社区 / 报告 / 向量 / 状态清理</td></tr>
@@ -125,20 +126,22 @@ weight: 7.0     combined_degree: 7     text_unit_ids: 1 个块</pre>
       </table>
 
       <h4>2.2 嵌入（embedding）不是可选项</h4>
-      <p>前面那十步里，最后两步就是在做嵌入：<code>create_final_text_units</code> 把文本块整理成"可嵌入"的形态，<code>generate_text_embeddings</code> 真正把文本送进嵌入模型、把向量写进向量库。<b>它嵌哪三样东西</b>（配置项 <code>embed_text.names</code>，默认全开 📄）：</p>
+      <p>十步里<b>写向量库的只有第十步 <code>generate_text_embeddings</code></b>。容易看错的是第八步 <code>create_final_text_units</code>——它名字像"为嵌入做准备"，其实<b>跟嵌入没关系</b>：它只处理 chunk（流式读 <code>text_units</code>，给每块补上 <code>entity_ids</code> / <code>relationship_ids</code> / <code>covariate_ids</code> 三个反向引用列，<b>就地重写同一张表</b>；被嵌的 <code>text</code> 字段一个字符都没动 📄）。它的用途在<b>查询与溯源</b>：拿到一个块，能直接知道"这块里出了哪些实体、哪些关系"。顺带一句：它在报告生成<b>之后</b>才跑（排在第九步后面），所以也不可能成为报告的前置。</p>
+      <p><b>写向量库这一步嵌哪三样东西</b>（配置项 <code>embed_text.names</code>，默认全开 📄）——注意它<b>不只是嵌 chunk</b>：</p>
       <table>
-        <thead><tr><th>向量</th><th>嵌的是什么</th><th>查询期谁在用它</th></tr></thead>
+        <thead><tr><th>向量</th><th>取自哪张表 / 哪个字段</th><th>查询期谁在用它</th></tr></thead>
         <tbody>
-          <tr><td><code>text_unit_text</code></td><td>每个文本块的原文</td><td>basic search 的"块向量 top-k"</td></tr>
-          <tr><td><code>entity_description</code></td><td>每个实体的描述</td><td>local search 找入口实体</td></tr>
-          <tr><td><code>community_full_content</code></td><td>每份社区报告的全文</td><td>查询时定位相关社区</td></tr>
+          <tr><td><code>text_unit_text</code></td><td><code>text_units.text</code>——每个 chunk 的原文</td><td>basic search 的"块向量 top-k"</td></tr>
+          <tr><td><code>entity_description</code></td><td><code>entities</code> 的<b>标题拼描述</b>（<code>title:description</code>）</td><td>local search 找入口实体</td></tr>
+          <tr><td><code>community_full_content</code></td><td><code>community_reports.full_content</code>——每份报告的全文</td><td>查询时定位相关社区</td></tr>
         </tbody>
       </table>
+      <p class="muted">同一行还有一条护栏：某个字段要嵌，但它的源表不在产出里（比如没跑报告那步），它就 <b>warning 一句然后跳过</b>，不会崩（📄）。</p>
       <p>默认配置：嵌入模型 <code>text-embedding-3-large</code>（3072 维），向量库 <b>LanceDB</b>（<code>vector_store.type</code> 的默认值 📄）。<b>成本注意</b>：报告全文那一份通常最贵——报告本身就不短（我们测到的中位数在 2–3 千字符量级）。</p>
-      <p>所以"跳过嵌入"只在一种场景下成立：<b>这次只看索引产出、不打算查</b>。跳过之后产出里就没有向量库，将来想查还得把这两步补跑一遍。</p>
+      <p>所以"跳过嵌入"只在一种场景下成立：<b>这次只看索引产出、不打算查</b>。跳过之后产出里就没有向量库，将来想查还得把这一步补跑。</p>
 
       <h4>2.3 最小可跑集合：六个步骤，以及为什么少不了谁</h4>
-      <p>把上面两个嵌入步骤、再加 <code>create_final_documents</code> 摘掉之后，能一路跑出社区报告的最小链是<b>六步</b>：</p>
+      <p>从上面十步里摘掉四个（第十步嵌入、第八步补反向引用、第三步对外版文档、第六步 claim——后者默认本来就不跑），剩下的就是能一路跑出社区报告的最小链，<b>六步</b>：</p>
       <pre>load_input_documents → create_base_text_units → extract_graph
 → finalize_graph → create_communities → create_community_reports</pre>
       <p><b>为什么是这六步</b>——不是随手删的，是按"下一环读什么"倒推出来的（<span class="half">📄</span> 看每个 workflow 打开哪张表即可）：</p>
@@ -153,7 +156,13 @@ weight: 7.0     combined_degree: 7     text_unit_ids: 1 个块</pre>
           <tr><td><code>create_community_reports</code></td><td><code>communities</code> ＋ <code>entities</code> ＋ <code>relationships</code></td><td><code>community_reports</code></td><td>——（终点）</td></tr>
         </tbody>
       </table>
-      <p>砍得掉的就两类：① <b>两个嵌入步骤</b>——它们只服务查询期，本次只看索引产出，跳过能省一笔钱；② <b><code>create_final_documents</code></b>——报告生成<b>并不读 documents</b>（<code>create_community_reports</code> 只开 communities / entities / relationships 三张表，📄）。<b>我们实跑时多留了这一步</b>，因为想让产出里也有一份整齐的 documents 表；它不花钱，多留一步没有代价——第 3 节的最小配置里为了把"最小"讲干净，就按六步写。</p>
+      <p>砍得掉的其实只有三类"收尾 / 服务端"的步骤，都不是主线：</p>
+      <ul>
+        <li><b>第十步 <code>generate_text_embeddings</code></b>——只服务查询期，本次只看索引产出，跳过能省一笔钱；</li>
+        <li><b>第八步 <code>create_final_text_units</code></b>——只是给 chunk 补反向引用（<b>嵌入不依赖它</b>，见 2.2），跳过就等于放弃"块 → 实体/关系"的反查能力；</li>
+        <li><b>第三步 <code>create_final_documents</code></b>——报告生成<b>并不读 documents</b>（<code>create_community_reports</code> 只开 communities / entities / relationships 三张表，📄）。</li>
+      </ul>
+      <p>外加第六步 <code>extract_covariates</code> 默认就关。<b>我们实跑时把第三步留着了</b>，因为想让产出里也有一份整齐的 documents 表（不花钱）；第 3 节的最小配置为把"最小"讲干净，就按这六步写。</p>
       <p>反过来讲：<b>这六步里没有一步是"可选"的</b>——每一环的输出，正好是下一环的输入。</p>
     </section>
 
@@ -224,16 +233,17 @@ communities 的 community 集合  −  community_reports 的 community 集合</p
       <h4>5.1 <code>use_lcc</code>：决定"哪些实体根本不进社区"</h4>
       <p>名字是 <b>largest connected component</b>（最大连通片）。它的行为写在 <code>graphs/stable_lcc.py</code> 里，一共做三件事（📄）：</p>
       <ol>
-        <li><b>只保留最大连通片上的边</b>——关系图里连不到主团的那些节点与边，全部丢掉；</li>
+        <li><b>只保留最大连通片上的边</b>——只在关系图上留下那个<b>节点数最多的连通片</b>（连通片＝在这个无向视角下能互相走到的节点集合），连不到它的节点与边全部丢掉；</li>
         <li><b>归一化实体名</b>（HTML 反转义、转大写、去空格），让"同一实体的不同写法"不至于把图撕开；</li>
-        <li><b>把每条边的方向按字典序摆平</b>（名字小的当 source）——也就是说，<b>社区划分实际上是在"无向图"上做的</b>，方向只对最终那张关系表有意义。</li>
+        <li><b>把每条边的方向按字典序摆平</b>（名字小的当 source）——也就是说，<b>社区划分实际上是在"无向图"上做的</b>，边的方向只对最终那张关系表有意义。这一条其实在调 <code>use_lcc</code> 之前就已经做过一遍：<code>cluster_graph</code> 先把每条边两端按字典序排好并去重，源码注释直接写着 <code>Normalize edge direction and deduplicate (undirected graph)</code>（📄）。</li>
       </ol>
+      <p class="muted">一个容易混的细节：这三件里<b>只有前两件归 <code>use_lcc</code> 管</b>——把它关掉，连通片过滤和实体名归一就都不做了（后者不做，意味着大小写/空格不同的同一实体可能被当成两个，进而把图撕成更多小片）；<b>第三件（方向摆平）无论开关都会发生</b>，因为 <code>cluster_graph</code> 自己要先做一遍。</p>
       <p>所以 <code>use_lcc: true</code>（默认）意味着：<b>不在最大连通片上的实体，在聚类之前就被排除了，永远不会属于任何社区，也就永远不会被任何社区报告覆盖。</b>实测后果（判官篇那一轮）：</p>
       <pre>抽取到实体            101 个
 其中出现在关系里的      99 个   （另 2 个一条边都没有）
 最大连通片上的节点      74 个   ⇒ 25 个节点在聚类前被丢掉
 最终能被社区覆盖的实体   74 个   ⇒ 27 个实体一个社区都进不去</pre>
-      <p>被挡在社区外的都是谁？看名字就知道它们为什么连不到主团：一串虚构地名和人名（白丘国、碧石监狱、苏小满、林柏舟、陈立诚、云溪……），加上仓库路径这类"语料里只出现过一次"的字符串。<b>它们多半是语料里的噪声，被 <code>use_lcc</code> 顺手清掉了——这既是它的好处（自动去噪），也是它的代价（它不区分"噪声"和"稀但真实的旁支"）</b>。</p>
+      <p>被挡在社区外的都是谁？看名字就知道它们为什么连不上主片：一串虚构地名和人名（白丘国、碧石监狱、苏小满、林柏舟、陈立诚、云溪……），加上仓库路径这类"语料里只出现过一次"的字符串——它们各自三两相连、自成小片。<b>这些多半是语料里的噪声，被 <code>use_lcc</code> 顺手清掉了——这既是它的好处（自动去噪），也是它的代价（它不区分"噪声"和"稀但真实的旁支"）</b>。</p>
       <p>所以怎么决定：<b>想要覆盖面、宁可多留噪声，就把 <code>use_lcc</code> 设成 <code>false</code></b>——代价是那些孤立小片会各自成社区，报告数量与成本一起上涨；<b>想要干净、接受"稀有的东西看不见"，就保持默认</b>。关键是知道这道闸门存在，并且它<b>不打招呼</b>。</p>
 
       <h3>6 · 要调优时：怎么挑值</h3>
