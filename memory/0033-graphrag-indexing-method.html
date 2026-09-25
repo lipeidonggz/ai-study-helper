@@ -153,7 +153,7 @@ weight: 7.0     combined_degree: 7     text_unit_ids: 1 个块</pre>
           <tr><td><code>create_community_reports</code></td><td><code>communities</code> ＋ <code>entities</code> ＋ <code>relationships</code></td><td><code>community_reports</code></td><td>——（终点）</td></tr>
         </tbody>
       </table>
-      <p>砍得掉的就两类：① <b>两个嵌入步骤</b>——它们只服务查询期，本次只看索引产出，跳过能省一笔钱；② <b><code>create_final_documents</code></b>——报告生成<b>并不读 documents</b>（<code>create_community_reports</code> 只开 communities / entities / relationships 三张表，📄）；我们实际跑的时候把它留着，因为它不花钱、还能拿到一份整齐的 documents 表。</p>
+      <p>砍得掉的就两类：① <b>两个嵌入步骤</b>——它们只服务查询期，本次只看索引产出，跳过能省一笔钱；② <b><code>create_final_documents</code></b>——报告生成<b>并不读 documents</b>（<code>create_community_reports</code> 只开 communities / entities / relationships 三张表，📄）。<b>我们实跑时多留了这一步</b>，因为想让产出里也有一份整齐的 documents 表；它不花钱，多留一步没有代价——第 3 节的最小配置里为了把"最小"讲干净，就按六步写。</p>
       <p>反过来讲：<b>这六步里没有一步是"可选"的</b>——每一环的输出，正好是下一环的输入。</p>
     </section>
 
