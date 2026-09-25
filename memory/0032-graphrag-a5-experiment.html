@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0032 · GraphRAG 默认模式跑 A5：报告形状与四个发现</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: 0.85em; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0032 · GraphRAG 默认模式跑 A5：报告形状与四个发现</h1>
+      <p class="subtitle">做法：<b>最小实验</b>（不对比、只跑到社区报告）· 上游：0029 阅读清单第 ③ 步「拿 A5/O2 跑一遍」· 方法来源：0031 对 global search 的逐行核实 · <b>方法小结见 <a href="0033-graphrag-indexing-method.html">0033</a></b>（本页是现场流水账，0033 是提炼后的知识文）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 + 结论（复习先读这里）</h2>
+
+      <h3>当时为什么做</h3>
+      <p>0031 里把 GraphRAG 的查询侧（global/local/DRIFT 的选层、roll-up、map-reduce）核得比较细了，但一直是<b>读代码</b>。0029 的阅读清单第 ③ 步本来就写着"拿 A5/O2 跑一遍"。沛东明确目标不是做对比，而是——<b>看看 GraphRAG 默认模式吐出来的"社区报告"到底长什么样</b>（字段、长度、语气、findings 结构、能不能回锚）。于是设计了一个最小实验：<b>只跑到社区报告为止，跳过一切 embedding 相关步骤</b>。</p>
+
+      <h3>结论（七条）</h3>
+      <ol>
+        <li><b>跑通了，报告形状拿到手</b>。<code>A5</code>（＝我们语料里的 Anthropic《How we contain Claude across products》，8.0k token）→ 6 个 text unit → <b>128 实体 / 185 关系 / 23 社区（L0=9、L1=14）</b> → <b>20 份报告</b>。报告是"<code># 标题</code> ＋ 每个发现一个小节"的长文，中位 5,882 字符，findings 中位 7 条。</li>
+        <li><b>报告正文里本身就带实体/关系级引用</b>：段落末尾形如 <code>[Data: Entities (41); Relationships (47, 48, 46, 53, 54)]</code>——即<b>生成报告时就把引用写进了正文</b>。<span class="why">（口径说明：0029 在 2026-09-22 已把引用分层改准确了——claim 级一跳、实体/关系级回到"该实体出现过的 text_unit 集合"（粒度粗）、最终答案只到报告级。本轮<b>新增的事实</b>是"报告正文自带这层引用"，所以"报告 → 实体/关系 → text_unit 集合"是条<b>可实测的路径，只是粒度粗</b>；不是推翻 0029。）</span></li>
+        <li><b>DeepSeek 不支持 GraphRAG 要用的 JSON schema 结构化输出</b> —— 这是硬卡点（真实数据坐实了计划里标的风险①）。23 个报告调用全部 400，报告表为空，最终以 <code>KeyError: 'community'</code> 的形式暴露出来。加了一个本地 shim（只剥掉 API 层 schema 强制）才跑通。</li>
+        <li><b>提示词示例串味（确证 12 个）</b>：128 个实体里有 <b>12 个直接来自 GraphRAG 自己 <code>extract_graph.py</code> 的 few-shot 示例文本</b>（Aurelia / Firuzabad / Quintara / Krohaara / Tiruzia / Cashion / Samuel Namara / Durke Bataglani / Meggie Tazbah / Hostage Exchange / Alhamia Prison / Aurelian Officials）——模型把示例当正文抽了。这跟 AGENTS.md 里"Pass 1 提示词含本语料示例"是<b>同一类病、方向相反</b>（这次是<b>通用示例污染我们的图</b>）。<br><span class="half">2026-09-25 当天更正</span>：我先前按"名字不在原文里"的<b>严格字面匹配</b>报了"22/128（17%）"，<b>偏高了</b>——把 28 个严格不匹配的实体逐个看过之后，只有 12 个是串味，其余多是<b>概念短语的规范形式</b>（如 <code>EGRESS ALLOWLIST PROXY</code>、<code>TRUST DIALOG VULNERABILITY</code>）或轻度推断（<code>MICROSOFT</code> 由 HCS 推出），属检测器假阳性。而且那 12 个自成一个小连通片，<b>被默认 <code>use_lcc=True</code>（只对最大连通分量划分社区）挡在社区之外 ⇒ 本轮没有进入任何报告正文</b>（全文 grep 0 次）。⇒ 危害面是"<b>污染了图（实体/关系表），没污染报告</b>"，比我当时说的轻。</li>
+        <li><b>还有一次静默部分失败</b>：23 个社区里有 <b>3 个报告生成失败</b>（模型返回空内容 → <code>JSONDecodeError</code>），但流水线<b>报成功、退出码 0</b>，只在日志里留下 <code>No report found for community: 9.0</code> 这样的 WARNING。</li>
+        <li><b>报告语言是"无约束下的默认回落"，不是干净的继承</b>（第二篇掘金中文文章上实测，见第 九 节）。v2 数据上曾看起来是"实体语言决定报告语言"（全中文实体 → <b>10/10</b> 份中文报告；全英文实体 → <b>0/11</b>），<b>但 v3 出现反例</b>：社区 #8 的实体名／实体描述／关系描述<b>全中文</b>（1.00／1.00／1.0），报告正文却只有 <b>0.61% 中文（几乎全英文）</b>，模型还把中文实体名翻成英文再括号回注；#3 亦然（实体名 75% 中文／描述 100% 中文 → 报告正文 2.5% 中文）。⇒ 真实机制是：<b>报告提示词一句语言要求都没有 ⇒ 模型回落到自己的默认语言（英文），且不稳定</b>（同一批 20 份里 12 份中文、8 份英文）。<b>本节先前"100% 继承"的说法已撤回。</b>抽取侧的三版提示词对比依然有效（实体描述中文率 11%→91%、关系描述 3%→98%、报告正文 40%→80%）；<b>v4 把报告提示词原样翻译成中文 ⇒ 报告标题 19/19、正文 19/19 全部中文（语言问题解决）</b>。<span class="why">（另有两条当天更正：① 我先前报的"串味 12–16→0–1"是<b>比错文件</b>造成的假象——v4 图里其实有 <b>15 个实体来自我写的中文示例</b>、并形成 <b>24/120 条关系</b>，只是被 <code>use_lcc</code> 挡在社区外、未进报告；② 报告层本身干净：真幻觉候选 <b>0 个</b>、19/19 报告都带引用。详见第 九 节。）</span></li>
+        <li><b>prompt-tune 实测（v5）</b>：GraphRAG 自带的"提示词自动生成"工具，一次产出 domain / language / persona / <b>实体类型</b> / few-shot 示例 / <b>评分标准</b>。换掉默认四类之后，<b>EVENT 垃圾桶占比 61% → 最大桶 14%</b>；那批我先前叫"结构垃圾"的实体（<code>EVIDENCE</code>／<code>0号输出</code>／<code>RUNNER.PY</code>…）各自落进了合适的类型（<code>output schema field</code>／<code>dataset artifact</code>）⇒ <b>"垃圾"其实是"没有合适的桶"</b>。它也自动生成了我们手改三轮才得到的语言设定（<code>Return output in Chinese</code>）。<b>但有个反直觉副作用</b>：它把评分口径改成"与领域的相关性"，而整篇语料本身就是那个领域 ⇒ <b>rank 中位 6.0→9.0、48/52 份挤在 8–10 分，排序能力被口径吃掉</b>。</li>
+      </ol>
+
+      <h3>成本与耗时（实测）</h3>
+      <div class="chain">整轮实验累计：<b>87 次请求、16.8 万 token、$0.0546</b>（其中 72% 命中缓存）；冷启动那一轮约 <b>$0.024 / 116 秒</b>。⇒ 这个体量上，成本完全可以忽略，<b>以后想反复试配置，随便试</b>。</div>
+
+      <h3>待办（未决）</h3>
+      <ul>
+        <li><b>#2573 的真实数据复现</b>：现在手里有一份真实的 2 层层级（L0=9 / L1=14，其中 4 个 L0 带 children），可以在这份数据上跑 <code>read_indexer_reports(N)</code>，验证"被完整划分的 L0 祖先社区是不是被错误保留"，再作为评论贴到 issue。</li>
+        <li><b>调参后对比</b>：换支持 json_schema 的模型 / 改 <code>entity_types</code> / 关 gleanings / 换我们自己的领域提示词——沛东定的是"后面再调整对比"。</li>
+        <li><b>轮换 DeepSeek key</b>：本实验过程中我犯过一次密钥泄露（见经验教训①），建议吊销重发。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节</h2>
+
+      <h3>一、实验设计（为什么这么切）</h3>
+      <ul>
+        <li><b>目标</b>：看<b>一个社区报告的形状</b>，不评估检索效果。</li>
+        <li><b>范围</b>：不跑检索（global/local/DRIFT）、不接我们自己的 KB、<b>不与我们的编译器对比</b>、不改默认提示词与实体类型（先看默认形态）。</li>
+        <li><b>关键在于 <code>workflows</code> 这个开关</b>（官方文档原话："run exactly and only what you want"）：只列 7 步 ⇒ 两个 embedding 工作流（<code>create_final_text_units</code>、<code>generate_text_embeddings</code>）被跳过 ⇒ <b>我们不需要 embedding 端点</b>（DeepSeek 没有 embedding，本地又没起服务）。这是整个实验能成立的前提。</li>
+        <li><b>输入</b>：用我们自己的 <code>app.kb.chunker.extract_sections_html_auto</code> 把 A5 的 HTML 洗成纯文本（去 nav/footer/订阅噪声、保留小节标题）⇒ 15 个小节、<b>28,951 字符 ≈ 8.0k token</b>。没有把 228KB 原始 HTML 丢给 GraphRAG 的 markitdown，是为了少一个变量。</li>
+        <li><b>只放 A5 一篇</b>，不放 O2，减少变量。</li>
+      </ul>
+
+      <h3>二、环境与配置</h3>
+      <p>独立 venv 在 <code>data/tmp/graphrag-exp/.venv</code>，<b>Python 3.11.9</b>（刻意不用 3.14：<code>graspologic_native</code> 是 Rust 扩展，cp314 wheel 存在性可疑；实测 <b>1.2.5 有 cp311 wheel</b> ⇒ 风险清除）。装到 <b>graphrag 3.2.0</b>（含 graphrag-llm/vectors/storage/chunking 等 3.2.0、litellm 1.100.1）。</p>
+      <pre>completion_models:
+  default_completion_model:
+    model_provider: deepseek          # LiteLLM 前缀；模型写 deepseek-chat
+    model: deepseek-chat
+    auth_method: api_key
+    api_key: （从环境变量注入，不落文件）
+    call_args:
+      timeout: 180                    # 补的：第一次重跑因无超时卡死
+      num_retries: 2
+
+concurrent_requests: 4                # 默认 25 会把 DeepSeek 打急
+workflows:                            # 只跑到社区报告
+  - load_input_documents
+  - create_base_text_units
+  - create_final_documents
+  - extract_graph
+  - finalize_graph
+  - create_communities
+  - create_community_reports</pre>
+      <p class="muted">默认值（读本地已装源码核的，不是抄文档）：chunking <code>1200/100</code>（编码 <code>o200k_base</code>）、<code>entity_types=['organization','person','geo','event']</code>、<code>cluster_graph.max_cluster_size=10</code>、<code>community_reports.max_length=2000</code>/<code>max_input_length=8000</code>、<code>extract_graph.max_gleanings=1</code>、<code>extract_claims.enabled=False</code>。</p>
+
+      <h3>三、过程：三次失败与定位（时间精确到分钟）</h3>
+      <table>
+        <thead><tr><th>时间</th><th>发生了什么</th><th>处置</th></tr></thead>
+        <tbody>
+          <tr><td>12:41–12:43</td><td><b>首跑</b>：前 6 步全过（entities/relationships/communities 都产出），<b>最后一步 <code>create_community_reports</code> 崩</b>：<code>Pipeline error: 'community'</code>；日志里是 <code>DeepseekException - This response_format type is unavailable now</code></td><td>定位：pydantic schema 透传给 litellm → DeepSeek 不认 ⇒ 23 个报告调用全 400 ⇒ 报告表为空 ⇒ merge 缺列。写本地 shim</td></tr>
+          <tr><td>12:45 / 12:53</td><td><b>两次都精确卡在 <code>summarize ... progress: 132/317</code></b>，之后 7 分钟日志不动（CPU=0）</td><td>先怀疑限流 → 降并发到 4、加 timeout 180 → 仍然卡在同一处 ⇒ 排除限流</td></tr>
+          <tr><td>12:56–12:58</td><td>发现真因是<b>我自己写的 runner 造成管道死锁</b>：把子进程输出逐行转发到本进程 stdout，而它没被实时消费 ⇒ 本进程阻塞 ⇒ 不再读子进程 ⇒ 子进程写进度时管道写满 ⇒ 双方僵死（所以两次都停在同一个 buffer 边界）</td><td>改为子进程输出<b>直接落盘</b>（仍逐行脱敏），不再经我的 stdout</td></tr>
+          <tr><td>12:58:39–12:59:48</td><td><b>跑通</b>：7 个 workflow 全部 complete，6 张表产出，退出码 0</td><td>扫密钥残留：无真实密钥命中</td></tr>
+        </tbody>
+      </table>
+
+      <h3>四、结果数据</h3>
+      <table>
+        <thead><tr><th>表</th><th>行数</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>documents</td><td>1</td><td>A5 一篇</td></tr>
+          <tr><td>text_units</td><td><b>6</b></td><td>默认 chunk 1200/100；我们自己的切法是 24 块（≈450 token）</td></tr>
+          <tr><td>entities</td><td><b>128</b></td><td>类型分布：ORGANIZATION 53 / EVENT 28 / PERSON 27 / GEO 20</td></tr>
+          <tr><td>relationships</td><td><b>185</b></td><td>抽取期间另有 "Dropped 12 relationship(s) referencing non-existent entities" 的警告</td></tr>
+          <tr><td>communities</td><td><b>23</b></td><td>L0=9、L1=14；L0 中 0/1/2/4 带 children，其余是 L0 叶子 ⇒ <b>正是 0031 里"子社区完整划分父社区"的真实样本</b></td></tr>
+          <tr><td>community_reports</td><td><b>20</b></td><td>缺 3 份（社区 1 / 9 / 20），原因是生成失败，见发现④</td></tr>
+        </tbody>
+      </table>
+      <p><b>报告字段与实测分布</b>：列＝<code>id / human_readable_id / community / level / parent / children / title / summary / full_content / rank / rating_explanation / findings / full_content_json / period / size</code>；<code>rank</code> 2.0–8.7（中位 7.25）；<code>findings</code> 5–10 条（中位 7）；<code>full_content</code> 2,454–10,473 字符（中位 5,882）；<code>summary</code> 392–1,030 字符。</p>
+
+      <h3>五、报告形状（样例节选）</h3>
+      <pre>TITLE: Claude Cowork VM Sandbox Architecture
+SUMMARY: The community centers on the virtual machine (VM) used by the Claude Cowork agent to
+sandbox code execution. The VM is a full Linux system that relies on host hypervisors...
+RATING EXPLANATION: Moderate impact due to the security-sensitive nature of sandboxing
+untrusted code with host filesystem access, but no evidence of exploitation or vulnerability.
+FINDINGS (7 条)：
+  [0] Virtual Machine is the central entity
+  [1] Cross-platform hypervisor dependencies
+  [2] Linux kernel inside the VM
+
+FULL_CONTENT（开头）：
+# Claude Cowork VM Sandbox Architecture
+
+The community centers on the virtual machine (VM) used by the Claude Cowork agent to sandbox
+code execution. ... This architecture has moderate impact because it balances security
+(credential isolation, full VM sandbox) with the inherent risk of running untrusted code...
+
+## Virtual Machine is the central entity
+
+The Virtual Machine (VM) is the most connected entity in this community, with a degree of 7 and
+relationships to Apple, Microsoft, Linux, the .claude folder, and the host keychain. ...
+[Data: Entities (41); Relationships (47, 48, 46, 53, 54)]</pre>
+      <p class="muted">完整数据（含 20 份报告全文）在 <code>data/tmp/graphrag-exp/output/*.parquet</code>；一行命令重看：<code>python _inspect_output.py</code>。</p>
+
+      <h3>六、四个发现</h3>
+
+      <h4>① DeepSeek 不支持 JSON schema 结构化输出（硬卡点）</h4>
+      <p>社区报告这一步显式传 pydantic 模型当 <code>response_format</code>（<code>community_reports_extractor.py:84</code>），<code>graphrag_llm</code> 原样透传给 litellm → 转成 json_schema → DeepSeek 返回 400：<code>"This response_format type is unavailable now"</code>。<code>drop_params=True</code> 兜不住（litellm 的模型表没把 response_format 标为 DeepSeek 不支持）。</p>
+      <p><b>处置</b>：写了本地 shim <code>sitecustomize.py</code>——只把"pydantic 类的 response_format"在调 API 前剥掉；GraphRAG 拿到文本后仍会在本地用 <code>structure_completion_response()</code> 解析成同一个模型。<span class="why">不改提示词、不改 schema 定义。但代价见发现④。</span></p>
+
+      <h4>② 报告内部带实体/关系级引用（对我们价值最高的一条）</h4>
+      <p>正文段落末尾形如 <code>[Data: Entities (41); Relationships (47, 48, 46, 53, 54)]</code>。⇒ 报告不是"黑盒摘要"，它<b>自带回锚线索</b>：报告 → 实体/关系 → <code>text_unit_ids</code>。<b>但粒度要如实说</b>：实体/关系级引用回到的是"该实体出现过的那些 text unit"的<b>集合</b>（可能几十上百），不是一句话级证据——这与 0029（2026-09-22 那次修正）的分层口径一致。本轮新增的只是"<b>这层引用确实写在报告正文里</b>"，让这条路径可实测而非仅理论存在。</p>
+
+      <h4>③ 提示词示例串味：确证 12 个实体来自示例文本</h4>
+      <p>把 128 个实体名逐个回 A5 原文做匹配：严格字面匹配有 <b>28 个</b>一次都没出现；逐个看过之后，<b>确证 12 个</b>来自 GraphRAG <code>extract_graph.py</code> 的 <b>Example 3</b>——那段虚构新闻原文：</p>
+      <pre>Example 3:
+Entity_types: ORGANIZATION,GEO,PERSON
+Text:
+Five Aurelians jailed for 8 years in Firuzabad and widely regarded as hostages are on their way
+home to Aurelia.
+The swap orchestrated by Quintara was finalized when $8bn of Firuzi funds were transferred to
+financial institutions in Krohaara, the capital of Quintara.</pre>
+      <p>⇒ 我们的图里因此出现了 <code>AURELIA / FIRUZABAD / QUINTARA / KROHAARA / TIRUZIA / CASHION / HOSTAGE EXCHANGE / ALHAMIA PRISON / SAMUEL NAMARA / DURKE BATAGLANI / MEGGIE TAZBAH / AURELIAN OFFICIALS</code>，它们之间还有 8 条关系（185 条里的 8 条）。</p>
+      <p><b>危害面的实测边界（2026-09-25 当天补测）</b>：这 12 个串味实体自成一个小连通片，<b>被默认 <code>use_lcc=True</code> 排除在社区划分之外</b>（28 个"字面不匹配"实体里只有 15 个落进了社区，且都是概念短语那批）⇒ <b>它们没有进入任何一份报告</b>（对 <code>reports.md</code> 全文 grep：<code>Aurelia/Firuzabad/Quintara/Krohaara/Tiruzia/Cashion/Namara/Tazbah/Alhamia</code> 各 0 次）。<span class="why">⇒ 准确说法是"<b>污染了图，没污染报告</b>"；我先前"22/128 污染了语料"的说法偏高，已更正。</span></p>
+      <div class="chain"><b>与我们自己的关系</b>：AGENTS.md 开放待办里有一条"<b>Pass 1 提示词含本语料（A5）示例 → A5 数字偏乐观</b>"——那是<b>我们的示例污染我们的语料</b>；这里是反方向，<b>GraphRAG 的通用示例污染了我们的语料</b>。同一个病：<b>few-shot 示例一旦与正文同处一个上下文，弱指令跟随的模型就会把示例当内容</b>。</div>
+
+      <h4>④ 静默部分失败：3 份报告没生成，流水线却报成功</h4>
+      <p>社区 1 / 9 / 20 没有报告。日志里是 <code>error generating community report</code> → <code>Community Report Extraction Error</code> → <code>No report found for community: 9.0</code>，根因是模型返回空内容触发 <code>json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</code>。<b>但整个 workflow 打印 <code>completed successfully</code>、进程退出码 0</b>。</p>
+      <p class="muted">诚实归因：这 3 例很可能是 <b>shim 去掉 API 层 schema 强制</b>的代价（模型少了约束，偶尔返回空）。要区分"模型的锅"还是"shim 的锅"，需要换一个支持 json_schema 的模型重跑——本轮没做。</p>
+
+      <h3>七、实践与经验教训</h3>
+      <ol>
+        <li><b>掩码必须按"值的内容"判敏感，不能只按列名。</b>我为查 key 写了个探针，只按列名（<code>key</code>/<code>value</code>）判敏感，于是 settings 表里那列 JSON（<code>{"provider":…,"api_key":"sk-…"}</code>）被原样打印，<b>泄露了一把真实 DeepSeek key</b>。事后查证：该 db 未被 git 跟踪且在 <code>.gitignore</code> 里 ⇒ 没进仓库，泄露面＝会话记录。探针已改为按值内容脱敏（含 JSON 敏感键），并把这个教训写进文件头。<b>建议吊销重发。</b></li>
+        <li><b>settings.yaml 里任何字面 <code>$</code> 都会炸</b>——GraphRAG 用 <code>string.Template</code> 做环境变量替换，<b>连注释里的也算</b>。给 <code>file_pattern</code> 写正则结尾锚 ⇒ <code>Invalid placeholder in string</code>；在注释里写出占位符的完整写法 ⇒ <code>Environment variable not found</code>。踩了三次才干净。</li>
+        <li><b>不要把子进程输出转发到本进程 stdout。</b>两次"卡在 132/317"根本不是模型/限流问题，而是管道死锁（本进程 stdout 未被实时消费 → 停止读取子进程 → 子进程写满管道 → 僵死）。<b>长跑任务的输出应当直接落盘</b>，再另行 tail。</li>
+        <li><b>"卡住"要先用日志时间戳判定，再动手改参数。</b>我先怀疑限流、降并发加超时，白折腾一轮；真正有效的动作是"看日志最后写入时间 + 进程状态"。</li>
+        <li><b>比"看效果"更值钱的是看到失败模式</b>：这一轮真正有信息量的不是报告长什么样，而是串味、静默失败、provider 兼容性这三类"看报告看不出来的东西"。</li>
+      </ol>
+
+      <h3>八、文件清单（都在 <code>data/tmp/graphrag-exp/</code>）</h3>
+      <table>
+        <thead><tr><th>文件</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td><code>_prepare_exp.py</code></td><td>A5 HTML → 纯文本输入 ＋ 生成 settings.yaml ＋ 配置自校验（不调 LLM）</td></tr>
+          <tr><td><code>_run_index.py</code></td><td>跑索引：密钥只从 <code>backend/data/app.db</code> 读进环境变量、输出脱敏落盘、跑完扫密钥残留</td></tr>
+          <tr><td><code>sitecustomize.py</code></td><td><b>DeepSeek 兼容 shim</b>（剥掉 API 层的 pydantic response_format）——只在实验内生效</td></tr>
+          <tr><td><code>_inspect_output.py</code></td><td>审读产出：规模、实体类型、层级、报告字段统计、报告样例</td></tr>
+          <tr><td><code>_check_hallucination.py</code></td><td>实体名回原文做字面匹配，找"图里有、文里没有"的实体</td></tr>
+          <tr><td><code>_check_missing_reports.py</code></td><td>找没有报告的社区及其特征</td></tr>
+          <tr><td><code>_env_probe.py</code> / <code>_settings_probe.py</code></td><td>读本地已装 graphrag 的默认值与工作流注册表 / 掩码查应用配置</td></tr>
+          <tr><td><code>_export_reports.py</code></td><td>把报告导成可读版（下面两个文件）</td></tr>
+          <tr><td><code>reports.html</code> / <code>reports.md</code></td><td><b>20 份社区报告全文的可读版</b>（含索引表、summary、rating explanation、findings、正文）——<code>.md</code> 在 VSCode 里 Ctrl+Shift+V 直接预览</td></tr>
+          <tr><td><code>_check_contamination_location.py</code></td><td>查串味实体落在哪些社区、为何没进报告</td></tr>
+          <tr><td><code>output/*.parquet</code>、<code>logs/</code>、<code>run-*.out.log</code>、<code>cache/</code></td><td>产物、引擎日志、脱敏后的子进程输出、LLM 缓存</td></tr>
+          <tr><td><code>../graphrag-exp-juejin/</code></td><td><b>第二篇（掘金中文文章）的整目录</b>：同结构 + 三版产物（<code>output-en/</code>／<code>output-samelang/</code>／<code>output/</code>）与三份导出（<code>reports-en.*</code>／<code>reports-samelang.*</code>／<code>reports.*</code>）+ <code>prompts/</code> 下两版提示词</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="page-foot">
+      <h3>九、第二篇：掘金文章（中文）＋「语言链」三版对比</h3>
+      <p><b>第二篇的设置</b>：沛东拿自己的文章 <a href="https://juejin.cn/post/7682220809205907490">《判官不稳定时，先别换判官——一次 LLM-as-Judge 的完整排查实录》</a> 走同一套流程（新目录 <code>data/tmp/graphrag-exp-juejin/</code>，复用同一 venv／settings／shim）。输入 11 小节、11,281 字符（中文，约 6–7k token；勾掉 2 行站点装饰）。<b>规模</b>：7 text unit → 95 实体 / 109 关系 / 16 社区 → 15 报告（v1 基线那次）。</p>
+
+      <h4>① 语言：先是"看起来干净"，随后被反例推翻（本段最值钱，含一次撤回）</h4>
+      <p>现象是"报告大量输出英文"。<b>先看到的假象</b>（v2 数据）——规律整齐得可疑：</p>
+      <table>
+        <thead><tr><th>该社区的实体语言</th><th>报告数</th><th>报告标题是中文</th><th>摘要中文占比（中位）</th></tr></thead>
+        <tbody>
+          <tr><td>全中文（占比 1.0）</td><td>10</td><td><b>10 / 10</b></td><td><b>0.83</b></td></tr>
+          <tr><td>全英文（占比 0.0）</td><td>11</td><td><b>0 / 11</b></td><td><b>0.00</b></td></tr>
+          <tr><td>混合</td><td>10</td><td>4 / 10</td><td>0.01</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">我据此下了"报告语言 100% 继承自实体语言"的结论——<b>然后被 v3 的反例推翻</b>。</p>
+      <p><b>反例（v3 实测，沛东指出 #3 后逐个核）</b>——把社区的"原料"逐层拆开看：</p>
+      <table>
+        <thead><tr><th>社区</th><th>实体名中文</th><th>实体描述中文</th><th>关系描述中文</th><th>报告正文中文</th></tr></thead>
+        <tbody>
+          <tr><td><b>#8</b></td><td><b>1.00</b></td><td><b>1.00</b></td><td><b>1.0</b></td><td><b>0.006</b></td></tr>
+          <tr><td><b>#3</b>（沛东点名）</td><td>0.75</td><td><b>1.00</b></td><td><b>1.0</b></td><td><b>0.025</b></td></tr>
+          <tr><td>#1</td><td>0.00</td><td>0.50</td><td>0.6</td><td>0.000</td></tr>
+          <tr><td>#5</td><td>0.00</td><td>0.75</td><td>1.0</td><td>0.000</td></tr>
+          <tr><td>#10（典型中文报告）</td><td>0.75</td><td>1.00</td><td>1.0</td><td>0.745</td></tr>
+        </tbody>
+      </table>
+      <p>#8 的实体是「变量分离实验／0号输出／第2节」——<b>三件原料全中文</b>，报告却写成英文，并把中文名翻译后括号回注：<code>The community centers on the 'Variable Isolation Experiment' (变量分离实验) ... 'Section 2' (第2节)</code>。</p>
+      <div class="chain"><b>更正后的结论</b>：报告语言与原料语言<b>只是弱相关</b>；真实机制是<b>报告提示词（<code>community_report.py</code>）一句语言要求都没有 ⇒ 模型回落到自己的默认语言（英文）</b>——因为提示词的指令、输出格式说明与示例<b>全是英文</b>。这个"回落"还<b>不稳定</b>：同一批 20 份里 12 份中文、8 份英文，与原料语言对不齐。<br>⇒ <b>两个可操作推论</b>：① 抽取侧改提示词能<b>整体抬高</b>中文比例（聚合上有效，见 ②），但<b>管不住单个社区</b>；② <b>要让报告语言稳定，必须在报告提示词上显式约束</b>——语言本该是<b>显式策略</b>，而不是涌现行为。<br><b>两个备选都没走</b>：<span class="why">（a）<code>create_community_reports_text</code>——它属官方 <code>--method fast</code> 套餐（NLP 建图 + 文本块报告），上下文换成"社区命中的 text unit 原文"，机制上也许更稳；两件事其实可拆开组合（保留 LLM 抽图、只换报告那一步，产出表字段不变）。<b>2026-09-25 沛东定：不试这条。</b>（b）给报告提示词加显式语言约束——未做，留给以后需要时。</span></div>
+      <p><b>全链扫描</b>：GraphRAG 全部索引／查询提示词里，<b>只有两处</b>提到语言——<code>extract_graph.py:25</code>（"Return output in <b>English</b>"）与 <code>extract_claims.py:27</code>（我们没跑那条链）；<code>summarize_descriptions.py</code>、<code>community_report*.py</code> <b>全部无语言要求</b>。</p>
+
+      <h4>② 三版提示词对比（同一篇文章、同一模型）</h4>
+      <table>
+        <thead><tr><th>指标</th><th>v1 默认（要求 English）</th><th>v2 只改语言句</th><th>v3 中文示例 ＋ 去 capitalized ＋ Do not translate</th></tr></thead>
+        <tbody>
+          <tr><td>entities / relationships</td><td>95 / 109</td><td>133 / 153</td><td>101 / 120</td></tr>
+          <tr><td>communities / reports</td><td>16 / 15</td><td>33 / 31</td><td>21 / 20</td></tr>
+          <tr><td>实体名含中文</td><td>18%</td><td>49%</td><td><b>58%</b></td></tr>
+          <tr><td>实体描述含中文</td><td>11%</td><td>50%</td><td><b>91%</b></td></tr>
+          <tr><td>关系描述含中文</td><td>3%</td><td>48%</td><td><b>98%</b></td></tr>
+          <tr><td>报告标题含中文</td><td>7%</td><td>45%</td><td><b>60%</b></td></tr>
+          <tr><td>报告正文含中文</td><td>40%</td><td>55%</td><td><b>80%</b></td></tr>
+        </tbody>
+      </table>
+      <p><b>三处改动</b>（都在 <code>prompts/extract_graph.txt</code>，走官方 <code>extract_graph.prompt: &lt;文件路径&gt;</code> 机制，不改 site-packages）：<b>A</b> 三个 few-shot 示例全部换中文（并换成虚构中文场景，避免注入真实实体）；<b>B</b> <code>entity_name: Name of the entity, capitalized</code> → <code>exactly as written in the text (do not translate)</code>；<b>C</b> 第 3 步加 <code>Do not translate anything: keep entity names, relationship descriptions and entity descriptions in the same language as the input text</code>。提示词 6,483 → 3,781 字符。</p>
+      <p><b>对 v3 剩余英文的核查（别误读成"没改干净"）</b>：42 个不含中文的实体名里 <b>41 个能在原文里逐字找到</b>——<code>LLM-AS-JUDGE</code>、<code>RAG</code>、<code>KRIPPENDORFF'S α</code>、<code>MICROSOFT FOUNDRY</code>、<code>LLAMA 3.1</code>、<code>QWEN 3</code>、<code>ALCE</code>、<code>EMNLP 2023</code>、<code>backend/eval/runner.py</code>……<b>都是原文本来就用的英文术语与路径</b>，按 "do not translate" <b>正该保留</b>；真正找不到的只有 1 个（<code>TURNOVER</code>，degree 0，未进报告）。剩下 4 份全英文正文的报告，其社区实体本来就是英文产品名（Anthropic Judge Cookbook / Orq.ai / Llama 3.1·Qwen 3 / Microsoft Foundry）——<b>仍继承机制所致，不是提示词失效</b>。</p>
+      <p><b>附带的"串味收益"——这条我报错了，2026-09-25 当天更正</b>：我先前写"v1 有 12 个、v2 有 16 个提示词示例实体混进图，<b>v3 降到 0–1 个</b>"。<b>错在我比错了文件</b>——那个检查拿实体名去比 <code>site-packages</code> 里 <b>GraphRAG 原始的英文示例</b>，而 v3 起用的是<b>我们自己的中文示例</b>，所以根本没检查到。<br>用<b>改后的提示词</b>重新比（<code>_audit_v4.py</code>）：<b>v4 图里有 15 个实体来自我写的中文 few-shot 示例</b>——陈立诚／北岭联合储备委员会／市场策略委员会（例 1）、华芯科技／远景控股／远景交易所（例 2）、青屿市／岚港／白丘国／云溪／明珠市／碧石监狱／林柏舟／顾丽娟／苏小满（例 3），并且它们之间已形成 <b>24/120 条关系（20%）</b>。<b>⇒ 把示例翻译成中文并没有消除串味，只是把串味从"英文虚构地名"换成了"中文虚构人名地名"，而且同语言更难被肉眼发现。</b></p>
+      <div class="chain"><b>危害面（实测，好消息）</b>：这 15 个实体<b>落在 0 个社区</b>（它们自成几个小连通片，被默认 <code>use_lcc=True</code> 排除），<b>19 份报告里 0 次提及</b>。⇒ <b>污染停在图（实体表 ＋ 20% 的关系），没有进报告</b>。但这个"安全网"是 <b>use_lcc 的副作用，不是设计</b>——一旦它们与主图连通，就会随社区进报告。<br><b>正解（我们有先例）</b>：<b>把 few-shot 示例整段删掉</b>——我们自己的 S5 收尾就是这么做的（AGENTS.md：<i>"删掉提示词里全部示例（含两条取 O2 原文的）"</i>）。</div>
+      <p><b>顺带记下 v4 体检的另两类问题</b>（都不影响本轮报告，但都要修）：<br><b>① 结构垃圾（12 个）</b>——章节引用 <code>第2节</code>、产物编号 <code>0号输出</code>、单字母 <code>V</code>、字段/枚举名 <code>COVERED</code>／<code>NOT_COVERED</code>／<code>EVIDENCE</code>／<code>PASS/FAIL</code>／<code>TURNOVER</code>／<code>EQUIVOCAL</code>、文件路径 <code>BACKEND/EVAL/RUNNER.PY</code>／<code>BACKEND/EVAL/CASES/RAG/</code>／<code>MEMORY/</code>——被当成实体抽了出来（<code>第2节</code>／<code>0号输出</code> 是沛东先看出来的）。<br><b>② 类型兜底</b>——<code>第2节</code>／<code>0号输出</code>／<code>V</code>／<code>COVERED</code> 全被塞进 <b>EVENT</b>：默认四种类型里没有合适的，EVENT 成了垃圾桶（与 AGENTS.md 记的 <code>acts_on</code> 收容桶同源）。<br><b>③ 报告层反而是干净的</b>：真幻觉候选 <b>0 个</b>；19/19 报告都带引用（每份 5–9 处，与 findings 条数一致）；v1 那个 <code>Autonomous Driving</code> 幻觉在 v4 已消失，<code>Johns Hopkins</code> 则有据（原文写的就是"约翰霍普金斯大学"）。</p>
+
+      <h4>③ 经验教训：判定器自身连错四次（都属于"想当然"）</h4>
+      <ol>
+        <li><b>跨语言下"实体名回原文匹配"整体失效</b>：我用它把 <code>JOHNS HOPKINS UNIVERSITY</code> 判成幻觉，可原文写的是"<b>约翰霍普金斯大学</b>"——错的是我。⇒ 中文语料＋英文图时，必须改用<b>语言无关</b>判据（如"是否命中提示词示例专名"）。<b>判据先要问：它在目标语言下成立吗。</b></li>
+        <li><b><code>all([]) == True</code> 陷阱</b>：判据写成"实体名的每个词都能在提示词里找到"，中文名切不出拉丁词 ⇒ 词表为空 ⇒ 恒为真 ⇒ 把所有中文实体误判成串味。</li>
+        <li><b>numpy 数组判空</b>：<code>v or []</code> 对 <code>ndarray</code> 直接抛异常（本 session 犯了<b>三次</b>）⇒ 统一写 <code>as_list()</code>。</li>
+        <li><b>pandas/pyarrow 的正则不认 <code>\u4e00-\u9fff</code></b>（<code>Invalid escape sequence</code>）⇒ 中文字符判断挪到 Python 层。</li>
+      </ol>
+
+      <h4>④ 顺带定下来的两条口径（阅读／检索都用得上）</h4>
+      <ul>
+        <li><b>引用标记的位置</b>（实测）：在 <code>findings[].explanation</code> 里（掘金 31/31、A5 20/20）；<code>summary</code>、<code>rating_explanation</code>、<code>findings[].summary</code> <b>都不带</b>。我先前的"只有 <code>full_content</code> 带引用"是错的——<code>full_content</code> 只是把这些 explanation 渲染了一遍。⇒ <b>要给报告建索引，索引带引用的解释文本；<code>summary</code> 是干净的无引用摘要。</b></li>
+        <li><b>导出与阅读工具链</b>：导出改为<b>结构化字段版</b>（不再重复渲染 <code>full_content</code>，渲染版另存 <code>reports-rendered.*</code>）；阅读版加了<b>索引表 parent 列 ＋ 按 level／parent 筛选 ＋ 关键词搜索</b>（纯 JS，筛选同时作用于索引表与正文）。</li>
+      </ul>
+      <h4>⑤ v4：报告提示词翻译成中文 ⇒ 语言问题解决（2026-09-25 当天收到当天验证）</h4>
+      <p><b>改动</b>：把默认的 <code>COMMUNITY_REPORT_PROMPT</code> <b>原样翻译成中文</b>（不改语义、不动 JSON 双大括号与 <code>{input_text}</code>／<code>{max_report_length}</code> 占位符、CSV 表头保持英文以对齐真实输入），落成 <code>prompts/community_report.txt</code>，通过官方钩子 <code>community_reports.graph_prompt: prompts/community_report.txt</code> 挂载。</p>
+      <table>
+        <thead><tr><th>指标</th><th>v3（抽取三刀）</th><th><b>v4（＋报告提示词译中）</b></th></tr></thead>
+        <tbody>
+          <tr><td>报告标题含中文</td><td>12/20（60%）</td><td><b>19/19（100%）</b></td></tr>
+          <tr><td>报告正文含中文</td><td>16/20（80%）</td><td><b>19/19（100%）</b></td></tr>
+          <tr><td>报告数（社区 21 个）</td><td>20</td><td>19（社区 9、18 生成失败）</td></tr>
+          <tr><td>正文长度 中位 / 最大</td><td>2,749 / 7,871</td><td><b>1,946 / 3,166</b></td></tr>
+          <tr><td>rank 中位 / 范围</td><td>6.5（1.0–7.5）</td><td>6.0（1.0–8.5）</td></tr>
+        </tbody>
+      </table>
+      <p><b>结论</b>：<b>报告语言由"报告提示词的语言基线"决定，与原料语言只是弱相关</b>——这条现在是<b>实证</b>而不是推理了（同一份图、同一批实体、只换报告提示词的语言，报告从 60%/80% 中文变成 100% 中文）。</p>
+      <p><b>两个要留意的副作用</b>：① <b>报告明显变短</b>（正文中位 2,749→1,946、最长 7,871→3,166）——可能是"限制为 <code>{max_report_length}</code> 个<b>词</b>"在中文下的解读不同，若在意信息量，下一步该调这句（改成"字"或直接调大限额）；② <b>社区 9／18 生成失败</b>（模型返回不可解析内容 → <code>No report found</code> → 静默跳过），仍是 shim 去掉 schema 强制的老问题，<b>与语言无关</b>。</p>
+      <h3>十、prompt-tune 实测（v5）：换掉类型表，垃圾桶就没了</h3>
+      <p><b>起因</b>：v4 的类型分布是 EVENT 62/101（<b>61%</b>）——默认四类（organization/person/geo/event）是给叙事语料设计的，技术文章里的概念/方法/指标/字段全挤进 EVENT。GraphRAG 自带 <code>prompt-tune</code>（用 LLM 从语料推断 domain / language / persona / <b>实体类型</b> / few-shot 示例 / <b>评分标准</b>），于是拿它跑了一遍。</p>
+
+      <h4>① 要四处准备，不止"加一个参数"</h4>
+      <ol>
+        <li><code>--limit 7</code>：默认 <code>limit=15</code>，而越界回落的实现是 <code>limit = LIMIT(=15)</code> 之后<b>无条件</b> <code>sample(n=15)</code> ⇒ <b>块数 &lt; 15 直接崩</b>（我们这篇正好 7 块）。</li>
+        <li><b>必须补 <code>embedding_models</code> 占位块</b>：prompt-tune <b>无条件</b>构造嵌入客户端（<code>get_embedding_model_config("default_embedding_model")</code>），缺 key 直接 <code>ValueError</code>——哪怕 <code>top</code>/<code>random</code> 选法根本不用嵌入。</li>
+        <li><b>要带 shim</b>：<code>generate_entity_types</code> 在 API 里<b>写死</b> <code>json_mode=True</code> ⇒ 传 pydantic schema ⇒ DeepSeek 400（同 #2573 那个坑）。</li>
+        <li><b>输出目录必须换</b>：默认 <code>-o prompts</code> 会写 <code>extract_graph.txt</code>——<b>正好覆盖我们手改的那份</b>；改用 <code>-o prompts-tuned</code>。</li>
+        <li><span class="half">连带发现</span>：补了占位 key 之后，<b>索引的预检会真的去调嵌入端点</b>（拿占位 key 打了 OpenAI，401），尽管 <code>workflows</code> 里没有任何 embedding 步骤 ⇒ 索引得加 <code>--skip-validation</code>。又一个"配置要求与实际使用脱钩"。</li>
+      </ol>
+      <p>运行结果：<b>退出码 0 · 33 秒 · 11 次调用 · $0.0367</b>，产出三份提示词（<code>extract_graph.txt</code> 25KB/499 行、<code>summarize_descriptions.txt</code>、<code>community_report_graph.txt</code>）。</p>
+
+      <h4>② 它自己生成了什么</h4>
+      <ul>
+        <li><b>14 个领域类型</b>：<code>evaluation metric / evaluation methodology / failure mode / root cause / fix strategy / gold standard / judge prompt / output schema field / model / technical term / experiment / paper / dataset artifact / design principle</code>。</li>
+        <li><b>语言＝中文</b>：它先跑 <code>detect_language</code>，再把 language 填进所有提示词模板 —— <code>Return output in Chinese</code>、<code>If you have to translate into Chinese, just translate the descriptions, nothing else!</code>、<code>Your answers should be in Chinese</code>。<b>我们手改三轮才得到的东西，它一次给全了</b>，而且"只翻译描述、别动实体名"那句比手写的更狠。</li>
+        <li><b>领域 persona</b>：「expert in LLM evaluation methodology and algorithmic analysis… diagnosing instability through metrics like flip-rate and judge consistency」。</li>
+        <li><b>评分标准带锚点</b>：把默认的 "impact severity" 换成 "relevance to LLM evaluation methodology… <b>1 = trivial or irrelevant，10 = highly significant</b>"。</li>
+        <li><b>2 个 few-shot 示例，取自本文档原文</b> ⇒ 对"这一篇"是自污染，对"给整库调提示词"则合理——与我们 AGENTS.md 记的"Pass 1 含 A5 示例"同类。</li>
+      </ul>
+
+      <h4>③ v5 vs v4</h4>
+      <table>
+        <thead><tr><th>指标</th><th>v4（手改提示词＋默认四类）</th><th><b>v5（prompt-tune 三份提示词＋14 类）</b></th></tr></thead>
+        <tbody>
+          <tr><td>最大类型桶占比</td><td><b>EVENT 62/101（61%）</b></td><td><b>FAILURE MODE 39/273（14%）——没有垃圾桶</b></td></tr>
+          <tr><td>entities / relationships</td><td>101 / 120</td><td><b>273 / 431</b></td></tr>
+          <tr><td>communities / reports</td><td>21 / 19</td><td><b>64 / 52</b></td></tr>
+          <tr><td>实体描述中文</td><td>91%</td><td><b>100%</b></td></tr>
+          <tr><td>关系描述中文</td><td>98%</td><td><b>100%</b></td></tr>
+          <tr><td>报告标题／正文中文</td><td>100% / 100%（19 份）</td><td><b>100% / 100%（52 份）</b></td></tr>
+          <tr><td>引用密度（中位／最大）</td><td>6 / 9</td><td><b>8 / 24</b>（无一缺引用）</td></tr>
+          <tr><td><b>成本</b></td><td>$0.055（87 次调用）</td><td><b>$0.178（139 次调用，13.5 分钟）</b></td></tr>
+          <tr><td><b>没报告的社区</b><br><span class="muted">（＝静默失败）</span></td><td><b>2 / 21（10%）</b>——社区 9、18</td><td><b>12 / 64（19%）</b>——社区 6、16、17、19、24、26、27、32、34、44、49、60<br><span class="half">2026-09-25 当天更正：我先前写"0，静默失败消失"是<b>把指标读数当成了结果</b>，实际更差</span></td></tr>
+        </tbody>
+      </table>
+
+      <h4>④ 最重要的一条："结构垃圾"其实是"没有合适的桶"</h4>
+      <table>
+        <thead><tr><th>v4 里像垃圾的东西</th><th>v5 的类型归属</th></tr></thead>
+        <tbody>
+          <tr><td><code>EVIDENCE</code> / <code>COVERED</code> / <code>NOT_COVERED</code> / <code>EQUIVOCAL</code> / <code>PASS/FAIL</code> / <code>V</code></td><td><b>OUTPUT SCHEMA FIELD</b>（判官输出 schema 的字段——在这篇文章里是<b>合法实体</b>）</td></tr>
+          <tr><td><code>0号输出</code> / <code>7号输出</code> / <code>RUNNER.PY</code> / <code>BACKEND/EVAL/CASES/RAG/</code></td><td><b>DATASET ARTIFACT</b></td></tr>
+          <tr><td><code>1600/1600</code> / <code>0.33-0.79</code> / <code>FLIP-RATE</code> / <code>SELF-CONSISTENCY</code></td><td><b>EXPERIMENT</b> / <b>EVALUATION METRIC</b></td></tr>
+          <tr><td><code>EVIDENCE-FIRST</code> / <code>LLM-AS-JUDGE</code> / <code>ALCE</code> / <code>CODEX</code></td><td><b>DESIGN PRINCIPLE</b> / <b>EVALUATION METHODOLOGY</b> / <b>PAPER</b> / <b>MODEL</b></td></tr>
+          <tr><td><code>第2节</code></td><td><b>没被抽出来</b>（v4 有）</td></tr>
+        </tbody>
+      </table>
+      <div class="chain"><b>⇒ 结论</b>：<b>类型表不适配，会把正常实体挤成"垃圾"。</b>我先前给它们贴"结构垃圾"的标签<b>对它们不公平</b>——真正改掉的不是抽取器，而是<b>给它一个合适的桶</b>。这也回过头解释了一件事：既然 type 不进查询、错了没代价（见第九节的全链扫描），"类型表烂"唯一的表现形式就是<b>图的语义分布烂</b>，而这件事只有看产出时才会被发现。</div>
+
+      <h4>⑤ 反直觉的副作用：评分标准"领域化"之后，rank 失去区分度</h4>
+      <pre>v4:  中位 6.0 · 范围 1.0–8.5
+v5:  中位 9.0 · 范围 5.5–9.8 · 标准差 0.78 · 48/52 份落在 (8, 10]</pre>
+      <p>原因是 prompt-tune 把评分口径从"影响严重程度"换成了"<b>与 LLM 评测方法学的相关性</b>"——而整篇文章本身就是讲这个的 ⇒ <b>每个社区都高度相关 ⇒ 全部 8–10 分</b>。</p>
+      <div class="chain"><b>可复用判据</b>：<b>"评分标准领域化" ≠ "评分有信息量"</b>。判据必须与<b>用途</b>对齐：<code>rank</code> 在 GraphRAG 里是用于<b>排序与过滤</b>的（<code>min_community_rank</code>、批内排序、reduce 降序截断），那就必须选一个<b>在语料内部有方差</b>的维度；选"与领域的相关性"这种全库同质的维度，<b>等于把排序能力杀掉</b>。v5 的锚点比 v4 清楚（1=trivial / 10=highly significant），但<b>方差被口径吃掉了</b>——"有锚点"和"有信息量"是两件事。</div>
+
+      <h4>⑥ 两处小的</h4>
+      <ul>
+        <li><b>类型越界</b>：v5 出现第 15 个类型 <code>PROJECT</code>（实体 <code>RAG 评测工程系列</code>），不在配置的 14 类里、提示词里也没有 ⇒ <b>模型自造类型</b>。内容合理，但说明类型约束不是硬约束。</li>
+        <li><b>"串味"判据在中文语料上不可用</b>：v5 上报了 39 个，逐个核下来基本都是<b>跨语言误报</b>——<code>字段顺序</code>（原文 4 次）、<code>反例</code>（7 次）、<code>探针</code>（12 次）、<code>合并</code>（2 次）都在原文里，只是被译成了英文。这类误报本 session 已犯三次 ⇒ <b>中文语料上不要用它判串味</b>。</li>
+      </ul>
+      <h4>⑦ 当天更正：v5 的静默失败比我说的更严重，而且指标看不见</h4>
+      <p>我在 ③ 那张表里先写的是"调用失败数 0 ⇒ 静默失败消失"，依据是运行日志末尾的 LLM 指标（<code>failed_response_count: 0</code>）。<b>那是把读数当成了结果。</b>查缺失清单才发现：<b>v5 有 12/64 个社区（19%）没生成报告</b>，日志里 <code>No report found</code> 也是 12 条，与缺失清单（6、16、17、19、24、26、27、32、34、44、49、60）逐一对得上。</p>
+      <div class="chain"><b>为什么指标是"全绿"的</b>：那 12 次失败发生在 <b>"LLM 返回内容 → 解析/校验成 pydantic schema"</b> 这一步（<code>community_reports_extractor</code> 自己的 try/except 里），而 <b>HTTP 调用本身是成功的</b> ⇒ 不进 <code>failed_response_count</code>。<b>⇒ 指标的统计边界是"调用层"，不是"产出层"</b>；于是"指标全绿"与"19% 社区没报告"可以同时成立。这与 #2573（roll-up）同一性质：<b>失败被静默吞掉，且汇总层看不到</b>。<br><b>顺带修正另一处</b>：v4 是 2/21（10%），v5 是 12/64（19%）——<b>tuned 提示词并没有减少静默失败，丢失率反而升了</b>（可能因为社区数多了 3 倍、每个社区的上下文更碎）。所以 ③ 表里"静默失败消失"的结论<b>撤回</b>。</div>
+      <p class="muted"><b>对我自己的教训（本 session 第 N 次同类）</b>：<b>不要用汇总指标回答"有没有发生"这类问题</b>——指标的边界由埋点决定，它是给趋势看的；要判断"有没有丢东西"，就得<b>拿清单对账</b>（社区集合 − 报告集合）。这跟"判定器假阳性"是同一个毛病：<b>拿一个近似物当精确判据。</b><br><b>2026-09-25 已提级</b>：这条连同本节的三次实证，已写成 <code>AGENTS.md</code> 的<b>"判据纪律（重要，2026-09-25 定）"</b>——给结论前先问"判据覆盖我要断言的边界吗"，对账优先于读数，三类高风险判据（字面匹配／拿 A 的清单比 B／汇总指标）先自检。</p>
+      <p class="muted"><b>相关脚本</b>（都在 <code>data/tmp/graphrag-exp-juejin/</code>）：<code>_run_prompt_tune.py</code>（跑 prompt-tune：密钥注入＋shim＋脱敏落盘）、<code>_check_prompttune_sampling.py</code>（复现 &lt;15 块崩溃）、<code>_check_auto_selection_bug.py</code>（复现 AUTO 行号错位）、<code>_audit_v5.py</code>（类型桶／结构垃圾／rank／引用密度体检，可指定输出目录与对照提示词）、<code>_list_reports.py</code>（打印某轮的社区/报告清单与缺失项，用于对账）。另外提示词目录已做成可切换：<code>ASH_PROMPT_DIR=prompts-tuned</code> 即用 tuned 那套重跑索引。</p>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-25 · <b>进行中</b>（A5 默认模式 + 掘金文章五版对比均已完成：语言问题已解决、prompt-tune 实测收官；待办：真数据复核 #2573、报告长度与评分口径调参、key 轮换）· 上游出处：0029 阅读清单第 ③ 步 · 方法依据：0031 查询模式核实
+    </footer>
+  </div>
+</body>
+</html>

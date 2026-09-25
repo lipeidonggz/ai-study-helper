@@ -28,6 +28,19 @@ from app.tools.registry import registry_for_mode
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
+_COMPILE_STORE = None
+
+
+def _compile_store():
+    """编译产物库（进程内单例）——图路由要用；没编译过也不影响（查不到就落回向量）。"""
+    global _COMPILE_STORE
+    if _COMPILE_STORE is None:
+        from app.storage.sqlite.compile_store import CompileStore
+        from scripts.compile_slice_b6 import COMPILE_DB
+
+        _COMPILE_STORE = CompileStore(COMPILE_DB)
+    return _COMPILE_STORE
+
 # 会话模式：通用 / 知识库优先 / 工具增强（范围控制的会话级开关）
 SessionMode = Literal["general", "kb_priority", "tool_enhanced", "rag"]
 
@@ -46,6 +59,29 @@ def _build_llm(deps) -> LLMClient | None:
     if not settings.api_key:
         return None  # 没有 Key 就无法调用，由上层发提示
     return DeepSeekLLMClient(api_key=settings.api_key, model=settings.model or "deepseek-chat")
+
+
+_ROUTE_JUDGE_CACHE: dict[tuple[str, str], object] = {}
+
+
+def _route_judge(deps):
+    """L3（通道判定的第三层）用的同步 judge；没配 Key 返回 None（判定就不干预）。
+
+    按 (key, model) 缓存：判定器每个请求都要用，而 RagBackend 是每请求新建的，
+    不缓存的话每次都会新建一个 httpx 客户端、每条 query 重新握手。
+    """
+    from app.rag.route_decision import build_http_judge
+
+    settings = deps.settings_store.get_llm_settings()
+    if not settings.api_key:
+        return None
+    model = settings.model or "deepseek-chat"
+    cache_key = (settings.api_key, model)
+    judge = _ROUTE_JUDGE_CACHE.get(cache_key)
+    if judge is None:
+        judge = build_http_judge(settings.api_key, model)
+        _ROUTE_JUDGE_CACHE[cache_key] = judge
+    return judge
 
 
 def _sse(event: str, data: dict) -> str:
@@ -74,7 +110,11 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
         if not deps.vector_store or not deps.embedder:
             raise HTTPException(503, "知识库检索组件未就绪（向量库/embedding 未配置）")
         # v1 默认 dense-only：BM25 / rerank 为实验对照，不注入（见 0025 2026-09-04 决策）
-        rag_backend = RagBackend(deps.vector_store, deps.embedder)
+        rag_backend = RagBackend(
+            deps.vector_store, deps.embedder,
+            compile_store=_compile_store(),
+            route_judge=_route_judge(deps),   # L3：通道判定的第三层（预筛后的形状判定）
+        )
     pending_trace: deque[dict] = deque()  # trace 步骤缓冲：loop 产生、gen 取走
 
     async def gen():

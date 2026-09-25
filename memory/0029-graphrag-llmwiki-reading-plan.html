@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0029 · 图谱检索补课：GraphRAG → LLM-Wiki 阅读清单</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .step { border-left: 3px solid #0969da; padding-left: 12px; margin: 18px 0; }
+    .step h3 { margin: 0 0 4px; font-size: 15px; }
+    .tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 10px; background: #eef2f7; color: #57606a; margin-left: 6px; }
+    .tag.core { background: #fff1e5; color: #9a6700; }
+    .tag.opt { background: #f0f1f3; color: #6e7781; }
+    .field { margin: 8px 0 0; }
+    .field label { display: block; font-size: 12.5px; color: #57606a; margin-bottom: 4px; }
+    textarea { width: 100%; box-sizing: border-box; min-height: 74px; font-family: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d8dee4; border-radius: 6px; }
+    .chk { font-size: 13px; }
+    .chk input { margin-right: 6px; }
+    .bar { background: #eef2f7; border-radius: 8px; padding: 8px 12px; font-size: 13px; display: flex; align-items: center; gap: 12px; }
+    .bar b { color: #0969da; }
+    button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 1px solid #d8dee4; background: #fff; border-radius: 6px; cursor: pointer; }
+    .muted { color: #8c959f; font-size: 12px; }
+    blockquote { border-left: 3px solid #6b9aff; margin: 10px 0; padding: 6px 12px; background: #f3f4f6; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0029 · 图谱检索补课：GraphRAG → LLM-Wiki 阅读清单</h1>
+      <p class="subtitle">配套决策见 <a href="0028-rag-storage-architecture.html">0028 考古层第五十一段</a>；本页是它的<b>执行清单</b>：勾选 + 每步两段产出。</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 + 结论</h2>
+      <p><strong>为什么开这一页</strong>：检索侧推进到"Query → 图"时，沛东自评<b>这块知识储备不够、不易掌控方向</b>，决定先补课（重点 GraphRAG 与 LLM-Wiki）。0028 第五十一段记了决策与理由，但 0028 本身很长，不适合当工作台——于是拆出本页，只留"要读什么、每步验证什么、读完回填什么"。</p>
+      <p><strong>顺序结论</strong>：<b>先 GraphRAG，再 LLM-Wiki</b>。四条理由——① 三条线里唯一"论文 ＋ 官方文档 ＋ 参考实现"三者对齐（读完能验证自己懂没懂）；② 它解决的是我们立项时的母题（"整个语料库的全局问题"）；③ 概念封闭、可拆可查；④ 先给一把尺子，后面看 LLM-Wiki / SearchWiki 能立刻定位。</p>
+      <blockquote><b>口径提醒（别读成论文崇拜）</b>：GraphRAG 评的是"感知上的全面"（comprehensiveness / diversity），我们的红线是"漏了能看见"（遗漏透明 ＋ 可回溯）。补课的目的是<b>能复核我们自己的判断</b>，不是换一批权威替我们判断。</blockquote>
+      <div class="bar">
+        <span>进度：<b id="progress">0</b> / 6 步</span>
+        <button id="reset">重置本页记录</button>
+        <span class="muted">勾选与文字保存在本地浏览器（同机同浏览器有效）</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 阅读清单（六步）</h2>
+
+      <div class="step">
+        <h3>1 · GraphRAG 论文 <span class="tag core">核心</span></h3>
+        <p class="muted">arXiv 2404.16130（2024-04-24，v2 2025-02-19）·《From Local to Global: A Graph RAG Approach to Query-Focused Summarization》</p>
+        <p><b>重点看</b>：§3 的 indexing / query 两条 pipeline；global search 的 map-reduce；<b>comprehensiveness / diversity 两个指标怎么评出来</b>。</p>
+        <p><b>产出要求</b>：它解决了什么 / 它没有解决什么——特别是它的"全面"与我们要的"漏了能看见"差在哪。</p>
+        <p class="chk"><label><input type="checkbox" id="s1" data-persist> 读完</label></p>
+        <div class="field"><label>两段产出</label><textarea id="s1note" data-persist placeholder="它解决了什么 ……&#10;它没有解决什么 ……"></textarea></div>
+      </div>
+
+      <div class="step">
+        <h3>2 · GraphRAG 官方文档四页 <span class="tag core">核心</span></h3>
+        <p class="muted">microsoft/graphrag：<code>docs/index/overview</code> → <code>docs/index/methods</code> → <code>docs/query/local_search</code> → <code>docs/query/global_search</code></p>
+        <p><b>重点看</b>：论文没写的工程参数——社区层级怎么选、上下文窗口怎么分配、候选如何排序过滤；local search 的 "access points" 那条数据流（描述向量 → 一组实体 → 取候选 → 过滤进窗口）。</p>
+        <p><b>产出要求</b>：如果照它做，<b>我们的 A5 会得到什么</b>（社区报告大概长什么样、装得下多少）。</p>
+        <p class="chk"><label><input type="checkbox" id="s2" data-persist> 读完</label></p>
+        <div class="field"><label>两段产出</label><textarea id="s2note" data-persist></textarea></div>
+      </div>
+
+      <div class="step">
+        <h3>3 · 跑一遍（最值钱的一步） <span class="tag core">核心</span></h3>
+        <p class="muted">microsoft/graphrag ＋ 现成语料 A5 / O2（我们已有 KB、chunk、390 条断言可对照）</p>
+        <p><b>重点看</b>：社区报告长什么样；<b>它漏了什么</b>；"主题簇"与"类"的差别（社区是拓扑簇，类需要 membership 判据）。</p>
+        <p><b>产出要求</b>：贴一段它生成的社区报告（可摘要），标出哪些是我们想要的"类"、哪些只是"主题簇"。</p>
+        <p class="chk"><label><input type="checkbox" id="s3" data-persist> 跑完并看过输出</label></p>
+        <div class="field"><label>两段产出</label><textarea id="s3note" data-persist></textarea></div>
+      </div>
+
+      <div class="step">
+        <h3>4 · 读它的批评者 <span class="tag">建议</span></h3>
+        <p class="muted">Do We Still Need GraphRAG?（2604.09666，2026-04-01）／LinearRAG（2510.10114，2025-10-11，整类拿掉关系）／EcphoryRAG（2510.08958，2025-10-10，关系不预枚举）</p>
+        <p><b>重点看</b>：它们各自动了 GraphRAG 的哪根柱子（agentic search 替代 / 拿掉关系建模 / 不预枚举关系）。</p>
+        <p><b>产出要求</b>：如果按它们改，我们的哪个卡点会松动、哪个会更糟。</p>
+        <p class="chk"><label><input type="checkbox" id="s4" data-persist> 读完</label></p>
+        <div class="field"><label>两段产出</label><textarea id="s4note" data-persist></textarea></div>
+      </div>
+
+      <div class="step">
+        <h3>5 · LLM-Wiki 论文 <span class="tag core">核心</span></h3>
+        <p class="muted">arXiv 2605.25480（2026-05-25）·《Retrieval as Reasoning: Self-Evolving Agent-Native Retrieval via LLM-Wiki》</p>
+        <p><b>重点看</b>：两条路线 <b>search-first</b>（实体锚定）/ <b>browse-first</b>（开放式与<b>枚举型</b>）；每步的"证据是否足够"判断与停止条件（T_max / patience）；Error Book 的约束累积。注意它<b>全文没提 knowledge graph</b>，对照物只是扁平 chunk RAG。</p>
+        <p><b>产出要求</b>：它的 wiki 与我们的 statement 图<b>差在哪一层</b>；"枚举型走 browse-first" 对我们第 3 条用例意味着什么。</p>
+        <p class="chk"><label><input type="checkbox" id="s5" data-persist> 读完</label></p>
+        <div class="field"><label>两段产出</label><textarea id="s5note" data-persist></textarea></div>
+      </div>
+
+      <div class="step">
+        <h3>6 · 可选：SearchWiki ＋ WiCER <span class="tag opt">可选</span></h3>
+        <p class="muted">SearchWiki（2608.29953，2026-08-30，IBM，无代码）／WiCER（2605.07068，2026-05-08，声明放出代码）</p>
+        <p><b>重点看</b>：SearchWiki 的 Stage 3「联合 wiki 编译器」——每文档单元一次调用同时出摘要 ＋ 对<b>全局主题注册表</b>的注册动作；WiCER 的<b>诊断探针</b>（盲目编译丢事实 53–60%，探针 + 迭代修补）。</p>
+        <p><b>产出要求</b>：类别维度我们走"注册表"还是"聚类"，为什么。</p>
+        <p class="chk"><label><input type="checkbox" id="s6" data-persist> 读完</label></p>
+        <div class="field"><label>两段产出</label><textarea id="s6note" data-persist></textarea></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>第三部分 · 读完回填：复核我们自己的判断</h2>
+      <p class="muted">补课的唯一产出是——我们此前那些判断，被证实、被推翻，还是要修订。逐条填。</p>
+
+      <div class="field"><label>卡点 ① 非原子类概念（"安全防护手段"这种）——业界做法是否足以支撑我们的需求？</label><textarea id="r1" data-persist placeholder="原判断：需要'内容类别维度'，谓词族只是近似（漏 62 / 混错项）……&#10;现在我认为："></textarea></div>
+      <div class="field"><label>卡点 ② Query → 图输入——"确定性输入"这个前提还站得住吗？</label><textarea id="r2" data-persist placeholder="业界（GraphRAG local search / LLM-Wiki）都不追求确定性输入，而是'选一组入口 + 结构化展开 + 过程内判断何时够'……"></textarea></div>
+      <div class="field"><label>红线复核：'遗漏透明 + 可回溯'还站得住吗？谁在正面处理它？</label><textarea id="r3" data-persist></textarea></div>
+      <div class="field"><label>需要改 ⑤（架构文档）与 0028 的地方</label><textarea id="r4" data-persist placeholder="哪一条被推翻、哪一条要改口径、新增哪条……"></textarea></div>
+      <div class="field"><label>下一步动作（可多选，写清理由）</label><textarea id="r5" data-persist placeholder="继续做图 / 转 wiki 承载 / 只补类别维度 / 先做三档原语实验 / 先做入口对比实验 / 其他"></textarea></div>
+    </section>
+
+    <section class="card">
+      <h2>第四部分 · 使用说明（现场细节）</h2>
+      <ul>
+        <li>勾选与文字通过浏览器本地存储保存（键 <code>memory-0029-checklist</code>）；换浏览器或清缓存会丢。</li>
+        <li>若以 <code>file://</code> 打开而浏览器禁用了本地存储，页面仍可勾选，但刷新不保留——此时建议边读边另存，或直接打印。</li>
+        <li>"重置本页记录"只清本页（勾选 ＋ 文字），不影响 0028。</li>
+        <li>读完请把第三部分回填到 0028（新增考古段或修订对应条目），本页保留为过程留痕。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>第五部分 · 精读现场记录（讨论留痕）</h2>
+      <p class="muted">这部分是 <b>AI（Codex）在讨论过程中自记的现场留痕</b>，按 0016 起的老规矩——值得记的就记，不打断讨论。凡标「事实」的都写了来源（论文原文 / 仓库文件 / 我们自己的代码），凡属判断的标 <span class="tag core">待复核</span>，等你精读完一起过。你自己的精读产出写在第 1 步的产出栏与第三部分回填栏。</p>
+
+      <div class="step">
+        <h3>记录 ① · 两家各约束了哪一端 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的观察引出（"我们确定谓词列表，GraphRAG 给定了实体类型"）</p>
+        <p><b>事实</b>（仓库 <code>packages/graphrag/graphrag/prompts/index/extract_graph.py</code>）：抽实体时字段是 <code>entity_name</code> / <code>entity_type: One of the following types: [{entity_types}]</code> / <code>entity_description</code>；抽关系时字段是 <code>source_entity</code> / <code>target_entity</code> / <code>relationship_description</code>（<b>自由文本</b>）/ <code>relationship_strength</code>（<b>数值</b>）——<b>边没有受控谓词表</b>。默认 <code>DEFAULT_ENTITY_TYPES = ["organization", "person", "geo", "event"]</code>（config 里 <code>entity_types</code> 是可调旋钮）。</p>
+        <p><b>事实</b>（同类核对）：实体类型<b>基本只活在抽取那一步</b>——社区报告提示词的示例输入里，给 LLM 的实体表只有 <code>human_readable_id,title,description</code>（<b>没有 type 列</b>）；<code>local_search</code> 的配置只有 <code>top_k_entities</code> / <code>top_k_relationships</code> / <code>text_unit_prop</code> / <code>community_prop</code>，<b>没有"按类型过滤"</b>。</p>
+        <p><b>结论</b>：两家正好是<b>镜像</b>——<b>我们约束边</b>（38 条受控谓词）、放开点（概念无类型）；<b>它约束点</b>（4 个通用类）、放开边（自由文本 + 强度）。</p>
+        <p><b>代价对照</b>：我们约束边的代价＝<b>归类磨损</b>（<code>acts_on</code> 收容桶 A5 44 条混 apply/describe/automates、<code>is</code>/<code>is_a</code> 混用、S5 串味错案、方向极性反了）；它放开边的代价＝<b>边不可枚举、不可按类型查</b>（问不了"库里所有 <code>blocks</code> 的关系"）。我们放开点的代价＝概念 399 起、无类型、碎片化（"防护手段"碎成 52 片）。它约束点买到的是抽取稳定 + 跨领域可移植（换 4 个类型词即可）。</p>
+        <p><b>为什么各自这么选（用目标反推）</b>：它要的是<b>材料</b>（描述 + 社区报告）喂 LLM 写综述，边的可枚举性对它无用，自由文本信息量更大；我们要的是<b>可过滤、可枚举的检索结构</b>，所以边必须受控。一句话：<b>它约束的那端是"抽取先验"，我们约束的那端是"查询维度"。</b></p>
+        <p><b>候选（未动手）</b>：受控谓词 + 自由描述<b>可以并存</b>——我们已有 <code>predicate</code>（受控归一）与 <code>predicate_surface</code>（原文表面形式）并存；可考虑补一条"关系解释"（对应 <code>relationship_description</code>）与"权重"（对应 <code>relationship_strength</code>，用途与我们已登记的 <code>object_surface</code> 一致：审计 + 弱排序）。属编译层 schema ＋ 基础件 → 先方案后实现 ＋ 人工复核。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ② · 复杂度不是"多步 vs 一步"，是"要的东西多不多" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的观察引出（"我们拆了很多步骤，它一个提示词搞定"）</p>
+        <p><b>先把它的说法修正一半</b>：它的<b>抽取</b>确实是一个提示词同时出实体与关系，但整条索引链不止一步——官方 <code>docs/index/methods</code> 列的是：实体抽取 → 关系抽取（同一次）→ <b>实体描述归并（每个实体一次 LLM 调用）</b> → <b>关系描述归并（每个关系一次）</b> → claim 抽取（可选）→ <b>社区报告生成（每个社区一次）</b>；且官方说<b>图抽取约占索引成本 75%</b>。所以它的复杂度是<b>搬到了后面</b>（按记录、按社区铺开，随规模放大）。</p>
+        <p><b>真正的差别</b>：我们那条链上几乎每个环节都在给一条<b>能力或红线</b>付费，而那些东西<b>它全都不需要</b>——体检/S4.5 指代消解/S5 端点规范化与组图/S6 归并/S7 reify/S8 引文锚定，对应的分别是"可对账 / 可点名 / 可回锚 / 可过滤 / 可枚举 / 遗漏透明"。它没有受控谓词（省掉谓词清洗与归一）、没有方向极性角色的显式建模（省掉校验）、没有逐字证据要求（省掉锚定与护栏）、没有全量对账（省掉台账）；实体身份靠 <b>title 字符串相等</b>这一招。</p>
+        <p><b>它的代价</b>：漏抽<b>不可度量</b>——没有体检、没有"每条 claim 必须落在建边 / 丢弃 / 待定三者之一"的口径，所以它连"这篇有多少内容没进图"这个数都不存在（我们当年是这个数炸出来的：旧形态 <b>42–45% 的 claim 无声无息没建边</b>）。</p>
+        <p><b>判据（比步数重要）</b>：每个环节背后有没有一条产品要求；把"枚举 / 跨源连接 / 关系查询 / 遗漏透明"这四条里砍掉任何一条，对应环节就该消失——这正是<b>三档原语对比实验</b>（已立项）要验的东西。<b>诚实注</b>：我们链里相当一部分是踩坑长出来的（谓词表来自"结构判同指失败"、S5 大改来自"为何会有孤立实体"、S4.5 来自 O2 第一次泛化撞线），既是价值也是成本。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ③ · 窗口大小与 gleaning（本轮最"可执行"的一条） <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东读到"精度–chunkSize 权衡、推荐 600 token"引出</p>
+        <p><b>它那边的原文（修正版）</b>：600 不是"推荐输入"，是<b>语料切片尺寸</b>（播客 1669 × 600-token 块、块间 100 token 重叠；新闻 3197 × 600）。真正的对比是——"the LLM tends to extract few entities from chunks of larger size. For example, in a sample dataset (HotPotQA), <b>GPT-4 extracted almost twice as many entity references when the chunk size was 600 tokens than when it was 2400</b>."应对不是"必须 600"，而是 <b>self-reflection / gleaning</b>：把已抽实体回喂，用 logit bias=100 强制 yes/no 判断"有没有漏"，若答漏则用"<b>MANY entities were missed in the last extraction</b>"催它再抽一轮，最多迭代 N 次（Fig.3 显示迭代能把 2400 那档补上来）。结论：<b>块小抽得全但调用多；用补抽让大块不掉质量。</b></p>
+        <p><b>我们这边的实测数字（代码）</b>：Pass 1 窗口＝<code>_window_text(clean_t, 5000)</code>，而函数签名是 <b><code>max_chars</code>（字符，不是 token）</b>→ A5 这类英文语料 ≈ <b>1000–1300 token</b>（比它 600 大、比 2400 小）；中文语料 ≈ <b>3300–5000 token</b>（已超过它那个"抽得少"的 2400 档）。检索块＝<code>MAX_TOKENS = 450</code>（实际 320–450），<b>比它的 600 还小</b>；内容单元上限＝12k token。</p>
+        <p><b>顺势发现的隐患</b>：<b>我们的窗口口径是字符、它是 token</b>，于是同一份配置在不同语料上的实际窗口差 <b>3–4 倍</b>，而抽取质量从没按语言标定过——这与"论文类语料验证 ＋ 语料依赖风险清单"那条待办同源。</p>
+        <p><b>两个候选动作</b>：① <b>窗口 A/B</b>——用 A5 召回金标准，把窗口从 5000 字符降到 2500 / 1500，量 claim 召回率的变化（便宜、可测、直服务"遗漏透明"）；② <b>移植 gleaning</b> 做"补抽断言"——我们已有"补引文"的先例（只补引文、不重抽断言、同样过逐字护栏、同样记账），照着做一版即可。</p>
+        <p><b>边界（别当结论）</b>：它的对比是 HotPotQA ＋ GPT-4 ＋ 短段落语料，且量的是<b>实体引用数</b>而非 claim 召回率；我们只能把它当<b>假设</b>，用我们自己的金标准去证伪。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ④ · 可追溯性：不是"没有映射"，是"粗、两跳、不逐句校验" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 修正沛东当时的第 3 条印象（"天然没法做社区摘要到 chunk 的引用映射"）</p>
+        <p><b>事实</b>：它<b>维护了实体↔文本单元的多对多映射</b>——<code>entities.text_unit_ids</code>（"包含该实体的 text units"）、<code>relationships.text_unit_ids</code>、反向的 <code>text_units.entity_ids</code>，社区报告自己也带 <code>text_unit_ids</code> / <code>entity_ids</code>。社区报告提示词还<b>明确要求引用</b>，但引用的是<b>记录 id</b>：<code>[Data: Reports (1), Entities (5, 7); Relationships (23); Claims (7, 2, 34, 64, 46, +more)]</code>，规则规定单条最多列 5 个 id、其余写 <code>+more</code>。</p>
+        <p><b>于是准确的分层是</b>：<b>claim 级引用可以一跳回到具体 text unit</b>（claim 记录自带 <code>text_unit_id</code>）；<b>实体/关系级引用</b>回到的是"该实体出现过的那些 text unit"的<b>集合</b>（可能几十上百，粒度极粗）；而<b>最终答案带引用、但只到"报告"这一级</b>（<code>[Data: Reports (id)]</code>，reduce 提示词明确要求 "preserve all the data references"）——<b>不是"没引用"，是"引到的是 LLM 写的报告、不是原文块，且无任何校验"</b>（单条引用还有"最多 5 个 id ＋ <code>+more</code>"的抽样上限）。<b>（口径已更正，2026-09-22 写 0031 时核出。）</b>缺的不是"映射"，是<b>句级/断言级的逐字回锚 ＋ 可审计</b>——正是我们红线的要求。</p>
+        <p><b>两个更影响我们的劣势</b>（比可追溯性更硬）：① <b>抹平跨源差异</b>——global search 的目标就是综合成一个整体看法（QFS），"A5 与 O2 在这一点上不同"这类对比会被合成掉，而"跨源连接/对比"是我们立项的三大理由之一；② <b>静态冻结</b>——报告是索引期预生成的，语料一变就得重跑（论文自己把 just-in-time community report generation 列为 future work）。</p>
+        <p><b>值得偷的一点</b>：<b>粒度旋钮</b>——社区层级（C0–C3，越往下社区越多越细），token 与详略可在查询时选；我们的粒度固定在 chunk 与断言两级，没有这个旋钮。这与"类别维度建起来后，枚举可以按层级选粒度"是同一个思路。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑤ · 社区层级怎么停：叶子的判定标准 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"怎么判断无法划分、也就是叶子社区"）</p>
+        <p><b>事实（两个停分条件，满足任一即停）</b>：① <b>规模条件</b>——社区节点数 ≤ <code>max_cluster_size</code>；② <b>拓扑条件</b>——在该社区的诱导子图上再跑 Leiden，<b>切不出多个社区</b>。来源：graspologic <code>hierarchical_leiden</code> 源码 docstring 原文——"Every community whose membership is greater than <code>max_cluster_size</code> will then also have entries where level == 1, and so on <b>until no communities are greater in population than <code>max_cluster_size</code> OR we are unable to break them down any further</b>"；并把"归属不再变化"的节点标 <code>is_final_cluster = True</code>。</p>
+        <p><b>事实（GraphRAG 的具体取值）</b>：它用的就是 graspologic（论文原话 "We implemented Leiden community detection using the graspologic library (Chung et al., 2019)"）；`ClusterGraphDefaults.max_cluster_size = 10`（配置文档：这组是"settings used for Leiden hierarchical clustering of the graph to create communities"，字段说明 "the maximum cluster size to export"），而 <b>graspologic 自身默认是 1000</b>——即 <b>GraphRAG 把阈值压到了 10</b>。另两个参数：<code>use_lcc = True</code>（只对<b>最大连通分量</b>聚类）、<code>seed</code>（固定种子，"to guarantee clustering stability"）。</p>
+        <p><b>实践含义（这条比定义重要）</b>：因为阈值是 10，实际运行中<b>绝大多数"叶子"是被"节点数 ≤ 10"截出来的，而不是"模块度真的到头了"</b>——所以"叶子 = 拓扑上不可再分"<b>一半是算法事实、一半是配置选择</b>。层级 = <b>递归深度</b>（level 0 根划分；level 1 在人数超阈值的社区里再切），C0–C3 就是这么来的：<b>层级不是自然长出来的，是"递归 + 阈值"共同切出来的</b>。</p>
+        <p><b>顺带三条</b>：① <code>use_lcc: True</code> ⇒ 只有最大连通分量参与聚类，不在 LCC 的实体拿不到社区归属——与我们 S5 处理过的"孤立实体"是同一现象的镜像（<b>已核</b>：<code>get_levels</code> 里 <code>lvl != -1</code> 被显式排除，即 <code>level == -1</code> 的节点<b>不参与社区报告生成</b>、也就没有社区报告）；② <b>固定 seed</b> ⇒ 把聚类随机性锁住换可复现，与我们"确定性操作不交给 LLM"的纪律同向；③ <b>没有 <code>min_cluster_size</code></b>（配置只有 max）⇒ 出现大小 1–2 的社区是可能的，而它们同样各生成一份社区报告，报告质量参差有一部分来自这里。</p>
+        <p><b>机制补正（同日补）· <code>max_cluster_size</code> 到底是"下拆触发器"而不是"输出上限"</b>：graspologic 参数文档原文——"Any partition or cluster with membership <b>&gt;=</b> <code>max_cluster_size</code> will be <b>isolated into a subnetwork</b>. This subnetwork will be used for a new leiden global partition mapping... Once all clusters with membership &gt;= <code>max_cluster_size</code> have been completed, <b>the level increases</b> and the partition scheme is scanned again... and the process continues <b>until every cluster's membership is &lt; <code>max_cluster_size</code> or if they cannot be broken into more than one new community</b>." 即：<b>① 先在全图跑一次 Leiden（level 0）→ ② 挑出"仍然超阈值"的社区，把它们的节点单独切出来各跑一次 Leiden（得到 level 1）→ ③ 层级 +1，重复 ②，直到每个社区都 < 阈值、或拆不动为止。</b>层级＝<b>下拆轮次</b>（level 0 的社区最大最少；层级越高社区越多越小）；<b>每一轮只对上一轮仍超阈值的子图重跑</b>，其余节点不动，所以 level 1 的社区是 level 0 某些社区的<b>细分</b>（不是另起一套）。<br><b>于是关键推论</b>：<code>max_cluster_size</code> 不是"输出的尺寸上限"，<b>叶子社区可能仍然大于阈值</b>——只要那个子图"拆不出多于一个社区"（文档里两个条件用 OR 连接）。文件内部还<b>自相矛盾一处</b>：类 docstring 说 "greater than"，参数文档说 "&gt;="——实现以代码为准，重写时要自己核。<br><b>举个例</b>（假设图 400 个实体、阈值 10）：level 0 切出 200/120/80 三个社区 → 三个都超阈值，各自再跑：200 里切出 4 个、120 里切出 2 个（成 level 1），而那个 80 的<b>再跑也只能得到 1 个社区</b> → 它<b>停在 80 就不再细分</b>，成为一个"大于阈值的叶子"。所以"叶子 = 小社区"是错的，<b>叶子 = 小社区 或 拆不动的大社区</b>。</p>
+        <p><b>对我们最值钱的一条对照</b>：这套设计给"层级"提供了<b>确定性、可复现、零 LLM</b> 的来源——归属是算法算的（连接密度），不是模型判的。但代价是：<b>它的可解释是"结构性的"（它和这些节点连得密），不是"语义性的"（它属于这一类）</b>，所以给不出"这一类都有哪些"的成员判据（回到记录 ①）。<b>推论</b>：将来若建<b>类别维度</b>，这套"递归到 ≤N 或切不动"<b>可以原样抄来做层级</b>（零 LLM、可复现、可对账），但<b>类别名与归属判定仍需另想办法</b>（注册表 or 人工受控表）——一句话：<b>层级可以从拓扑长出来，类别不能。</b></p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑥ · 父级摘要为什么"优先用元素、而不是用下一层摘要" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的观察引出（"叶子级顺理成章，有意思的是高层级也优先用元素摘要"）</p>
+        <p><b>事实（代码原文）</b>：<code>index/operations/summarize_communities/build_mixed_context.py</code> 的 docstring 写着——"Build parent context by concatenating all sub-communities' contexts. <b>If the context exceeds the limit, we use sub-community reports instead.</b>" 代码里的替代是<b>从最大的子社区开始</b>（大的最占地方），注释还写了一句"this sub-community has no report, so we will use its local context"（叶子子社区没有报告，直接用它的局部上下文）。<b>兜底</b>：若连"全用子报告"都超预算，就按顺序塞报告直到塞满。所以准确说法是：<b>父级报告默认把子社区的"局部上下文"（实体 / 关系 / claim 表）拼起来 → 超预算时才降级用子社区报告</b>；元素是正文，摘要是"省 token 的备选"。</p>
+        <p><b>事实（生成顺序）</b>：<code>summarize_communities.py</code> 把已生成的 <code>reports</code> 逐层传给上下文构建器，而 <code>utils.get_levels()</code> 返回 <code>sorted(levels, <b>reverse=True</b>)</code>——即<b>由深到浅、叶子先写</b>，父级要用子报告时它已经存在。这条顺序是被实现强制的。</p>
+        <p><b>论文里的精确规则（§3.1.5，2026-09-22 晚补核）</b>：论文原文分两条写——<br>· <b>Leaf-level communities</b>：leaf 的<b>元素摘要先被排序</b>，再逐条加入 LLM 上下文直到塞满 token 上限；<b>排序规则＝按社区内每条边的 "source 节点度数 ＋ target 节点度数" 降序（即显著度 prominence）</b>，每条边加入 source 节点描述、target 节点描述、边本身、相关 claim。<b>注意：叶子也不是"元素全进"，而是按图拓扑显著度挑前 N 个。</b><br>· <b>Higher-level communities</b>：<b>如果全部元素摘要装得下窗口，就照 leaf 的做法——直接总结元素摘要</b>；<b>装不下时，才按"子社区的元素摘要 token 数降序"，用子社区摘要（更短）替换对应的元素摘要（更长），直到装得下</b>。<br>——这精确印证了沛东那条观察（高层优先用元素），并给出了两条我们此前没有的规则：<b>叶子的取舍靠"度数显著度"，高层的降级靠"子社区 token 体量降序"</b>。</p>
+        <p><b>为什么这么设计（判断，待复核）</b>：① <b>避免"摘要的摘要"逐层累积误差</b>——每层都回到元素重写，高层报告不会因为低层摘要漏了东西而继续丢；摘要只是在预算不足时用来"降级覆盖率"。② 元素表里带的是<b>记录 id</b>（实体 / 关系 / claim），所以从元素出发的报告能带可解析引用；用子报告时数据集名变成 <code>Reports</code>——这正好解释 grounding rules 示例里为什么会出现 <code>[Data: Reports (1), Entities (5, 7); Relationships (23); Claims (...)]</code>。③ 它给了层级一个<b>显式的父子结构</b>（<code>sub_community</code> 字段 ＋ 逐层生成），我们图里没有这个东西。④ <b>用"度数"当取舍依据</b>很值得注意：它没有用文本相关度，而是用<b>图上的连接显著度</b>决定"哪些元素进摘要"——一个纯结构信号。</p>
+        <p><b>对我们的意义（这条最能学）</b>：GraphRAG 在这里其实<b>站在我们这边</b>——<b>把"结构/元素"当真相，把"摘要"当预算不足时的压缩品</b>，这与我们"事实层要有结构、呈现层按需渲染"是同一个立场。反过来推：如果我们做"主题页 / 概念页"，正确做法也是<b>从 statement ＋ 出处重新渲染</b>，而不是让 LLM 拿上一层摘要再摘一遍——否则每一层都在丢信息，最后没人知道丢了什么。将来若建类别维度，"父社区 → 子社区"这个骨架可以照抄，但<b>父子关系解决的是"层级"，不解决"类名与成员判据"</b>（回到记录 ①⑤）。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑦ · <code>Prepare community summaries</code> 到底在干什么 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"Map / Reduce 看懂了，Prepare 这步没明白"）</p>
+        <p><b>先纠一个误解</b>：这一步<b>不生成摘要</b>——摘要在索引期就写好了（每层每社区一份，带 title / summary / rating / findings）。<code>Prepare community summaries</code> 是<b>查询期的"分批打包"</b>：给 Map 决定"一批多大、装哪些"。原文（§3.1.6）："Community summaries are <b>randomly shuffled and divided into chunks of pre-specified token size</b>. This ensures relevant information is distributed across chunks, rather than concentrated (and potentially lost) in a single context window."</p>
+        <p><b>它干三件事</b>：① <b>选定层级</b>——"for a given community level"，即用 C0/C1/C2/C3 哪一层的摘要（<b>层级是查询期选的，不是索引期定的</b>）；② <b>随机打散</b>该层全部摘要；③ <b>按预设 token 大小切块</b>→ K 个批次，<b>每批＝一次 Map 调用</b>（一批通常装好几份摘要）。</p>
+        <p><b>更正（2026-09-24，读代码后发现）</b>：上面"用某一层的摘要"是<b>论文口径</b>；<b>当前代码实现是"<code>level &lt;= N</code> 的各层全给"</b>——原本用于"每个实体只留它所属最深社区"的 roll-up，因 2025-02-07 PR #1674 把入参从 <code>final_nodes</code>（title＝实体名）换成 <code>final_communities</code>（title＝<code>"Community N"</code>）而<b>静默失效</b>，<code>groupby(["title"])</code> 退化成按社区去重。证据（源码／官方样例 parquet／官方 notebook 的 10→10／本仓库探针）与全部影响见 <a href="0031-graphrag-search-modes.html">0031 第 0 步</a>。</p>
+        <p><b>为什么必须分批</b>：每份摘要本身有长度上限（<code>max_report_length</code>），而一层的摘要总量远超单窗口预算 → 只能切成 K 批。至于<b>为什么随机而不按顺序</b>——见下方"修正补记"，我第一版给的两个理由（防超窗、防答坏）都站不住。</p>
+        <p><b>修正补记（同日，由沛东两问更正）</b>：<br>① <b>"防超窗"不是随机的理由</b>——按 token 预算切块本身就是<b>确定性操作</b>，顺序打包同样保证每批不超窗；把原文 "concentrated (and potentially lost) in a single context window" 读成"超窗截断"是误读。<br>② <b>"答坏"不作论据</b>——一批里若有对问题有价值的内容，模型至少能抽出其中的点；以"LLM 抽风"论证设计不成立。而且<b>新版实现的打分对象是"点"而不是"整批"</b>：官方 <code>docs/query/global_search.md</code> 里 map 产出的是"a <b>list of points</b>, each of which is accompanied by a <b>numerical rating</b> indicating the importance of the point"，reduce 汇总的是"a <b>filtered set of the most important points</b>"——所以一批里只要有点重要，它就能活下来，不存在"整批全灭"。<br>③ <b>我认为站得住的解释（判断）</b>：随机化防的是"<b>最终窗口在语料上的分布</b>"，不是"装不下"——reduce 只取排在前面的一小撮点/批次；若按语料顺序打包，同主题社区挨在一起 ⇒ 高分点集中在少数连续区域 ⇒ 最终窗口偏向语料一小块、覆盖面窄；随机打散 ⇒ 每批都是全语料抽样 ⇒ 高分点天然来自不同区域 ⇒ 覆盖面广。这正好对上它自己选的评测指标 <b>comprehensiveness ＋ diversity</b>（"多样性"只有在批次被打散时才谈得上）。<br>④ <b>附带解释（判断）</b>：顺序打包暗含"相邻社区＝相关"这个未经证实的假设（社区 id 是算法输出顺序，本身无语义）；随机化是<b>不做该假设</b>的保守选择——这也解释了后来为什么能做 dynamic selection：那是<b>用真的相关度评分替掉"相邻即相关"的猜测</b>。<br>⑤ <b>官方文档的旁证</b>：数据流里那三批的标注就是 "<b>Shuffled</b> Community Report Batch 1/2/N"。</p>
+        <p><b>三步合起来的链路</b>：索引期各层摘要已就绪 → ① <b>Prepare</b>：选层 ＋ 洗牌 ＋ 按 token 打包成 K 批；② <b>Map</b>：每批独立生成"中间答案 ＋ 0–100 helpfulness 分"（<b>0 分直接丢</b>）；③ <b>Reduce</b>：按分降序、一批批塞进新窗口直到塞满 → 生成最终答案。</p>
+        <p><b>两个对我们有用的观察</b>：① 它是"<b>全量扫 ＋ 打分筛</b>"，不是"先检索再总结"——这正是 global search 与 local search 的分界（只有 local search 做实体匹配），也解释了它为什么<b>不需要实体锚定</b>。② <b>随机分批有副作用</b>：批次边界与语料结构无关，所以中间答案<b>无法自然追溯回"哪个社区、哪段原文"</b>，链路到"批次"就断了——与记录 ④ 的可追溯性问题同源。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑧ · 随机分批 vs 按相关度分批：沛东的反例与 GraphRAG 的升级版 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东质疑引出（"相关度更高的社区放一个窗口应该答得更好；无关的批次自然 0 分被过滤，岂不是更好"）</p>
+        <p><b>结论：这个直觉是对的，而且 GraphRAG 后来就是这么做的。</b>仓库里有 <code>query/context_builder/dynamic_community_selection.py</code>（配 notebook <code>global_search_with_dynamic_community_selection.ipynb</code>），docstring 即"Algorithm to dynamically select relevant communities with respect to a query"。机制：<b>从根社区（level 0）自顶向下</b>遍历社区树 → 对每个社区用 LLM 打<b>对 query 的相关度分</b>（<code>rate_relevancy</code>，可用 summary 或 full_content）→ <b>≥ 阈值则保留并把子社区入队，低于阈值则整枝剪掉</b> → global search 只在留下来的社区上跑。参数含 <code>threshold</code>（默认 <b>1</b>，偏低 ⇒ 偏向"宁滥勿缺"）、<code>use_summary</code>、<code>keep_parent</code>、<code>num_repeats</code>、<code>max_level</code>、并发 8。</p>
+        <p><b>为什么初版（随机）仍然成立</b>：它的前提是"<b>全局问题没有相关度信号</b>"——若系统能算出哪些社区相关，它就是在做<b>检索</b>；而全局问题之所以需要图，正因为跨了太多社区、单条 query 与任何具体内容都不像。<b>所以随机不是"顺序的对立面"，而是"没有任何排序依据时的默认处理"</b>；有依据时（dynamic selection）就按依据来。</p>
+        <p><b>无信号前提下，"随机"优于"按原始顺序"（口径已按记录 ⑦ 的"修正补记"更正）</b>：理由<b>不是</b>"防超窗"（按预算切块是确定性的，顺序打包也不会超），<b>也不是</b>"防答坏"（新版按"点"打分，一批里有点重要就能活）；真正的理由是<b>最终窗口的分布</b>——reduce 只取排在前面的一小撮点，若按语料顺序打包，同主题社区挨在一起 ⇒ 高分点集中在少数连续区域 ⇒ 最终窗口覆盖面窄；随机打散 ⇒ 每批都是全语料抽样 ⇒ 高分点来自不同区域 ⇒ 覆盖面广（对上它的 comprehensiveness ＋ diversity 指标）。同时随机化<b>不做"相邻社区＝相关"这个未经证实的假设</b>——这正是后来 dynamic selection 要替换掉的东西。一句话：<b>顺序打包赌"相关的东西是相邻的"，随机打包赌"抽样能代表整体"</b>——是代表性选择，不是容量或容错选择。</p>
+        <p><b>两边的代价都不白拿</b>：随机分批牺牲<b>单批信息密度</b>（中间答案更碎片化），并让批次边界与语料结构无关 ⇒ 中间答案追溯不到社区/原文（与记录 ④⑦ 同源）；dynamic selection 的代价是<b>多一轮 LLM 评分</b>，以及<b>"评分错 → 整枝被剪"的漏召回风险</b>——剪枝天然伤覆盖，而覆盖恰是全局问题最在意的。归纳：<b>初版＝全量 + 随机 + 打分过滤（保覆盖，牺牲密度与可追溯）；升级版＝相关度剪枝 + map-reduce（保密度，牺牲覆盖与成本）</b>——与我们自己在"枚举完备"与"入口精确"之间的取舍同构。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑨ · 为什么向量检索（SS）还能赢 17–38%：胜率口径与"混合题" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的疑惑引出（"8K 窗口 vs 1M 语料不到 1%，全局题上 SS 应该几乎不可能赢才对"）</p>
+        <p><b>先把数字核准（Figure 2 矩阵逐格核对；行列表头顺序＝SS, C0, C1, C2, C3, TS；对角线自比 50%）</b>：<br>· <b>comprehensiveness</b>——SS 胜率（vs C0/C1/C2/C3/TS）＝播客 <b>17 / 28 / 25 / 22 / 21%</b>，新闻 <b>20 / 28 / 25 / 21 / 21%</b>；<br>· <b>diversity</b>——播客 <b>18 / 23 / 25 / 19 / 19%</b>，新闻 <b>33 / 38 / 35 / 29 / 31%</b>（<b>比沛东估的"十几到二十几"还高</b>）；<br>· 正文对应说法：global 胜率 72–83%（播客）/ 72–80%（新闻），diversity 75–82% / 62–71%——与矩阵一致。<br>· 设置：<b>125 题 × 每题重复 5 次</b>，判官成对比较、允许判 tie（"fundamentally similar"）。</p>
+        <p><b>口径更正（2026-09-22 晚，由沛东找到出处；我此前那条"论文没写预算"是错的）</b>：<b>§4.1.3 Configuration</b> 原文——"We used a <b>fixed context window size of 8k tokens</b> for generating community summaries, community answers, and global answers (explained in Appendix C). Graph indexing with a <b>600 token window</b> (explained in Section A.2) took <b>281 minutes</b> for the Podcast dataset, running on a virtual machine (16GB RAM, Intel Xeon Platinum 8171M @2.60GHz) and using a public OpenAI endpoint for <b>gpt-4-turbo</b> (2M TPM, 10k RPM)." 注意它写的到底是什么：<b>8k 是"生成阶段的固定上下文窗口"</b>（用于 ① 生成社区摘要 ② 社区答案 ③ 全局答案 三处），<b>不是"SS 的 top-k 配置"</b>；<b>600 token 是索引抽取的窗口</b>（§A.2）——两个口径分属不同阶段。按 8k 反推：SS 一次能塞进窗口的原文上限 ≈ 8k÷600 ≈ <b>13 块</b>，相对 1M token 语料 <b>≈0.8%</b>，<b>沛东"不到 1%"的推算成立</b>（探针逐条 top-k 配置论文仍未给，只能这么反推）。</p>
+        <p><b>顺带核到 tie 的算法（附录）</b>：Experiment 1 每次比较重复 5 遍，用<b>多数投票</b>聚合成一个标签（如 C0 五判中赢 3 次 ⇒ 记为 C0 胜）；<b>出现"没有多数"</b>（如 2:1:2）则记为 <b>tie</b>。附录那句关键数字："we focused on cases where the aggregated LLM label was <b>not a tie</b>, representing <b>33%</b> and <b>39%</b> of pairwise comparisons for comprehensiveness and diversity respectively" —— 即<b>约 2/3 的比较判官给不出区别</b>，报出来的 72–83% 是<b>在"判官能区分的那 1/3 样本"上算的</b>。这段语境是在讨论"数值指标 vs LLM 标签如何对齐"，适用范围<b>待核</b>；但若成立，它能解释沛东的疑问的另一半：<b>SS 的 20% 不只是"混合题"，还叠加了"只在可区分样本上计分"这个口径</b>。</p>
+        <p><b>为什么赢这么多（按可信度排，均为判断）</b>：① <b>"胜率"不是"答对率"</b>——它是<b>判官在某个维度上的偏好</b>；两答案都触到主要主题、只是详略不同时，判 tie 或判 SS 赢都合理（tie 在分母里怎么算，论文未细说，待核）。② <b>题目集是"混合题"</b>——125 题由 LLM 从<b>语料描述</b>（非语料内容）生成 personas → tasks → questions，<b>无法保证每题真的需要全语料</b>；其中一批靠几段最显著内容就能答好，top-k 恰好捞到。③ <b>"全面"≠"穷尽"</b>——判官比的是两个答案的表述，而<b>显著主题（头部）恰是向量最容易捞到的</b>，长尾才需全局结构；这与论文自己的动机句一致（SS 的问题是 query 里"nothing to direct it"）。④ 判官噪声 ＋ 具体度偏好（SS 答案更直接具体）——但主效应 p&lt;.001，说明 20% 量级<b>不是纯噪声，主因是 ②③</b>。</p>
+        <p><b>本节还藏着一条更值得记的（事实）</b>：它同时报了 <b>directness</b> 与 <b>empowerment</b>——<b>SS 在 directness 上赢 56–65%</b>（论文说 directness 与 comprehensiveness/diversity "effectively in opposition"），empowerment 混合。即：<b>图赢了"全面"，输了"直接"</b>——与我们"完整 / 不误判 / 遗漏透明"三件套面对的是同一个矛盾，所以不能拿单指标判优劣。</p>
+        <p><b>对我们的三条提醒</b>：① 这套评测对"<b>题目是否真需要全局</b>"控制很弱，<b>主效应显著 ≠ 每个子集都赢</b>——20% 的尾巴里混着"不需要图的题"。② 这对尚未开跑的 <b>"三档原语对比实验"是提前警告</b>：探针题若不够"全局"，第 (ii) 档（段落主题标签）也会赢，结论会失真 ⇒ <b>探针题本身要先验"是否真的需要跨语料"</b>。③ 它同时报四个维度、并让 directness 当效度检验，这个做法值得抄。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑩ · 成本口径：8k 生成窗口 vs 600 索引窗口，以及 281 分钟的建图代价 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提供 §4.1.3 原文引出</p>
+        <p><b>事实（§4.1.3 Configuration）</b>：① <b>8k token 是"生成阶段的固定上下文窗口"</b>——统一用于"生成社区摘要 / 社区答案 / 全局答案"三处（细节在 Appendix C）；② <b>600 token 是索引抽取的窗口</b>（§A.2）；③ 建图成本：<b>播客语料（1669 块 ≈1M token）耗时 281 分钟</b>，环境＝16GB RAM、Intel Xeon Platinum 8171M @2.60GHz、公开 OpenAI <b>gpt-4-turbo</b> 端点（2M TPM / 10k RPM）；④ Leiden 用 graspologic 实现；⑤ 提示词在 Appendix E、评测提示词在 Appendix F、统计细节在 Appendix G。</p>
+        <p><b>两条口径别混（这条是本记录最实用的部分）</b>：<b>600 是"喂给抽取的窗口"</b>，<b>8k 是"生成阶段的窗口"</b>——两者相差 13 倍，分属索引与生成两个阶段。沛东最初问的"我们的窗口是不是比它大不少"，现在有了更准的答法：<b>比抽取窗口（600）我们大（英文 ≈1000–1300 token）；比生成窗口（8k）我们小得多</b>（我们 Pass 1 单窗 ≈1–5k token；检索注入上限我们设的是 32k 但那是检索侧预算）。</p>
+        <p><b>量级对照（粗算，仅作参考）</b>：它 1M token 语料 281 分钟 ⇒ <b>每 8k token ≈ 2.2 分钟</b>；我们 A5（≈8256 token）全链大约 <b>2 分钟</b>（记录里"白跑 2 分钟"是实测）。也就是说：<b>我们那条"多步链"虽然步骤比它多，但单篇成本与它处在同一量级（约 2 分钟/8k token）</b>。注意可比性有限：模型端点、硬件、语料语言、每一步的提示词长度都不同，这里只主张"量级不差一个数量级"，不做精确比较。这条对"三档原语实验"的成本预算有直接参考价值。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑪ · directness 是"控制项（简洁度）"，不是质量指标；而 empowerment 暴露了它的真短板 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的疑问引出（"全局问题上 SS 怎么会更'具体清晰'？具体事实对全局题不该是次级指标吗"）</p>
+        <p><b>论文的四条标准（原文）</b>：<b>Comprehensiveness</b>＝"How much detail does the answer provide to cover all aspects and details of the question?"；<b>Diversity</b>＝"How varied and rich is the answer in providing different perspectives and insights..."；<b>Empowerment</b>＝"How well does the answer help the reader understand and make informed judgments about the topic?"；<b>Directness</b>＝"How specifically and clearly does the answer address the question?"，且明确标注为 <b>"control criterion"（控制项）</b>。</p>
+        <p><b>关键澄清（原文）</b>："In plain terms, <b>directness evaluates the concision of an answer</b> in a generic sense that applies to any generated LLM summarization. We include it to behave as a <b>reference against which we can judge the soundness of results for the other criteria</b>. Since directness is effectively <b>in opposition</b> to comprehensiveness and diversity, <b>we would not expect any method to win across all four criteria</b>." ⇒ <b>SS 赢 directness 是设计预期，不是异常</b>：它赢的其实是"短、聚焦、给具体事实"——这套评测里 <b>directness ≈ 简洁（concision）</b>；而 SS 只看到约 13 块原文，答案天然更简洁。目的＝验证判官没有无脑偏好又长又全的答案。</p>
+        <p><b>但更有价值的是 Empowerment 那段的自我诊断（原文）</b>："Using an LLM to analyze LLM reasoning for this measure indicated that <b>the ability to provide specific examples, quotes, and citations was judged to be key to helping users reach an informed understanding</b>. <b>Tuning element extraction prompts may help to retain more of these details in the GraphRAG index.</b>" ⇒ <b>论文自己承认"具体细节"是它的短板，并把病因指向"索引端把细节磨掉了"</b>。这印证沛东的判断：对"帮用户形成理解"来说，具体事实<b>不是次级指标，而是关键</b>；抽象摘要在这一项上吃亏。</p>
+        <p><b>对我们的直接意义</b>：<b>我们这条设计恰好是对着干的</b>——保留 <code>evidence_texts</code>（逐字证据句）＋ <code>evidence_chunks</code>（可回锚块）、引用红线要求可回锚、注入下游 LLM 的是 <b>chunk / 逐字证据</b>而非"社区摘要"（图只做索引、不承载事实）。所以 GraphRAG 在 directness / empowerment 上付的代价（抽象化、丢引文），<b>在我们架构里本就不该发生</b>——不是我们更聪明，而是<b>目标不同</b>：它是"答案生成器"（必须综合成一个整体看法 ⇒ 必然抽象），我们是"检索结构"（把证据交回去，让下游 LLM 说具体话）。<b>反向推论</b>：将来若真做"主题页 / 聚合页"这类预写摘要，就会把它的短板搬进来 ⇒ "页面必须从 statement ＋ 出处渲染、不能自由写"这条纪律又多了一个理由（保住<b>具体度与引文</b>）。</p>
+        <p><b>方法论提醒</b>：它把 directness 当<b>控制项</b>、用它验证"判官是否被长度带跑"——值得抄。我们自己的评测（金标准 ＋ 判官）目前有"引用红线 ＋ 遗漏透明 ＋ 覆盖性"，但<b>没有一个明确标为"效度检验"的对照维度</b> ⇒ 可以进评测侧待办。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑫ · 沛东的总体判断（预摘要 + 图）与三个对比的成色；以及"图 vs 向量"的沟 vs "图 vs TS"的平地 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 沛东读完全文后的总结，附带我核到的两类证据</p>
+        <p><b>核心判断是论文自述（§2.1 原话）</b>："In particular, GraphRAG is <b>similar to other approaches that use hierarchical indexing to create summaries (similar to Kim et al., 2023; <b>Sarthi et al., 2024</b>)</b>. GraphRAG <b>contrasts with these approaches by generating a graph index from the source data, then applying graph-based community detection to create a thematic partitioning of the data</b>." ⇒ <b>"层级索引/预摘要不是首创 ＋ 创新点＝把图索引与社区检测用于主题划分"这两句是它自己写的</b>。<br><b>检索教训</b>：我第一次搜 <code>RAPTOR</code> 得 0 命中，是因为它按作者引用（<code>Sarthi et al., 2024</code>）——<b>搜系统名 ≠ 搜引用</b>，差点误判"它没引 RAPTOR"。<br><b>另一处细节</b>：它引的 <code>Cheng et al., 2024</code>（"把大段摘要当 self-memory"），而 <b>Newman Cheng 本身就是本文作者之一</b>（Microsoft Strategic Missions and Technologies）⇒ 那条预摘要线里有同团队的前作（"是否同一人"未核）。</p>
+        <p><b>三个对比的成色（我的评价）</b>：<br>① <b>vs 向量 RAG（SS）</b>：胜出<b>是必然的</b>，不能算能力证据——SS 受 8k 生成窗口限制、一次只能塞 ≈13 块 ≈0.8% 语料，拿不到 1% 的材料去答"整个语料库有哪些主题"本就覆盖不了；且那些胜率只在"判官能区分的 1/3 非平局样本"上算（记录 ⑨）。它的正当作用是<b>证明问题存在、机制有效</b>。<br>② <b>vs TS 比 token</b>：TS 是"同一套 map-reduce 去掉图"的消融，对比本身有意义（证明预摘要能省 ~100× token，C0 只用 2.6%、C3 73.5%），但<b>这份功劳属于"预摘要"而非"图"</b>——把它当 GraphRAG 的优势呈现，是归因偏差。<br>③ <b>最该比同类预摘要方法</b>（Kim 2023 / Sarthi 2024 = RAPTOR 那一类）：<b>论文引了却没跑对比</b>——实验条件只有 C0–C3、TS、SS 六种。</p>
+        <p><b>而它自己的 TS 对照已经暴露了答案（我按 Figure 2 抠出 Cx 胜 TS 的百分比）</b>：<br>· 播客 comprehensiveness：C0 <b>44</b> / C1 <b>49</b> / C2 <b>50</b> / C3 <b>52</b>；新闻：C0 <b>36</b> / C1 <b>52</b> / C2 <b>55</b> / C3 <b>59</b>；<br>· 播客 diversity：C0 <b>46</b> / C1 <b>44</b> / C2 <b>45</b> / C3 <b>48</b>；新闻 diversity：C0 <b>40</b> / C1 <b>41</b> / C2 <b>50</b> / C3 <b>51</b>；<br>· 对照 Cx vs <b>SS</b>：播客 72–83 / 75–82，新闻 72–80 / 62–71。<br>⇒ <b>C0–C3 对 TS 基本打平甚至略输（diversity 上尤其），只有 C3 在 comprehensiveness 上小胜（52/59）</b>；而它们对向量检索是压倒性优势。<b>结论：那条大沟来自"预摘要 vs 向量检索"，图的边际贡献是小幅、接近噪声的</b>——与沛东"赢向量是显然的、真正该比同类预摘要方法"完全一致，且是它自己的数据。</p>
+        <p><b>一处待核的口径不一致</b>：论文正文写 "Conditions C1-C3 also showed <b>slight improvements</b> in answer comprehensiveness <b>and diversity</b> over TS"，但我按 diversity 矩阵读出来 C1–C3 vs TS ＝ 44–51%，<b>谈不上改进</b>（comprehensiveness 那半成立）。可能是我的列序读错，也可能正文那句偏乐观 ⇒ <b>回图表核一眼</b>。</p>
+        <p><b>方法论收获（可直接用到我们实验上）</b>：当"新方法＝老方法 ＋ 一个组件"时，<b>必须直接跟老方法比，才能量出组件的边际价值</b>。它自己给了近乎正确的对照（TS），却没按这个口径讲清结论，还被 SS 的大数字盖过。<b>映射到我们</b>："图 ＋ 语句级断言"相对"段落主题标签（第 ii 档）"的边际价值是多少？——这正是"三档原语实验"要问的，<b>而探针题必须先让"预摘要 vs 向量"这个差距失灵</b>（否则测出来的又是必然结论），才能显出图这一层加了多少。这条应直接写进实验设计。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑬ · 这篇论文的"水平"：工业预印本，无正式 venue <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"它发表的刊物或会议是个啥水平？"）</p>
+        <p><b>先定义两个词（本项目规矩：代号/新词首现必须定义）</b>：<b>预印本（preprint）</b>＝作者把稿件先放到公开服务器（arXiv / bioRxiv / SSRN 等）上，<b>公开、有稳定编号、可正式引用，但未经同行评审</b>，因此不算学术口径的"正式发表"；若后续被会议/期刊接收，arXiv 页面会补上 <code>journal_ref</code> / <code>comment</code>。<b>"工业预印本"不是学术上的正式分类，是本记录为描述一类东西用的说法</b>——指<b>由公司/工业研究机构（微软研究院、Google、Meta、OpenAI 等）产出、通常从设计上就不打算投会议/期刊</b>的技术报告或预印本，典型形态＝<b>arXiv 一篇 ＋ 同步博客 ＋ 开源代码</b>（GraphRAG 即标准样本：MSR 博客 ＋ <code>microsoft/graphrag</code> ＋ 这篇 arXiv）。"算不算发表"分语境：<b>学术评价口径不计入；引用口径可正式引用；工程/产品口径常被当权威参考</b>。</p>
+        <p><b>事实（三处口径一致）：没有正式发表。</b>① <b>arXiv 元信息</b>——没有 <code>journal_ref</code>、没有 <code>comment</code>（作者从未登记期刊/会议）；② <b>Semantic Scholar</b>——<code>venue = arXiv.org</code>，<code>publicationTypes</code> 标为 JournalArticle（<b>S2 对预印本的默认归类，不代表期刊</b>）；③ <b>DBLP</b>——条目号 <code>journals/corr/abs-2404-16130</code>，而 <code>journals/corr</code> 是 DBLP 给<b> CoRR（arXiv 预印本集合）</b>的编号。⇒ <b>微软研究院技术报告 / 工业预印本，未经同行评审</b>。这也解释了它的画像为何是"<b>高引 ＋ 方法论松</b>"：传播渠道是博客与仓库而非评审台，没人逼它补对照实验、对齐口径——<b>没经过那道关是身份决定的，不是偶然</b>。</p>
+        <p><b>换尺子看"水平"</b>：引用量 <b>2,170 次</b>（Semantic Scholar，2026-09-22）；作者/机构＝Microsoft Research ＋ Office of the CTO（Darren Edge 等）；工程落地＝<code>microsoft/graphrag</code> 开源、36k stars、持续 push。<b>同族对照</b>：HippoRAG 在 OpenAlex 有 <b>conference-paper</b> 记录（2024）；LightRAG 仓库自述 <b>EMNLP 2025</b>；RAPTOR 本次只查到预印本条目（印象中是 ICLR 2024，<b>未核到会议条目，待核</b>）。<br><b>一句话</b>：<b>它的影响力来自工程与产品化，不来自学术评审</b>——工业预印本的典型画像：引用量极高、方法论把关较弱。</p>
+        <p><b>对我们的三条意义</b>：① 引用时必须标明身份（工业预印本 ≠ 同行评审证据），以后在本项目文档里写它要带这个限定；② <b>这解释了本轮挑出的问题为什么没人挡过</b>——缺同类预摘要对照（RAPTOR / Kim 那类<b>只进相关工作、没跑实验</b>）、正文与图表在 diversity 上口径不一致、把"预摘要 vs 向量"的差距归因成 GraphRAG 的优势 ⇒ <b>这些在正式评审里大概率会被要求补实验；我们不是挑刺，是补它缺的那道关</b>；③ <b>引用量 ≠ 评审等级</b>，两个信号分开看：<b>当工程参考用它（能读、能跑、有生态），当证据用得先过我们自己的金标准</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑭ · 论文冻结在 2025 年初；之后改了什么都去哪儿看 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"它这版预印本之后到现在，做了哪些改进、去哪儿看"）</p>
+        <p><b>先纠时间</b>：论文 <b>v1 = 2024-04-24、v2 = 2025-02-19</b>，<b>v2 之后再无更新</b> ⇒ <b>论文冻结在 2025 年初</b>；后续改进全在仓库里。</p>
+        <p><b>去哪儿看（按效率）</b>：① <b><code>CHANGELOG.md</code></b>——写法规整（<code>minor:</code> 功能级 / <code>patch:</code> 修 bug），最权威；② <b>GitHub Releases</b>——同内容带日期，<b>最新 v3.1.2（2026-08-21）</b>，仓库当日仍有 push；③ <b><code>docs/</code></b>——反映当前能力，其中<b>论文里根本没有的</b>有：<code>docs/query/drift_search.md</code>、<code>docs/query/question_generation.md</code>、<code>docs/index/methods.md</code>（standard ＋ <b>fast</b>）、<code>docs/index/byog.md</code>、<code>docs/config/*</code>、<code>docs/examples_notebooks/global_search_with_dynamic_community_selection.ipynb</code>；④ <b>代码里的新模块</b>（文档未写全）：<code>query/context_builder/dynamic_community_selection.py</code>、<code>index/workflows/update_*.py</code>、<code>index/operations/summarize_communities/*</code>。</p>
+        <p><b>论文之后的主要新增（均可在 CHANGELOG/仓库对上）</b>：<br>· <b>DRIFT Search</b>（1.1/1.2，2025）＝"Dynamic Reasoning and Inference with Flexible Traversal"，官方措辞"<b>结合 global 与 local 两种搜索</b>、在成本与质量间平衡"、三阶段流程 ⇒ <b>论文里完全没有，应是论文之后最大的方法级新增</b>；<br>· <b>NLP 图抽取 / FastGraphRAG</b>（2.0.0）＝NLTK/spaCy 抽名词短语做实体、共现做边、不做 LLM 描述；<br>· <b>动态社区选择</b>（代码 ＋ notebook，见记录 ⑧）；<br>· <b>增量更新 workflow</b>（<code>update_*.py</code>）——论文列为 future work 的那件事的一部分；<br>· <b>Provider 抽象 / LiteLLM</b>（2.6.0 起，不再绑 OpenAI）；<br>· <b>BYOG（Bring Your Own Graph）</b>＝自带 <code>entities/relationships/text_units</code> 表跑它的查询栈；<br>· 工程向：全链路 streaming、存储适配（CosmosDB 等）、向量库配置面扩大。</p>
+        <p><b>想追"学术界之后做了什么"</b>：① Semantic Scholar 该文的 <b>"cited by" 按时间倒序</b>（追一条线的标准做法）；② 我们文档已收的那批——LightRAG（EMNLP 2025）、HippoRAG 2、LinearRAG、EcphoryRAG、KAG、LLM-Wiki（2026-05）、SearchWiki（2026-08）、WiCER（2026-05）、Do We Still Need GraphRAG?（2026-04）。</p>
+        <p><b>对我们最有用的一条＝BYOG</b>：它允许"<b>自带图 ＋ 用它的查询栈</b>"——若将来想测"<b>我们的图 ＋ 它的检索</b>"（或反过来），这是一条<b>有官方文档的路径</b>，但要先写转换（我们的 concept/statement ↔ 它的 entity/relationship，schema 不一致）。<b>它把"要不要整个搬过来"变成"可以局部对接"</b>——这比"从零重做"现实得多。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑮ · 官方"适用性声明"分析：它把 verify / augment 外包给领域专家，而我们不能 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东给出的一句 RAI 声明引出</p>
+        <p><b>出处（已核）</b>：仓库根目录 <code>RAI_TRANSPARENCY.md</code>——《GraphRAG: Responsible AI FAQ》，README 里专门列了它的五个入口（能做什么 / intended uses / 怎么评测 / 局限 / 运营条件）。<b>性质＝官方"适用性声明"，不是技术规格</b>，所以它是<b>使用边界</b>而非修辞。</p>
+        <p><b>逐句抠字</b>：「designed for <b>settings</b> where users are <b>trained in responsible analytic approaches</b> and <b>expected to apply critical reasoning</b>」——关键词全是<b>前置责任</b>（settings / trained / expected），把"用对"的前提押在<b>场景与用户素质</b>上，功能上＝<b>缩小适用面</b>；「can provide <b>deep insight</b>」——承诺的是<b>洞察</b>而非"答案/事实"（用词刻意克制，从不说 accurate answers）；「<b>however</b>, a <b>domain expert</b> should analyze its answers to <b>verify and augment</b>」——<b>verify＝可能错、augment＝可能缺、domain expert＝需专业知识才能判断对错与缺口</b> ⇒ <b>把验证与补全外包给领域专家</b>。同一文件运营条件段更直白：「the system is designed for <b>trusted users</b>. <b>Human analysis of responses is important</b> ... and <b>information provenance should be traced to verify the inferences made during answer generation</b>」。</p>
+        <p><b>这不是客套话，与架构自洽</b>（三条已核证据）：① 最终答案由 map-reduce 汇总，<b>引用只保留到"报告"这一级、且无校验</b>（记录 ④；原文写"不带引用"，2026-09-22 更正）；② 社区是拓扑近似、报告为索引期预生成（记录 ⑤⑥）；③ 论文自认"帮人理解的关键是具体例子/引文"并建议调抽取提示词保留细节（记录 ⑪）⇒ <b>细节确实会被磨掉</b>。</p>
+        <p><b>同一文件里另外三条信息量更大的</b>：① <b>intended use 第一条</b>把场景定义为"跨多文档、<b>嘈杂、混着 misinformation</b>、问题比底层数据能直接回答的更抽象"——<b>这就是"学习型问答"的画像</b>；② <b>Limitations 只列两条</b>——(a) "依赖构造良好的索引提示词…独特数据集上有效索引取决于能否<b>正确识别领域概念</b>"＝<b>我们卡点①②的官方承认</b>，(b) "索引相对昂贵"＋建议"<b>先在目标域做小数据集试点</b>评估 indexer"＝<b>我们"先跑 A5"做法的官方背书</b>；③ 它评测关注点含 <b>transparency and groundedness</b>，手段是 coverage ＋ <b>人工检查返回的上下文</b>——在意可追溯，但<b>靠人工看</b>而非结构化引用。</p>
+        <p><b>与我们定位的对照（本轮最值钱的一层）</b>：它<b>用户画像＝受训分析者 ＋ 领域专家兜底 ＋ trusted users</b> ⇒ 可以把 verify / augment 外包；我们<b>用户画像＝学习者</b>，不具备也不该被要求具备专业判断力 ⇒ <b>不能照抄它的免责策略</b>。我们那套"引用红线 ＋ 遗漏透明 ＋ 判官 ＋ 金标准"，本质是<b>把它的"需要专家 verify / augment"变成产品功能</b>：让 verify 变廉价（点开即回原文）、让 augment 变可见（显式声明不完整）。<b>但要诚实</b>：我们同样免除不了最终判断——红线保证的是"<b>可核查</b>"而非"保证正确"，目标是"让验证便宜、让缺失可见"，不是假装不需要验证。<br><b>反向收获</b>：它那句 "information provenance should be traced to verify the inferences" <b>恰好是我们已做到、而它默认流程做不到的</b>（我们有逐字证据句 ＋ chunk 映射，它的最终答案无引用）⇒ 在"<b>可信度/可核查</b>"这个维度上我们<b>可以明确宣称强于它</b>，尽管我们的图更小更浅。<br><b>安全边界提示</b>：它明说 <b>"designed for trusted users"</b>——即<b>不能直接拿来服务公开/不受信用户</b>；我们若面向不受信输入要另做设计。</p>
+        <p><b>引用纪律</b>：以后引用 GraphRAG 的结论必须带这条 intended use（"<b>答案需领域专家核实与补充</b>"）——它与"它是工业预印本"是两条互补限定：一条限<b>方法可信度</b>，一条限<b>适用场景</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑯ · "只能给专家用，那专家要它干嘛"——不是逻辑矛盾，是未验证的成本假设 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东对 RAI 声明的质疑引出（承接记录 ⑮）</p>
+        <p><b>结论</b>：<b>逻辑上不算自相矛盾，但质疑指向的那个矛盾是真的——形态是"经济学矛盾"</b>：<b>把验证责任推给专家，而架构没把验证成本降下来</b>。</p>
+        <p><b>给它一个公平的钢人（为什么逻辑上不矛盾）</b>：① "专家要验证" ≠ "专家不如它"——专家的价值是"<b>审一份对全量语料的粗加工</b>"，<b>覆盖率是人力做不到的那部分</b>；类比资深分析师审初级分析师初稿，省的是"从零写"的时间，不是判断的责任。② 其 intended use 第一条（跨多文档、嘈杂、混 misinformation、更抽象）指向的真场景是"<b>跨域快速定位</b>"——<b>有专业判断力但没时间读完语料</b>的人。这个岗位成立。</p>
+        <p><b>真正的矛盾（两条证据）</b>：① <b>没做到</b>——最终答案的引用停在"<b>报告</b>"这一级（不是原文块）<b>且无校验</b>（记录 ④⑮；原文写"不带引用"，2026-09-22 更正），验证仍得自己回去翻语料；RAI 还得专门叮嘱 "information provenance <b>should be traced</b>"，<b>等于把负担推回用户</b>。② <b>没量化</b>——它的评测只测答案质量（comprehensiveness / diversity / empowerment / directness），<b>从没测"验证成本"</b>（确认或推翻一段答案要花多少时间），而这是"专家在环"模式成立与否的分母。<br>⇒ 准确答法：<b>要它来当"粗加工器"；但验证成本压不下来，它连这个岗位都站不住</b>——质疑戳的是它<b>未验证的那个假设</b>。</p>
+        <p><b>附带一层：体裁错位</b>。这类文档一半是能力宣传（What can GraphRAG do?）、一半是责任避风港（intended use / limitations / operational factors），连着读就像自我否定 ⇒ <b>别把 RAI 段落当产品定位读，但别忽略它——它暴露的是产品的未验证假设，不是文风问题</b>。</p>
+        <p><b>对我们的意义（最值钱）</b>：我们的用户是<b>学习者</b>，本来没有专业判断力 ⇒ <b>不能复制"依赖用户会验证"这个模式</b>（会掉进同一个坑且更糟：专家至少能验证，学习者连验证能力都没有）。三条红线的产品语言：<b>引用可回锚</b>＝把 verify 成本压到接近零（点开即回原文）；<b>遗漏透明</b>＝把 augment 缺口<b>替用户说出来</b>；<b>判官 ＋ 金标准</b>＝把"看起来对"与"确实对"分开。<br><b>一句话对照</b>：<b>GraphRAG 的价值主张依赖"用户的验证能力"；我们的价值主张必须依赖"系统的可核查性"</b>——可直接用作定位陈述："<b>把 GraphRAG 推给用户的那部分责任，做成系统能力</b>"。</p>
+        <p><b>顺带得到一个可测的新指标</b>：既然判据是"<b>验证路径够不够短</b>"，那就能量——拿 A5 做小实验：从答案出发，<b>要几步、多久才能确认/推翻每一句</b>（我们 vs 它 vs 纯向量）。<b>这个数它没有、我们可以有</b>，且能接到现有评测体系（引用真实性那套已有一半基础）。<b>属评测侧新增维度 ⇒ 按纪律先方案后评审</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑰ · 它怎么测"透明性与有据性"：能自动化的只有覆盖，groundedness 交给人工审计 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东给出的 RAI 评测段一句引出</p>
+        <p><b>原文</b>："Transparency and groundedness of responses are tested through <b>automated answer coverage evaluation</b> and <b>human inspection of the returned context</b>."<br><b>翻译</b>：回答的<b>透明性</b>与<b>有据性（groundedness）</b>，通过<b>自动化的答案覆盖度评估</b>＋<b>对返回上下文的人工检查</b>来测试。<br><b>抠词</b>：<b>groundedness</b>＝答案是否有据（扎根于给定材料、非模型自带知识）；<b>returned context</b>＝为本次回答拼装的那批材料（<b>GraphRAG 里主要是社区报告</b>），<b>不是答案本身</b>；<b>answer coverage</b>＝覆盖度（recall 类）。</p>
+        <p><b>先定义三件常混的术语（本记录用到"透明性"，按规矩首现即定义）</b>：<b>Attribution（归因/引用）</b>＝答案<b>带出处</b>，判据是"有没有引用"；<b>Groundedness（有据性）</b>＝答案<b>确实被出处支持</b>，判据是"引用是否真的支撑结论"；<b>Transparency（透明）</b>＝系统的依据/行为<b>可见</b>，判据是"你看得到它用了什么"。<b>关键：有引用 ≠ 有据</b>——引用可能挂着却不支持结论，所以要"要求引用 ＋ 验引用"两步（我们项目里就是引用真实性判官）。<br><b>"transparency"在本句里的具体所指</b>：指 <b>responses 的来源可见</b>——系统不只给答案，还把"为这次回答拼装了哪些材料（returned context）"暴露出来；所以它的测法才是"<b>人工检查返回的上下文</b>"（检查上下文＝检查透明这件事）。<br><b>另一层含义</b>：这份文件本身叫 <code>RAI_TRANSPARENCY.md</code>，在微软 RAI 体系里"transparency"还指一类<b>披露文档</b>（说明能力 / 适用面 / 局限 / 评测 / 运营条件）——即"响应级透明"＋"文档级透明"同名。<br><b>它的透明是弱版本</b>：returned context 主要是<b>社区报告（LLM 写的摘要）</b> ⇒ <b>透明到一个 LLM 产物 ≠ 透明到源头</b>；配合"<b>引用只到报告级、且无校验</b>"（2026-09-22 更正；原文写"最终答案不带引用"），它做到"<b>可查</b>"（能看到给了什么材料）但没做到"<b>可核</b>"（能验证材料支撑结论），后一步它写进 RAI 让用户自己 trace。<b>我们的对应</b>：引用可回锚＝把"可查"升级为"可核"；遗漏透明＝把透明从"材料可见"扩展到"覆盖状态可见" ⇒ 业界常说的 transparency / attribution / coverage 三件，我们合成了<b>两条可测的量</b>。</p>
+        <p><b>解读（关键在分工）</b>：① <b>能自动化的只有"覆盖"；"有据"那半交给人工</b> ⇒ 它的 groundedness <b>没有被自动化</b>，退化成"让人去看材料对不对"——<b>这是审计流程，不是评测指标</b>。② <b>人检查的对象是上下文而非答案</b> ⇒ 判定的是"<b>材料里有没有相关内容</b>"，<b>不是</b>"答案每一句是否真被材料支持"（后者要逐句对齐 ＋ 引用真实性判定；它没做——虽有 <code>[Data: Reports (id)]</code> 标注，但停在报告级且无校验，记录 ④，2026-09-22 更正）。③ <b>隐含漏洞</b>：returned context 里含 <b>LLM 写的社区报告</b>，人若要检查"摘要是否忠实于原文"，得顺 <code>[Data: ...]</code> 往下钻两跳（报告 → 实体/关系/claim → text unit，记录 ④），成本很高 ⇒ 实操上多半只确认"有相关内容"，<b>难确认"这份上下文忠实于原文"</b>。④ 附带：它把"透明性"与"有据性"并列写，但<b>实测手段里没有对应"透明"的量</b>——"透明"没有独立指标（这也是"验证成本"空缺的一部分）。</p>
+        <p><b>与我们评测体系的对照（最值钱的部分）</b>：它＝<b>自动化覆盖 ＋ 人工看上下文</b>；我们＝<b>自动化覆盖（判官）＋ 逐字回锚的引用真实性（判官 ＋ 确定性提取）＋ 遗漏透明声明</b>。差别在<b>谁判 groundedness</b>：它靠"人 ＋ 抽象上下文"，我们靠"判官 ＋ 逐字证据句"——我们强一档，代价是<b>编译期必须保留证据句与映射</b>（我们做了：记录 ④ 那张多对多表）。<br><b>更值得记的分工差异</b>：<b>它把人工放进"每次评测的流程"</b>（人看上下文），<b>我们把人工放在"基础件"上</b>（金标准 / 判官口径 / 提示词），让自动化部分<b>可回归</b>——<b>"可回归"才是评测的意义</b>，人工审计每次重来、不产生累积。</p>
+        <p><b>一句总结</b>：这句话表面在说"我们测了透明与有据"，实际暴露的是"<b>有据性无法自动验证，所以交给人工审计</b>"；而我们的设计相反——<b>把"有据"操作化成"能否逐字回到原文"，一个可测、可回归的量</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑱ · Basic Search 到底怎么实现：就是把 SS 基线产品化了 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（官方文档列了四种搜索模式，但 Basic Search 没有实现说明）</p>
+        <p><b>定性（代码 docstring 原文）</b>：<code>basic_search/search.py</code> 写着 "Implementation of a <b>generic RAG algorithm (vector search on raw text chunks)</b>" ⇒ <b>它就是论文里那个 SS（semantic search 基线）被产品化成第四个查询模式</b>。</p>
+        <p><b>流程（<code>basic_context.py</code>）</b>：① 依赖＝embedding 模型 ＋ <b>text unit 的向量库</b>（<code>text_unit_embeddings: VectorStore</code>）＋ text unit 列表；② <code>build_context</code>：query 非空 → <code>similarity_search_by_text(text=query, k=k)</code> ⇒ <b>对原始 chunk 做纯稠密向量检索</b>；③ 命中的 chunk <b>按 token 预算逐条塞进上下文</b>，超了就 break（日志："Reaching token limit: ... <b>Reverting to previous context state</b>"）；④ 上下文以 <code>id|text</code> 两列 CSV 喂给 LLM（<code>|</code> 分隔、<code>escapechar="\\"</code>）；⑤ <b>无重排、无图参与、无实体/社区报告、无查询改写</b>——一次向量检索 ＋ 一次 LLM 生成。</p>
+        <p><b>参数（config）</b>：<code>k</code> <b>默认 10</b>（"The number of text units to include in search context"）、<code>max_context_tokens</code> <b>默认 12,000</b>、另有 <code>prompt</code> / <code>completion_model_id</code> / <code>embedding_model_id</code>。</p>
+        <p><b>提示词差异（重要）</b>：<code>basic_search_system_prompt.py</code> <b>要求引用</b>——"Points supported by data should list their data references as follows: <code>[Data: Sources (record ids)]</code>"（单条最多 5 个 id、其余 <code>+more</code>，id 取自表格 <code>id</code> 列），并要求"不知道就说不知道，不要编"；id 是 chunk 的 <code>short_id</code> ⇒ <b>Basic Search 的答案可回锚到具体 chunk，比 global search 强</b>（后者的引用只到报告级、且无校验；2026-09-22 更正）。</p>
+        <p><b>一处疑似小 bug（我的阅读）</b>：命中被收成集合 <code>text_unit_ids = {t.document.id for t in related_texts}</code>，再<b>遍历全量 <code>self.text_units</code> 过滤</b> ⇒ <b>相关度顺序未保留</b>，上下文按语料原始顺序拼。k=10 × ~600 token ≈ 6k &lt; 12k 预算 ⇒ 平时都塞得下、不咬人；但 chunk 变长或 k 调大时，<b>被截断的是"最早出现的块"而非"最不相关的块"</b>。可提 issue。</p>
+        <p><b>对我们的三点参考</b>：① <b>它把 baseline 做成了产品模式</b>（对"点状问题"更便宜更直接）——与我们的"向量兜底"同构（判定 need=vector 直接走向量）；② <b>两种模式的引用"层级"不同，这才是关键区别</b>：Basic Search 引到 <b>chunk</b>（<code>short_id</code> 直接回原文），Global Search 只引到 <b>报告</b>（还要再跳两跳）⇒ 讨论"有没有引用"意义不大，<b>要问"引到哪一级、有没有校验"</b>（2026-09-22 更正）；对我们则是<b>全流程红线</b>：引到原文块 ＋ 判官验引用；③ <b>参数口径别混着比</b>：它 <code>k=10</code> 是<b>块数</b>、上限 12k tokens；我们检索块 ≤450 token、注入上限按 token 走——讨论"预算"必须说清是哪一个。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑲ · 向量库：默认 LanceDB；协议"接口层已统一"，但能力是逐步补齐的 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"Basic Search 实现太原始——它有默认向量库吗？各家协议统一了吗？"）</p>
+        <p><b>默认向量库＝LanceDB</b>：<code>config/defaults.py</code> 里 <code>VectorStoreDefaults.type = VectorStoreType.LanceDB.value</code>（"lancedb"）、<code>db_uri = &lt;output&gt;/lancedb</code>；<code>VectorStoreType(StrEnum)</code> <b>只有三个值</b>：<code>lancedb</code> / <code>azure_ai_search</code> / <code>cosmosdb</code> ⇒ <b>只有三种后端，全是自家栈能控的</b>（本地 LanceDB ＋ 两个 Azure 服务），<b>没有 FAISS / pgvector / Qdrant / Milvus</b>——是<b>为自家栈做的适配层</b>，不是通用适配层。</p>
+        <p><b>协议统一程度</b>：向量库已抽成独立包 <code>packages/graphrag-vectors/</code>。① <code>vector_store.py</code> 定义<b>抽象基类 <code>VectorStore(ABC)</code></b>（"The base class for vector storage data-access classes"），抽象方法＝<code>connect</code> / <code>create_index</code> / <code>load_documents</code> / <code>similarity_search_by_vector</code> / <code>search_by_id</code> / <code>count</code> / <code>remove</code> / <code>update</code>；具体方法＝<code>insert</code>、<code>similarity_search_by_text</code>（<b>先 embed 再检索，embedder 以回调传入</b>）；② <code>vector_store_factory.py</code> ＋ <code>vector_store_type.py</code> ⇒ <b>换后端＝改配置</b>（<code>vector_store.type</code>）；③ 后端差异由 <code>filtering.py</code> / <code>timestamp.py</code> / <code>index_schema.py</code> 三个模块吸收（能不能过滤 / 时间字段 / schema 声明）。<b>CHANGELOG 印证：3.0.3 才加上 filtering ＋ timestamp explosion ＋ insert/count/remove/update 与顶层 <code>vector_size</code></b> ⇒ <b>接口统一了，能力是逐步补齐的</b>。</p>
+        <p><b>"Basic Search 原始"要拆开</b>：<b>原始的是"检索逻辑"</b>（一次 top-k ＋ 拼上下文，无重排/扩展/图参与，刻意做 baseline）；<b>存储层并不原始</b>（索引生命周期 ＋ 按 id CRUD ＋ 过滤 ＋ 时间戳都有）。</p>
+        <p><b>与我们对照（已核我们的 <code>backend/app/storage/</code>）</b>：我们同构——<code>ports.py</code> 的 <code>VectorStore(ABC)</code> ＋ <code>qdrant_store.py</code> 的 <code>QdrantVectorStore</code>，另有<b>独立</b>的 <code>Embedder</code>（含 query/document 前缀区分，e5 系模型的坑）与 <code>Reranker</code> 端口。<br>· <b>它更强</b>：索引生命周期（connect / create_index）与<b>按 id CRUD</b>（update / remove / count / search_by_id）都在接口里 ⇒ 适合多后端 ＋ 服务化。<br>· <b>我们更强/更贴需求</b>：<b><code>filters</code> 是 <code>search()</code> 的一等参数</b>（它的抽象签名里没有 filters，过滤单列模块 ⇒ 各后端支持不齐）；<b>Embedder / Reranker 独立成端口</b>（它无 reranker 抽象——干脆不做重排）。<br>· <b>我们的短板</b>：接口缺 <code>count</code> / <code>update</code> / <code>search_by_id</code>（只有 list_by_document / list_all / delete_by_document）⇒ 将来要做"单块增量更新"或"按 id 取块"需补。<b>可登记为待办候选</b>。</p>
+        <p><b>附：LanceDB 在向量库里是什么档位（2026-09-23 核查）</b>——<b>它自己的定位就不在"性能/规模"那一栏</b>：仓库自述 "Developer-friendly OSS <b>embedded</b> retrieval <b>library</b> for multimodal AI. <b>Search More; Manage Less.</b>"（嵌入式 ＋ 库 ＋ 少运维）。同档对照（stars 为关注度粗代理）：Milvus 46,223（cloud-native / scalable ANN）、Qdrant 34,758（massive-scale）、Weaviate 16,839（cloud-native / fault tolerance）、Faiss 40,961（引擎库，无存储层）、<b>LanceDB 11,505（嵌入式/零运维/多模态）</b>。<b>真卖点＝Lance 列式格式那套</b>（多模态 blob、随机访问、版本化/时间旅行、对象存储原生）；<b>不擅长</b>分布式分片复制、超大规模 ANN 延迟与召回、托管生态、过滤表达力。<br><b>那它为什么是 GraphRAG 的默认？形态匹配，不是性能选择</b>——GraphRAG 产出本就是"一堆 parquet ＋ 一个输出目录"，默认 LanceDB ＝ <code>&lt;output&gt;/lancedb</code> 一个目录、<b>不用起服务</b>、装完即跑（对 OSS 第一体验极关键）；要生产规模就切 <code>azure_ai_search</code> / <code>cosmosdb</code>。<br><b>方法论提醒（值得复用）</b>：<b>默认值透露"最容易被跑起来的那个"，不透露性能</b>——别拿"人家默认用 LanceDB"当"LanceDB 优秀"的证据（与"论文 ≠ 实现""声明 ≠ 能力"同一种误读）。<br><b>我们这边</b>：用 Qdrant <b>本地文件模式</b>，同属"能本地跑 ＋ 有过滤"的档；差别是 Qdrant 是<b>服务</b>、LanceDB 是<b>库</b>。当前规模（3333 块 / 27 源）下<b>选型对性能几乎无影响，影响的是运维形态与过滤能力</b> ⇒ 不必换；可偷的是它"零运维"的思路（部署形态变时再考虑）。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ⑳ · 嵌入模型与 chunk 存储：默认 text-embedding-3-large；三处版本漂移 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"它用啥嵌入模型？chunk 怎么存？"）</p>
+        <p><b>模型（<code>config/defaults.py</code>）</b>：<code>DEFAULT_COMPLETION_MODEL = "gpt-4.1"</code>、<code>DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"</code>、<code>ENCODING_MODEL = "o200k_base"</code>（token 计数）、认证 <code>AuthMethod.ApiKey</code>（云端按 token 计费）。<b>版本漂移①</b>：论文 §4.1.3 用的是 <b>gpt-4-turbo</b>，现在默认 <b>gpt-4.1</b> ⇒ <b>论文的质量数字对应"当时模型 ＋ 当时配置"，不能直接当"现在的 GraphRAG"</b>。</p>
+        <p><b>默认向量化三个目标（<code>config/embeddings.py</code>）</b>：<code>default_embeddings = ["entity_description", "community_full_content", "text_unit_text"]</code> ⇒ <b>实体描述 / 社区报告全文 / 原文 chunk 三类都建向量</b>。这解释了它各模式的检索底座：<b>local search 用"实体描述"向量做入口</b>（记录 ⑦ 的 access points）、<b>global search 可召回社区报告</b>、<b>basic search 用 <code>text_unit_text</code></b>（记录 ⑱）。</p>
+        <p><b>chunk 存储＝三层</b>：① <b>原文 chunk → <code>text_units.parquet</code></b>，字段＝<code>text</code> / <code>n_tokens</code>（文档说一般等于 <code>chunk_size</code>，末块常更短）/ <code>document_id</code> / <code>entity_ids</code> / <code>relationship_ids</code> / <code>covariate_ids</code>（＋ id / short_id 标识）——<b>注意 <code>entity_ids</code> 就长在块上</b>，与实体侧的 <code>text_unit_ids</code> 互为反向 ⇒ <b>记录 ④ 那张"实体↔块"多对多映射表的另一半就在 chunk 记录里</b>；② <b>chunk 向量 → 向量库</b>（默认 LanceDB <code>&lt;output&gt;/lancedb</code>），<b>每个 embedding 目标一张表</b>（示例输入里 <code>embeddings.community_full_content.parquet</code> 与 <code>lancedb/community_full_content.lance</code> 成对出现）；③ <b>整条流水线产物默认 Parquet 表</b>（官方原话 "stored as Parquet tables by default"），可换 CosmosDB。</p>
+        <p><b>版本漂移②（重要）：chunk 尺寸 600 → 1200</b>。<code>ChunkingDefaults</code>：<code>size = 1200</code>、<code>overlap = 100</code>、<code>encoding_model = o200k_base</code>、<code>prepend_metadata = None</code>；而论文 §4.1.3 明说切成 <b>600-token 块 / 100 重叠</b> ⇒ <b>论文测出"600 比 2400 多抽近一倍实体"，而现在的默认落在中间（1200）</b>（可能是 gleaning 补了召回后的再平衡，<b>属推断</b>）。<b>结论：别把论文的 600 当"它的推荐值"</b>——那是当时的实验配置（记录 ③ 已踩过一次，这是第二处证据）。</p>
+        <p><b>与我们对照（两处结构性差异）</b>：<br>· <b>嵌入模型</b>：它<b>云端 <code>text-embedding-3-large</code></b>（API、按 token 计费）vs 我们<b>本地 e5-large</b>（离线、无 API 成本、需 query/document 前缀区分）；<br>· <b>原文与元数据放哪</b>：它<b>原文在 parquet、向量库只放向量</b>（取原文要多一跳）；我们<b>原文＋元数据都在 Qdrant payload</b>（<code>text</code>/<code>source_id</code>/<code>section_path</code>/<code>tokens</code>/<code>seq</code>…）＋ SQLite <code>chunk_offsets</code> 存位置索引 ⇒ <b>一次查询拿到全部</b>，代价是<b>同一份原文存两份（冗余）</b>；<br>· <b>块大小</b>：它默认 <b>1200</b> token vs 我们 <b>≤450</b>（我们多带 <code>section_path</code>）。<br>一句话：<b>它＝"索引与数据文件分离"，我们＝"向量库即素材库"</b>——与我们"chunk 是事实源"的口径一致。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉑ · Covariate 的译法与实质：它其实是"带时间与真值判定的实体断言" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（官方 default_dataflow 的 Covariate 定义怎么翻译）</p>
+        <p><b>译法决定（供本项目文档统一口径）</b>：首次出现写「<b>协变量（covariate，此处指"带时间的实体断言"）</b>」，正文指具体内容时用「<b>时间性断言</b>」。"协变量"是统计学标准译法（可能影响结果的伴随变量），但这里<b>与统计学无关</b>——官方定义就是 "Extracted <b>claim</b> information"；直译会把人带沟里，而类型名又不该自造（对照代码/配置要用原词） ⇒ <b>保留原词 ＋ 一句话解释</b>。</p>
+        <p><b>实质（官方 <code>docs/index/outputs.md</code> 字段全貌）</b>：<code>covariate_type</code>（默认恒为 <code>"claim"</code>，说明它是<b>可扩展容器类型</b>，claim 只是当前唯一填充）、<code>type</code>（claim 性质）、<code>description</code>（LLM 生成的行为描述）、<code>subject_id</code>（<b>谁</b>做出该行为）、<code>object_id</code>（行为<b>作用于谁</b>）、<code>status</code>（LLM 判定真值：<b>TRUE / FALSE / SUSPECTED</b>）、<code>start_date</code> / <code>end_date</code>（<b>ISO8601 时间界</b>）、<code>source_text</code>（短句原文）、<code>text_unit_id</code>（来自哪一块）。⇒ 一句话：<b>"某实体在某个时间段做过某事、且这件事可真/可假/存疑"被建模成一等公民</b>。</p>
+        <p><b>与我们 statement 的对照（几乎同构，差异有价值）</b>：<br>· <b>相同</b>：subject / object / 描述 / 证据句 / 块锚（它的 <code>text_unit_id</code>）⇒ <b>它其实就是我们 <code>statement</code> 的一个特例</b>。<br>· <b>它多两样</b>：<b>时间界</b>（start/end date）与<b>真值判定</b>（status）——我们 <code>statement</code> 有 <code>polarity</code>（正/负）但<b>没有时间字段</b>；<b>这是我们的真实差距</b>（与记录 ①③ 里"时序条件过滤"卡点同源）。<br>· <b>我们多一样</b>：我们允许 <b><code>evidence_texts</code> 多段逐字证据 ＋ <code>evidence_chunks</code> 多块</b>；它只有<b>一条短 <code>source_text</code> ＋ 单个 <code>text_unit_id</code></b>。</p>
+        <p><b>两个必须打的折扣</b>：① <b>claim 抽取默认关闭</b>——<code>extract_claims.enabled</code> 默认 off，官方理由"claim prompts really need user tuning"；② <b>默认 claim 提示词是给特定场景写的</b>——官方原话 "claims are typically oriented around <b>identifying malicious behavior such as fraud</b>, so they are <b>not useful for all datasets</b>"。<br>⇒ 准确说法：<b>数据模型里留了时间维度，但默认不启用、现成提示词的骨架偏"需核验的负面行为主张"、示例偏欺诈/违规，要用得自己改造</b>——又一次"<b>能力存在 ≠ 默认可用</b>"（同"论文 ≠ 实现""声明 ≠ 能力"）。<b>（口径已按记录 ㉘㉙ 更正：默认参数中性、骨架偏取证、示例偏欺诈。）</b></p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉒ · 产品层面的拷问：学习助手到底要多"准确"？——分层准确性 ＋ 可发现性 ＋ 低纠错成本 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的一个想法引出（"十分准确有多重要？学习是渐进过程、智能本身有不完备性，是不是该追求'靠谱的搭子'而不是单次十分准确"）</p>
+        <p><b>我的结论：对了一半。</b>把"单次回答十分准确"当目标是偏的（既不可达、也不是学习者真正需要的）；但<b>不能由此推出"准确性可以降级"</b>。正确重构＝<b>分层准确性 ＋ 错误的可发现性 ＋ 低纠错成本</b>。</p>
+        <p><b>一、错误不是均匀的，代价取决于落在哪一层</b>：<b>细节</b>（"83% 还是 80%"、"Seatbelt 在 macOS 上"）⇒ 后续材料能对上，代价低；<b>骨架</b>（因果搞反、"这两条路线是一回事"）⇒ 学习者正是靠它理解别的东西，<b>不能自纠</b>，代价高；<b>归属/极性</b>（把 A 的观点记成 B 的、把被明确否定的说法当主张）⇒ <b>完全不能自纠</b>，代价最高。要点：<b>学习是建构性的，错的心智模型比"不知道"更糟</b>（教育心理学的"错误概念难以纠正"：它不是空缺，而会主动干扰后续学习）。⇒ <b>"准确"不能当标量整体放松，必须分层：骨架/归属/极性不可松，细节/措辞/程度可容忍</b>。<b>注意这与我们图里那条"正确性分层"（方向/极性/范围不可错，字面量/程度可容忍）是同一条原则，只是从索引层搬到回答层。</b></p>
+        <p><b>二、"学习是渐进的"这条论据隐含一个不成立的前提</b>：它成立的前提是"<b>学习者有能力在后续迭代中识别并纠正错误</b>"——而我们的用户画像<b>恰不具备</b>（这正是我们与 GraphRAG 的定位分叉，记录 ⑮）。这句话 <b>disclaim 了纠错的必要性，却没提供纠错的能力</b>；对初学者说"你以后会自己发现我错了"，等于把风险转嫁给最没有能力承担的人。</p>
+        <p><b>三、"持续交流的搭子"方向对，但替代不了结构性正确</b>：对话能澄清/追问/逐轮补充（学习本就该是对话式），但三个硬限制——① <b>用户不知道自己不知道什么</b>，不会针对性追问从未怀疑过的错误；② <b>多轮会累积偏差</b>，第一轮的错误结论被后续当作前提（错误被上下文固化，比单次错误更难发现）；③ 它把指代消解变成必需，也因此引入错误传播。⇒ <b>它的真正价值不是"可放松准确性"，而是把准确性从"单次答案"转移到"可核查的交互结构"上</b>：允许单次不完美，但每个结论都能被追问到依据。</p>
+        <p><b>四、把"十分准确"重构成三个可交付属性</b>：① <b>不正确率（分层）</b>——骨架/归属接近零，细节/程度可容忍但要有标注；② <b>错误的可发现性</b>——引用可回锚 ＋ 不确定标注 ＋ 遗漏声明（<b>这是护城河，不是妥协</b>）；③ <b>纠错成本</b>——发现后改起来多贵（一句话能否定位到依据）。⇒ <b>合起来才叫"靠谱的搭子"：不是不出错，而是"错得起、看得出来、改得动"</b>。</p>
+        <p><b>五、反向风险（必须说清）</b>：若把目标定成"靠谱的搭子"而放松准确性，很容易滑成<b>聊天机器人</b>——那用户凭什么不用通用大模型？<b>我们的差异化恰恰是"有材料、可回溯、能核对"</b> ⇒ "搭子"必须<b>站在材料上</b>：一个<b>能带你去原文的搭子</b>，不是更会聊的搭子。</p>
+        <p><b>六、可操作判据</b>：纠结某处要不要做准时，问一句——"<b>如果用户拿着这句去写论文，我敢让他引哪一句？</b>"敢让他引的＝骨架层，必须准；不敢的，必须<b>显式标注</b>"这层是综合推断/可能不完整"，而不是混在一起让他分不出来。</p>
+        <p><b>七、与现有设计的对接</b>：我们的评测三件套（<b>覆盖性 / 引用真实性 / 遗漏透明</b>）已覆盖上述第 1、2 条属性，<b>缺的正是第 3 条"纠错成本"</b>——与记录 ⑯ 的"验证成本"是同一族（待办候选 2）。⇒ <b>这个想法不是推翻现有口径，而是给它补上第三根柱子</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉓ · 社区报告的 rank / rating_explanation / findings 从哪来；以及报告层的"三处截断" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（官方 outputs 页里这几个字段怎么产生的）</p>
+        <p><b>一、<code>rating_explanation</code> 与 <code>findings</code> ＝ LLM 的 JSON 输出</b>。社区报告提示词（<code>prompts/index/community_report.py</code>）要求模型返回固定 JSON：<code>{ title, summary, rating, rating_explanation, findings[] }</code>，其中 rating 原文定义＝"<b>IMPACT SEVERITY RATING</b>: a float score between 0-10 ... <b>IMPACT is the scored importance of a community</b>"；findings＝"<b>5–10 条关键洞见</b>"，每条＝短 <code>summary</code> ＋ 多段 <code>explanation</code>（explanation 要按 grounding rules 带 <code>[Data: ...]</code> 引用）。</p>
+        <p><b>二、<code>rank</code> ＝ 那个 rating 换个列名落表</b>。官方 outputs："rank (float): LM-derived relevance ranking ... based on <b>member entity salience</b>"；数据模型 <code>CommunityReport.rank</code> 注释："Rank of the report, used for sorting... <b>Higher means more important</b>"。⇒ <b>它不是"名次"，是模型给的 0–10 分（重要性/影响严重度），且为索引期一次性计算、与 query 无关</b>。<b>措辞坑</b>：文档叫它 "relevance ranking"，但它与查询相关度无关（若是查询相关度，global search 的 map 阶段就无需再打 helpfulness 分，记录 ⑦）——<b>它的真义是"这个社区有多重要"</b>。</p>
+        <p><b>三、<code>full_content</code> / <code>parent</code> / <code>children</code> / <code>size</code> / <code>period</code> ＝ 程序生成</b>。<code>finalize_community_reports()</code>：① <code>full_content</code>＝title ＋ summary ＋ findings 拼成文本（extractor <code>_get_text_output</code>）；② <code>id</code>＝<b><code>full_content</code> 的 sha512 哈希</b>（<code>gen_sha512_hash(row, ["full_content"])</code>，内容变则 id 变）；③ <code>parent</code>/<code>children</code>/<code>size</code>/<code>period</code> 从 <b>communities 表 merge</b> 进来（显式父子关系落表处，见记录 ⑥）。另 <code>human_readable_id</code>＝社区 short id；<code>full_content_json</code> 保留原始 JSON（官方理由：<b>留给用户做 prompt tuning 加字段</b>）。</p>
+        <p><b>四、三个值得记的深层含义</b>：<br>① <b>"重要性"是可调的、不是固定的</b>：rating 的判据（domain ＋ persona）是 <b>prompt tuning 的自动生成项</b>——<code>generate_community_report_rating(model, domain, persona, docs)</code>；"什么算重要"由使用者按<b>领域与受众</b>调出 ⇒ 对我们的启示：<b>给"重要性/主题"打分必须显式绑定"谁在什么场景下认为重要"</b>，否则是无锚点的数（我们的 <code>claim_type</code> 局限/展望就是有锚点的那种）。<br>② <b>findings 的引用是"模型手写标注"，不是结构化外键</b>：prompt 要求带 <code>[Data: ...]</code>，但不校验、不能自动回链——与记录 ④⑰ 同一个洞；我们的 <code>evidence_texts</code> ＋ <code>evidence_chunks</code> 是<b>结构化字段</b>。<br>③ <b>报告层有三处信息截断</b>（建议单独记）：<b>社区规模</b>（&gt;10 节点继续下拆，记录 ⑤）、<b>摘要窗口</b>（按度数显著度排、塞满 token 预算为止，记录 ⑥）、<b>洞见条数</b>（findings 被 prompt 限死 5–10 条）⇒ 三处叠加＝"<b>报告看起来完整、实际有损</b>"的机制来源。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉔ · 打分提示词原文与译文（两处，分工不同） <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东要求取出打分提示词原文并翻译</p>
+        <p><b>A. 报告提示词里的打分指令（默认固定，<code>prompts/index/community_report.py</code>）</b><br><b>总目标原文</b>："Write a comprehensive report of a community, given a list of entities that belong to the community as well as their relationships and optional associated claims. The report will be used to <b>inform decision-makers</b> about information associated with the community and their <b>potential impact</b>. The content of this report includes an overview of the community's key entities, their <b>legal compliance</b>, <b>technical capabilities</b>, <b>reputation</b>, and noteworthy claims."<br><b>译文</b>：给定某社区内的实体列表、它们之间的关系以及可选的相关 claim，为该社区写一份全面报告。该报告用于<b>给决策者</b>提供该社区相关信息及其<b>潜在影响</b>的情报；内容涵盖关键实体概览、它们的<b>法律合规性</b>、<b>技术能力</b>、<b>声誉</b>以及值得注意的 claim。<br><b>打分指令原文</b>："- <b>IMPACT SEVERITY RATING</b>: a float score between 0-10 that represents the severity of IMPACT posed by entities within the community. <b>IMPACT is the scored importance of a community.</b> - <b>RATING EXPLANATION</b>: Give a <b>single sentence</b> explanation of the IMPACT severity rating."<br><b>译文</b>：影响严重度评分＝0–10 浮点数，表示该社区内实体造成的<b>影响（IMPACT）的严重程度</b>，<b>IMPACT 即"该社区的重要性"的打分数值</b>；评分说明＝对该评分给出<b>一句话</b>解释。<br><b>视角提示</b>：默认框架是<b>尽职调查 / 风险取向</b>（决策者、法律合规、声誉、影响）⇒ "重要"≈"<b>风险影响大</b>"，对技术文章语料口径本身有偏（记录 ㉓ 的"无锚点"源于此）。</p>
+        <p><b>B. prompt tuning 的"评分标准生成"提示词（<code>prompt_tune/prompt/community_report_rating.py</code>）</b>——它<b>不直接打分，而是生成一段评分标准文本</b>。<br><b>原文</b>："You are a helpful agent tasked with <b>rating the importance of a given text in the context of the provided domain and persona</b>. Your goal is to provide a rating that reflects the <b>relevance and significance of the text to the specified domain and persona</b>. Use your expertise to evaluate the text based on the importance criteria and assign a float score between 0-10. <b>Only respond with the text description of the importance criteria.</b> Use the provided example data format to guide your response. Ignore the content of the example data and focus on the structure."<br><b>译文</b>：你是一个评估文本重要性的助手，评估须在<b>给定 domain（领域）与 persona（受众/角色）的语境下</b>进行；目标是给出反映该文本<b>对该领域与该 persona 的相关性与重要性</b>的评分（0–10 浮点数）；<b>你只需输出"重要性标准"的文字描述</b>。<br><b>示例输出（Example 1：domain＝个人与家庭沟通，persona＝社会网络分析专家）原文</b>："# Importance Criteria — A float score between 0-10 that represents the <b>relevance of the email's content to family communication, health concerns, travel plans, and interpersonal dynamics</b>, with <b>1 being trivial or spam and 10 being highly relevant, urgent, and impactful to family cohesion or well-being</b>."<br><b>译文</b>：重要性标准＝0–10 浮点数，表示<b>邮件内容与家庭沟通、健康关切、出行计划、人际互动的相关性</b>；<b>1 分＝琐碎或垃圾信息，10 分＝高度相关、紧急且对家庭凝聚力或福祉有实际影响</b>。<br><b>示例还并列了第二个领域（19 世纪文学分析 / 文学学者）</b>⇒ 该 meta-prompt 本就为<b>跨领域</b>设计。</p>
+        <p><b>三点解读</b>：① <b>两处产物不同</b>——A 产出<b>分数（＋ 一句解释）</b>，B 产出<b>评分标准本身（人可读的文字）</b> ⇒ "可解释性"主要在<b>标准层</b>（可读可改），<b>分数层只有一句 <code>rating_explanation</code>，很薄</b>。② <b>默认标准固定且偏风险取向；开了 prompt tuning 才变成 domain ＋ persona 定制</b> ⇒ 坐实记录 ㉓ 的"不绑 domain/persona 的重要性无锚点"。<b>（口径已按记录 ㉜ 更正：默认提示词里没有打分标准占位符，领域化是"整份换 prompt"，不是"运行时填参数"。）</b> ③ <b>可借鉴的结构</b>：它"<b>先把标准写成人话、再让模型按标准打分</b>"——与我们"基础件（词表/判官口径）先人工过目"同一路子；将来若做"主题重要性/优先级"，应照此结构，<b>标准可读可审在前、打分在后</b>，而不是直接让模型甩分数。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉕ · 社区报告生成提示词全文（通读后记五点） <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东要求"完整给一遍"引出；全文见 <code>packages/graphrag/graphrag/prompts/index/community_report.py</code>（本记录不复制全文，只记结论与瑕疵，原文按需回源核对）</p>
+        <p><b>结构</b>：Role（帮助人类分析员做 general information discovery）→ # Goal（给决策者提供情报；含 legal compliance / technical capabilities / reputation）→ # Report Structure（TITLE / SUMMARY / IMPACT SEVERITY RATING / RATING EXPLANATION / DETAILED FINDINGS 5–10 条）→ JSON 输出格式 → # Grounding Rules（引用写法 <code>[Data: &lt;dataset&gt; (record ids)]</code>、单条最多 5 个 id ＋ <code>+more</code>、"无证据不得写入"、总长度上限 <code>{max_report_length}</code> 词）→ # Example Input（Operation Dulce 的 Verdant Oasis Plaza / Unity March 示例 ＋ 4 条 findings 的完整输出示例）→ # Real Data（"Do not make anything up"、注入 <code>{input_text}</code>、**再重复一遍 Structure / JSON / Grounding**）。两个模板变量＝<code>{input_text}</code> 与 <code>{max_report_length}</code>。</p>
+        <p><b>通读后五点（均为事实观察）</b>：① <b>同一段要求出现两次</b>（示例前、真实数据后各一遍，Structure ＋ JSON 格式 ＋ Grounding Rules 全重复）——像刻意"贴身重申"，也可能历史遗留；<b>副作用＝每次调用多付约 1.5k 字符的重复 token</b>。② <b>指令说 findings 5–10 条，示例只给 4 条</b> ⇒ <b>指令与示例自相矛盾</b>（模型多跟示例，实际产出可能偏少）。③ <b>示例与 Goal 全是"风险/威胁"叙事</b>（<code>potential for unrest or conflict</code>、<code>a potential source of threat</code>、<code>allegations of wrongdoing</code>、<code>legal compliance / reputation / inform decision-makers</code>）⇒ <b>这套提示词的原生场景是情报/风险分析，不是知识学习</b>（记录 ㉓㉔"打分口径错位"的直接证据）。<b>（措辞已按记录 ㉙ 更正：这里偏的是"取证/风险"骨架与示例，"偏欺诈"是官方文档的总结、不是骨架属性。）</b> ④ <b>完整性没有判据，只有两个上限</b>（5–10 条 findings ＋ <code>{max_report_length}</code> 词）——"该覆盖什么"完全没要求，<b>只有"别写太多"</b>（与记录 ㉓"三处截断"同线）。⑤ <b>反幻觉只有一句</b>（<code>Do not make anything up in your answer.</code>），引用是<b>格式要求</b>而非<b>校验步骤</b> ⇒ 再次落到记录 ④⑰ 的洞。</p>
+        <p><b>对我们的直接参考</b>：如果要写"页面/摘要生成"提示词，至少三处要反过来做——<b>给覆盖判据</b>（该有哪几类内容，而不是只给条数上限）、<b>把引用做成可核验的对象</b>（而不是要求模型手写标注）、<b>示例与指令保持一致</b>（示例的条数/结构要与要求对齐）。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉖ · claim 抽取提示词的领域相关性在哪：三层，最深一层在任务定义 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东要求分析 <code>prompts/index/extract_claims.py</code> 的领域相关性</p>
+        <p><b>结构</b>：<code>-Target activity-</code>（角色）→ <code>-Goal-</code> → <code>-Steps-</code>（1 抽实体 / 2 抽 claim / 3 输出 / 4 收尾）→ <code>-Examples-</code>（两条）→ <code>-Real Data-</code>（注入 <code>{entity_specs}</code> / <code>{claim_description}</code> / <code>{input_text}</code>）。同文件还带 <b>gleaning 两件</b>：<code>CONTINUE_PROMPT = "MANY entities were missed in the last extraction..."</code> 与 <code>LOOP_PROMPT</code>（让模型自答 Y/N 决定是否继续）——即记录 ③ 那套补抽循环（LOOP 依赖 logit bias 强制作答）。</p>
+        <p><b>领域相关性三层（按深度排）</b>：<br><b>① 任务定义层（最难改）</b>——四处硬编码：(a) "claims <b>against</b> certain entities"＝任务被定义为"针对实体的<b>指控/负面主张</b>"，非中性陈述抽取；(b) subject＝"one that <b>committed the action</b>"、object＝"reports/handles or <b>is affected by</b> the action" ⇒ 预设"<b>施动者—行为—受害者</b>"图式；(c) <b>Claim Status ＝ TRUE / FALSE / SUSPECTED</b>＝调查取证判据（非取证场景模型只能全填 SUSPECTED）；(d) <b>示例全是违规行为</b>——Example 1 串标(bid rigging)+罚款、claim type <code>ANTI-COMPETITIVE PRACTICES</code>；Example 2 腐败(corruption)+suspected、claim type <code>CORRUPTION</code> ⇒ <b>示例定义了"什么算 claim"</b>。隐藏预设另两条：<b>"Return output in English"</b>（强制英文输出，对中文语料是坑）、<b><code>claim_description</code> 只有一个槽位</b>（一次只能追一类 claim，多类要跑多遍）。<br><b>② 参数层（唯一开放处）</b>：<code>{entity_specs}</code>（实体名列表或类型列表）＋ <code>{claim_description}</code>（一段自然语言描述）＝<b>官方领域适配入口</b>（prompt tuning 生成的就是它们）⇒ <b>"接口开放、语义骨架锁死"</b>。<br><b>③ 示例层</b>：示例还示范了日期与状态的取值风格（<code>2022-01-10T00:00:00</code>、<code>2015-01-01~2015-12-30</code>、<code>TRUE</code>/<code>SUSPECTED</code>），无形中教模型"claim 该长什么样"。</p>
+        <p><b>顺带两处瑕疵（可核）</b>：① <b>时间口径自相矛盾</b>——提示词写 <code>Claim Date: Period ... when <b>the claim was made</b></code>（主张<b>被提出</b>的时间），而 outputs 文档写 <code>start_date: LM-derived start of the <b>claimed activity</b></code>（被主张的<b>活动</b>发生的时间）；Example 2 的 2015 明显是活动发生时间 ⇒ <b>示例与文档一致、与提示词文字矛盾</b>。② <code>Claim Source Text: List of <b>all</b> quotes ...</code> 这条写得好——"<b>所有</b>相关引文"，比"给出出处"强（对应我们 <code>evidence_texts</code> 多段逐字证据）。</p>
+        <p><b>对我们的三点启示</b>：① <b>本体承诺不同且不可复用</b>——它把 "claim" 锚在"违规行为 ＋ 取证结论"（施动/受害 ＋ TRUE/FALSE/SUSPECTED），我们把 statement 锚在"可点名的断言"（谓词受控、可当路由键）；<b>它的 subject/object 语义装不下我们的关系类型</b>（<code>is_a</code>/<code>causes</code>/<code>supports</code>/<code>part_of</code>）⇒ 再次说明我们为何必须自建谓词表（记录 ①）。② <b>可借鉴两点</b>：<b>"要列出所有相关引文"的措辞</b> ＋ <b>gleaning 循环</b>（<code>CONTINUE</code>＋<code>LOOP</code>＋Y/N）——后者正好移植到我们 Pass 1 的"补抽"（记录 ③ 待办候选）。③ <b>迁移时要警惕</b>：若将来给 statement 加时间字段（待办候选 7），<b>别照抄它的口径</b>——它自己都没说清时间是"事件发生"还是"主张提出"；我们必须先定义清楚（事件时间 / 文档时间 / 主张时间），否则会把它的歧义复制过来。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉗ · 已经抽了关系，为什么还要抽 claim？——同形不同因 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"关系已经是实体间关系了，为何再抽一遍 claim？理由和我们一样吗"）</p>
+        <p><b>差异对照（来自 schema 与提示词）</b>：<br>· <b>Relationship</b>：抽取图那一步、<b>每个文本单元</b>；字段＝source / target / description / <b>strength（数值）</b>；<b>无受控类型</b>（自由文本描述）、<b>无真值判定</b>、<b>无时间</b>、<b>无引文</b>；<b>进图</b>（社区检测的拓扑基础）。<br>· <b>Claim（covariate）</b>：<b>独立一步、默认关闭</b>；字段＝subject / object / claim_type / <b>status（TRUE·FALSE·SUSPECTED）</b> / <b>start_date·end_date</b> / description / <b>全部引文</b>；<code>claim_type</code> 是<b>模型自己命名</b>（只要求"可跨文本重复"＝开放词表）；从 outputs 看是<b>独立表</b>，社区检测只用 entities ＋ relationships（<b>不参与拓扑；实现细节未逐行核，待核</b>）；用途＝local search 的 <b>covariates</b> 候选进上下文（回答"谁在何时做了什么、是否属实"）。</p>
+        <p><b>它为什么要 claim</b>：<b>因为"边"装不下两样东西——时间与真值</b>。边只需回答"这两个东西有联系"（＋自由描述＋强度分）就够做社区检测与写摘要；但"某公司何时做了什么、是否已证实"这类问题，边里没有槽位 ⇒ <b>另立一张表</b>：claim ＝ 带时间区间 ＋ 真值判定 ＋ 全部引文的断言。这正是 local search 数据流里 "Entity-Covariate Mappings → Candidate Covariates" 那一支的来源。</p>
+        <p><b>与我们 reify（S7）对比：同形不同因</b>——<b>相同的那半</b>：都是"边太薄、塞不下额外维度，所以把断言另立成一等公民"（外形同一个动作）。<b>不同的那半（关键）</b>：<b>我们的动因是检索</b>——<code>statement</code> 要能<b>被独立寻址 / 按类型角色过滤 / 当锚点 / 挂出处</b>，所以它是图的<b>枢纽</b>（concept 与 chunk 都通过它相连）；<b>它的动因是取证</b>——claim 要能回答"<b>何时、是否属实、依据哪几句</b>"，所以它是<b>旁挂的证据表</b>、不参与拓扑。<b>一句话：一样是"物化断言"，但我们的物化是为了当"索引键"，它的物化是为了当"证据记录"。</b></p>
+        <p><b>佐证差异的细节</b>：它的 <code>claim_type</code> 是开放词表（模型自命名、只要求可重复），我们的 <code>predicate</code> 是 <b>38 条受控表</b>——<b>这正是我们走过的那条路</b>（早期也是自由谓词，因"结构判同指失败"才收敛成表，记录 ①）。它停在我们的早期阶段，<b>但对它无坏处</b>：它不靠 <code>claim_type</code> 做过滤，那张表长什么样无所谓。</p>
+        <p><b>对我们的两点参考</b>：① <b>要加时间/真值时可以照它的字段设计</b>（但别照抄口径，记录 ㉖ 已证其时间定义自相矛盾）——正好接上待办候选 7；② <b>反过来要守住我们的东西</b>：<code>statement</code> 的"枢纽地位"是它 claim 没有的，我们的枚举/过滤/跨源连接都建在这上面，<b>不能因为"它也有 claim"就把两件事混为一谈</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉘ · claim 一次只能抽一类（description 是单值）；附：对 ㉖ 一处措辞的更正 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"输入里有 claim 描述，是否意味着多类别要调用多次 LLM"）</p>
+        <p><b>结论：是，一次只能针对一类 claim。</b>① 配置 <code>ExtractClaimsConfig.description: str</code>＝<b>单值</b>（不是列表）；② 实现 <code>extract_covariates(..., claim_description: str, ...)</code> 也是<b>单值</b>，内部按行跑一个 strategy ⇒ <b>每个文本单元一次调用、只针对那一段描述</b>。多类别的两条路：<b>(a) 改 description 重跑整条抽取（成本 ×N）</b>；<b>(b) 自己改代码做成列表循环</b>（每块 ×N 次）。</p>
+        <p><b>更正 ㉖ 的一处措辞（重要）</b>：默认值是 <code>enabled = False</code>、<code>description = "Any claims or facts that could be relevant to information discovery."</code>、<code>max_gleanings = 1</code> ⇒ <b>默认的 claim 描述其实是中性、宽泛的</b>；<b>偏欺诈的不是这个参数，而是提示词的示例与任务定义</b>（<code>claims against...</code>、施动者/受害者、两个腐败/串标例子）。⇒ ㉖ 里"这套提示词偏欺诈"的准确表述是：<b>骨架与示例偏、默认参数不偏</b>——这恰好再次印证"<b>接口开放、语义骨架锁死</b>"。</p>
+        <p><b>成本模型（与实体/关系对比）</b>：实体/关系＝每个文本单元 <b>1 次</b>；claim＝每块 × 每描述 ×（1 次抽取 ＋ 最多 <b>2 × max_gleanings</b> 次补抽/确认调用，因 gleaning 里 <code>CONTINUE_PROMPT</code> 追加抽取 ＋ <code>LOOP_PROMPT</code> 让模型答 Y/N）。默认 <code>max_gleanings = 1</code> ⇒ 打开时约 <b>2–3 次/块/描述</b>，多类别再线性放大 ⇒ <b>官方默认关闭的理由不只是"提示词要调"，成本也翻倍甚至翻数倍</b>。</p>
+        <p><b>与我们对照</b>：它＝<b>按类别分次抽 ＋ 类型开放</b>（<code>claim_type</code> 模型自命名）；我们＝<b>一次宽抽 ＋ 受控归一</b>（Pass 1 抽全部可点名断言 → 38 条谓词表）。<b>原因仍是"约束哪一端"（记录 ①）</b>：它的类型<b>不承担过滤职责</b>，所以可以一类一跑；我们的谓词<b>承担过滤职责</b>，所以必须一次抽全再归一，否则过滤会漏。⇒ <b>"宽抽 ＋ 后置归一"同时省调用次数、又保住过滤能力，是我们的成本优势</b>，讨论"要不要学它"时要记住。<br><b>反向推论</b>：将来若要做"按类别分次抽取"，先算清它是 <b>×N</b> 的；<b>除非某一类需要完全不同的语义骨架，否则不值得拆</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉙ · 再更正：骨架偏"取证"而非"欺诈"；限制是"装不下无动作的断言" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"真的是偏欺诈方向吗？还是只有例子偏、骨架并不偏"）</p>
+        <p><b>结论：沛东的怀疑成立。</b>准确说法＝<b>骨架偏"调查取证"，示例偏"欺诈"</b>；而"偏欺诈"这个标签的<b>直接来源是官方 outputs 文档的一句话</b>（"claims are typically oriented around identifying <b>malicious behavior such as fraud</b>, so they are not useful for all datasets"）——<b>那是文档作者的总结，不是提示词原文</b>。㉖ 把它当成了骨架属性，要更正。</p>
+        <p><b>按层拆开看（定稿口径）</b>：<br>· <b>角色定位</b>："helps a <b>human analyst</b> to perform <b>information discovery</b>" ⇒ 偏<b>情报/分析</b>定位（不是学习/写作）；不特指欺诈。<br>· <b>任务定义</b>："analyze <b>claims <i>against</i> certain entities</b>"——<b><code>against</code> 是关键词</b>（中性说法应是 <code>claims about</code>）⇒ 偏<b>对抗性/负面</b>；但<b>不特指欺诈</b>——新闻核查、法律、尽调同样适用。<br>· <b>语义骨架（字段定义）</b>：subject＝"one that <b>committed</b> the action"、object＝"reports/handles or <b>is affected by</b>" ⇒ 偏 <b>"主体—实施行动—受影响对象"的事件图式</b>（<code>committed</code> 用词本身带负面色彩）；<b>真正的硬限制在这里：无动作的断言装不下</b>（"X 是一种 Y"、"X 依赖 Y"）。<br>· <b>核验语义</b>：Claim Status＝TRUE/FALSE/<b>SUSPECTED</b> ⇒ 偏<b>"该主张需要被证实或证伪"</b>，与"索引一条中性断言"不匹配。<br>· <b>示例</b>：串标＋罚款、腐败＋<code>SUSPECTED</code>、claim description＝"<b>red flags</b>" ⇒ 偏<b>欺诈/监管违规</b>。<br>· <b>默认参数</b>：description＝"Any claims or facts that could be relevant to information discovery." ⇒ <b>中性、宽泛</b>（㉘ 已更正过一次）。</p>
+        <p><b>三句话分清</b>：① <b>骨架不是"偏欺诈"，而是"偏取证"</b>——<code>against</code> ＋ <code>committed</code> ＋ <code>SUSPECTED</code> 三处合力，把任务定义为"<b>针对某实体、需要被核验的行为主张</b>"，可覆盖新闻核查/法律/尽调/情报，<b>不止欺诈</b>；② <b>"偏欺诈"来自示例 ＋ 官方文档那句总结</b>；③ <b>对我们真正的限制不是"偏欺诈"，而是"骨架装不下无动作的断言"</b>。</p>
+        <p><b>对判断的影响：结论不变，理由要换</b>——<b>❌ 不该说"它偏欺诈，所以不适合我们"</b>（一句"它也能做新闻核查"就能挡回来）；<b>✅ 应该说"它的骨架预设了'主体—实施负面行为—待核验'，装不下 <code>is_a</code> / <code>part_of</code> / <code>supports</code> 这类无动作、非对抗的断言"</b>。差别在于：前者是印象，<b>后者是可验证的结构性理由</b>（与记录 ①"约束哪一端"同一层）。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉚ · claim_type 要求"跨文本可重复"，但每次只看一个块——指令 ≠ 机制 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"一次调用只给一个 TextUnit，却要求 claim_type 跨多个 TextUnit 重复，岂不是看 LLM 心情"）</p>
+        <p><b>结构硬伤（成立）</b>：提示词写 "Name it in a way that can be <b>repeated across multiple text inputs</b>, so that similar claims share the same claim type"，但<b>每次调用只看到一个 text unit</b>，模型<b>看不到别的块产出了什么类型</b> ⇒ "可重复"既<b>不是查表</b>（无闭集）、也<b>不是全局对齐</b>（无全局视图），只是"同一提示词 → 同一命名习惯"的先验赌注。</p>
+        <p><b>为什么还部分能用（四条）</b>：① 同一提示词 ＋ 同一模型，命名先验较稳（相似内容易收敛到相似粗类）；② <b><code>claim_description</code> 是全局共享配置</b>，所有调用被同一句话锚住；③ 大写 ＋ "overall category" 的措辞把输出推向<b>粗粒度名词</b>、抑制长短语；④ <b>最关键：下游不靠它做过滤</b>——local search 配置里没有"按 claim type 过滤"（只有 <code>top_k_entities</code> / <code>top_k_relationships</code> / <code>text_unit_prop</code> 等）⇒ <code>claim_type</code> 是<b>描述性元数据、不是查询键</b>，<b>近似重复可容忍</b>。</p>
+        <p><b>什么时候崩</b>：① <b>类型空间一大就崩</b>——欺诈场景类型少而显著，开放领域（如技术文章）类型空间无界，漂移立刻显形；② <b>抽象层级不一致</b>——同一件事可能一块写成 <code>BID RIGGING</code>、另一块写成 <code>ANTI-COMPETITIVE PRACTICES</code>（兄弟类并存，而非同义合并）；③ <b>不可复现</b>——同输入两遍类型名可能不同 ⇒ 基于 claim_type 的计数/筛选都不稳定。<br>⇒ 准确说法：不是"看心情"，而是"<b>一个有先验约束的随机变量</b>"——主分布集中（少数大类为主），长尾不稳定且不可复现。</p>
+        <p><b>我们的第一手证据</b>：<b>我们早期就是这么干的</b>——自由谓词 → 长尾碎片 ＋ <b>收容桶</b>（<code>acts_on</code> 44 条混着 apply/describe/automates/倾向判断）→ 因"结构判同指失败"才<b>收敛成 38 条受控表</b>（记录 ①）；中间还踩过"一致率口径只覆盖 27% 样本"的坑。⇒ <b>它在我们的早期阶段、我们是被数据逼出来的</b>；它不往前走是因为<b>不需要</b>（claim_type 不当过滤键，碎片化对它只是不好看，不是错）。</p>
+        <p><b>想真一致有四条路（它一条都没走）</b>：① <b>给闭集</b>（把类型表写进提示词）；② <b>两趟归一</b>（自由抽 → 归一到受控表 ＋ 表外词台账）；③ <b>事后聚类合并</b>（类型名向量聚类/近义合并，便宜的中间路线）；④ <b>让一次调用看到一批 text unit</b>，使"跨文本重复命名"有执行基础（<b>它没这么做，claim 抽取是逐块的</b>——而这条是最直接的结构性修法）。<br><b>结论一句话</b>：<b>它把"一致性"写成了要求，我们把"一致性"做成了机制</b>（受控表 ＋ 归一步 ＋ 台账）——这也解释了两家的成本结构差异（记录 ㉘）：它省掉归一，代价是类型不可用；我们多花那一步，换来类型能当<b>过滤键</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉛ · "既然 LLM 是续写，为什么不写 I am 而写 You are"——直觉对在基座层，落点其实在结构 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东看提示词时的想法引出</p>
+        <p><b>直觉在基座模型层面成立</b>：裸模型的训练目标是续写，把提示词写成"文稿的延续"确实更贴合目标。其<b>正统实现是"预填充（prefill）"</b>——在 <b>assistant 回合开头</b>写 "I am a careful analyst. …" 让模型从那里续；而 <b>"I am" 放到 user 消息里</b>会被理解成"用户自称"（模型以第三方回应），<b>放到 system 里</b>则语义错位（那是"系统在设定"，不是"我在说话"），最容易导致角色混淆。</p>
+        <p><b>为什么 "You are" 在 chat 模型上照样有效</b>：① 指令微调把"<b>system＝指令、assistant＝回答者</b>"的映射训进了模型 ⇒ "You are …" 落在 system 位置**本来就在训练分布内**；② <b>chat 模板是结构化的</b>（system / user / assistant 分段），续写只发生在 <b>assistant 段落内部</b>，改称呼没法把整段 prompt 变成文稿；③ 所以人称差异更多体现在<b>口吻与自我一致性</b>，不在"能否理解任务"。</p>
+        <p><b>真正的收益点在结构，不在人称（本轮最值钱的判断）</b>：续写范式最有效的用法是"<b>把答案的开头与格式摆好让模型接着写</b>"——而 <b>GraphRAG 的提示词其实已经这么干了</b>：<code>extract_claims</code> 与 <code>community_report</code> 结尾都是 <code>Output:"</code>（留下答案的开头等它续写），结构是"示例输入 → 示例输出 → 真实数据 → <code>Output:</code>"；<b>人称写 "You are"，结构却是续写式的</b>。对照 <code>basic_search</code> 的系统提示词是纯命令式（"Generate a response ..."），<b>同一项目里两种范式并存</b>。⇒ <b>人称的作用（若有）远小于结构</b>，力气应花在"给格式、给半成品、给 Output 钩子"。</p>
+        <p><b>公开研究证据现状（已查 arXiv）</b>：<b>有</b> role-play prompting 这条线——"Better Zero-Shot Reasoning with Role-Play Prompting"（2023-08-15）、"Role-playing Prompt Framework: Generation and Evaluation"（2024-06-02）、ORPP（2025-06-03），以及一条<b>反面证据</b>："<b>Persona is a Double-edged Sword</b>: Mitigating the Negative Impact of Role-playing Prompts in Zero-shot Reasoning Tasks"（2024-08-16）⇒ <b>角色提示不是免费收益</b>。<b>没找到</b>专门比较"第一人称 vs 第二人称"的研究 ⇒ <b>该假设目前无现成结论，是开放问题</b>。</p>
+        <p><b>它最好的地方是可证伪，且我们具备测它的条件</b>。建议实验（一次只动一个变量）：任务＝现成的 <b>L3 形状判定</b>（19 条标注、判官与台账都在）；三版提示词——<b>A＝现状</b>（system "You are …"）／<b>B＝预填充</b>（assistant 开头 "I am …"）／<b>C＝纯结构版</b>（去掉人称，只留格式示例 ＋ <code>Output:</code> 钩子）；指标＝判定准确率 / 格式合规率 / 理由质量，同重复次数。<b>关键：人称与结构分开测</b>（A vs C 测结构、A vs B 测人称）。⇒ 无论结果如何都得到一手结论，且可复用到后续所有提示词。<b>涉及提示词属基础件 ⇒ 先在方案层确认再动手。</b></p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉜ · 默认提示词里没有"领域打分依据"的占位符——领域化是"整份换 prompt"，不是"填参数" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"社区报告提示词只有 {input_text}，没有领域打分依据的占位，那打分不就不可控了"）</p>
+        <p><b>一、默认提示词（<code>prompts/index/community_report.py</code>）</b>：占位符只有 <code>{input_text}</code> 与 <code>{max_report_length}</code>；打分段是<b>硬编码</b>的 "IMPACT SEVERITY RATING … <b>IMPACT is the scored importance of a community</b>" ⇒ <b>默认路径下打分标准不可控、与领域无关</b>。沛东的判断成立。</p>
+        <p><b>二、转折：存在第二份提示词（prompt tuning 模板 <code>prompt_tune/template/community_report_summarization.py</code>）</b>。它的打分段是 <code>- REPORT RATING: {report_rating_description}</code>，整份模板占位符＝<b><code>{persona}</code> / <code>{role}</code> / <code>{report_rating_description}</code> / <code>{language}</code> / <code>{input_text}</code></b>；由 <code>create_community_summarization_prompt(persona, role, report_rating_description, language, output_path)</code> 填好并<b>写成文件</b> <code>community_report_graph.txt</code>；用户随后在配置里把 <code>community_reports.prompt</code> <b>指向该文件</b>，运行时用定制版而非默认常量。</p>
+        <p><b>三、两个说明"分叉"的技术细节</b>：① <b><code>{input_text}</code> 是转义写的</b>（模板里为 <code>{{input_text}}</code>）⇒ <code>.format()</code> 把它变成<b>字面量 <code>{input_text}</code></b> 留在文件里、<b>留给运行时替换</b> ⇒ 这份提示词是<b>两段式填充</b>（离线填 persona/role/评分标准/语言，运行时填输入）。② <b>tuning 版没有 <code>{max_report_length}</code> ⇒ 长度上限丢了</b>；标签名也从 <code>IMPACT SEVERITY RATING</code> 变成 <code>REPORT RATING</code>（JSON key 仍是 <code>rating</code>，注释里还写 <code>&lt;impact_severity_rating&gt;</code>，属遗留不一致）。</p>
+        <p><b>四、准确结论</b>：<b>不是"运行时给领域参数"，而是"离线生成一整份新提示词、把配置指过去"</b>；换掉的不只是打分标准，还有 <b>persona（身份）/ role（角色）/ language（输出语言）</b>（后者解释了默认版那句 "Return output in English" 的来源）。<b>代价＝两份提示词并存并漂移</b>（长度上限、标签名、措辞都不同），<b>维护与复核成本翻倍</b>。</p>
+        <p><b>五、对我们的两条启示</b>：① <b>别学"整份分叉"</b>——若将来要按领域定制"重要性/分类标准"，应做成<b>显式参数 ＋ 可审的标准文本</b>（受控词表 ＋ 说明），而不是生成一整份新提示词（那会把标准藏进长文本，审阅与回归都变难）。② <b>呼应基础件纪律</b>（提示词须人工过目）：<b>两份分叉的提示词＝双份复核成本</b>，漂移后没人知道线上用的是哪份的哪几条 ⇒ 若做领域定制，"<b>标准可读可审、版本单一</b>"应作硬要求。<br><b>措辞更正（对 ㉔）</b>：㉔ 说"rating 的判据（domain ＋ persona）是 prompt tuning 的自动生成项"——更准确的说法是"<b>tuning 生成的是另一份完整提示词，其中含 persona / role / 打分标准三个槽位</b>"，<b>默认提示词里根本没有这些槽位</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉝ · 增量索引：有实现，但只支持"新增"；删除被检测、未落地 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"最新代码有增量索引吗？那些 TextUnitID 列表是不是为增量准备的？能不能删源文件"）</p>
+        <p><b>一、有实现，但只做"新增"</b>：<code>index/update/</code> 下有 <code>incremental_index.py</code> ＋ <code>entities.py</code> / <code>relationships.py</code> / <code>communities.py</code>，配 9 个 <code>update_*</code> workflow（load_update_documents → update_text_units → update_entities_relationships → update_communities → update_community_reports → update_text_embeddings → update_clean_state）。核心＝<code>get_delta_docs</code> 按 <b>title</b> 比对当前输入与上一轮 <code>documents</code> 表，产出 <code>InputDelta(new_inputs, deleted_inputs)</code>。</p>
+        <p><b>二、删除只被"检测"，没有落地（关键证据）</b>：<code>load_update_documents</code> 里 <code>delta_documents = await get_delta_docs(...)</code> 之后 <b><code>return delta_documents.new_inputs</code>——<code>deleted_inputs</code> 被直接丢掉</b>；且我核的三个合并模块（entities / relationships / communities）＋ <code>update_clean_state</code> 里 <b>"deleted" 出现 0 次</b>，全是<b>并集</b>逻辑：实体按 <b>title 精确匹配</b>建 <code>{delta_id: old_id}</code> 映射、<code>text_unit_ids</code> <b>取并集</b>（<code>itertools.chain</code>）、<code>frequency</code> <b>重算</b>＝并集长度。⇒ <b>结论：删除有检测代码、无落地路径；设计上留了口子，实现上没走。</b>（核查范围＝上述文件；不排除别处有处理，如需绝对确认可再往下追。）</p>
+        <p><b>三、沛东的第二个推断成立：那些 ID 列表就是为增量准备的</b>：<code>entities.text_unit_ids</code> / <code>relationships.text_unit_ids</code> / <code>text_units.entity_ids</code> 是<b>双向的"证据块集合"</b>——合并做并集、理论上删除做差集，<b>不必重跑全图</b>；官方 outputs 文档亦明写 <code>period</code>＝"Date of ingest, <b>used for incremental update merges</b>"、<code>size</code>＝"<b>used for incremental update merges</b>"。</p>
+        <p><b>四、更值得注意：增量 ≠ 全量的等价物</b>。<code>entities.py</code> 里有 <code>"degree": "first",  # todo: we could probably re-compute this with the entire new graph</code> ⇒ <b>度数不重算</b>、只重算 <code>frequency</code>（两个"重要性"指标只更新一个，官方自己留 TODO）⇒ <b>增量索引是质量折衷</b>。</p>
+        <p><b>五、对我们的三条启示</b>：① <b>我们的"编译产物 ↔ 语料映射表"就是增量的底座</b>（记录 ④ 的多对多表）——要做增量须先把它做扎实，我们已有雏形，这是走在它前面的地方。② <b>删除比新增难一个量级</b>：新增是并集；删除是<b>差集 ＋ 级联</b>（失去全部 text unit 支撑的实体/边必须消失、社区要重划、报告要重写）——真做时恐怕不能当"减法"，而要当"<b>标脏 ＋ 局部重算</b>"（或对受影响子图重跑）。③ <b>必须先定"哪些字段允许近似"</b>：它敢让 degree 不重算，因为 degree 只用于<b>排序</b>；而我们的字段含<b>过滤键</b>（谓词 / claim_type / 源 / 概念）——<b>过滤键脏了检索直接错</b>，不是"排序略差"。所以要做增量，先列三档：<b>必须精确 / 可近似 / 必须重算</b>。<br><b>顺带</b>：这条与"编译层只编译第一个文件（S0 未完成）"的待办<b>配套</b>——大源分批 ＋ 断点续跑，本质就是增量与重入问题，可一起设计。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉞ · 增量不重划社区（两棵树并置）+ degree 不重算的两级后果 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"degree 不更新，那岂不是没重划社区？若不重划，增量就没意义；若重划，degree 不更新又是什么逻辑"）</p>
+        <p><b>结论：推理链命中——社区确实没有重划。</b>证据（<code>index/update/communities.py</code>）：<code>merged_communities = pd.concat([old_communities, delta_communities])</code>，配套两步——① delta 社区编号<b>整体偏移</b>（<code>v + old_max + 1</code>）、<code>-1</code>（无社区）保持不变；② 报告表用同一套 id 映射<b>拼接</b>；③ 合并时 <code>merged_communities["title"] = "Community " + community_id</code>（<b>title 被覆盖成通用占位名</b>，LLM 生成的报告标题只留在报告表）。⇒ <b>增量后的社区结构＝"旧图那棵树 ＋ 新批次那棵树"并置</b>：<b>新旧语料永不可能落进同一社区</b>，全局摘要变成"旧语料摘要 ＋ 新语料摘要"，<b>不重新形成跨批主题</b>。</p>
+        <p><b>于是 degree 不更新的"逻辑"自洽——不是忘了，是与"不重算社区"一致的省事路线</b>：社区都不重算，degree 更没必要重算。但<b>沛东说得对：更新 degree 一点都不复杂</b>（<code>merged_relationships_df</code> 就在手边，按 source/target 计频即可）⇒ 这是"<b>没做</b>"，不是"<b>做不了</b>"。</p>
+        <p><b>后果是具体的（承接 §3.1.5）</b>：社区报告挑"哪些元素摘要进窗口"时<b>按"边的两端节点度数之和"降序</b>排列 ⇒ 合并后老实体的 <code>degree</code> ＝<b>首轮全量图</b>的度数、新实体的 ＝<b>增量小图</b>的度数 ⇒ <b>同一列两种口径、不可比</b> ⇒ 新批次报告可能按<b>错的重要性</b>取材。这不是"排序略差"，是"<b>优先级判据被污染</b>"。</p>
+        <p><b>它为什么敢这么设计</b>：增量目标＝"别重跑全量"，它接受"全局结构退化为分批拼接"；且其定位是<b>答案生成器</b>（记录 ⑮），全局问答本就要人 verify/augment ⇒ 结构缺陷被免责声明吃掉。<br><b>对我们不可接受</b>：<b>我们的类别/社区要承担枚举与过滤</b>——拼起来的社区会让"这一类都有哪些"<b>答错</b>（不是不好看，是检索结果错）。</p>
+        <p><b>若我们要做增量，正确形态是"局部重算"而非"追加"</b>：① <b>受影响子图重算</b>——新文档实体若与旧实体经关系相连，就重算那个连通片（或所在社区），既非全局重跑、也非纯追加；② 把 <b>degree 与社区归属明确列入"必须重算"档</b>（对照记录 ㉝ 的三档：必须精确 / 可近似 / 必须重算）——本条为其提供了具体的反面教材。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㉟ · 增量索引没有任何设计文档（只有代码）；"增量追加"的确切含义 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"你说的增量追加是什么意思？我没找到它的增量索引设计说明"）</p>
+        <p><b>一、确实没有设计说明（已系统检索）</b>：<code>docs/</code> 下全部 30 个 <code>.md</code> 无 update / incremental 命名页面；全部 38 个 notebook 中只有 index_migration_to_v1/v2/v3 与 4 种搜索示例、<b>无增量示例</b>；<code>docs/cli.md</code> "update" <b>0 次</b>，<code>docs/index/architecture.md</code>、<code>docs/index/overview.md</code> 同为 0 次。</p>
+        <p><b>二、只留下三处痕迹</b>：① <b>代码</b>＝<code>index/update/*</code> ＋ 9 个 <code>update_*</code> workflow ＋ <b>一个没写进文档的 CLI 命令</b>——<code>cli/main.py</code> 里 <code>@app.command("update")</code>／"Update an existing knowledge graph index ... saving the new index to the <code>update_output</code> folder"（即 <code>graphrag update --root &lt;dir&gt;</code>，内部 <code>is_update_run=True</code>）；② <code>docs/index/outputs.md</code> 两处字段注释（<code>period</code> / <code>size</code>＝"<b>used for incremental update merges</b>"）；③ <code>entities.py</code> 那句 <code>degree: "first"</code> 的 TODO。</p>
+        <p><b>三、"增量追加"的确切含义（举例）</b>：旧索引有实体 <code>Claude</code>（<code>text_unit_ids=[A5:1, A5:7]</code>）、社区 <code>C3</code>、报告 <code>R3</code>；新增 <code>D_new</code> 后跑 update：① <b><code>D_new</code> 单独跑一遍小流水线</b>（自己抽实体/关系、划社区、生成报告）；② <b>实体合并</b>——按 title 精确匹配，<code>Claude.text_unit_ids</code> <b>取并集</b>、description 并列多条、<code>frequency</code> 重算，<b>但 <code>degree</code> 保持旧值</b>；③ <b>社区合并</b>——新批次社区编号整体偏移后<b>拼接</b>在旧社区之后 ⇒ <b>旧社区 <code>C3</code> 的成员不因新文档而改变</b>；④ 净效果＝图上多一块"新批次的子图"，<b>不与旧结构重新聚类（哪怕新文档讲的就是 C3 那个主题）</b>。⇒ <b>它的"增量"＝"新内容独立成图 ＋ 表级拼接"，不是"融进旧图重新成形"</b>——这就是"增量 ≠ 全量"的具体含义。</p>
+        <p><b>四、一个可检验的推论</b>：与记录 ⑱（Basic Search 也没写实现说明）合看，浮现一条规律——<b>它有几处能力"只在代码里"</b>（Basic Search、增量索引、动态社区选择），而<b>没写文档的那几处恰好都是半成品</b>（增量索引：删除检测了不落地、degree 不重算、社区不重算）。⇒ <b>读开源项目时，"文档覆盖度"可当"成熟度"的先行指标</b>：文档没覆盖的地方，多半还在施工。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㊱ · 增量索引的变更史：0.4.0 引入、删除从未落地、近两年只有外围修补 → 实质搁置 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"到现在还是半成品？查下 changelog"）</p>
+        <p><b>变更时间线（CHANGELOG 抽取）</b>：<br>· <b>0.3.3</b>：Add entrypoints for incremental indexing；<br>· <b>0.4.0（minor）</b>：<b>Add Incremental Indexing</b> ＋ Add config for incremental updates ＋ Add text units update ＋ <b>Calculate new inputs and deleted inputs on update</b> ＋ Update Incremental Indexing to new embeddings workflow；<br>· <b>0.4.1</b>：Add <b>update cli entrypoint</b> for incremental indexing ＋ Fix optional covariates update in incremental indexing；<br>· <b>2.0.0</b>：<b>Rework the update output storage structure</b> ＋ <b>Properly increment text unit IDs during updates</b>；<br>· <b>3.0.2</b>：Add async iterator support to InputReader 并用于 <code>load_input_documents</code> / <b><code>load_update_documents</code></b>，把 document id / human_readable_id / raw_data 初始化移入这两个 workflow；<br>· <b>当前 CHANGELOG 头＝3.2.0</b>，内容只是依赖升级。</p>
+        <p><b>三条判断</b>：① <b>删除从第一天就算出来了，却一直没接下游</b>——0.4.0 那行就是"Calculate new inputs <b>and deleted inputs</b> on update"，而现版 <code>load_update_documents</code> 仍 <code>return delta_documents.new_inputs</code>（<code>deleted_inputs</code> 被丢）⇒ <b>这个值算近两年、从未被用</b>。② <b>之后全是外围改动</b>（2.0.0＝存储重构＋text unit ID 自增修复；3.0.2＝async 化），<b>没有一条触及"社区重算 / 度数重算 / 删除落地"</b>——社区合并至今仍是 <code>concat</code> ＋ 编号偏移（记录 ㉞）。③ <b>投入重心不在索引侧</b>：近两年新增都在<b>查询侧</b>（DRIFT、动态社区选择、question generation）与<b>基础设施</b>（多 provider、多存储、streaming、向量库抽象）。</p>
+        <p><b>结论：不是"施工中"，是"实质搁置"。</b>深层原因＝其定位是"<b>离线建一次库 ＋ 反复查询</b>"的批处理系统，"增量"只是"别全量重跑"的省事手段，而不是"维护一张活的图"——所以社区能否跨批重聚、删除能否传播，对它而言是可以不算的账（它的答案本来就要人 verify/augment，记录 ⑮）。</p>
+        <p><b>由此总结"成熟度判断法"（三看，已三次印证）</b>：① <b>看文档覆盖</b>——没文档的能力多半在施工（Basic Search / 增量索引 / 动态社区选择）；② <b>看 CHANGELOG 是否有后续推进</b>——只有"引入"那次、之后全是外围修补的即为搁置；③ <b>看引入与最后相关改动的跨度</b>——本例 0.4.0（2024 初）引入、之后近两年只有外围修补、删除从未落地。<b>修正 ㉟ 的说法</b>：更准确的是"<b>没写文档 ＋ CHANGELOG 无后续推进 ＝ 搁置</b>"，文档只是第一层信号。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㊲ · 增量对查询的影响：全局问答被打在价值主张上；查询侧完全不消费"批次" <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东提问引出（"这种增量方式对全局查询有影响吗"）</p>
+        <p><b>先把证据链钉死（也让 ㉞ 成立）</b>：<code>PipelineFactory._update_workflows</code> 只有 8 个——<code>update_final_documents / update_entities_relationships / update_text_units / update_covariates / update_communities / update_community_reports / update_text_embeddings / update_clean_state</code>，<b>不含 <code>finalize_graph</code></b>；而 <code>degree</code> / <code>combined_degree</code> 正是 <code>finalize_graph</code> 从关系表算出的（<code>_build_degree_map</code> → <code>row["degree"] = degree_map.get(title, 0)</code>）。而 delta 那批会跑完整流水线 ⇒ <b>delta 的 degree 在"只有新文档的小图"里算</b>；合并后 <code>finalize_graph</code> 不运行 ⇒ 合并表里 degree 保持"旧值 / 小图值"两种来源，<code>entities.py</code> 那句 <code>"degree": "first"</code> 的 TODO <b>是真实状态而非过时注释</b>。</p>
+        <p><b>对 global search 的影响（四条，均较硬）</b>：① <b>跨批主题永远不会出现</b>——输入＝"旧树各层 ＋ 新批次各层"两套报告并置 ⇒ 同一主题被分批表述，<b>跨批的对比/连接/趋势没有对应报告</b>，直接打在其"跨整个语料综合"的立身之本上。② <b>主题重复把"全面性"虚高</b>——同一主题两批各有报告 → map 各出部分答案 → reduce 汇总时同事实计两次 ⇒ <b>comprehensiveness / diversity 这两个指标被冗余污染</b>。③ <b>层级粒度不可比</b>——旧树可能深到 C3、新批次或许只有 C0–C1 ⇒ 同层选择下两边粒度不同，却在同一批不可比对象上打 helpfulness 分。④ <b>成本线性涨、覆盖不涨</b>——global search 每次扫该层<b>全部</b>报告（记录 ⑦）⇒ 报告数随更新单调增长，token/延迟持续上升，新增部分常是"另一批对旧主题的复述"。⑤ 叠加<b>删除不落地</b> ⇒ 已删内容继续参与全局问答（不是覆盖不足，而是<b>把不存在的东西当当前知识</b>）。</p>
+        <p><b>对其他查询</b>：<br>· <b>local search</b>：影响较小且部分为正向（旧实体被新证据补全——<code>text_unit_ids</code> 并集、description 并列）；已核 <code>mixed_context.py</code> <b>不按 degree 排序</b>（degree 出现 0 次），用 <code>rank</code>（<code>rank_description</code> 默认 "number of relationships"）、社区按 <code>(matches, rank)</code> ⇒ <b>degree 那笔脏账主要落在社区报告生成（㉞），不在 local search 选取</b>。<br>· <b>basic search</b>：向量库<b>只增不删</b> ⇒ 已删文档的块<b>仍可被召回</b>（最直接的一种"错"）。<br>· <b>所有查询</b>：<code>period</code> 虽在数据模型里（"used for incremental update merges"），但 <b>local search 无 period 过滤、<code>mixed_context.py</code> 里 period 出现 0 次</b> ⇒ <b>查询侧完全不消费批次信息，新旧产物被当同质语料混用</b>。</p>
+        <p><b>一句话结论</b>：增量把"时间/批次"写进了<b>数据</b>，但查询侧<b>不重算、不区分、不淘汰</b> ⇒ 对全局查询的影响不是"少了一块"，而是"<b>混进去一批粒度不同、且含已删内容的产物</b>"。<br><b>对我们做增量时查询侧必须配一样</b>：① <b>重算</b>（保证同质）／② <b>显式区分批次</b>（过滤 / 加权 / 至少如实声明）／③ 至少让<b>删除生效</b>。GraphRAG 三件都没做——其增量在全局问答上只能算"聊胜于无"。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㊳ · 为什么"增量 + 社区划分"不该做：它是全局优化，不是工程偷懒 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东追问引出（"有全量流水线了，增量应该不难啊？不对，是不是要重跑一半社区划分？少量增量会不会引起划分大变化"）</p>
+        <p><b>一、Leiden 是全局优化，不存在"局部增量"</b>：它最大化**整张图的模块度**（全局求和），加几条边，最优划分**可能在任意位置变化**。三个机制叠加：① 目标函数全局；② 解空间有大量"近似最优"划分（near-degenerate，分数差极小但成员差很多）；③ 算法带随机性——<b>GraphRAG 为此专门固定 seed</b>（"to guarantee clustering stability"，记录 ⑤）⇒ <b>"必须锁种子"本身就是"输出对细节敏感"的自证</b>。</p>
+        <p><b>二、"只重算受影响的社区"会卡在接缝上</b>：重算区与冻结区的边界<b>不对应任何一致的划分</b> ⇒ 得到"既非旧最优、也非新最优"的混合体，<b>且没有目标函数能判它合不合格</b>。真要做得用"局部模块度优化 ＋ 边界冻结"，代价是<b>质量不可验证</b>。</p>
+        <p><b>三、一旦要保质量，就退化成"全量重跑聚类"</b>——而且不只是重跑划分，<b>还要重写所有受影响的社区报告</b>（LLM 生成，成本与社区数成正比）⇒ <b>增量省下的抽取钱很可能不够付重算报告的钱</b>。两个连带影响：① <b>层级放大影响</b>——层级是递归切出的（"递归到 ≤10 或切不动"，记录 ⑤），一次小插入可能改变分支**深度**（主题落 C2 还是 C3 都变），而 global search 是"选一层扫全量"（记录 ⑦）⇒ 用户看到的是"一次增量让全局问答取材范围整体变动"；② <b>引用与基线连带失效</b>——报告 id＝<code>full_content</code> 的 sha512（记录 ㉓），重算后全变 ⇒ 缓存/引用/评测基线一起失效，<b>重算把"稳定性成本"从算法层推到工程层</b>。</p>
+        <p><b>四、这条线在学术界是活跃题目（已核 arXiv）</b>：<b>DynaMo: Dynamic Community Detection by Incrementally Maximizing Modularity（2017-09-25）</b>、DyPerm（2018-02-13）、Constrained Spectral Clustering for Dynamic Community Detection（2019-11-04）、Flow stability for dynamic community detection（2021-01-15），以及最新 <b>ComNetX: Local Hierarchical Adaptation for Dynamic Community Detection（2026-07-10）</b>——最后这篇的标题几乎就是"局部层次自适应"。⇒ <b>这个想法学术上研究了近十年，没成为默认做法，原因是"增量带来的结构漂移"要和"结构可比性/稳定性"做交换</b>，而 GraphRAG 的价值正建在"结构是全局的"之上。</p>
+        <p><b>五、它为什么不做的三条</b>：① 目标场景是"静态语料、建一次、查很多次"（记录 ㊱）⇒ 无高频更新压力；② 真做增量要么引入不可验证的近似、要么退化成全量重算，<b>两头不划算</b>；③ <b>没有产品需求逼它做对</b>——免责声明（记录 ⑮）已把"结构可能不准"兜住。</p>
+        <p><b>六、对我们的启示（"约束哪一端"的第三次回本）</b>：<b>我们的路线在增量上天然占优</b>——要的是<b>受控类别表 ＋ 逐条归属</b>，给新断言挂类别标签是<b>局部判定</b>，<b>不需要重跑全局聚类</b>。同一个选择第三次给红利：受控词表 → <b>可过滤（记录 ①）→ 可归一（记录 ㉚）→ 可增量（本条）</b>。<br><b>反面的诚实话</b>：若"概念结构层"将来做成<b>多层级上位概念体系</b>，同样会撞上全局重算（层级越高越需全局视图）；<b>只有"扁平受控表 ＋ 逐条挂标"才是天然可增量的形态</b> ⇒ 这对"类别维度要不要做层级"是<b>实质约束</b>。</p>
+      </div>
+
+      <div class="step">
+        <h3>记录 ㊴ · 推论："GraphRAG 不适合持续更新的知识库"——对一半，受影响的是"全局结构"而非整个系统 <span class="tag core">待复核</span></h3>
+        <p class="muted">记录 2026-09-22 17:07 · 由沛东的领悟引出（"知识库长期稳定的不多，大多是持续更新的，那 GraphRAG 岂不是不适合很多知识库场景"）</p>
+        <p><b>一、受影响的只有"全局结构"能力</b>：四种查询模式里，<b>只有 global search 依赖全语料社区结构</b>（DRIFT 依赖一半，它也吃社区信息）。另两种在持续更新下基本可用：<b>basic search</b>（纯向量 ⇒ 新内容 upsert 即可查）、<b>local search</b>（靠实体图 ＋ text unit，而实体合并按 title 并 <code>text_unit_ids</code> <b>是真合并</b> ⇒ 旧实体被新证据补全，<b>越更新越全</b>，记录 ㊲ 已给此条）。⇒ 准确说法：<b>"全局综合"与"持续更新"不兼容；"局部检索"与持续更新兼容</b>。</p>
+        <p><b>二、更深的理由：全局结构本质是"慢变量"</b>——"跨全库主题聚类"需要<b>一段时间窗才能收敛</b>；语料若变得比索引刷新快，那个"全局主题"还没形成就过时，概念本身不成立。由此得一条<b>可复用判据</b>：<b>索引刷新周期要与语料演化速度匹配在同一量级</b>（差得太多就白做）。分档：<b>每月补充几次 ⇒ 完全可行</b>（离线全量重建，几小时机器时间）；<b>每日新增 ⇒ 需调度 ＋ 分域/分档刷新</b>；<b>分钟级流式 ⇒ 不适用</b>——不是它不行，是<b>任何"全局结构"都不行</b>。<br>公平话：<b>静态语料（书 / 法规 / 制度集 / 研究集）它很合适</b>，企业知识库里"基本不动、偶尔补"的也不少 ⇒ "不适合很多知识库"应限定为"<b>不适合高频更新的知识库</b>"。</p>
+        <p><b>三、业界对"持续更新"的四种对策（非 GraphRAG 独有难题）</b>：① <b>分层刷新率</b>（Lambda 思路：高频只做 chunk ＋ embedding，低频做全量结构重算）；② <b>分域建图</b>（按主题/来源/时间窗切稳定子域，各自重算，避免全局重算随语料无限增长）；③ <b>滑动窗口图</b>（新内容建小图、老图冻结，查询跨多图）；④ <b>接受滞后并声明</b>（把索引当快照，标明"数据截至某时间"、定期重建——最常见也最诚实，正是我们"遗漏透明"的精神）。</p>
+        <p><b>四、对我们的实际结论</b>：我们的语料是<b>精选文章 / 论文 / 书</b>，更新频率<b>天然低</b>（用户传一篇、隔几天再传），<b>正好落在它的适用带</b>。而且我们有个结构上的便宜：<b>逐篇编译 ＋ 扁平受控类别表 ＋ 逐条挂标</b>（记录 ㊳）⇒ 新内容是<b>局部判定</b>、天然可增量，<b>不依赖全局重算</b>。真要做"跨全库全局综述"，路线也已明确：<b>按需渲染而非预生成摘要</b>（记录 ⑯㉒）——<b>不预生成，就没有"预生成过期"</b>。这是"事实层结构化 ＋ 呈现层按需渲染"这条路线又一次替我们挡掉了别人踩的坑。</p>
+        <p><b>五、最值得留档的判断顺序</b>：以后讨论"要不要上某种索引/结构"，先问两句——<b>① 语料变化速度 vs 索引刷新周期，差几个数量级？② 我要的是"全局结构"还是"局部检索"？</b>（全局结构＝慢变量，只配低频刷新）。<b>这两句能提前挡掉一大类"建的时候爽、维护起来废"的方案。</b></p>
+      </div>
+
+      <div class="chain" style="margin-top:12px;"><b>本部分 ㉝–㊴（增量索引专题）已收口成一页独立记录</b>：<a href="0030-graphrag-incremental-and-scope.html">0030 · GraphRAG 的增量索引与适用范围（精读专题总结）</a>——按"决策层 / 主体层 / 附录"重排，含增量流程 7 步、正向效果、7 条未解问题、根因（全局优化 ＋ 慢变量 ＋ 研究十年）、适用范围分档表与四种对策、三条方法论提炼（成熟度三看法 / 刷新周期判据 / "约束哪一端"三连回本）、以及证据索引。<b>本页 ㉝–㊴ 保留为现场留痕</b>，两者内容一致、粒度不同。</div>
+
+      <h3 style="margin:20px 0 6px;font-size:15px;">附 · 读出来的"我们自己的待办"候选（补课结束后一起定）</h3>
+      <p class="muted">这些不是 GraphRAG 的事，是<b>读它读出来的我们自己的活</b>。现在只登记，不立项——按纪律，凡涉及评测口径 / 基础件的都要先方案后评审。</p>
+      <table>
+        <thead><tr><th>#</th><th>候选</th><th>出处</th><th>类型</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><b>评测缺一个"效度检验"对照维度</b>——像它用 directness 验"判官是否被长度带跑"。我们有引用红线 / 遗漏透明 / 覆盖性，但没有明确标为"效度检验"的那一栏。</td><td>记录 ⑪</td><td>评测侧 / 基础件（判官口径）</td></tr>
+          <tr><td>2</td><td><b>"验证成本 / 纠错成本"作为可测指标（评测的第三根柱子）</b>——① <b>验证成本</b>＝从答案反查原文要几步、多久（我们 vs 它 vs 纯向量）；② <b>纠错成本</b>＝发现错误后改起来多贵（能否一句话定位到依据）。它没这两个数，我们可以有；能接现有引用真实性那套。配合已有的覆盖性 / 引用真实性 / 遗漏透明，补上"错得起、看得出来、改得动"里的最后一条。</td><td>记录 ⑯㉒</td><td>评测侧新增维度</td></tr>
+          <tr><td>3</td><td><b>我们的 <code>VectorStore</code> 端口缺 <code>count</code> / <code>update</code> / <code>search_by_id</code></b>——做"单块增量更新"或"按 id 取块"时会撞上。</td><td>记录 ⑲</td><td>代码 / 接口补齐（小）</td></tr>
+          <tr><td>4</td><td><b>三档原语实验的探针题要先验"是否真需要跨语料"</b>——否则探针题不够"全局"时，第 (ii) 档（段落主题标签）也会赢，结论失真；做法可借它 TS 对照的口径（直接跟"老方法"比，量组件边际价值）。</td><td>记录 ⑫</td><td>实验设计（三档原语实验，已立项）</td></tr>
+          <tr><td>5</td><td><b>架构文档 ⑤ 增补"定位差异"一段</b>——它假设受训专业用户、把 verify/augment 外包；我们假设学习者、把可核查性做进系统（引用可回锚 ＋ 遗漏透明）。既是技术定位，也是产品说明素材。</td><td>记录 ⑮⑯</td><td>文档（架构文档 ⑤）</td></tr>
+          <tr><td>6</td><td><b>（可选）BYOG 试接</b>——把我们的 concept/statement 转成它的 entities/relationships/text_units，用它的查询栈跑一次，看"我们的图 ＋ 它的检索"长什么样。</td><td>记录 ⑭</td><td>实验（成本中等，需写转换）</td></tr>
+          <tr><td>7</td><td><b>statement 是否要加时间字段</b>——它有 <code>covariate.start_date/end_date</code>（ISO8601），我们只有 <code>polarity</code>、无时间；这与"时序条件过滤"卡点（用例 20：'哪些安全案例发生在用户明确表示同意之前'）同源。要不要加、加在哪一步，先讨论。</td><td>记录 ㉑</td><td>编译层 schema / 先方案</td></tr>
+          <tr><td>8</td><td><b>提示词"人称 vs 结构"小 A/B</b>——用 L3 形状判定（已有 19 条标注）测三版：A＝system "You are…"／B＝assistant 预填充 "I am…"／C＝去人称只留格式示例＋<code>Output:</code> 钩子。目的：验证"续写式结构"是否比人称更有收益；结论可复用到所有提示词。属基础件 ⇒ 先方案后动。</td><td>记录 ㉛</td><td>实验 / 基础件（提示词）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">（后续讨论中我判断值得记的，会继续按 ①②③… 追加到本部分；你精读时若发现上面的"事实"有错，直接改或标出来，我按你的修正更新。）</p>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-21 · 配套 0028 考古层第五十一段（补课决策与阅读路线）· 第五部分为精读讨论留痕（AI 自记，逐条追加）· 读完后随回填内容更新
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var KEY = "memory-0029-checklist";
+      var fields = Array.prototype.slice.call(document.querySelectorAll("[data-persist]"));
+      var boxes = fields.filter(function (el) { return el.type === "checkbox"; });
+      var store = {};
+      try { store = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { store = {}; }
+
+      function progress() {
+        var done = boxes.filter(function (el) { return el.checked; }).length;
+        var el = document.getElementById("progress");
+        if (el) el.textContent = String(done);
+      }
+
+      function save() {
+        var out = {};
+        fields.forEach(function (el) {
+          out[el.id] = el.type === "checkbox" ? el.checked : el.value;
+        });
+        try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) {}
+        progress();
+      }
+
+      fields.forEach(function (el) {
+        if (el.id in store) {
+          if (el.type === "checkbox") el.checked = !!store[el.id];
+          else el.value = store[el.id];
+        }
+        el.addEventListener("input", save);
+        el.addEventListener("change", save);
+      });
+
+      var reset = document.getElementById("reset");
+      if (reset) {
+        reset.addEventListener("click", function () {
+          boxes.forEach(function (el) { el.checked = false; });
+          fields.forEach(function (el) { if (el.type !== "checkbox") el.value = ""; });
+          try { localStorage.removeItem(KEY); } catch (e) {}
+          progress();
+        });
+      }
+
+      progress();
+    })();
+  </script>
+</body>
+</html>

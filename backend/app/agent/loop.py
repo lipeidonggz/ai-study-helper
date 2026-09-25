@@ -17,6 +17,8 @@
 （上下文组装 / 轮次 / LLM 调用 / 流式事件 / 工具执行 / 结束统计）。
 """
 
+import json  # 原始流 chunk 的字节量估算
+import os  # 逐 delta 调试开关（环境变量）
 import time  # 工具执行耗时计时
 from typing import AsyncIterator
 
@@ -36,6 +38,17 @@ from app.agent.trace import Trace, event_to_dict, messages_to_dicts  # 处理过
 from app.tools.executor import ToolExecutor
 
 _MAX_TOOL_ROUNDS = 4  # 工具调用轮数上限，防止模型无限循环烧钱
+
+
+def _per_delta_trace() -> bool:
+    """是否逐条记录流式增量（调试开关，默认关）。
+
+    默认（聚合）：一轮 LLM 调用只记一条 llm_stream 汇总步骤——一次长回答会收上千个
+    delta，逐条记会把处理过程面板和 SSE 带宽淹没（实测单次问答 SSE 1.02MB，其中 85%
+    是这类步骤，而真正的流程步骤只有 6 条）。设 TRACE_PER_DELTA=1 可恢复逐条记录，
+    用于排查 provider 协议层问题（如 tool_call 增量拼接、异常中断位置）。
+    """
+    return os.environ.get("TRACE_PER_DELTA", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 async def run_agent_turn(
@@ -132,75 +145,120 @@ async def run_agent_turn(
             )
 
         # —— 思考 + 输出：流式调用，文本边收边发，工具调用事件先收集 ——
+        # 流式增量不逐条记 trace 步骤，只在本轮结束时汇总成一条 llm_stream（见
+        # _per_delta_trace 的说明）；护栏截断前的文本以"实际推给前端的"为准。
         tool_events: list[LLMEvent] = []
-        async for event in llm.stream(messages=messages, tools=schemas):
-            if event.type == "raw":
-                # 原始流 chunk：不直接产出文本，只记录到 trace（前端可开关展示）
-                if trace:
-                    trace.step("raw_chunk", {"chunk": event.raw})
-                continue
-            if event.type == "usage" and event.usage:
-                # 流结束的 token 用量：累计并记录（reasoner 的 usage 里还有 reasoning_tokens）
-                u = event.usage
-                total_tokens["prompt"] += u.get("prompt_tokens", 0)
-                total_tokens["completion"] += u.get("completion_tokens", 0)
-                total_tokens["total"] += u.get("total_tokens", 0)
-                total_tokens["cache_hit"] += u.get("prompt_cache_hit_tokens", 0)
-                total_tokens["cache_miss"] += u.get("prompt_cache_miss_tokens", 0)
-                if trace:
-                    trace.step("usage", {"usage": u})
-                continue
-            if trace:
-                trace.step("event", {"event": event_to_dict(event)})  # 每个流式事件都记录
-            if event.type == "text" and event.text:
-                if guard.check(event.text):
-                    # 输出已包含系统提示原文：截断本轮，改为固定拒绝文案
-                    if trace:
-                        trace.step(
-                            "guardrail",
-                            {"action": "block", "fragments": guard.leaked_fragments()},
-                        )
-                    yield BLOCK_MESSAGE
-                    return
-                safety_hit = safety_guard.check(event.text)
-                if safety_hit is not None:
-                    # 自伤高危短语：截断到命中位置之前，追加安全说明后结束本轮
-                    if trace:
-                        trace.step(
-                            "guardrail",
-                            {
-                                "action": "safety_block",
-                                "fragment": safety_guard.hit_fragment(),
-                            },
-                        )
-                    prefix = event.text[:safety_hit]
-                    if prefix:
-                        yield prefix
-                    yield SELF_HARM_SAFE_SUFFIX
-                    return
-                refusal_hit = refusal_guard.check(event.text)
-                if refusal_hit is not None:
-                    # 行动执行型风险请求中出现可执行内容（命令/药名/剂量）：截断并追加安全说明
-                    if trace:
-                        trace.step(
-                            "guardrail",
-                            {
-                                "action": "refusal_block",
-                                "fragment": refusal_guard.hit_fragment(),
-                                "kind": refusal_guard.hit_kind(),
-                            },
-                        )
-                    prefix = event.text[:refusal_hit]
-                    if prefix:
-                        yield prefix
-                    if refusal_guard.hit_kind() == "drug":
-                        yield MEDICATION_SAFE_SUFFIX
+        per_delta = _per_delta_trace()
+        stream_start = time.perf_counter()
+        first_token_ms: float | None = None  # 首字延迟
+        raw_chunks = 0  # 原始 SSE chunk 数（含 [DONE]）
+        raw_bytes = 0
+        raw_head: list[dict] = []  # 首 2 条原始 chunk：看协议形态够用
+        raw_tail: list[dict] = []  # 末 1 条：通常是 [DONE] 之类的收尾标记
+        deltas = 0  # 文本增量块数
+        emitted: list[str] = []  # 本轮实际产出的文本（含护栏追加的兜底文案）
+        try:
+            async for event in llm.stream(messages=messages, tools=schemas):
+                if event.type == "raw":
+                    raw_chunks += 1
+                    raw_bytes += len(json.dumps(event.raw, ensure_ascii=False).encode("utf-8"))
+                    if len(raw_head) < 2:
+                        raw_head.append(event.raw)
                     else:
-                        yield DESTRUCTIVE_SAFE_SUFFIX
-                    return
-                yield event.text  # 文本增量：立即推给前端（打字机效果）
-            elif event.type == "tool_call":
-                tool_events.append(event)  # 工具调用：先攒着，流结束后统一处理
+                        raw_tail[:] = [event.raw]
+                    if trace and per_delta:
+                        trace.step("raw_chunk", {"chunk": event.raw})
+                    continue
+                if event.type == "usage" and event.usage:
+                    # 流结束的 token 用量：累计并记录（reasoner 的 usage 里还有 reasoning_tokens）
+                    u = event.usage
+                    total_tokens["prompt"] += u.get("prompt_tokens", 0)
+                    total_tokens["completion"] += u.get("completion_tokens", 0)
+                    total_tokens["total"] += u.get("total_tokens", 0)
+                    total_tokens["cache_hit"] += u.get("prompt_cache_hit_tokens", 0)
+                    total_tokens["cache_miss"] += u.get("prompt_cache_miss_tokens", 0)
+                    if trace:
+                        trace.step("usage", {"usage": u})
+                    continue
+                if event.type == "text" and event.text:
+                    deltas += 1
+                    if first_token_ms is None:
+                        first_token_ms = round((time.perf_counter() - stream_start) * 1000, 1)
+                if trace and per_delta:
+                    trace.step("event", {"event": event_to_dict(event)})  # 逐条调试模式
+                if event.type == "text" and event.text:
+                    if guard.check(event.text):
+                        # 输出已包含系统提示原文：截断本轮，改为固定拒绝文案
+                        if trace:
+                            trace.step(
+                                "guardrail",
+                                {"action": "block", "fragments": guard.leaked_fragments()},
+                            )
+                        emitted.append(BLOCK_MESSAGE)
+                        yield BLOCK_MESSAGE
+                        return
+                    safety_hit = safety_guard.check(event.text)
+                    if safety_hit is not None:
+                        # 自伤高危短语：截断到命中位置之前，追加安全说明后结束本轮
+                        if trace:
+                            trace.step(
+                                "guardrail",
+                                {
+                                    "action": "safety_block",
+                                    "fragment": safety_guard.hit_fragment(),
+                                },
+                            )
+                        prefix = event.text[:safety_hit]
+                        if prefix:
+                            emitted.append(prefix)
+                            yield prefix
+                        emitted.append(SELF_HARM_SAFE_SUFFIX)
+                        yield SELF_HARM_SAFE_SUFFIX
+                        return
+                    refusal_hit = refusal_guard.check(event.text)
+                    if refusal_hit is not None:
+                        # 行动执行型风险请求中出现可执行内容（命令/药名/剂量）：截断并追加安全说明
+                        if trace:
+                            trace.step(
+                                "guardrail",
+                                {
+                                    "action": "refusal_block",
+                                    "fragment": refusal_guard.hit_fragment(),
+                                    "kind": refusal_guard.hit_kind(),
+                                },
+                            )
+                        prefix = event.text[:refusal_hit]
+                        if prefix:
+                            emitted.append(prefix)
+                            yield prefix
+                        if refusal_guard.hit_kind() == "drug":
+                            emitted.append(MEDICATION_SAFE_SUFFIX)
+                            yield MEDICATION_SAFE_SUFFIX
+                        else:
+                            emitted.append(DESTRUCTIVE_SAFE_SUFFIX)
+                            yield DESTRUCTIVE_SAFE_SUFFIX
+                        return
+                    emitted.append(event.text)
+                    yield event.text  # 文本增量：立即推给前端（打字机效果）
+                elif event.type == "tool_call":
+                    tool_events.append(event)  # 工具调用：先攒着，流结束后统一处理
+        finally:
+            # 本轮流式汇总（正常结束、护栏截断、调用异常都记，便于事后定位）
+            if trace and not per_delta and (deltas or raw_chunks):
+                trace.step(
+                    "llm_stream",
+                    {
+                        "round": round_no,
+                        "deltas": deltas,
+                        "chars": sum(len(p) for p in emitted),
+                        "raw_chunks": raw_chunks,
+                        "raw_bytes": raw_bytes,
+                        "first_token_ms": first_token_ms,
+                        "duration_ms": round((time.perf_counter() - stream_start) * 1000, 1),
+                        "text": "".join(emitted),  # 本轮产出全文（评测执行轨迹复用）
+                        "raw_samples": raw_head + raw_tail,
+                    },
+                )
 
         # 没有工具调用：本轮输出结束
         if not tool_events or tools is None:

@@ -266,6 +266,20 @@ def test_tool_link_and_observation():
     assert judgment["metrics"]["max_rounds"] == "pass"
 
 
+def test_exec_trace_aggregates_stream_text():
+    """根因探针：执行轨迹里文本产出按"每轮一条"记，不逐 delta 记碎片。
+
+    背景：逐 delta 记时一条用例的 exec_trace 能到 5792 条 / 182KB，复核页每条只截
+    100 字，于是"执行轨迹"退化成上千行无意义碎片。
+    """
+    cases = load_cases(Path(__file__).resolve().parent.parent / "eval" / "cases")
+    case = next(c for c in cases if c.id == "tool-calc-001")
+    result = asyncio.run(run_case(case, ToolThenTextLLM(), ToolExecutor(default_registry())))
+    text_events = [t for t in result.exec_trace if t["type"] == "text"]
+    assert len(text_events) == 1  # 第二轮那段文本只记一条
+    assert text_events[0]["text"] == "结果是 8"  # 且是完整文本，不是被截断的碎片
+
+
 def test_tool_used_judgment():
     """tool_used 自动判定：预期工具被实际调用 → pass。"""
     case = CaseFile(

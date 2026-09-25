@@ -14,6 +14,7 @@ import CompileReportPage from './components/CompileReportPage.vue'
 import EvalPage from './components/EvalPage.vue'
 import GraphReviewPage from './components/GraphReviewPage.vue'
 import KbPage from './components/KbPage.vue'
+import MdText from './components/MdText.vue'
 import RunDetailPage from './components/RunDetailPage.vue'
 
 interface ChatMsg {
@@ -43,6 +44,80 @@ const visibleTraceSteps = computed(() =>
   showRaw.value ? traceSteps.value : traceSteps.value.filter((s) => s.type !== 'raw_chunk')
 )
 const rawCount = computed(() => traceSteps.value.filter((s) => s.type === 'raw_chunk').length)
+
+// —— 步骤摘要：面板主要靠这一行读懂流程，JSON 详情默认折叠（retrieval 一条就有 30KB+）——
+const CLAIM_TYPE_CN: Record<string, string> = {
+  LimitationStatement: '局限',
+  OutlookStatement: '展望'
+}
+
+function num(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0
+}
+
+function kbytes(v: number): string {
+  return `${Math.round(v / 1024)}KB`
+}
+
+function stepSummary(step: TraceStep): string {
+  const d = (step.data ?? {}) as Record<string, any>
+  switch (step.type) {
+    case 'retrieval': {
+      const hits = Array.isArray(d.hits) ? d.hits.length : 0
+      const budget = d.budget_cap
+        ? `${num(d.budget_used)}/${num(d.budget_cap)} tok`
+        : `${num(d.budget_used)} tok`
+      if (!d.gate) return `未过门控 · ${hits} 块 · ${d.reason ?? ''}`
+      const qt = String(d.query_type ?? '')
+      if (qt.startsWith('graph_role:')) {
+        const g = (d.groups ?? [])[0] ?? {}
+        const label = CLAIM_TYPE_CN[String(g.claim_type)] ?? String(g.claim_type ?? '')
+        return `图路由（${label}）· ${num(g.statements)} 断言 → ${num(g.selected)} 块 · ${budget}`
+      }
+      const route = qt === 'compare' ? '多篇对比' : qt === 'detail' ? '单篇细读' : '全库兜底'
+      return `${route} · ${hits} 块 · ${budget}`
+    }
+    case 'context':
+      return `组装上下文 · ${num(d.message_count)} 条消息 · variant=${d.variant ?? '-'}`
+    case 'round':
+      return `第 ${num(d.round)} 轮`
+    case 'llm_call':
+      return `调用 ${d.model ?? ''} · ${num(d.message_count)} 条消息 · ${num(d.tool_count)} 个工具`
+    case 'llm_stream': {
+      const ttfb = typeof d.first_token_ms === 'number' ? `首字 ${d.first_token_ms}ms` : '首字 —'
+      return (
+        `流式输出 · ${num(d.deltas)} 块 / ${num(d.chars)} 字` +
+        ` · 原始 chunk ${num(d.raw_chunks)}（${kbytes(num(d.raw_bytes))}） · ${ttfb}`
+      )
+    }
+    case 'usage': {
+      const u = (d.usage ?? {}) as Record<string, any>
+      return (
+        `token · 提示 ${num(u.prompt_tokens)}（缓存命中 ${num(u.prompt_cache_hit_tokens)}）` +
+        ` / 生成 ${num(u.completion_tokens)}`
+      )
+    }
+    case 'done': {
+      const t = (d.tokens ?? {}) as Record<string, any>
+      return (
+        `结束 · ${num(d.rounds)} 轮 · ${num(d.tool_calls)} 次工具调用` +
+        ` · ${d.end_reason ?? ''} · 共 ${num(t.total)} tok`
+      )
+    }
+    case 'guardrail':
+      return `护栏拦截 · ${d.action ?? ''}`
+    case 'tool_exec':
+      return `工具 ${d.name ?? ''}`
+    case 'event': {
+      const e = (d.event ?? {}) as Record<string, any>
+      return `流式事件 · ${e.type ?? ''}`
+    }
+    case 'raw_chunk':
+      return '原始 chunk'
+    default:
+      return step.type
+  }
+}
 
 onMounted(async () => {
   window.addEventListener('hashchange', onHashChange)
@@ -108,7 +183,7 @@ async function send() {
 </script>
 
 <template>
-  <main class="page" :class="{ wide: route.name !== 'chat' }">
+  <main class="page" :class="{ wide: route.name !== 'chat', chat: route.name === 'chat' }">
     <EvalPage v-if="route.name === 'eval'" />
     <KbPage v-else-if="route.name === 'kb'" />
     <ChunkPreviewPage v-else-if="route.name === 'kb-chunks'" :source-id="route.sourceId" />
@@ -116,6 +191,7 @@ async function send() {
     <GraphReviewPage v-else-if="route.name === 'graph'" :source-id="route.sourceId" />
     <RunDetailPage v-else-if="route.name === 'run'" :run-id="route.runId" />
     <template v-else>
+    <div class="chat-col">
     <header class="bar">
       <h1>AI 助手</h1>
       <nav class="nav">
@@ -160,36 +236,10 @@ async function send() {
 
       <section class="chat">
         <div v-for="(msg, i) in messages" :key="i" class="msg" :class="msg.role">
-          <pre>{{ msg.content }}</pre>
+          <pre v-if="msg.role === 'user'">{{ msg.content }}</pre>
+          <MdText v-else :text="msg.content" variant="inline" />
         </div>
         <p v-if="streaming" class="hint">正在生成…</p>
-      </section>
-
-      <section class="trace">
-        <div class="trace-head">
-          <strong>处理过程</strong>
-          <label class="trace-toggle">
-            <input v-model="showRaw" type="checkbox" /> 原始流
-          </label>
-          <span class="hint">
-            {{ visibleTraceSteps.length }} 个步骤
-            <template v-if="!showRaw && rawCount">（+{{ rawCount }} 原始流）</template>
-          </span>
-          <button class="link-btn" @click="showTrace = !showTrace">
-            {{ showTrace ? '收起' : '展开' }}
-          </button>
-        </div>
-        <ol v-if="showTrace" class="trace-list">
-          <li v-for="step in visibleTraceSteps" :key="step.seq">
-            <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
-            <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
-            <details open>
-              <summary>详情</summary>
-              <pre>{{ JSON.stringify(step.data, null, 2) }}</pre>
-            </details>
-          </li>
-          <li v-if="!traceSteps.length" class="trace-empty">发送消息后，这里会逐步展示内部处理过程</li>
-        </ol>
       </section>
 
       <footer class="bar">
@@ -201,6 +251,39 @@ async function send() {
         />
         <button :disabled="streaming" @click="send">发送</button>
       </footer>
+    </div>
+
+    <aside class="trace-col">
+      <section class="trace">
+        <div class="trace-head">
+          <strong>处理过程</strong>
+          <label v-if="rawCount" class="trace-toggle">
+            <input v-model="showRaw" type="checkbox" /> 原始流
+          </label>
+          <span class="hint">
+            {{ visibleTraceSteps.length }} 个步骤
+            <template v-if="!showRaw && rawCount">（+{{ rawCount }} 原始流）</template>
+          </span>
+          <button class="link-btn" @click="showTrace = !showTrace">
+            {{ showTrace ? '收起' : '展开' }}
+          </button>
+        </div>
+        <ol v-if="showTrace" class="trace-list">
+          <li v-for="step in visibleTraceSteps" :key="step.seq" class="trace-item">
+            <div class="trace-row">
+              <span class="trace-badge" :class="`type-${step.type}`">{{ step.type }}</span>
+              <span class="trace-ms">{{ step.elapsed_ms }}ms</span>
+              <span class="trace-sum" :title="stepSummary(step)">{{ stepSummary(step) }}</span>
+            </div>
+            <details>
+              <summary>详情</summary>
+              <pre>{{ JSON.stringify(step.data, null, 2) }}</pre>
+            </details>
+          </li>
+          <li v-if="!traceSteps.length" class="trace-empty">发送消息后，这里会逐步展示内部处理过程</li>
+        </ol>
+      </section>
+    </aside>
     </template>
   </main>
 </template>
@@ -226,6 +309,30 @@ body {
   max-width: 1600px;
   display: block;
   height: auto;
+}
+/* 聊天页：左对话流 + 右处理过程（宽屏两栏；窄屏见文末媒体查询回退成上下布局） */
+.page.chat {
+  max-width: 1440px;
+  display: grid;
+  grid-template-columns: minmax(0, 760px) minmax(380px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.chat-col {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.trace-col {
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+/* 右栏自己滚，步骤列表就不再套一层限高滚动条 */
+.page.chat .trace-list {
+  max-height: none;
 }
 .nav {
   display: flex;
@@ -277,15 +384,21 @@ body {
 .msg {
   margin-bottom: 10px;
 }
-.msg pre {
+.msg.user pre {
   white-space: pre-wrap;
   margin: 0;
   padding: 8px 12px;
   border-radius: 8px;
-  background: #eef2f7;
-}
-.msg.user pre {
   background: #dbeafe;
+}
+.msg.assistant {
+  background: #eef2f7;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.msg.assistant .mdtext {
+  font-size: 0.95em;
+  line-height: 1.65;
 }
 .hint {
   color: #888;
@@ -377,6 +490,14 @@ footer.bar button:disabled {
   background: #fef2e0;
   color: #9a6700;
 }
+.trace-badge.type-llm_stream {
+  background: #eef4ff;
+  color: #0a3069;
+}
+.trace-badge.type-retrieval {
+  background: #e7f6ec;
+  color: #1a7f37;
+}
 .trace-list {
   margin: 10px 0 0;
   padding-left: 0;
@@ -386,11 +507,21 @@ footer.bar button:disabled {
   border-top: 1px solid #eee;
 }
 .trace-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.trace-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid #f0f0f0;
+}
+.trace-sum {
+  flex: 1;
+  font-size: 0.85em;
+  color: #24292f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .trace-badge {
   font-size: 0.78em;
@@ -418,7 +549,7 @@ footer.bar button:disabled {
   color: #888;
 }
 .trace-list details {
-  flex: 1;
+  margin-top: 2px;
 }
 .trace-list summary {
   cursor: pointer;
@@ -436,5 +567,25 @@ footer.bar button:disabled {
 .trace-empty {
   color: #999;
   font-size: 0.85em;
+}
+/* 窄屏回退：两栏放不下时退回"上对话流、下处理过程" */
+@media (max-width: 1199px) {
+  .page.chat {
+    max-width: 760px;
+    display: flex;
+    flex-direction: column;
+  }
+  .chat-col {
+    height: auto;
+    flex: 1;
+  }
+  .trace-col {
+    height: auto;
+    max-height: 42vh;
+    margin-top: 12px;
+  }
+  .page.chat .trace-list {
+    max-height: 320px;
+  }
 }
 </style>

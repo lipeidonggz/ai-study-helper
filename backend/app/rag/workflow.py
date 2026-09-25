@@ -9,10 +9,12 @@
 - 内容覆盖（答案证据是否真齐）不在此层断言，交判官检索充分性诊断 + trace 信号。
 """
 
+import re
 from dataclasses import dataclass, field
 
 from app.rag.bm25 import Bm25Index
 from app.rag.doc_mention import detect_named_source
+from app.rag.graph_route import CLAIM_TYPE_LABEL
 from app.storage.ports import Embedder, Reranker, VectorStore
 
 KB_ID = "kb-main"
@@ -21,6 +23,7 @@ _DEFAULT_MIN_SCORE = 0.5  # 冷启动阈值：先确定性起步，步骤 6 按�
 _DEFAULT_BUDGET_TOKENS = 3600  # 注入总预算（资源约束；顶住时上报，不静默砍）
 _FALLBACK_TOP_K = 6  # 未分型 fallback 的注入上限（保持旧行为）
 _RRF_K = 60
+_SOURCE_CODE = re.compile(r"\b([A-Z]{1,2}\d{1,2})\b")   # 源代号（A5 / O2 / T1…）
 
 
 def _rrf_merge(ranked_lists: list[list[dict]], top_k: int) -> list[dict]:
@@ -61,6 +64,11 @@ class RagContext:
     budget_used: int = 0
     budget_cap: int = 0
     rerank_used: bool = False
+    # 通道判定（影子模式）：只记录，不改变行为。见 app/rag/route_decision.py
+    route_decision: dict | None = None
+    # 落回向量时的说明（判定要图但图未产出 / 判定不可用 / unsure）——与检索结论 reason 分开，
+    # 免得把路由层的注释混进检索结论（reason 会进评测报告）
+    route_note: str | None = None
 
     def trace_data(self) -> dict:
         """判官/诊断可见的检索证据（text 截断，防 trace 爆炸）。"""
@@ -71,12 +79,16 @@ class RagContext:
             "rerank_used": self.rerank_used,
             "budget_used": self.budget_used,
             "budget_cap": self.budget_cap,
+            "route_decision": self.route_decision,
+            "route_note": self.route_note,
             "groups": list(self.groups),
             "hits": [
                 {
                     "source_id": h["payload"].get("source_id", ""),
                     "section_path": h["payload"].get("section_path", ""),
-                    "score": round(h.get("score", 0), 4),
+                    # 图路由的 hit 没有 cosine 分（不是打分命中）→ 保持 None（别 round(None) 炸掉 trace）
+                    "score": round(h["score"], 4)
+                    if isinstance(h.get("score"), (int, float)) else None,
                     "rerank_score": round(h["_rerank"], 4) if "_rerank" in h else None,
                     "text": h.get("text", ""),
                 }
@@ -105,6 +117,10 @@ class RagBackend:
         budget_tokens: int = _DEFAULT_BUDGET_TOKENS,
         bm25: Bm25Index | None = None,
         reranker: Reranker | None = None,
+        compile_store=None,
+        graph_max_tokens: int | None = None,
+        route_judge=None,
+        route_threshold: float | None = None,
     ) -> None:
         self._vector_store = vector_store
         self._embedder = embedder
@@ -114,33 +130,157 @@ class RagBackend:
         self._budget_tokens = budget_tokens
         self._bm25 = bm25
         self._reranker = reranker
+        self._compile_store = compile_store          # 有它才启用图路由（否则纯向量）
+        self._graph_max_tokens = graph_max_tokens
+        # 通道判定（影子模式）：判定器本体在 app/rag/route_decision.py
+        self._route_judge = route_judge              # L3 的同步 judge（None = 不调 LLM）
+        self._route_threshold = route_threshold      # 保留参数（原 L2 的 margin 阈值；L2 已裁掉）
 
     def prepare(self, query: str, filters: dict | None = None) -> RagContext:
-        """路由 + 检索 + 门控 + 组内选择 + 注入块组装。"""
+        """入口：先做通道判定，再由判定决定要不要走图通道。"""
+        decision = self._decide_route(query)
+        ctx = self._prepare_impl(query, filters, decision)
+        if decision is not None:
+            ctx.route_decision = decision.trace_data()
+        return ctx
+
+    def _decide_route(self, query: str):
+        """跑一次 L1→L3→默认 的通道判定；任何异常都不得影响检索本身。"""
+        try:
+            from app.rag.route_decision import (
+                decide_route,
+                record_for_review,
+                record_distribution,
+            )
+
+            # L2（语义路由）已裁出流水线，故这里不再需要 embedder（见 route_decision.py 说明）
+            decision = decide_route(query, judge=self._route_judge)
+            record_for_review(query, decision)
+            record_distribution(query, decision)
+            return decision
+        except Exception:
+            return None
+
+    def _prepare_impl(
+        self, query: str, filters: dict | None = None, decision=None
+    ) -> RagContext:
+        """路由 + 检索 + 门控 + 组内选择 + 注入块组装。
+
+        **判定驱动执行**（2026-09-21 定，取代原来的"闸门"）：
+          · 判定 = enum → 跑 enum 执行器（目前只有"按源 + 角色取全"这一条实现）；
+          · 判定 = relation → 暂无执行器 → 落向量并标注；
+          · 判定 = vector / unsure → 落向量（unsure 另进台账）；
+          · 判定**不可用**（need 为 None：L3 关掉 / judge 不可用 / 出错）→ 落向量并标注。
+        关键变化：**不存在"第二判定器"**——老角色路由降格为 enum 的执行器，不再自己决定要不要走图。
+        代价是 L3 不可用时"角色枚举"这一类会退化成向量（沛东 2026-09-21 选此方案），
+        理由：那条路径只在故障或手动关闭时触发，而它带着"问题"这种泛词的已知误判——
+        返回 113 条局限（答非所问）比只给 6 段相关块（不全）更糟。
+        """
+        need = getattr(decision, "need", None)
+        if need == "enum":
+            enum_ctx = self._enum_role_query(query, filters)
+            if enum_ctx is not None:
+                return enum_ctx
+        # need == "relation" 时暂无执行器；vector / unsure / 未判定 都不进图通道
+        note = _fallback_note(decision)
         if filters is not None:
             srcs = _filter_sources(filters)
             if len(srcs) == 1:
-                return self._prepare_grouped(
+                ctx = self._prepare_grouped(
                     query, srcs, query_type="detail", mention_note=""
                 )
-            return self._prepare_fallback(query, filters=filters)
+            else:
+                ctx = self._prepare_fallback(query, filters=filters)
+        else:
+            mentioned = detect_named_source(query)
+            if len(mentioned) == 1:
+                ctx = self._prepare_grouped(
+                    query,
+                    mentioned,
+                    query_type="detail",
+                    mention_note=f"（点名文档 {mentioned[0]} → 单源细节）",
+                )
+            elif len(mentioned) >= 2:
+                ctx = self._prepare_grouped(
+                    query,
+                    mentioned,
+                    query_type="compare",
+                    mention_note=f"（点名多文档 {' / '.join(mentioned)} → 跨源对比）",
+                )
+            else:
+                ctx = self._prepare_fallback(query)
 
-        mentioned = detect_named_source(query)
-        if len(mentioned) == 1:
-            return self._prepare_grouped(
-                query,
-                mentioned,
-                query_type="detail",
-                mention_note=f"（点名文档 {mentioned[0]} → 单源细节）",
-            )
-        if len(mentioned) >= 2:
-            return self._prepare_grouped(
-                query,
-                mentioned,
-                query_type="compare",
-                mention_note=f"（点名多文档 {' / '.join(mentioned)} → 跨源对比）",
-            )
-        return self._prepare_fallback(query)
+        if note:                      # 不静默：落向量时说明原因（独立字段，不污染检索结论）
+            ctx.route_note = note
+        return ctx
+
+    def _enum_role_query(self, query: str, filters: dict | None) -> RagContext | None:
+        """enum 执行器（条件＝某源 + 某类论述）：按角色枚举该文的断言 → 证据块。
+
+        **它不再是判定器**：只有在判定给出 `need == "enum"` 之后才会被调用。
+        这里的"角色词 + 点名"是**执行器的参数提取**（把 enum 落到具体查询上），
+        不是"要不要走图"的判定；等第二个问题（怎么把判定变成图能用的确定性输入）
+        落地后，这一段会被正式的约束抽取取代。
+        """
+        if self._compile_store is None:
+            return None
+        from app.rag.graph_route import detect_role, role_chunks
+
+        claim_type = detect_role(query)
+        if not claim_type:
+            return None
+        if filters is not None:
+            srcs = _filter_sources(filters)
+        else:
+            srcs = detect_named_source(query)
+        if len(srcs) != 1:
+            # 兜底：用户直接写源代号（如"A5 的局限"）——KB 页与调试都用代号，
+            # 标题词表覆盖不到它；只在"这个代号确实已编译"时才算点名。
+            try:
+                known = set(self._compile_store.sources())
+            except Exception:
+                known = set()
+            hit_codes = [c for c in _SOURCE_CODE.findall(query or "") if c in known]
+            if len(set(hit_codes)) == 1:
+                srcs = [hit_codes[0]]
+        if len(srcs) != 1:                      # 未点名 / 点名多篇（跨源对比）→ 暂不接图路由
+            return None
+        src = srcs[0]
+        kwargs = {"mode": "chunks"}
+        if self._graph_max_tokens:
+            kwargs["max_tokens"] = self._graph_max_tokens
+        res = role_chunks(src, claim_type, compile_store=self._compile_store,
+                          vector_store=self._vector_store, **kwargs)
+        chunks = res.get("chunks") or []
+        if not chunks:
+            return None                         # 图里没有 → 落回向量（兜底）
+        hits = [
+            {
+                "id": ch["chunk_id"],
+                "score": None,
+                "text": ch["text"],
+                "payload": {"source_id": src, "section_path": ch.get("section_path", ""),
+                            "tokens": ch.get("tokens", 0), "text": ch["text"]},
+            }
+            for ch in chunks
+        ]
+        t = res["trace"]
+        return RagContext(
+            injected=res["injection"],
+            gate=True,
+            reason=(f"图路由：{src} 的{CLAIM_TYPE_LABEL[claim_type]}（{t['statements']} 条断言 → "
+                    f"{t['chunks_used']} 个证据块，枚举非 top-k）"),
+            hits=hits,
+            query_type=f"graph_role:{claim_type}",
+            groups=[{
+                "source_id": src, "route": "graph_role", "claim_type": claim_type,
+                "statements": t["statements"], "statements_covered": t.get("statements_covered"),
+                "selected": t["chunks_used"], "tokens": t["tokens_used"],
+                "over_max": len(t["over_budget"]),
+            }],
+            budget_used=t["tokens_used"],
+            budget_cap=self._graph_max_tokens or 32000,
+        )
 
     def _hybrid_search(
         self,
@@ -315,6 +455,26 @@ class RagBackend:
 def _filter_sources(filters: dict) -> list[str]:
     srcs = (filters or {}).get("source_id") or []
     return [srcs[0]] if isinstance(srcs, list) and srcs else []
+
+
+def _graph_attempt(decision) -> str | None:
+    """判定是否要尝试图通道；返回要尝试的类别（"enum" / "relation"），None 表示不尝试。"""
+    need = getattr(decision, "need", None)
+    return need if need in {"enum", "relation"} else None
+
+
+def _fallback_note(decision) -> str:
+    """落回向量时给 reason 附的一句说明（不静默降级）。"""
+    need = getattr(decision, "need", None)
+    if need == "enum":
+        return "⚠ 判定要图（enum）但图通道未产出，已落向量"
+    if need == "relation":
+        return "⚠ 判定要图（relation）但图通道未产出，已落向量"
+    if need == "unsure":
+        return "⚠ 通道判定为 unsure（判不出来），按向量处理"
+    if need is None:
+        return "⚠ 通道判定不可用（未判定），按向量处理"
+    return ""
 
 
 def _build_injection(hits: list[dict]) -> str:

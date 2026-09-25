@@ -456,7 +456,7 @@ def test_loop_with_fake_llm():
 
 
 def test_loop_trace_steps():
-    """Agent loop 的 trace：应记录 context → round → llm_call → event → done 的关键步骤。"""
+    """Agent loop 的 trace：应记录 context → round → llm_call → llm_stream → done 的关键步骤。"""
 
     async def scenario():
         from app.agent.loop import run_agent_turn
@@ -482,7 +482,7 @@ def test_loop_trace_steps():
         assert types[0] == "context"  # 第一笔是上下文组装
         assert "round" in types  # 有轮次记录
         assert "llm_call" in types  # 有 LLM 调用记录
-        assert "event" in types  # 有流式事件记录
+        assert "llm_stream" in types  # 有流式汇总记录
         assert types[-1] == "done"  # 最后是结束统计
         llm_call = next(s for s in trace.steps() if s["type"] == "llm_call")
         assert "prompt" in llm_call["data"]  # llm_call 应包含完整提示词
@@ -494,7 +494,7 @@ def test_loop_trace_steps():
 
 
 def test_loop_raw_chunk_forwarding():
-    """loop 应把原始 chunk 转发为 raw_chunk trace 步骤，且不影响文本输出。"""
+    """loop 应把流式增量聚合成一条 llm_stream 步骤（默认不逐条记），且不影响文本输出。"""
 
     class RawStubLLM(LLMClient):
         """模拟会产出原始 chunk 的 LLM（Fake 不产出 raw，这里专门构造）。"""
@@ -534,9 +534,108 @@ def test_loop_raw_chunk_forwarding():
         ]
         assert "".join(chunks) == "hi"  # raw 事件不影响文本输出
         types = [s["type"] for s in trace.steps()]
-        assert types.count("raw_chunk") == 2  # 两个原始 chunk 都被记录
+        assert "raw_chunk" not in types  # 默认聚合：不逐条记原始 chunk
+        stream = next(s for s in trace.steps() if s["type"] == "llm_stream")
+        assert stream["data"]["raw_chunks"] == 2  # 原始 chunk 以计数形式汇总
+        assert stream["data"]["deltas"] == 1  # 一个文本增量
+        assert stream["data"]["text"] == "hi"  # 本轮产出全文（评测执行轨迹复用）
+        assert stream["data"]["raw_samples"]  # 保留首尾样本，供协议层排查
         assert "usage" in types  # usage 步骤被记录
         done = next(s for s in trace.steps() if s["type"] == "done")
         assert done["data"]["tokens"]["total"] == 8  # done 统计汇总 token 用量
+
+    asyncio.run(scenario())
+
+
+def test_loop_trace_steps_do_not_grow_with_output_length():
+    """根因探针：trace 步骤数应与"流程步骤"同阶，不随输出长度线性增长。
+
+    背景：逐 delta 记步骤时，一次 1600 token 的回答会产生 3300+ 条 trace 步骤（面板
+    没法看、单次 SSE 1MB）。这里用 2000 个 delta 钉住聚合后的不变式。
+    """
+
+    class LongStubLLM(LLMClient):
+        model_name = "stub"
+
+        async def chat(self, messages, tools=None) -> LLMResponse:
+            return LLMResponse(content="")
+
+        async def stream(self, messages, tools=None):
+            for _ in range(2000):
+                yield LLMEvent(type="raw", raw={"choices": [{"delta": {"content": "字"}}]})
+                yield LLMEvent(type="text", text="字")
+            yield LLMEvent(type="done")
+
+    async def scenario():
+        from app.agent.loop import run_agent_turn
+
+        from app.agent.trace import Trace
+        from app.tools.executor import ToolExecutor
+        from app.tools.registry import default_registry
+
+        trace = Trace()
+        chunks = [
+            chunk
+            async for chunk in run_agent_turn(
+                "hi",
+                mode="general",
+                llm=LongStubLLM(),
+                tools=ToolExecutor(default_registry()),
+                trace=trace,
+            )
+        ]
+        assert len("".join(chunks)) == 2000  # 文本输出不受影响
+        steps = trace.steps()
+        types = [s["type"] for s in steps]
+        assert types.count("raw_chunk") == 0  # 不再逐条记原始流
+        assert types.count("event") == 0  # 不再逐条记流式事件
+        assert len(steps) <= 6  # context / round / llm_call / llm_stream / done
+        stream = next(s for s in steps if s["type"] == "llm_stream")
+        assert stream["data"]["deltas"] == 2000
+        assert stream["data"]["raw_chunks"] == 2000
+        assert len(stream["data"]["text"]) == 2000  # 全文保留，评测执行轨迹要用
+        assert len(stream["data"]["raw_samples"]) == 3  # 首 2 + 末 1
+
+    asyncio.run(scenario())
+
+
+def test_loop_per_delta_trace_switch(monkeypatch):
+    """TRACE_PER_DELTA=1 时恢复逐条记录（排查 provider 协议层的调试开关）。"""
+
+    class RawStubLLM(LLMClient):
+        model_name = "stub"
+
+        async def chat(self, messages, tools=None) -> LLMResponse:
+            return LLMResponse(content="")
+
+        async def stream(self, messages, tools=None):
+            yield LLMEvent(type="raw", raw={"choices": [{"delta": {"content": "你"}}]})
+            yield LLMEvent(type="text", text="hi")
+            yield LLMEvent(type="done")
+
+    monkeypatch.setenv("TRACE_PER_DELTA", "1")
+
+    async def scenario():
+        from app.agent.loop import run_agent_turn
+
+        from app.agent.trace import Trace
+        from app.tools.executor import ToolExecutor
+        from app.tools.registry import default_registry
+
+        trace = Trace()
+        chunks = [
+            chunk
+            async for chunk in run_agent_turn(
+                "hi",
+                mode="general",
+                llm=RawStubLLM(),
+                tools=ToolExecutor(default_registry()),
+                trace=trace,
+            )
+        ]
+        assert "".join(chunks) == "hi"
+        types = [s["type"] for s in trace.steps()]
+        assert types.count("raw_chunk") == 1  # 逐条记录恢复
+        assert "llm_stream" not in types  # 调试模式下不再叠加汇总步骤
 
     asyncio.run(scenario())

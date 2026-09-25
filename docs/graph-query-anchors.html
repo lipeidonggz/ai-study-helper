@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图查询的可用锚 + 20 条待解用例（检索侧工作清单）</title>
+  <style>
+    body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f6f7f9; color: #24292f; margin: 0; padding: 28px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: #57606a; font-size: 13px; margin-bottom: 22px; }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    .toc { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; }
+    .toc b { color: #0969da; }
+    .section { background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 16px 18px; margin-bottom: 24px; }
+    .section > h2 { margin: 0 0 12px; font-size: 17px; border-bottom: 2px solid #0969da; padding-bottom: 8px; }
+    .chain { font-size: 12.3px; color: #444; background: #f3f4f6; border-left: 3px solid #6b9aff; border-radius: 0 6px 6px 0; padding: 8px 12px; margin-top: 12px; line-height: 1.7; }
+    .chain code { background: #fff; border-radius: 4px; padding: 0 4px; font-size: 11.5px; color: #0969da; }
+    .verdict { font-size: 12.5px; color: #333; background: #f3f4f6; border-left: 3px solid #6b9aff; border-radius: 0 6px 6px 0; padding: 10px 12px; line-height: 1.75; }
+    .verdict b { color: #0969da; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 4px 0; }
+    th, td { border: 1px solid #d8dee4; padding: 6px 9px; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; font-size: 12.5px; }
+    td b { color: #0969da; }
+    code { background: #f0f1f3; border-radius: 4px; padding: 0 4px; font-size: 11.5px; color: #57606a; }
+    .ok { color: #1a7f37; font-weight: bold; }
+    .half { color: #9a6700; font-weight: bold; }
+    .no { color: #cf222e; font-weight: bold; }
+    .footer { color: #8c959f; font-size: 11.5px; margin-top: 20px; }
+    .alink { color: #0969da; text-decoration: none; }
+    .alink:hover { text-decoration: underline; }
+    html { scroll-behavior: smooth; }
+    h2, .chain { scroll-margin-top: 14px; }
+    h2:target, .chain:target { background: #fff8c5; box-shadow: 0 0 0 4px #fff8c5; }
+    .toc a { color: #0969da; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>图查询的可用锚 + 20 条待解用例 · 检索侧工作清单</h1>
+    <p class="sub">面向"怎么把用户 Query 落到图的查询上"这一步（第二个问题）· 2026-09-21 起草 · <b>状态：待逐条讨论</b> · 上游口径见 <a class="alink" href="rag-storage-structure.html">架构设计文档</a> 决策 7；过程见 <a class="alink" href="../../memory/0028-rag-storage-architecture.html">0028 考古笔记</a></p>
+
+    <div class="toc"><b>目录</b>：<a class="alink" href="#sec1">① 图里可用的锚（全量清单）</a>　<a class="alink" href="#sec2">② 锚的组合与实测跨度</a>　<a class="alink" href="#sec3">③ statement 作为锚的三条注意</a>　<a class="alink" href="#sec4">④ 20 条待解用例（A–F）</a>　<a class="alink" href="#sec5">⑤ 四条结构性问题</a>　<a class="alink" href="#sec6">⑥ 一个必须先定死的技术点</a>　<a class="alink" href="#sec7">⑦ 讨论状态</a></div>
+
+    <div class="section">
+      <h2 id="sec1">① 图里可用的锚（全量清单）</h2>
+      <p style="font-size:12.5px;color:#57606a;margin:0 0 8px;">"锚"＝用来定位"要取哪些内容"的东西，也就是过滤条件的取值来源。命中规模为 A5（单源、390 条断言）实测。</p>
+      <table>
+        <tr><th>锚</th><th>图上是什么</th><th>实测命中规模</th><th>用户话怎么落到它</th><th>校验要求</th></tr>
+        <tr><td><b>源</b>（已在用）</td><td>doc 节点</td><td>390 条 → 24 块</td><td>标题词表 / 别名 / 代号 / 界面选择</td><td>必须存在<b>且已编译</b></td></tr>
+        <tr><td><b>角色</b>（已在用）</td><td><code>statement.claim_type</code></td><td>局限 113 → <b>21 块</b>；展望 14 → 6 块</td><td>词表（L1）+ 形状判定（L3）</td><td>必须是枚举值（3 个）</td></tr>
+        <tr><td><b>谓词</b><br><span class="ok">已确认入口</span>（待实现）</td><td><code>statement.predicate</code></td><td>38 种，<b>中位 8 条</b>，最大 46（has_property / acts_on）</td><td>问题里的动词 / 动名词 → 38 条受控谓词；<b>可人工维护一张中文触发词表</b>（只有 38 条，成本极低）</td><td>必须在 38 条表内（表外词不进图，<b>天然校验</b>）</td></tr>
+        <tr><td><b>概念</b>（代码已有，未接路由）</td><td>concept 节点</td><td>头部 Anthropic 27 条 → 13 块；长尾 approval fatigue 1 条 → 1 块</td><td>别名 / 描述向量 / LLM（<b>已知最难</b>）</td><td>必须存在于概念表；注意碎片化（同名不同形）</td></tr>
+        <tr><td><b>statement</b>（待设计）</td><td>statement 节点</td><td><b>1 条 → 1 块</b>（390/390 全是 1 个块）</td><td>两端 +（可选）谓词</td><td>两端齐备 + 谓词与方向合理</td></tr>
+        <tr><td>~~极性~~（不建议用）</td><td><code>statement.polarity</code></td><td>negative 仅 <b>45 / 390</b></td><td>—</td><td><b>数据太薄，不建议作锚</b></td></tr>
+      </table>
+      <div class="chain"><b>实测口径</b>：概念抽查时注意大小写——<code>Anthropic</code> / <code>Claude Code</code> / <code>VM</code> 这类含大写的名字，查询必须与入库时一致（SQLite 的 <code>=</code> 对 TEXT 大小写敏感，本次就踩过一次）。</div>
+      <div class="chain"><b>谓词入口已确认加入（2026-09-21 沛东定）</b>。理由：① 它是<b>受控小表</b>——全库只有 38 条，且不随语料增长（对比概念表会随语料线性涨）；② 因此可以人工维护一张"中文触发词 → 谓词"的映射表，成本极低；③ 它解决了一个概念锚解决不了的问题：用户说"成本"时，库里没有概念 <code>cost</code>，但有谓词 <code>costs</code>（7 条）。</div>
+      <div class="chain"><b>概念锚的落地能力实测（2026-09-21，399 概念）</b>——按"LLM 抽出概括名 → 落到库里节点"这条路测的：<br>· <b>概括名的 top-1 明显弱于专指名</b>：概括名落在 <b>0.817–0.869</b>（中文 0.817–0.839 最低），专指名在 <b>0.899–0.907</b>；按"分数不可分"那条经验，这个区间没有判别力。<br>· <b>命中的永远是碎片中的一个</b>：如"防护措施"只落到 <code>model layer protection</code>，不代表拿到 defense 那一族。<br>· <b>唯一的亮点：同族碎片在向量空间里聚团</b>——<code>security controls</code> 的 top3 全是 controls 类（network / egress / filesystem controls），<code>defense mechanisms</code> 的 top3 也都在 defense / mechanism 这一片。<b>所以"top-k 当族锚"有可能成立，top-1 不行</b>（待标定）。<br>· 附带回答了一个疑问：中文"威胁"落地时会落到 <code>threat model</code>(0.839)——<b>抽取抽的是"威胁"，落地才可能碰巧落到 `threat model`</b>，而后者语义上并不精确（威胁 ≠ 威胁模型）。这说明<b>抽取与落地必须分开看</b>。</div>
+    </div>
+
+    <div class="section">
+      <h2 id="sec2">② 锚的组合与实测跨度</h2>
+      <table>
+        <tr><th>组合</th><th>例</th><th>命中</th></tr>
+        <tr><td>源 × 角色</td><td>A5 的局限</td><td><b>113 条 → 21 块</b>（最实用的组合）</td></tr>
+        <tr><td>源 × 概念</td><td>A5 里关于 sandbox</td><td>4 条 → 3 块</td></tr>
+        <tr><td>概念 × 角色</td><td>sandbox 的局限</td><td><b>1 条</b>（很窄）</td></tr>
+        <tr><td><b>概念 × 概念（直连边）</b></td><td>VM × sandbox / Claude Code × approval fatigue / agent × sandbox</td><td><b>0 条</b></td></tr>
+      </table>
+      <div class="chain"><b>关键实测：库里"两个有分量的概念直连"的边极少</b>——按"两端各自挂 ≥N 条断言"筛：≥2 条 39 / 279、<b>≥3 条 18 / 279（6.5%）</b>、≥5 条 5 / 279。而度数最高的概念是 <code>Anthropic</code>(27) / <code>Claude Code</code>(13) / <code>Claude Cowork</code>(13) / <code>agent</code>(11)——<b>都是组织或产品实体</b>，它们的边多是 <code>creates / uses / acts_on</code> 这类归属与作用。<br>根因：statement 的端点大多是<b>短语片段</b>（<code>risk of deployments</code>、<code>second approach to capping blast radius</code>、<code>three components</code>），而用户会点名的概念通常是<b>实体或主题</b>（VM、sandbox、agent），两者交集很小。<br><b>结论：不设"找连接两个概念的断言"这种 join 执行器</b>——命中率太低；relation 类只能走"枚举 ×2 并置"或全量直入。</div>
+    </div>
+
+    <div class="section">
+      <h2 id="sec3">③ statement 作为锚的三条注意</h2>
+      <table>
+        <tr><th>#</th><th>注意</th><th>实测</th></tr>
+        <tr><td>1</td><td><b>精度最高</b>：锚一条 statement ＝ 拿一个块</td><td>390 / 390 条 statement 各只挂 1 个块</td></tr>
+        <tr><td>2</td><td><b>端点质量</b>：不是所有 statement 都能当"边锚"</td><td>两端齐备 <b>279 / 390（71.5%）</b>；单端 <b>30（7.7%）</b>；<b>两端都空 81（20.8%）</b>——那 21% 完全不能当锚</td></tr>
+        <tr><td>3</td><td><b>一句多断言会漏兄弟</b>：按 statement 锚定时必须按证据句 / 块合并取</td><td><code>st0007/8/9</code> 是同一句拆出的三条（"风险有两部分：失败概率、潜在损失"）</td></tr>
+      </table>
+      <div class="chain">端点缺失的典型形态：<code>agent --become--> （空）</code>、<code>potential blast radius --changes--> （空）</code>——原文是 <i>As agents grow more capable, so does their potential blast radius.</i>，宾语都丢了。这类只能当"某概念参与的断言"，不能当"两点之间的边"。</div>
+    </div>
+
+    <div class="section">
+      <h2 id="sec4">④ 20 条待解用例（A–F）</h2>
+      <p style="font-size:12.5px;color:#57606a;margin:0 0 8px;">构造口径：<b>向量检索在原理上搞不定的问题</b>（要完备 / 要连接 / 要链 / 要跨源对齐 / 要一致性 / 要结构化条件）；<b>不迁就我们图现在的结构</b>（有些甚至需要图还没有的能力）。全部自包含，<b>不含需要多轮上下文的指代</b>。标记：<span class="ok">✓ 可执行</span> / <span class="half">△ 半可行</span> / <span class="no">✗ 卡住</span>。</p>
+
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">A 组 · 完备枚举（向量只能给抽样）</h3>
+      <table>
+        <tr><th>#</th><th>用户 Query</th><th>抽出的元素</th><th>拆成检索动作</th><th>结果 / 卡点</th></tr>
+        <tr><td>1</td><td>《How we contain Claude》和《Harness engineering》各自承认了哪些局限？</td><td>源 ×2、claim_type=局限</td><td>源 → 标题 / 别名召回；claim_type → 精确</td><td><span class="ok">✓</span> 可执行（＝现有 enum 执行器 + 源召回升级）</td></tr>
+        <tr><td>2</td><td>整个知识库里，关于"成本 / 开销"的论述都有哪些？</td><td>谓词 <code>costs</code>（"成本 / 开销" → costs）</td><td><b>谓词精确</b> → <b>7 条</b>（概念 <code>cost</code> 在表里不存在）</td><td><span class="ok">✓</span> 谓词入口已加入（2026-09-21）</td></tr>
+        <tr><td>3</td><td><b>知识库里提到的 Agent 安全防护手段都有哪些，各自针对什么威胁？</b><br><span style="color:#8c959f;font-size:11.5px;">（2026-09-21 细化：原版只写"安全防护手段"，补上范围词 Agent）</span></td><td>谓词族（"针对" → <code>protects_against</code> 等）；<b>范围词</b> <code>agent</code>；概念侧<b>库里无统一节点</b>（碎成 <code>defense</code> / <code>mechanisms</code> / <code>controls</code> / <code>isolation</code> 一片，且无上位概念）</td><td><b>谓词族</b>：<code>protects_against</code> 9 + <code>blocks</code> 9 + <code>detects</code> 8 + <code>isolates</code> 5 + <code>enforces</code> 6 + <code>monitors</code> 2 = <b>39 条 → 18 块</b></td><td><span class="half">△</span> <b>能召回材料，但不给完整且正确的清单</b>：39 条里约 20 条可用（<code>enforces</code> 6 条里仅 2 条可用，其余端点全空）；三类错项：抽取错误（<code>three components --protects_against--> model</code> 三条）、<b>极性反了</b>（<code>Anthropic --protects_against--> user's machine</code>，证据句是 "We're <b>not</b> protecting user machines"）、<b>方向反了</b>（<code>egress proxy --blocks--> traffic to api.anthropic.com</code>，证据句是 "checked the destination… and <b>let it through</b>"）。<br><b>更要紧的是漏召回 62 条</b>：证据句明确讲防护、但谓词不在防护族里——其中就有标准答案级的 <code>Anthropic --constrains--> agent action constraints</code>（证据句直接列了 process sandboxes / VMs / filesystem boundaries）。<br><b>细化后新增两条实测</b>：① <b>范围词不能当 AND 过滤键</b>——谓词族 ∩ 端点含 <code>agent</code> 只剩 <b>5 条 / 5 块</b>（39→5，枚举被打死），端点含 agent（不限谓词）有 48 条 / 14 块但混大量无关（<code>agent --acts_on--> files / sockets / processes</code>），而 chunk 层 24 块里 <b>17 块</b>都出现 agent（近乎零区分度）；② <b>"Agent 安全防护"自带方向歧义</b>——防 Agent 作恶（containment，A5 主线）与防 Agent 被攻击（注入 / 不可信内容）是两类内容，图里不编码这个方向。<br>详见 <a class="alink" href="#issue-4">⑤ 节第 4 条"谓词族 ≠ 内容类别"</a>与 <a class="alink" href="#issue-4-note">附注（细化版第 3 条）</a>。</td></tr>
+        <tr><td>4</td><td>知识库里的文章，明确否定或放弃了哪些做法？</td><td>抽不出（"否定"既非概念，也不是现有 claim_type）</td><td>退 statement 向量；或 claim_type=局限 113 条（语义不对）</td><td><span class="no">✗</span> <b>无对应入口</b></td></tr>
+        <tr><td>5</td><td>知识库里的文章，计划"以后要做"的事情都有哪些？</td><td>claim_type=展望</td><td>精确</td><td><span class="ok">✓</span> 14 条（全库）</td></tr>
+      </table>
+
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">B 组 · 关系与方向（向量给得出"提到"，给不出"连接"）</h3>
+      <table>
+        <tr><th>#</th><th>用户 Query</th><th>抽出的元素</th><th>拆成检索动作</th><th>结果 / 卡点</th></tr>
+        <tr><td>6</td><td>沙箱和出口管控是怎么配合的？谁依赖谁？</td><td>概念 <code>sandbox</code>(4)、<code>egress controls</code>(1)</td><td>两概念各取断言并置</td><td><span class="half">△</span> "谁依赖谁"<b>无直连边</b></td></tr>
+        <tr><td>7</td><td>EDR 和沙箱之间是什么关系——为什么一个看不见另一个？</td><td>概念 <code>EDR</code>(2)、<code>sandbox</code>(4)</td><td>同上</td><td><span class="half">△</span> 同 6</td></tr>
+        <tr><td>8</td><td>知识库里的防护机制，哪些是用来"限制 agent 能做什么"的，哪些是用来"发现它做了什么"的？</td><td>谓词 <code>blocks</code> / <code>protects_against</code> / <code>detects</code> / <code>monitors</code></td><td><b>谓词精确</b></td><td><span class="ok">✓</span> 正解（blocks 9 / protects_against 9 / detects 8 / monitors 2）</td></tr>
+        <tr><td>9</td><td>Claude Code 和 Claude Cowork 在隔离方式上的差别是什么？</td><td>概念 <code>Claude Code</code>(13)、<code>Claude Cowork</code>(13) + 谓词 <code>isolates</code> / <code>runs_in</code></td><td>两概念各取断言 + 谓词收窄</td><td><span class="ok">✓</span> 可行（对照交 LLM）</td></tr>
+        <tr><td>10</td><td>在 containment 这套设计里，"阻止"和"发现"这两类防护各自被放在什么位置？</td><td>概念 <code>containment</code>(5) + 谓词 <code>blocks</code>(9) / <code>detects</code>(8)</td><td>概念 + 谓词（均已可用）</td><td><span class="half">△</span> 材料有，"地位"要 LLM 判</td></tr>
+      </table>
+
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">C 组 · 路径与因果链（向量给不出链）</h3>
+      <table>
+        <tr><th>#</th><th>用户 Query</th><th>抽出的元素</th><th>拆成检索动作</th><th>结果 / 卡点</th></tr>
+        <tr><td>11</td><td>从"用户批准疲劳"到"数据外泄"，中间这条链是怎么一步步发生的？</td><td>概念 <code>approval fatigue</code>(1)、<code>exfiltration</code>(1)</td><td>各取 1 条断言</td><td><span class="no">✗</span> <b>链给不出</b>；材料也太少（各 1 条）</td></tr>
+        <tr><td>12</td><td>一个恶意仓库要完成数据外泄，中间需要哪几步？</td><td>概念 <code>malicious workspace file</code>(1)、<code>exfiltration</code>(1)</td><td>同上</td><td><span class="no">✗</span> 同 11</td></tr>
+        <tr><td>13</td><td>为什么把 agent 循环移出 VM 会削弱主机端对它的可观测性？</td><td>概念 <code>agent loop relocation outside the VM</code>(2)、<code>VM</code>(8)、<code>visibility</code>(1) + 谓词 <code>causes</code>(11) / <code>visible_to</code>(2)</td><td>概念 + 谓词</td><td><span class="half">△</span> 材料集中、半可行（方向靠谓词或 LLM）</td></tr>
+        <tr><td>14</td><td>哪些设计决定会连锁影响整套系统的可审计性？</td><td>概念 <code>auditability</code>(1) / <code>auditable</code>(1) + 谓词 <code>affects</code>(3)</td><td>概念 + 谓词（入口可用）</td><td><span class="no">✗</span> <b>卡的是材料量</b>：<code>affects</code> 全库仅 3 条，"连锁影响"没有足够边可走</td></tr>
+      </table>
+
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">D 组 · 跨来源对齐</h3>
+      <table>
+        <tr><th>#</th><th>用户 Query</th><th>抽出的元素</th><th>拆成检索动作</th><th>结果 / 卡点</th></tr>
+        <tr><td>15</td><td>知识库里的文章对"人的角色"的定义有什么不同？</td><td>概念 <code>role</code> <b>不在表里</b>（只有 <code>human-in-the-loop</code>(1)、<code>supervision</code>(1)）</td><td>退 statement 向量</td><td><span class="half">△</span> 回到"一堆相关断言 + LLM 对照"</td></tr>
+        <tr><td>16</td><td>知识库里有没有哪几篇在"谁是最后一道防线"上看法相反？分别是哪几篇？</td><td>statement 文本（"最后一道防线"）</td><td>statement 向量</td><td><span class="no">✗</span> <b>矛盾判断不是检索</b></td></tr>
+        <tr><td>17</td><td>全部文章里，同一个概念（比如 harness）在不同文章里是不是指同一件事？</td><td>概念 <code>harness</code> → <b>表里没有</b></td><td>—</td><td><span class="no">✗</span> 双卡：O2 未编译 + <code>cross_unit</code> 全 0</td></tr>
+      </table>
+
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">E 组 · 一致性 / 矛盾</h3>
+      <table>
+        <tr><th>#</th><th>用户 Query</th><th>抽出的元素</th><th>拆成检索动作</th><th>结果 / 卡点</th></tr>
+        <tr><td>18</td><td>知识库里有没有互相矛盾的说法？矛盾在哪一点上？</td><td>statement 文本</td><td>statement 向量（会召回"讲矛盾"的段落，不是矛盾的两条断言）</td><td><span class="no">✗</span> 缺"同主题并置比较"步骤</td></tr>
+        <tr><td>19</td><td>有没有哪两篇对同一个机制给出了不同评价？</td><td>statement 文本</td><td>同上</td><td><span class="no">✗</span> 同 18</td></tr>
+      </table>
+
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">F 组 · 结构化条件过滤</h3>
+      <table>
+        <tr><th>#</th><th>用户 Query</th><th>抽出的元素</th><th>拆成检索动作</th><th>结果 / 卡点</th></tr>
+        <tr><td>20</td><td>哪些安全案例发生在用户明确表示同意之前？分别涉及哪些组件？</td><td>statement 文本（"同意之前"）；谓词表里确实有 <code>before</code>，但全库仅 <b>2 条</b></td><td>statement 向量（谓词锚撑不起）</td><td><span class="no">✗</span> <b>时序条件</b>没有足够支撑：既无时间字段，<code>before</code> 也只有 2 条</td></tr>
+      </table>
+
+      <div class="chain"><b>汇总（谓词入口加入后）</b>：<span class="ok">✓ 可执行 5 条</span>（1、2、5、8、9）；<span class="half">△ 半可行 6 条</span>（3、6、7、10、13、15）；<span class="no">✗ 卡住 9 条</span>（4 缺入口；11–14 链与材料量；16、18、19 矛盾比较；17 覆盖与跨源对齐；20 时序）。<br><b>加谓词入口这一项的净效果</b>：第 2 条从"卡住（缺入口）"变成可执行；第 8、10、13、14 从"隐式依赖"变成"有明确入口"；第 20 条确认<b>不是入口问题而是材料问题</b>（<code>before</code> 只有 2 条）。</div>
+    </div>
+
+    <div class="section">
+      <h2 id="sec5">⑤ 四条结构性问题（从这 20 条里归纳出来的）</h2>
+      <div class="chain" id="issue-1"><b>一、"概念锚只支持术语原样"这条假设，把主力悄悄挪到了 statement 向量。</b>实测：<code>cost</code>、<code>role</code>、<code>harness</code> 都不在概念表（<code>blocks</code> / <code>observe</code> 是谓词不是概念）。凡是用自然语言描述概念的（成本 / 开销、人的角色、最后一道防线），精确锚就落空。<b>所以这套方案的真实形态是：statement 向量是主力，精确锚是收窄项</b>——这决定了投入顺序：statement 向量库是必需品，不是可选优化。</div>
+      <div class="chain" id="issue-2"><b>二、入口清单漏了"谓词"——已解决（2026-09-21 确认加入）。</b>2、8、10、14 本质都是谓词过滤（<code>costs</code> 7 / <code>blocks</code> 9 / <code>protects_against</code> 9 / <code>detects</code> 8 / <code>monitors</code> 2 / <code>affects</code> 3），而谓词是 38 条受控表、精确可查、零成本，且<b>不随语料增长</b>。<br><b>为什么它比概念好做</b>：概念表会随语料线性涨（一篇 A5 就有 399 个），而谓词永远只有 38 条——所以"中文触发词 → 谓词"的映射可以人工维护、成本极低，而概念锚没有这个便利（概念锚只能靠检索 + 术语原样）。<br><b>它解决的那个具体问题</b>：用户说"成本"时，库里没有概念 <code>cost</code>，但有谓词 <code>costs</code>。</div>
+      <div class="chain" id="issue-3"><b>三、"链"和"矛盾"这套流程给不出，而矛盾那条不是可以后置的。</b>这套流程的产出是<b>扁平的一组 statement + 它们的 chunk</b>。11–13 要路径、16/18/19 要"把同一主题下的多条断言并置比较"——后者在这套流程里<b>完全没有对应步骤</b>（多跳可以后置，但"同主题聚类 + 比较"连提都没提）。它们现在只能靠"把材料丢给 LLM 自己看"，效果取决于召回是否恰好把两边都召回来。</div>
+      <div class="chain" id="issue-4"><b>四、谓词族 ≠ 内容类别——两者正交，所以"用谓词划族"只是近似（2026-09-21 第 3 条实测得出）。</b>"防护手段"是一个<b>内容类别</b>，而谓词是<b>关系类型</b>；一条断言算不算"防护手段"取决于它讲什么内容，与它用哪个谓词（<code>constrains</code> / <code>isolates</code> / <code>blocks</code> / <code>enforces</code> / <code>uses</code>）没有必然关系。<br><b>于是必然两头出问题</b>：划窄了漏（第 3 条实测漏召回 <b>62 条</b>，含标准答案级的 <code>Anthropic --constrains--> agent action constraints</code>）、划宽了把不是手段的拉进来（<code>detects</code> 里混着基准测试、<code>monitors</code> 里混着"人监督 agent"）。<br><b>含义</b>："一类东西有哪些"这类问题，图里现在<b>没有"内容类别"这个维度</b>——概念表 399 个全是 <code>type=concept</code>，既无类型也无上位节点。三条候选路径：① 概念的类别 / 上位节点（最正，但图里没有原料，属编译层的活）；② 概念概括名 + top-k 族锚（实测同族碎片在向量空间聚团，可能可用，待标定）；③ 接受"部分 + 声明"（谓词族给材料、LLM 筛、如实声明不完整）。</div>
+      <div class="chain" id="issue-4-note"><b>附注 · 细化版第 3 条（"Agent 安全防护手段都有哪些，各自针对什么威胁"）带出两条（2026-09-21 实测）</b>——把范围词 <code>agent</code> 补进来之后，问题骨架没变（仍是"内容类别枚举 + 关系"），但暴露两件事：<br>① <b>范围词不能当 AND 过滤键，它在两端表现相反。</b>chunk 层 24 块里 <b>17 块</b>都出现 agent（A5 全篇都在讲 agent，近乎零区分度）；statement 端点层却把谓词族 39 条砍到 <b>5 条 / 5 块</b>——因为端点多写具体名字（<code>sandbox</code> / <code>egress controls</code> / <code>VM</code> / <code>Claude Code</code> / <code>sub-agents</code>），很少直接写 agent。换一条路也不行："端点含 agent"（不限谓词）48 条 / 14 块里混着大量无关（<code>agent --acts_on--> files / sockets / processes</code>、<code>agent --is--> user extension</code>）。所以范围词的正当用法是<b>软加权 / 只在覆盖声明里体现</b>，不是过滤键——与 2026-09-19"枚举型问题再 AND 概念约束，命中 113 条 → 4 条"是同一个病。<br>② <b>"Agent 安全防护"自带方向歧义，图里没有这个维度。</b>防 Agent 作恶（containment，A5 主线；正文明说 <i>We're not protecting user machines from agents; we're protecting our own infrastructure</i>）与防 Agent 被攻击（<code>MCP servers --provides--> untrusted content in agent context</code>、<code>three components --protects_against--> external content the agent can reach</code>）是两类内容；"都有哪些"要求两面都列，而谓词族与概念锚都不编码这个方向，只能靠 LLM 在线分。<br><b>复跑脚本</b>：<code>backend/data/tmp/_case3_agent_probe.py</code>（只读）。</div>
+    </div>
+
+    <div class="section">
+      <h2 id="sec6">⑥ 一个必须先定死的技术点：statement 的向量用什么文本？</h2>
+      <div class="verdict">若只用 <code>subject + predicate + object</code>（三个短词）——<b>召回不到细节</b>（"17%"、"同意之前"这类），而且实测过短文本的相似度<b>分数不可分</b>（噪声地板 0.839 &gt; 信号 0.830）。<br>所以必须把<b>逐字证据句 <code>evidence_texts</code> 一起编码</b>；这样一来 statement 向量其实≈"聚焦版的 chunk 向量"。<br>同时要看清一个 trade-off：<b>换成 statement 向量会把"检索覆盖"绑定到"抽取覆盖"</b>——图只含被抽成断言的内容，而 chunk 是全量的。<b>更稳的是两者都留</b>：statement 向量用于精确定位断言，chunk 向量兜住没被抽成断言的内容。</div>
+    </div>
+
+    <div class="section">
+      <h2 id="sec7">⑦ 讨论状态</h2>
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">已定的结论</h3>
+      <table>
+        <tr><th>#</th><th>议题</th><th>结论</th><th>日期</th></tr>
+        <tr><td>1</td><td><b>谓词是否作为入口</b></td><td><b>加</b>。理由：受控小表（38 条、不随语料增长）、可人工维护中文触发词、且能解决"用户说 cost 但库里只有谓词 costs"这类问题。净效果：第 2 条从卡住变可执行。</td><td>2026-09-21</td></tr>
+        <tr><td>2</td><td><b>第 3 条能否只靠谓词入口搞定</b></td><td><b>不能</b>。谓词族能给出材料（39 条里约 20 条可用），但<b>不给"完整且正确的清单"</b>——而这个问题要的正是清单；且<b>漏召回 62 条</b>（比命中还多）。因此第 3 条维持 <span class="half">△</span>，并把根因归纳为 <a class="alink" href="#issue-4">⑤ 第 4 条"<b>谓词族 ≠ 内容类别</b>"</a>。</td><td>2026-09-21</td></tr>
+      </table>
+      <div class="chain" style="margin-top:12px;">拟定的讨论顺序（待确认）：<b>先解决 ✓ 那 5 条的闭环</b> → <b>再补另一样白拿的</b>（statement 向量库）→ <b>然后逐条过 △</b>（"配对"、"依赖方向"、"对照"这类要 LLM 读的，看是增强召回还是加结构）→ <b>最后处理 ✗ 那 9 条</b>（缺入口 / 链 / 矛盾比较 / 覆盖 / 时序）。<br>每条讨论结论直接记在上表（或在本文件对应行下方加注），过程留痕在 0028。</div>
+      <h3 style="margin:14px 0 6px;font-size:13.5px;">待定项（细化版第 3 条带出来的，需拍板）</h3>
+      <table>
+        <tr><th>#</th><th>待定</th><th>实测依据</th><th>影响</th></tr>
+        <tr><td>1</td><td><b>范围词怎么处置</b>（如"Agent 安全防护"里的 Agent）</td><td>做 AND：谓词族 39 条 → 5 条 / 5 块，枚举被打死；不做：chunk 层 24 块里 17 块含 agent，几乎无区分度</td><td>候选是"软加权 + 覆盖声明，不当过滤键"；这条属执行规矩，定了才好写 ④ 的"拆成检索动作"</td></tr>
+        <tr><td>2</td><td><b>"防护方向"要不要进图</b>（防 Agent 作恶 vs 防 Agent 被攻击）</td><td>两类内容在 A5 里都实存，谓词族与概念锚都不编码该方向</td><td>不进图，第 3 条的"都有哪些"就得接受"混着两种方向、靠 LLM 在线分"；进图则属编译层维度扩充</td></tr>
+      </table>
+      <div class="chain">两条都直接影响 ⑤ 第 4 条里那三条候选路径的取舍，故先记为待定，不预设结论。</div>
+    </div>
+
+    <div class="footer">
+      数据来源：<code>backend/data/tmp/_anchor_sizes.txt</code>、<code>_pair_edges.txt</code>、<code>_stmt_samples.txt</code>、<code>_concept_probe3.py</code>；2026-09-21 补充的只读探针：<code>_concept_hierarchy_probe.py</code>（概念表有无类别/上位节点、is_a 边可用数）、<code>_defense_objects_probe.py</code>（防护族 45 条的对象侧与证据句）、<code>_case3_agent_probe.py</code>（细化版第 3 条：范围词 agent 在三条路上的命中）。上游口径：<a class="alink" href="rag-storage-structure.html">docs/rag-storage-structure.html</a> 决策 7（检索通道判据）。过程与决策链：<a class="alink" href="../../memory/0028-rag-storage-architecture.html">memory/0028</a>。
+    </div>
+  </div>
+</body>
+</html>

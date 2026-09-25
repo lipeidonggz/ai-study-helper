@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0033 · GraphRAG 索引方法小结（学习向·知识文）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; font-size: 0.85em; line-height: 1.5; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
+    th, td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top; }
+    code { word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0033 · GraphRAG 索引方法小结</h1>
+      <p class="subtitle">性质：<b>知识文（分层阅读）</b> · 状态：<span class="half">初稿，待沛东确认</span></p>
+      <p class="subtitle">适合谁读：<b>想在"建图 / 建索引"这条线上快速建立全局认识</b>的人；或下次要再跑一遍 GraphRAG 索引、不想重新踩坑的人。</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 现场细节（逐轮实验过程）见 <a href="0032-graphrag-a5-experiment.html">0032</a> · 查询侧（四种检索模式）见 <a href="0031-graphrag-search-modes.html">0031</a></p>
+      <p class="subtitle muted"><b>证据标记</b>：<span class="ok">✅ 实测</span>（我们自己跑出来的）· <span class="half">📄 源码</span>（读 graphrag 3.2.0 的代码）· <span class="half">🤔 推断</span>（我们的判断，未验证）</p>
+    </header>
+
+    <section class="card">
+      <h2>地图 · 先建立全局认识（一屏看完）</h2>
+
+      <h3>0 · 这是什么，读完能得到什么</h3>
+      <p>GraphRAG 的"索引"＝<b>把一堆原始文档，变成一组"能被检索和总结的结构化材料"</b>的过程。它主要干两件事：先把语料抽成一张<b>实体关系图</b>，再把图切成一棵<b>社区树</b>，并给每个社区写一份<b>报告</b>。</p>
+      <p><b>读完这份你能：</b>① 说清索引产出什么、每样给谁用；② 用最小配置把索引跑通（并知道最小链条为什么最小）；③ 知道跑完先检查什么（因为它的失败大多是静默的）；④ 知道参数挂在哪一步、该怎么挑；⑤ 知道它不擅长什么。</p>
+
+      <div class="chain"><b>本文引用的两篇语料</b>（后面提到就只用括号里的简称，不需要看别的材料）：
+        <br>· <b>Anthropic 篇</b>：<a href="https://www.anthropic.com/engineering/how-we-contain-claude">《How we contain Claude across products》</a>——Anthropic 官方工程博客（2026-05），讲 Claude 三个产品怎么用沙箱、虚拟机、出网管控把"爆炸半径"框住。英文，约 2.9 万字符。
+        <br>· <b>判官篇</b>：<a href="https://juejin.cn/post/7682220809205907490">《判官不稳定时，先别换判官——一次 LLM-as-Judge 的完整排查实录》</a>——沛东自己写的 LLM 判官评测排查实录。中文，约 2.7 万字符。
+        <br>两篇都是万把 token 量级的小语料：<b>观察产出形状够用，但代表不了真实知识库的规模</b>。
+      </div>
+
+      <h3>1 · 它产出什么（输入 → 六张表 → 谁消费）</h3>
+      <p>输入就是 <code>input/</code> 下的文档（<b>一个 txt 也能跑</b>；文档标题默认取文件名）。产出是几张 parquet 表，各自的角色差别很大——<b>这是最该先看的一节</b>：</p>
+      <table>
+        <thead><tr><th>表</th><th>一行是什么</th><th>在系统里的角色</th><th>被谁消费</th></tr></thead>
+        <tbody>
+          <tr><td><code>text_units</code></td><td>一个文本块（chunk）</td><td><b>事实源</b>——引用最终落到这里</td><td>basic / local 检索、报告生成</td></tr>
+          <tr><td><code>entities</code></td><td>一个实体</td><td>结构：图的节点</td><td>社区聚类、local 检索、报告生成</td></tr>
+          <tr><td><code>relationships</code></td><td>两个实体间的一条关系</td><td>结构：图的边</td><td>同上</td></tr>
+          <tr><td><code>communities</code></td><td>一个社区（含层级、父子、成员）</td><td><b>索引层的组织方式</b>（不是事实）</td><td>报告生成、查询侧选社区</td></tr>
+          <tr><td><code>community_reports</code></td><td>一个社区一份 LLM 写的报告</td><td><b>给 LLM 读的材料</b>（不是给机器查的）</td><td>global search（map-reduce）、local search</td></tr>
+          <tr><td><span class="muted"><code>documents</code></span></td><td><span class="muted">一篇文档</span></td><td><span class="muted">辅助（标题 / 全文 / 时间）</span></td><td><span class="muted">切块与溯源</span></td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><span class="ok">✅ 实测</span>：以上表名与字段来自三次实验的实际产出；"谁消费"部分见 <a href="0031-graphrag-search-modes.html">0031</a> 与 <a href="0029-graphrag-llmwiki-reading-plan.html">0029</a>。</p>
+
+      <h4>1.1 这里的"图"，不是 RDF 那种知识图谱</h4>
+      <p>名字里都有"图谱"，但 GraphRAG 的图跟 RDF / 本体式知识图谱是两套东西。<b>差别集中在"一条边怎么表示"上</b>：</p>
+      <table>
+        <thead><tr><th></th><th>RDF / 本体式知识图谱</th><th>GraphRAG 的 <code>relationships</code> 表</th></tr></thead>
+        <tbody>
+          <tr><td>一条边长什么样</td><td>三元组（主语，<b>谓词</b>，宾语），如 <code>Claude foaf:knows X</code></td><td>（source，target，<b>description</b>）——<b>根本没有谓词列</b></td></tr>
+          <tr><td>谓词从哪来</td><td>受控词表 / 本体，可枚举、可推理、可约束方向</td><td>没有词表。关系"是哪种"，只体现在那句自然语言描述里</td></tr>
+          <tr><td>同一对节点多条关系</td><td>可以（不同谓词各一条）</td><td><b>合并成一条</b>：按 (source, target) 分组，描述接成一段、<code>weight</code> 相加 📄</td></tr>
+          <tr><td>边上额外的字段</td><td>一般只有谓词</td><td><code>description</code>、<code>weight</code>（LLM 打的关系强度）、<code>combined_degree</code>（两端度数之和）、<code>text_unit_ids</code>（证据块）</td></tr>
+          <tr><td>方向</td><td>由本体定义</td><td>由抽取时的措辞决定，<b>没有约束保证</b>（方向错了就指到错的 chunk）</td></tr>
+          <tr><td>性质</td><td>断言（说它是事实）</td><td><b>索引</b>——事实在 chunk 里，边靠 <code>text_unit_ids</code> 指回去</td></tr>
+        </tbody>
+      </table>
+      <p>拿判官篇真跑出来的两条边看最清楚（来自 <code>data/tmp/graphrag-exp-juejin/output-v4/relationships.parquet</code>）：</p>
+      <pre>source: 判官            target: LLM-AS-JUDGE
+description: “判官”（LLM-AS-JUDGE）是 LLM-as-Judge 评测方法的核心角色，其名称即该方法的简称……
+weight: 18.0    combined_degree: 32    text_unit_ids: 2 个块
+
+source: FLIP-RATE       target: JUDGE CONSISTENCY
+description: flip-rate 是 judge consistency 的操作化定义
+weight: 7.0     combined_degree: 7     text_unit_ids: 1 个块</pre>
+      <p>这两条边的语义完全不同——一条说"是同义简称"，一条说"是操作化定义"——但<b>这个差别只存在于那句话里，表里没有任何字段能区分它们</b>。在 RDF 里，"把某类关系全查出来"是一条 SPARQL；在这里，你只能对描述文本做模糊匹配。<span class="ok">✅ 实测</span>：这一轮 120 条关系里，<b>没有任何一对 (source, target) 出现两次</b>——多块文本提到同一对实体就合并成一条、强度相加（有 14 条关系的证据块不止一个）。所以"同一对实体之间存在多种关系"这件事，在这个数据模型里<b>表达不出来</b>。</p>
+
+      <h3>2 · 完整流水线：十个步骤，每一环在决定什么</h3>
+      <p>官方 <code>--method standard</code>（标准索引链）就是下面这十步。注意最后两步是<b>嵌入（embedding，把文本变成向量，供查询时按语义找近似）</b>——它们才是真实环境里必配的环节：</p>
+      <table>
+        <thead><tr><th>步骤</th><th>它在决定什么</th><th>贵不贵 / 会不会静默出错</th></tr></thead>
+        <tbody>
+          <tr><td><code>load_input_documents</code></td><td>读 <code>input/</code> 下的文档 → <code>documents</code> 表（标题默认＝文件名）</td><td>不花钱；<b>多文件源只取第一个文件</b>是已知限制 📄</td></tr>
+          <tr><td><code>create_base_text_units</code></td><td><b>切块</b> → <code>text_units</code> 表。chunk 是后续一切引用的落点（"事实源"）</td><td>不花钱（纯本地）</td></tr>
+          <tr><td><code>create_final_documents</code></td><td>整理出对外版 <code>documents</code> 表</td><td>不花钱</td></tr>
+          <tr><td><code>extract_graph</code></td><td><b>抽实体与关系</b>——<b>范围</b>由实体类型表（靶子）＋提示词决定</td><td><b>最贵</b>（每块 1＋gleanings 次调用，默认 2 次）</td></tr>
+          <tr><td><code>finalize_graph</code></td><td>合并与裁剪：丢掉"引用了不存在实体"的边</td><td>不花钱；<b>会静默丢</b>（只打 warning）</td></tr>
+          <tr><td><span class="muted"><code>extract_covariates</code></span></td><td><span class="muted">抽 claim（关于某个实体的、可能带时间限定的断言）</span></td><td><span class="muted">默认<b>关闭</b> 📄</span></td></tr>
+          <tr><td><code>create_communities</code></td><td><b>层次聚类</b>成一棵社区树 → <code>communities</code> 表</td><td>不花钱；<code>use_lcc</code> 会<b>静默排除</b>一部分实体（见 5.1）</td></tr>
+          <tr><td><code>create_final_text_units</code></td><td>整理出对外版 <code>text_units</code>（把实体 / 关系 / claim 的引用挂上去）</td><td>不花钱</td></tr>
+          <tr><td><code>create_community_reports</code></td><td>为每个社区写一份报告（喂给 LLM 的材料）</td><td>较贵（每社区一次）；<b>失败静默</b>（见第 4 节）</td></tr>
+          <tr><td><code>generate_text_embeddings</code></td><td><b>算向量并写向量库</b>（详见 2.2）</td><td>按 token 计费</td></tr>
+        </tbody>
+      </table>
+
+      <h4>2.1 官方三种套餐，以及全部 22 个可配环节</h4>
+      <p>流水线不是一个写死的程序，而是一份<b>"只跑我要的步骤"的清单</b>（配置项 <code>workflows</code>，组合逻辑在 <code>index/workflows/factory.py</code> 📄）——这是所有小实验能成立的前提。官方内置三种组合：</p>
+      <table>
+        <thead><tr><th>套餐</th><th>由哪些步骤组成</th><th>什么时候用</th></tr></thead>
+        <tbody>
+          <tr><td><code>--method standard</code></td><td>上面那十步（LLM 抽图 ＋ 图上下文写报告）</td><td>默认；质量优先</td></tr>
+          <tr><td><code>--method fast</code></td><td>把"LLM 抽图"换成句法抽图（<code>extract_graph_nlp</code> ＋ <code>prune_graph</code>），报告也换成用"文本块原文"做上下文（<code>create_community_reports_text</code>）</td><td>不调 LLM 抽图，便宜快；用质量换成本</td></tr>
+          <tr><td><code>--method standard-update</code> / <code>fast-update</code></td><td>上面两种 ＋ 八个 <code>update_*</code> 步骤</td><td>增量索引（见 <a href="0030-graphrag-incremental-and-scope.html">0030</a>）</td></tr>
+        </tbody>
+      </table>
+      <p>自己拼的话，可选单步一共 <b>22 个</b>（<span class="half">📄 源码</span> <code>index/workflows/</code>，graphrag 3.2.0）：</p>
+      <table>
+        <thead><tr><th>环节</th><th>它做什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>load_input_documents</code> / <code>load_update_documents</code></td><td>读全量输入 / 读增量输入</td></tr>
+          <tr><td><code>create_base_text_units</code> / <code>create_final_text_units</code></td><td>切块 / 整理对外版文本块</td></tr>
+          <tr><td><code>create_final_documents</code></td><td>整理对外版文档表</td></tr>
+          <tr><td><code>extract_graph</code> / <code>extract_graph_nlp</code></td><td>LLM 抽实体与关系 / 句法抽图（不调 LLM）</td></tr>
+          <tr><td><code>prune_graph</code> / <code>finalize_graph</code></td><td>剪掉低频节点（fast 链）/ 合并与裁剪</td></tr>
+          <tr><td><code>extract_covariates</code></td><td>抽 claim（关于实体的、可能带时间限定的断言）</td></tr>
+          <tr><td><code>create_communities</code></td><td>层次聚类成社区树</td></tr>
+          <tr><td><code>create_community_reports</code> / <code>create_community_reports_text</code></td><td>写社区报告（图上下文 / 文本块原文上下文）</td></tr>
+          <tr><td><code>generate_text_embeddings</code></td><td>算向量、写向量库</td></tr>
+          <tr><td><code>update_*</code>（八个）</td><td>增量链：文档 / 实体关系 / 文本块 / claim / 社区 / 报告 / 向量 / 状态清理</td></tr>
+        </tbody>
+      </table>
+
+      <h4>2.2 嵌入（embedding）不是可选项</h4>
+      <p>前面那十步里，最后两步就是在做嵌入：<code>create_final_text_units</code> 把文本块整理成"可嵌入"的形态，<code>generate_text_embeddings</code> 真正把文本送进嵌入模型、把向量写进向量库。<b>它嵌哪三样东西</b>（配置项 <code>embed_text.names</code>，默认全开 📄）：</p>
+      <table>
+        <thead><tr><th>向量</th><th>嵌的是什么</th><th>查询期谁在用它</th></tr></thead>
+        <tbody>
+          <tr><td><code>text_unit_text</code></td><td>每个文本块的原文</td><td>basic search 的"块向量 top-k"</td></tr>
+          <tr><td><code>entity_description</code></td><td>每个实体的描述</td><td>local search 找入口实体</td></tr>
+          <tr><td><code>community_full_content</code></td><td>每份社区报告的全文</td><td>查询时定位相关社区</td></tr>
+        </tbody>
+      </table>
+      <p>默认配置：嵌入模型 <code>text-embedding-3-large</code>（3072 维），向量库 <b>LanceDB</b>（<code>vector_store.type</code> 的默认值 📄）。<b>成本注意</b>：报告全文那一份通常最贵——报告本身就不短（我们测到的中位数在 2–3 千字符量级）。</p>
+      <p>所以"跳过嵌入"只在一种场景下成立：<b>这次只看索引产出、不打算查</b>。跳过之后产出里就没有向量库，将来想查还得把这两步补跑一遍。</p>
+
+      <h4>2.3 最小可跑集合：六个步骤，以及为什么少不了谁</h4>
+      <p>把上面两个嵌入步骤、再加 <code>create_final_documents</code> 摘掉之后，能一路跑出社区报告的最小链是<b>六步</b>：</p>
+      <pre>load_input_documents → create_base_text_units → extract_graph
+→ finalize_graph → create_communities → create_community_reports</pre>
+      <p><b>为什么是这六步</b>——不是随手删的，是按"下一环读什么"倒推出来的（<span class="half">📄</span> 看每个 workflow 打开哪张表即可）：</p>
+      <table>
+        <thead><tr><th>步骤</th><th>它读什么</th><th>它写什么</th><th>少了它会怎样</th></tr></thead>
+        <tbody>
+          <tr><td><code>load_input_documents</code></td><td><code>input/</code></td><td><code>documents</code></td><td>没有文档，切块没有原料</td></tr>
+          <tr><td><code>create_base_text_units</code></td><td><code>documents</code></td><td><code>text_units</code></td><td>抽图没有输入</td></tr>
+          <tr><td><code>extract_graph</code></td><td><code>text_units</code></td><td><code>entities</code> ＋ <code>relationships</code></td><td>没有图，聚类无从谈起</td></tr>
+          <tr><td><code>finalize_graph</code></td><td><code>entities</code> ＋ <code>relationships</code></td><td>清洗后的同一对表</td><td>后面会拿到"指向不存在实体"的边</td></tr>
+          <tr><td><code>create_communities</code></td><td><code>entities</code> ＋ <code>relationships</code></td><td><code>communities</code></td><td>没有社区，报告无从谈起</td></tr>
+          <tr><td><code>create_community_reports</code></td><td><code>communities</code> ＋ <code>entities</code> ＋ <code>relationships</code></td><td><code>community_reports</code></td><td>——（终点）</td></tr>
+        </tbody>
+      </table>
+      <p>砍得掉的就两类：① <b>两个嵌入步骤</b>——它们只服务查询期，本次只看索引产出，跳过能省一笔钱；② <b><code>create_final_documents</code></b>——报告生成<b>并不读 documents</b>（<code>create_community_reports</code> 只开 communities / entities / relationships 三张表，📄）；我们实际跑的时候把它留着，因为它不花钱、还能拿到一份整齐的 documents 表。</p>
+      <p>反过来讲：<b>这六步里没有一步是"可选"的</b>——每一环的输出，正好是下一环的输入。</p>
+    </section>
+
+    <section class="card">
+      <h2>动手 · 先跑起来，再谈调优</h2>
+
+      <h3>3 · 最快跑通</h3>
+      <p><b>① 准备输入</b>：把文档放进 <code>input/</code>（<code>.txt</code> 最省事；标题取文件名，想好看就把文件命名好）。</p>
+      <p><b>② 最小配置</b>（<code>settings.yaml</code>）——注意这里<b>故意不配 <code>embedding_models</code></b>，理由见 ③：</p>
+      <pre>completion_models:
+  default_completion_model:
+    model_provider: &lt;provider&gt;        # LiteLLM 前缀，如 deepseek / openai
+    model: &lt;model&gt;
+    auth_method: api_key
+    api_key: ${YOUR_API_KEY}          # 从环境变量注入
+    call_args: { timeout: 180, num_retries: 2 }   # 不设超时会卡死（我们卡过 8 分钟）
+concurrent_requests: 4                # 默认 25 容易把 API 打急
+workflows: [ load_input_documents, create_base_text_units, extract_graph,
+             finalize_graph, create_communities, create_community_reports ]
+cache:     { type: json, storage: { type: file, base_dir: cache } }
+reporting: { type: file, base_dir: logs }</pre>
+      <p><b>③ 跑的命令，以及那条看起来自相矛盾的开关</b>：</p>
+      <pre>graphrag index --root . --skip-validation</pre>
+      <p><code>--skip-validation</code> 的意思是：<b>跳过"预检"，不是跳过某个步骤</b>（📄 它跳的是 <code>validate_config_names</code>）。预检做的事是——<b>给配置里每一个模型发一条测试消息</b>：每个对话模型试一次完成调用，每个嵌入模型试一次嵌入调用。于是：</p>
+      <ul>
+        <li>你<b>没配</b> <code>embedding_models</code>、也没跑嵌入步骤 ⇒ 预检确实没得可试，安全；</li>
+        <li>你<b>配了</b> <code>embedding_models</code> 但填的是占位 key（我们早期就是这么干的）⇒ 预检会真去调它，<b>直接 401 失败</b>（<span class="ok">✅ 实测</span>）；</li>
+        <li>所以口径是二选一：<b>要么"不配嵌入 ＋ 加 <code>--skip-validation</code>"，要么"把嵌入配真 ＋ 不加这个开关"</b>。上面那个配置示例属于第一种，配它自己的命令就是这个开关——两处并不矛盾。</li>
+      </ul>
+      <p><b>④ 另一条必知坑</b>：<code>settings.yaml</code> 里<b>任何字面 <code>$</code> 都会炸</b>——它用 <code>string.Template</code> 做环境变量替换，<b>连注释里的也算</b>。我们踩了三次（给文件匹配规则写正则的结尾锚、在注释里写出占位符的完整写法……全是它）。</p>
+      <p><b>⑤ 先别动提示词和参数</b>：先用默认跑一轮，拿到"默认长什么样"的基线，再改（不然没有对照）。</p>
+      <p class="muted"><span class="half">📄 源码</span>：配置字段与默认值都没抄文档，直接读本地已安装的 graphrag 3.2.0（<code>config/defaults.py</code> 与 workflow 注册表）。</p>
+
+      <h3>4 · 跑完先验收（因为它的失败大多是静默的）</h3>
+      <p><b>先看四件事</b>：① 实体 / 关系规模 ② 社区数 ③ 报告数 ④ 关系有没有被丢。<b>核心动作是"对账"</b>——拿集合相减，而不是看指标：</p>
+      <pre># 社区集合 − 报告集合 = 没写出报告的社区（本仓库脚本：data/tmp/graphrag-exp-juejin/_list_reports.py）
+communities 的 community 集合  −  community_reports 的 community 集合</pre>
+      <table>
+        <thead><tr><th>静默行为</th><th>实测表现</th><th>为什么指标看不见</th></tr></thead>
+        <tbody>
+          <tr><td><b>社区报告没生成</b></td><td>判官篇 prompt-tune 那版：<b>64 个社区只出了 52 份</b>（缺 12）；判官篇改完报告提示词那版：21 → 19（缺 2）；Anthropic 篇默认：23 → 20（缺 3）；两篇混跑：85 → 74（缺 11）</td><td>失败发生在"LLM 返回 → 解析成 schema"这一步，<b>HTTP 调用是成功的</b> ⇒ 不进 <code>failed_response_count</code>（<span class="ok">✅ 实测</span>：指标全绿与丢掉 19% 的报告同时存在）</td></tr>
+          <tr><td><b>关系被丢弃</b></td><td>日志一行 <code>Dropped N relationship(s) referencing non-existent entities</code></td><td>只打 warning，不进任何计数字段</td></tr>
+          <tr><td><b>实体根本没进社区</b></td><td>判官篇那一轮：抽出 101 个实体，最终只有 74 个能被任何社区报告覆盖</td><td>不是失败、是 <code>use_lcc</code> 的设计行为，但<b>没有任何提示</b>（见 5.1）</td></tr>
+        </tbody>
+      </table>
+      <div class="chain"><b>方法</b>：<b>要判断"有没有丢"，拿集合对账，不看指标。</b>指标的边界由埋点决定（这里埋的是"调用层"），而失败常发生在"产出层"。</div>
+    </section>
+
+    <section class="card">
+      <h2>调优 · 参数挂在哪一步、怎么挑</h2>
+
+      <h3>5 · 每一环可调的参数：先看角色 → 再定该测什么</h3>
+      <p><b>按步骤挂</b>（你要改东西时，先看它属于哪一步）：</p>
+      <table>
+        <thead><tr><th>属于哪一步</th><th>参数</th><th>它的角色</th><th>因此该测什么</th></tr></thead>
+        <tbody>
+          <tr><td>切块</td><td><code>chunking.size</code>（默认 1200 token）/ <code>overlap</code>（默认 100）</td><td>决定"事实源"的粒度与块数</td><td>抽取精度 × 成本。<b>推荐值会随 LLM 代际过期，不必照搬</b>（🤔）</td></tr>
+          <tr><td>抽图</td><td><code>extract_graph.entity_types</code>（默认 organization / person / geo / event）＋ 抽取提示词（含语言、示例）</td><td><b>抽取范围的靶子</b>；查询期根本不读 type</td><td><b>范围与成本</b>，不是分类正确率（<span class="ok">✅ 实测</span>：查询期零使用）</td></tr>
+          <tr><td>抽图</td><td><code>max_gleanings</code>（默认 1）</td><td>召回开关：<b>先断言"你漏了很多"</b>，再让模型补一轮</td><td>召回收益 vs 硬凑噪音（<b>两者同源</b>）</td></tr>
+          <tr><td>聚类</td><td><code>cluster_graph.max_cluster_size</code>（默认 10）/ <code>use_lcc</code>（默认 true）</td><td>决定社区层级；<code>use_lcc</code> 决定<b>哪些实体根本不进社区</b>（见 5.1）</td><td>覆盖面（<span class="ok">✅ 实测</span>：被判"串味"的实体，正是被 <code>use_lcc</code> 挡在社区外的）</td></tr>
+          <tr><td>写报告</td><td><code>community_reports.graph_prompt</code> / <code>max_length</code>（默认 2000）/ <code>max_input_length</code>（默认 8000）</td><td>报告的语言与口径、输出长度、上下文预算</td><td>可读性 / 信息量 vs token（<span class="ok">✅ 实测</span>：报告提示词译成中文后，报告长度中位从 2,749 字符降到 1,946）</td></tr>
+          <tr><td>嵌入</td><td><code>embed_text.names</code> / <code>embedding_models</code> / <code>vector_store</code></td><td>嵌哪三样、用哪个模型、存哪个库</td><td>查询召回 vs 索引成本（见 2.2）</td></tr>
+          <tr><td>全流程</td><td><code>workflows</code></td><td>决定跑哪些步骤</td><td>成本 / 耗时最直接的开关</td></tr>
+        </tbody>
+      </table>
+      <div class="chain"><b>为什么"角色"是这一节的核心</b>：同一个字段，角色不同、要求就不同。<code>entity_type</code> 在 GraphRAG 里<b>只是抽取提示词的参数</b>（查询期零使用）⇒ <b>分类粗、偶尔归错都不算缺陷</b>；但如果哪天它进了检索或路由，<b>归错就变成漏召回</b>，分类正确率立刻升级成硬要求。（已写进 <code>AGENTS.md</code> 的"判据纪律"第①条。）</div>
+
+      <h4>5.1 <code>use_lcc</code>：决定"哪些实体根本不进社区"</h4>
+      <p>名字是 <b>largest connected component</b>（最大连通片）。它的行为写在 <code>graphs/stable_lcc.py</code> 里，一共做三件事（📄）：</p>
+      <ol>
+        <li><b>只保留最大连通片上的边</b>——关系图里连不到主团的那些节点与边，全部丢掉；</li>
+        <li><b>归一化实体名</b>（HTML 反转义、转大写、去空格），让"同一实体的不同写法"不至于把图撕开；</li>
+        <li><b>把每条边的方向按字典序摆平</b>（名字小的当 source）——也就是说，<b>社区划分实际上是在"无向图"上做的</b>，方向只对最终那张关系表有意义。</li>
+      </ol>
+      <p>所以 <code>use_lcc: true</code>（默认）意味着：<b>不在最大连通片上的实体，在聚类之前就被排除了，永远不会属于任何社区，也就永远不会被任何社区报告覆盖。</b>实测后果（判官篇那一轮）：</p>
+      <pre>抽取到实体            101 个
+其中出现在关系里的      99 个   （另 2 个一条边都没有）
+最大连通片上的节点      74 个   ⇒ 25 个节点在聚类前被丢掉
+最终能被社区覆盖的实体   74 个   ⇒ 27 个实体一个社区都进不去</pre>
+      <p>被挡在社区外的都是谁？看名字就知道它们为什么连不到主团：一串虚构地名和人名（白丘国、碧石监狱、苏小满、林柏舟、陈立诚、云溪……），加上仓库路径这类"语料里只出现过一次"的字符串。<b>它们多半是语料里的噪声，被 <code>use_lcc</code> 顺手清掉了——这既是它的好处（自动去噪），也是它的代价（它不区分"噪声"和"稀但真实的旁支"）</b>。</p>
+      <p>所以怎么决定：<b>想要覆盖面、宁可多留噪声，就把 <code>use_lcc</code> 设成 <code>false</code></b>——代价是那些孤立小片会各自成社区，报告数量与成本一起上涨；<b>想要干净、接受"稀有的东西看不见"，就保持默认</b>。关键是知道这道闸门存在，并且它<b>不打招呼</b>。</p>
+
+      <h3>6 · 要调优时：怎么挑值</h3>
+      <ol>
+        <li><b>固定其他旋钮，只扫一个</b>——chunk 大小 / gleanings / 类型表，全都属于"最后都落到抽取范围"的那一类，一起动就说不清是谁的功劳；</li>
+        <li>用一份<b>"抽取范围"小金标准</b>对账：必须抽到的命中了几条、明显不该进来的进来了几条；</li>
+        <li>挑值。理由：这些参数<b>与所用的 LLM 强绑定</b>，纸面推荐值只说明方向（🤔）。</li>
+      </ol>
+      <p class="muted">金标准只要"范围"这一级就够（不需要逐条完美），否则维护成本会失控。</p>
+
+      <h3>7 · <code>prompt-tune</code>：调优的第一步，不是可选项</h3>
+      <p><b>为什么把它放在调优里、而不是"可选工具"</b>：官方默认提示词是<b>给英文通用语料写的</b>。换一篇别的语言 / 别的领域的语料，产出会明显变形（我们第一次跑判官篇，图与报告全变英文，实体类型也是英文通用那四类）。<code>prompt-tune</code> 做的事就是"<b>用你自己的语料，反推一份适配的提示词</b>"，一次跑几十美分，<b>后面所有调参都建立在它给的基线上</b>——所以它是调优的<b>推荐起点</b>。</p>
+      <p><b>一次跑产出六样</b>（都落成文件）：领域推断 · 语言检测 · persona（角色设定）· <b>实体类型表</b> · few-shot 示例 · <b>评分标准（带锚点）</b>，写成三份提示词：</p>
+      <pre>prompts-tuned/extract_graph.txt              # 抽图提示词（含实体类型表与示例）
+prompts-tuned/summarize_descriptions.txt     # 实体描述摘要提示词
+prompts-tuned/community_report_graph.txt     # 社区报告提示词（含评分口径）</pre>
+      <p><b>采样：先全量切块（本地、零 token），再按选法抽块</b>（📄 <code>prompt_tune/loader/input.py</code>）：</p>
+      <table>
+        <thead><tr><th><code>--selection-method</code></th><th>实现</th><th>性质</th></tr></thead>
+        <tbody>
+          <tr><td><code>top</code></td><td>取前 <code>--limit</code> 块（默认 15）</td><td>系统性偏向文档开头 / 排在前面的那一篇（<span class="ok">✅ 实测</span>：两篇混跑时，示例全取自第一篇）</td></tr>
+          <tr><td><code>random</code>（默认）</td><td>随机抽 <code>--limit</code> 块</td><td>无偏但样本小，<b>且没有固定种子、不可复现</b></td></tr>
+          <tr><td><code>auto</code></td><td>随机抽 ≤<code>--n-subset-max</code>（默认 300）块去嵌入 → 再取<b>离质心最近</b>的 <code>--k</code>（默认 15）块</td><td>意图是"选最主流 / 最有代表性"；<b>实现有缺陷（见下）</b>；也是唯一会真调嵌入的选法</td></tr>
+          <tr><td><code>all</code></td><td>全部块</td><td>样本最大、也最贵</td></tr>
+        </tbody>
+      </table>
+      <p><b>两处已知实现缺陷</b>（<span class="half">📄 源码</span> <code>prompt_tune/loader/input.py</code>）：</p>
+      <ol>
+        <li><b><code>auto</code> 的行号错位</b>：抽样后的块存在另一个变量里，但最后取"离质心最近"时用的仍是<b>原始顺序的整张表</b>、拿位置索引去取 ⇒ 取到的<b>不是</b>"离质心最近"那些块，实际退化成文档开头那几块；</li>
+        <li><b>块数少于 15 会直接崩</b>：越界时它先把 <code>limit</code> 回落成 15，再无条件 <code>sample(15)</code>。</li>
+      </ol>
+      <p><b>产出的性质</b>（<span class="ok">✅ 实测</span>）：</p>
+      <ul>
+        <li><b>类型与 persona 能跨领域融合</b>：Anthropic 篇（英文·安全）＋判官篇（中文·评测）一起跑，得到一份 13 类、覆盖两边的类型表（organization / product / person / security_threat / security_defense_mechanism / evaluation_concept / benchmark / standard_or_framework / software_tool / academic_paper / code_repository / technical_publication / metric）；</li>
+        <li><b>语言只能挑一个</b>：检测到中文就把三份文件都写成 Chinese ⇒ 英文那一半的描述与报告会被译成中文。对"报告服务于分析者阅读"的定位来说<b>可以接受</b>，但换语料必须重跑；</li>
+        <li><b>示例取自语料自身</b> ⇒ 它调的是"这一篇"的适配，不是"整个库"的适配；</li>
+        <li><b>评分口径不保证有区分度</b>：判官篇那一轮里，48/52 份报告的 rank 挤在 8–10 分（见第 8 节）。</li>
+      </ul>
+      <div class="chain"><b>能信到什么程度</b>：把它当<b>"给这一批语料、这一种语言"定制提示词的发生器</b>，<b>不要当通用提示词库</b>。另外 <code>limit</code> / <code>n-subset-max</code> / <code>k</code> 都是命令行参数（没写死），缺的是"<b>这是个成本 / 代表性的折中</b>"这件事没在 <code>--help</code> 里表达出来（🤔）。</div>
+    </section>
+
+    <section class="card">
+      <h2>边界 · 它不擅长什么</h2>
+
+      <h3>8 · 已知边界与接口提醒</h3>
+      <ul>
+        <li><b>实体类型不参与检索</b>：<code>entity.type</code> 在查询期完全不被读取（<span class="ok">✅ 实测</span>：66 个 .py 文件里零命中）⇒ 别指望靠它做过滤或路由。</li>
+        <li><b>社区报告可能缺</b>：同一批语料里丢哪几个社区，<b>每次都不一样</b>（<span class="ok">✅ 实测</span>：判官篇第三版丢 #4；第四版丢 #9 / #18；prompt-tune 那版丢了 12 个）⇒ 是调用级的抖动，不是某个社区本身有问题。</li>
+        <li><b>报告里的 <code>rank</code> 不保证有区分度</b>：它的口径由报告提示词决定。prompt-tune 生成的那版在"与领域的相关性"口径下，判官篇 48/52 份挤在 8–10 分（<span class="ok">✅ 实测</span>）⇒ 想拿它排序或过滤，口径必须选一个"<b>语料内部有方差</b>"的维度。</li>
+        <li><b>提示词换语料就得换</b>：语言、领域、类型、示例全被烧进提示词文本里（<span class="ok">✅ 实测</span>：把判官篇调好的提示词套到 Anthropic 篇上，报告 100% 变中文，而且标题里出现"判官 / 金标准"这类另一篇的主题词——同时还会长出新的垃圾桶，比如 44% 的实体被归进 TECHNICAL TERM）。</li>
+        <li><b>还有一条来自源码的限制</b>：实验脚本读 input 时，<b>多文件源只处理第一个文件</b>（📄）——这是 graphrag 工作流的既有行为，不是配置问题。</li>
+        <li><b>查询侧别按"层"的直觉去理解</b>：默认模式的 <code>community_level</code> 实际是"<code>level ≤ N</code> 全给"（原本的"每个实体取最深社区"那套 roll-up 自 v2.0.0 起失效）⇒ 细节见 <a href="0031-graphrag-search-modes.html">0031</a>，问题单见 <a href="https://github.com/microsoft/graphrag/issues/2573">issue #2573</a>。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>考古层 · 这些结论是怎么撞出来的（自愿深挖）</h2>
+      <p class="muted">每轮的语料与提示词改动都写在"设置"列里；<b>不依赖任何代号</b>，只看这张表也能读懂。</p>
+      <table>
+        <thead><tr><th>轮次</th><th>语料</th><th>提示词 / 设置</th><th>规模（实体 / 关系 / 社区 / 报告）</th><th>得到什么</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Anthropic 篇</td><td>官方默认提示词（英文、四类实体）</td><td>128 / 185 / 23 / 20</td><td>看清产出形状；发现示例串味；发现静默失败；撞上 provider 的 schema 卡点</td></tr>
+          <tr><td>2</td><td>判官篇</td><td>官方默认提示词</td><td>95 / 109 / 16 / 15</td><td>报告语言：无约束时会回落到英文</td></tr>
+          <tr><td>3</td><td>判官篇</td><td>只改语言那一句（"用英文输出"→"跟随原文语言"）</td><td>133 / 153 / 33 / 31</td><td>语言回来了，但实体名大小写与类型标签还不服帖</td></tr>
+          <tr><td>4</td><td>判官篇</td><td>再改三处：中文示例 ＋ 去掉"首字母大写"要求 ＋ 加"不要翻译"</td><td>101 / 120 / 21 / 20</td><td>报告标题与正文 19/19 全中文；描述中文率 11%→41%、关系 53%→68%</td></tr>
+          <tr><td>5</td><td>判官篇</td><td>再把<b>报告提示词整篇译成中文</b>（不改语义）</td><td>101 / 120 / 21 / 19</td><td>报告稳定中文；报告长度中位 2,749→1,946 字符（顺带省 token）</td></tr>
+          <tr><td>6</td><td>判官篇</td><td><code>prompt-tune</code> 自动生成的三份提示词（13 类实体）</td><td>273 / 431 / 64 / 52</td><td>类型表贴合语料：EVENT 这类垃圾桶从 61% 降到最多 14%；成本 $0.055→$0.178；同时暴露 12/64 的静默丢报告</td></tr>
+          <tr><td>7</td><td>Anthropic 篇</td><td>把第 6 轮为判官篇调好的提示词<b>原样移植</b>过来</td><td>277 / 381 / 63 / 54</td><td>报告 100% 中文 ＋ 主题串味 ＋ 长出新的垃圾桶（TECHNICAL TERM 占 44%）⇒ <b>提示词不能跨语料移植</b></td></tr>
+          <tr><td>8</td><td>两篇一起</td><td>两篇混跑 <code>prompt-tune</code></td><td>368 / 581 / 85 / 74</td><td>类型 / persona <b>能跨领域融合</b>；语言仍只能挑一个；示例偏偏全取自第一篇</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>附录 · 现场、脚本与成本</h2>
+      <p><b>项目仓库</b>：<a href="https://github.com/lipeidonggz/ai-study-helper">https://github.com/lipeidonggz/ai-study-helper</a>（本文的原始脚本与全部记录都在这里；实验数据在 <code>data/tmp/</code> 下，该目录已 gitignore，需要复现请按下面的脚本自己跑）。</p>
+      <table>
+        <thead><tr><th>目录 / 文件</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>data/tmp/graphrag-exp/</code></td><td>Anthropic 篇：默认提示词产出 <code>output-default/</code>、判官篇提示词移植产出 <code>output/</code>、提示词副本 <code>prompts-juejin-tuned/</code>、语言审计脚本 <code>_audit_lang.py</code></td></tr>
+          <tr><td><code>data/tmp/graphrag-exp-juejin/</code></td><td>判官篇各版产出（<code>output-en/ output-samelang/ output-v3/ output-v4/ output/</code>）＋手改提示词 <code>prompts/</code> ＋ <code>prompt-tune</code> 产出 <code>prompts-tuned/</code> ＋可读报告 <code>reports*.html</code></td></tr>
+          <tr><td><code>data/tmp/graphrag-exp-mixed/</code></td><td>两篇混跑语料（<code>input/a5.txt</code> ＋ <code>input/juejin.txt</code>）＋ tuned 提示词 ＋ 按文档分语言的审计脚本 <code>_audit_by_doc.py</code></td></tr>
+          <tr><td>复用工具</td><td><code>_run_index.py</code>（密钥从本地库注入、输出脱敏落盘）、<code>_run_prompt_tune.py</code>、<code>_export_reports.py</code>（导出可读报告＋按 level / 父社区筛选）、<code>_list_reports.py</code>（报告与缺失对账）、<code>_list_workflows.py</code>（列出全部工作流）、<code>sitecustomize.py</code>（provider schema 兼容 shim）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">成本量级（供以后估算，<span class="ok">✅ 实测</span>）：单篇索引一轮 <b>$0.05–0.18</b>；<code>prompt-tune</code> 一次 <b>≈$0.04</b>；两篇混跑一轮 <b>≈$0.3</b>（含 74 份报告）。用的是 DeepSeek 的对话模型；换成别家，价格与质量都要重估。</p>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-25 · 2026-09-26 按"读者动线"重排并补齐八处（RDF 对照 / 嵌入环节 / 最小集合理由 / <code>--skip-validation</code> 理顺 / 语料换成真名与链接 / <code>use_lcc</code> 专节 / <code>prompt-tune</code> 提为调优起点 / 附录补仓库地址）· <b>初稿待沛东确认</b>
+    </footer>
+  </div>
+</body>
+</html>

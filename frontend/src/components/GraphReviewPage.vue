@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { compileApi, type CompileClaim, type CompileGraph, type GraphEdge } from '../api/client'
+import { compileApi, type CompileClaim, type CompileGraph, type GraphEdge, type StatementsPayload } from '../api/client'
 import { navigate } from '../router'
 
 const props = defineProps<{ sourceId: string }>()
 
 const graph = ref<CompileGraph | null>(null)
+const s7 = ref<StatementsPayload | null>(null)
 const claims = ref<CompileClaim[]>([])
 const focusName = ref('')
 const error = ref('')
@@ -35,6 +36,11 @@ async function load() {
     }
     graph.value = g
     claims.value = await compileApi.claims(props.sourceId) // 顺序与 claim_idx 一致
+    try {
+      s7.value = await compileApi.statements(props.sourceId)   // S7 未跑过则 404 → 保持 null
+    } catch {
+      s7.value = null
+    }
     focusName.value = mainEntities.value[0]?.name || graph.value.entities[0]?.name || ''
   } catch (err) {
     error.value = `读取图产物失败：${err}（先在这篇上点"抽取/重抽"跑一遍）`
@@ -139,6 +145,17 @@ const guardHits = computed(() => {
 })
 
 /** 端点规范化映射（S5 审计）：默认只看带 derived_from 的（概括/溯源），其余折叠 */
+/** S7 断言视图：按 claim_type 过滤（局限 / 展望 / 未标） */
+const s7Filter = ref<'all' | 'limitation' | 'outlook' | 'none'>('all')
+const s7Limit = ref(60)
+const s7Rows = computed(() => {
+  const rows = s7.value?.statements || []
+  if (s7Filter.value === 'all') return rows
+  if (s7Filter.value === 'limitation') return rows.filter((r) => r.claim_type === 'LimitationStatement')
+  if (s7Filter.value === 'outlook') return rows.filter((r) => r.claim_type === 'OutlookStatement')
+  return rows.filter((r) => !r.claim_type)
+})
+
 const normLimit = ref(60)
 const normOnlyDerived = ref(false)
 const normOnlyGeneralized = ref(false)
@@ -500,6 +517,51 @@ onMounted(load)
             </p>
           </details>
 
+          <details v-if="s7">
+            <summary>
+              S7 断言（{{ s7.stats.statements }}）— 每条 claim 一个 statement
+              ｜局限 {{ s7.stats.limitation || 0 }} / 展望 {{ s7.stats.outlook || 0 }} / 其他 {{ s7.stats.null || 0 }}
+              <template v-if="(s7.claim_type_demoted || []).length">｜依据护栏降级 {{ (s7.claim_type_demoted || []).length }}</template>
+            </summary>
+            <p class="hint">
+              <b>statement = 可独立寻址的断言</b>：一条 claim 一个（394 条 claim → 394 个 statement，一一对应），
+              挂 <code>doc —asserts→</code>、有概念端点的另挂 <code>concept —hasStatement→</code>，
+              并 <code>groundedIn</code> 回 chunk。<b>claim_type</b> 只有两类（局限 / 展望），其余为空；
+              口径是"<b>宁多勿漏</b>"——「局限」标签实际是"风险 / 代价分析 + 作者自述局限"的合集，
+              下游按需过滤（这是有意为之，不是判错）。
+              <span style="margin-left:8px">
+                筛选：
+                <button :class="{ on: s7Filter === 'all' }" @click="s7Filter = 'all'">全部</button>
+                <button :class="{ on: s7Filter === 'limitation' }" @click="s7Filter = 'limitation'">只看局限</button>
+                <button :class="{ on: s7Filter === 'outlook' }" @click="s7Filter = 'outlook'">只看展望</button>
+                <button :class="{ on: s7Filter === 'none' }" @click="s7Filter = 'none'">只看未标</button>
+              </span>
+            </p>
+            <table class="tbl">
+              <thead><tr><th>#</th><th>断言（原文三件套）</th><th>类型</th><th>依据（逐字）</th></tr></thead>
+              <tbody>
+                <tr v-for="st in s7Rows.slice(0, s7Limit)" :key="'st' + st.id">
+                  <td><small>{{ st.id }}</small></td>
+                  <td>
+                    <a class="lnk" @click="focusName = claimOf(st.claim_idx)?.subject || ''">{{ claimOf(st.claim_idx)?.subject }}</a>
+                    <code>{{ claimOf(st.claim_idx)?.predicate }}</code>
+                    <span v-if="claimOf(st.claim_idx)?.object">{{ claimOf(st.claim_idx)?.object }}</span>
+                    <span v-else style="color: #8c959f">∅</span>
+                  </td>
+                  <td>
+                    <span v-if="st.claim_type === 'LimitationStatement'" class="badge">局限</span>
+                    <span v-else-if="st.claim_type === 'OutlookStatement'" class="badge ok">展望</span>
+                    <span v-else style="color: #8c959f">—</span>
+                  </td>
+                  <td><small>{{ st.claim_type_evidence }}</small></td>
+                </tr>
+              </tbody>
+            </table>
+            <button v-if="s7Rows.length > s7Limit" @click="s7Limit = s7Rows.length">
+              展开全部 {{ s7Rows.length }} 条（还有 {{ s7Rows.length - s7Limit }} 条）
+            </button>
+          </details>
+
         </section>
       </div>
     </template>
@@ -512,6 +574,7 @@ onMounted(load)
 .gr-head h1 { font-size: 17px; margin: 0; }
 .stage-switch button { font-size: 12px; padding: 2px 8px; }
 .stage-switch button.on { background: #0969da; color: #fff; border-color: #0969da; }
+.gr-lists button.on { background: #0969da; color: #fff; border-color: #0969da; }
 .chips { position: sticky; top: 0; z-index: 3; background: #fff; border: 1px solid #d8dee4; border-radius: 10px; padding: 7px 10px; margin-bottom: 10px; }
 .chips-title { font-weight: 700; font-size: 12.5px; margin-right: 6px; }
 .chip { display: inline-block; font-size: 12px; background: #eef4ff; border: 1px solid #6b9aff; color: #0969da; border-radius: 14px; padding: 2px 9px; margin: 2px 4px 2px 0; cursor: pointer; }

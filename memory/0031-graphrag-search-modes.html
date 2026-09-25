@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0031 · GraphRAG 查询模式逐项核实（进行中）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0031 · GraphRAG 查询模式逐项核实（进行中）</h1>
+      <p class="subtitle">做法：<b>沛东问、我核代码答、逐条落笔</b> · 现场来源：0029 精读 · 配套：<a href="0030-graphrag-incremental-and-scope.html">0030 增量与适用范围</a></p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 速查（一页看全四种模式）</h2>
+      <p class="muted">状态：<span class="ok">✓ 已核</span> / <span class="half">△ 部分核</span> / <span class="no">✗ 待核</span>。所有"已核"条目都在下文有代码或官方文档出处。</p>
+      <table>
+        <thead><tr><th>模式</th><th>检索对象</th><th>入口怎么来</th><th>成本特征</th><th>适合的问题形状</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Global Search</b><br>跨库综合</td>
+            <td><b><code>level &lt;= N</code> 的全部</b>社区报告<br><span class="muted">（"选第 N 层"是文档口径，实现是"≤N 全层"，见第 0 步更正）</span></td>
+            <td><b>外部指定层</b>（必填，无默认、无自适应）；可选开 dynamic selection 改由按 query 相关度剪枝</td>
+            <td>随层升高：报告数↑ token↑ 延迟↑（每次要扫 <code>≤N</code> 的全部报告）</td>
+            <td>面型：全库主题 / 综述 / 全局感知</td>
+            <td><span class="ok">✓ 已核</span></td>
+          </tr>
+          <tr>
+            <td><b>Local Search</b><br>实体锚定</td>
+            <td>实体 ＋ 关系 ＋ 社区报告 ＋ 文本块 ＋ 协变量（按比例装配）</td>
+            <td>从 query 命中<b>一组实体</b>（取"access points"，不要求精确命中）</td>
+            <td>与命中实体的邻域大小相关</td>
+            <td>点型：某个实体/概念的具体信息</td>
+            <td><span class="no">✗ 待核</span></td>
+          </tr>
+          <tr>
+            <td><b>DRIFT Search</b><br>global × local</td>
+            <td>先用社区信息扩大起点，再做局部深挖</td>
+            <td>三阶段流程（细节待核）</td>
+            <td>介于两者之间（官方措辞：平衡成本与质量）</td>
+            <td>混合型：既有全局方向又要具体事实</td>
+            <td><span class="no">✗ 待核</span></td>
+          </tr>
+          <tr>
+            <td><b>Basic Search</b><br>纯向量</td>
+            <td>原始 text unit（chunk）的向量</td>
+            <td>query 向量 top-k</td>
+            <td>最便宜；无图参与</td>
+            <td>点型：细节 / 单点事实</td>
+            <td><span class="ok">✓ 已核</span></td>
+          </tr>
+          <tr>
+            <td><b>Question Generation</b></td>
+            <td>复用 local search 的上下文构造器</td>
+            <td>给定历史提问，生成候选<b>后续问题</b></td>
+            <td>与 local 同级</td>
+            <td>不是检索，是"建议问什么"</td>
+            <td><span class="ok">✓ 已核</span></td>
+          </tr>
+          <tr>
+            <td><b>Dynamic Community Selection</b><br>（不是独立模式，是 global 的可选路径）</td>
+            <td>社区树上的一个<b>子集</b>（可跨层）</td>
+            <td>自顶向下：逐社区按 query 打相关度分，≥ 阈值保留并下探子社区</td>
+            <td>每候选社区一次 LLM 调用；带回漏风险</td>
+            <td>希望"精准聚焦"而非"全量扫"的全局问题</td>
+            <td><span class="ok">✓ 已核</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 逐模式细节</h2>
+
+      <h3>Global Search · 基本模式（非自适应）完整流程（2026-09-22 核，代码级）</h3>
+      <p><b>一句话</b>：把<b>某一层的全部社区报告</b>当材料，用 map-reduce 生成一份"跨库综述"。代码路径＝<code>structured_search/global_search/{search.py, community_context.py}</code> ＋ <code>context_builder/community_context.py</code>。</p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">第 0 步 · 先把"报告集合"读出来（这一步就定死了后面拿什么当材料）</h4>
+      <p><b>为什么原文读起来"一会儿实体、一会儿报告"（2026-09-24 沛东指出后重写）</b>：这个函数（<code>read_indexer_reports</code>）的<b>输入是两张表、输出是"报告列表"</b>；<b>"实体"只在中间露了一次面</b>——<code>explode("entity_ids")</code> 出来的那一列，而且那列是 <b>entity id（哈希）</b>、不带实体名。函数 docstring 用的是<b>旧版的实体口径</b>（"the max community level that an <b>entity</b> belongs to"），而代码早已换成<b>社区口径</b>（下一节有证据）。两套口径混在一段话里，读起来自然拧巴——<b>这是上游的语义漂移被我们读出来了，不是我们没读懂。</b></p>
+      <table>
+        <thead><tr><th>表</th><th>一行是什么</th><th>关键列</th><th><code>title</code> 是什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>communities</code><br><span class="muted">社区表（层级结构）</span></td><td>一个社区</td><td><code>community / level / parent / children / entity_ids / size</code></td><td><b><code>"Community N"</code></b>（<code>create_communities.py</code> 末尾直接拼字符串，N＝社区 id）</td></tr>
+          <tr><td><code>community_reports</code><br><span class="muted">报告表</span></td><td>一个社区一份 LM 报告</td><td><code>community / level / summary / full_content / rank / findings</code></td><td><b>LM 生成的报告标题</b>（如 "Paranormal Military Squad and Operation Dulce"）</td></tr>
+        </tbody>
+      </table>
+      <p><b>默认模式（<code>dynamic_community_selection=False</code>）下，代码只有四件事：</b></p>
+      <ol>
+        <li><b>社区表 explode 成"社区 × 成员实体 id"的长表</b>：<code>nodes_df = communities.explode("entity_ids")</code>——<b>这是"实体"唯一的出场</b>（一行＝某社区带了它的某一个成员实体）。</li>
+        <li><b>两张表各按 <code>level &lt;= N</code> 砍一刀</b>：社区侧砍 <code>nodes_df</code>，报告侧砍 <code>reports_df</code>（报告表的 <code>level</code> 是索引期从社区表 merge 过来的，见 <code>finalize_community_reports.py</code>）。<code>N</code> ＝ 外部必填的 <code>community_level</code>。</li>
+        <li><b>按 <code>title</code> 分组、取 <code>community</code> 最大值</b>：<code>groupby(["title"]).agg({"community": "max"})</code>——代码注释 <code># perform community level roll up</code>，docstring 称它是"每个实体只留它所属的最深社区"。</li>
+        <li><b>用这组 community id 与报告表 inner merge</b> ⇒ <b>输出＝报告集合</b>（不是实体集合、也不是社区集合）。</li>
+      </ol>
+      <div class="chain"><b>⚠️ 更正（2026-09-24）：第 3 步在当前版本里是"空操作"——这一参数的实际语义就是 <code>level &lt;= N</code>。</b>证据在下一节。<b>受影响的旧结论</b>：本页此前写的"≤N ＋ 取最深""层级不齐时用更浅层兜底"两句<b>都要撤</b>。</div>
+      <h4 style="margin:12px 0 4px;font-size:14px;">为什么 roll-up 是空操作（2026-09-24 核：源码 ＋ 官方样例数据 ＋ 本仓库探针）</h4>
+      <h4 style="margin:12px 0 4px;font-size:14px;">先补一课：roll-up 本来在干什么？（2026-09-24 补，沛东追问）</h4>
+      <p><b>一句话</b>：roll-up ＝ <b>"把同一实体的多行压成一行——只留它所属的最深社区"</b>，目的是让<b>每个实体恰好由一份报告代表</b>。它解决的是<b>"同一批内容被多层报告重复代表"</b>这个问题。</p>
+      <p><b>为什么需要它</b>：社区是<b>层级</b>结构，一个实体会同时出现在各个层的祖先社区里。以本页的合成语料为例，实体 A 同时属于 <code>C5</code>(L0)、<code>C20</code>(L1)、<code>C77</code>(L2)。若不处理，把 <code>level ≤ 2</code> 的报告一股脑塞进上下文，<b>A 的内容就被 3 份报告各讲了一遍</b>（C5 的报告里讲 A，C20 的报告里又讲 A，C77 的报告里还讲 A）——而这三份报告说的是同一批 text unit。<span class="why"><b>代价</b>：token 白烧；更麻烦的是 <b>reduce 阶段按分数截断</b>——重复代表会人为抬高同一批内容的"出现次数"，把别的材料挤出去。</span></p>
+      <p><b>数据形状</b>：它的输入必须是一张 <b>"实体 × 所属社区"的长表</b>（一行＝一个实体在一个层里的归属）：</p>
+      <table>
+        <thead><tr><th>谁提供这张表</th><th>长什么样</th><th>分组键 <code>title</code> 是</th></tr></thead>
+        <tbody>
+          <tr><td><b>旧版（v1）</b>：<code>final_nodes</code></td><td>从图上解包出来的节点：<code>label → title</code>、<code>cluster → community</code>，一行＝(实体, 社区)</td><td><b>实体名</b> ✅ 能区分实体</td></tr>
+          <tr><td><b>现在（v2/v3）</b>：<code>communities.explode("entity_ids")</code></td><td>形状<b>一模一样</b>（也是"社区 × 成员实体"），只是实体列名叫 <code>entity_ids</code>（哈希）</td><td><code>"Community N"</code> ❌ 只能区分社区</td></tr>
+        </tbody>
+      </table>
+      <p><b>它怎么干的（三步）</b>：</p>
+      <ol>
+        <li><b>按层砍一刀</b>：长表里只留 <code>level ≤ N</code> 的行 ⇒ 相当于把"层太深"的那些归属先删掉，于是"最深"是<b>在 N 这个上限内</b>的最深。</li>
+        <li><b>按实体聚合，取 <code>community</code> 最大值</b>：<code>groupby(实体).agg({"community": "max"})</code> ⇒ 每个实体只剩一行。之所以 <code>max</code> 就等于"最深"，是因为<b>社区 id 随深度递增</b>（官方 outputs 文档原话："these increment with depth, so they are unique through all levels"）。</li>
+        <li><b>去重成社区集合，再 merge 报告</b>：得到的 community id 去重 ⇒ "至少有一个实体把它当作最深社区"的那些社区 ⇒ 取它们的报告。</li>
+      </ol>
+      <p><b>一条必须先记住的结构性约束（2026-09-24 补，沛东指出）</b>：层级聚类里<b>子社区完整划分父社区</b>——一个社区要么是<b>叶子</b>（规模 ≤ <code>max_cluster_size</code> 或拆不动），要么被它的子社区<b>不重不漏地分完</b>。依据：<code>hierarchical_leiden</code> 是"对<b>超限社区在其诱导子图内</b>再聚类"，而 <code>_compute_leiden_communities</code> 收上来的是一张<b>逐层的"节点 → 社区"映射</b>（<code>results[level][node] = cluster</code>）⇒ 每个成员在每个更深的层里恰好落进一个子社区；官方样例也印证（社区 0 的 <code>size 10 = 4+3+3</code>）。<b>因此"父社区只被拆走一部分、剩下的留在父社区"这种状态不存在。</b><span class="why">诚实边界：底层递归由第三方包 <code>graspologic_native</code> 实现，我<b>没有逐行核它的递归逻辑</b>；此约束由"graphrag 传入 <code>max_cluster_size</code> 的层级 Leiden 定义 ＋ 官方样例数据"双向印证。这条约束后面会用来否掉一个错误例子。</span></p>
+      <p><b>拿合成语料走一遍</b>（<code>C5{A,B,C}</code> L0、<code>C6{D}</code> L0；<code>C20{A,B}</code>／<code>C21{C}</code>／<code>C22{D}</code> L1；<code>C77{A}</code>／<code>C78{B}</code> L2——注意 <b>C20 的两个成员都被拆走了</b>，这正是"完整划分"的样子）：</p>
+      <table>
+        <thead><tr><th>实体</th><th>它所属的社区</th><th><code>N=2</code> 时的最深</th><th><code>N=1</code> 时的最深</th><th><code>N=0</code> 时的最深</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td>C5, C20, C77</td><td><b>C77</b></td><td>C20</td><td>C5</td></tr>
+          <tr><td>B</td><td>C5, C20, C78</td><td><b>C78</b></td><td>C20</td><td>C5</td></tr>
+          <tr><td>C</td><td>C5, C21</td><td>C21</td><td>C21</td><td>C5</td></tr>
+          <tr><td>D</td><td>C6, C22</td><td>C22</td><td>C22</td><td>C6</td></tr>
+          <tr><td><b>报告集合</b></td><td colspan="4"><code>N=2</code> → <b>{C77, C78, C21, C22}</b>（4 份）· <code>N=1</code> → <b>{C20, C21, C22}</b>（3 份）· <code>N=0</code> → <b>{C5, C6}</b>（2 份）</td></tr>
+        </tbody>
+      </table>
+      <p>注意 <code>N=2</code> 那列：<b>C5、C6、C20 全被丢掉了</b>——它们虽满足 <code>level ≤ 2</code>，但<b>没有任何实体把它们当作最深社区</b>（成员都被更深的子社区分走了）。这就是 roll-up 的作用：<b>"哪些社区的报告进来"由"实体怎么归属"决定，而不是由"层的编号"决定。</b></p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">沛东的修正：roll-up 确实保证"实体不重复出现"（2026-09-24，我上一版写错了）</h4>
+      <p><b>先认错</b>：我上一版在这里写过一段"反例"，说"<code>N=2</code> 保留 <code>{C77, C20, …}</code>，而 <code>C77={A}</code>、<code>C20={A,B}</code>，所以 A 会同时出现在两份报告里 ⇒ 代言 ≠ 只出现一次"。<b>沛东指出这个例子不可达</b>：如果 C20 被继续拆分，B 也必然落在 C20 的<b>另一个</b>子社区里——C20 不可能"只拆走 A、把 B 留给自己"。而"子社区完整划分父社区"这条约束上面刚核实过（代码 ＋ 官方样例的 <code>10 = 4+3+3</code>）。<b>所以那个反例是我凭空造的，结论要翻回来。</b></p>
+      <p><b>正确的结论：roll-up 保证保留集里的社区两两成员不相交 ⇒ 每个实体恰好出现在一份报告里。</b>证明很短（两条合起来就够）：</p>
+      <ul>
+        <li>设实体 e 在层 ≤ N 内的最深社区为 <code>C_e</code>；保留集恰是全体 <code>C_e</code> 的集合。</li>
+        <li><b>比 <code>C_e</code> 更浅的祖先社区，一个都留不下来</b>：取 e 的任一祖先 A 且 <code>level(A) &lt; level(C_e)</code>——A 必有子社区（e 在 A 的某个更深社区里）⇒ 由"完整划分"，A 的<b>每个</b>成员都落进 A 的某个子社区 ⇒ 没有任何成员的最深社区是 A ⇒ A 出局。<span class="why">唯一逃逸口是"层号刚好等于 N"，但那要求 <code>level(A)=N</code>，与 <code>level(A) &lt; level(C_e) ≤ N</code> 矛盾。</span></li>
+        <li>⇒ e 所属的社区里只有 <code>C_e</code> 留在保留集中 ⇒ 保留的社区<b>成员互斥</b>，每个实体<b>恰好被一份报告</b>代表。</li>
+      </ul>
+      <div class="chain"><b>两句话记住区别（修正版）</b>：<br>· <b>roll-up 生效</b>：保留的是 <code>level ≤ N</code> 中<b>还"拥有专属成员"的社区</b> ⇒ 保留集里<b>成员互斥</b>，每个实体恰好一份报告覆盖它；报告数 ≤ 实体数（上例 <code>N=2</code>：4 个实体 → 4 份报告）。<b>"混层"照旧存在</b>，那是分支提前到顶的兜底。<br>· <b>roll-up 失效（现状）</b>：<code>level ≤ N</code> 全给 ⇒ 实体与报告<b>层层重复</b>：上例 <code>N=2</code> 给 <b>7 份</b>，4 个实体形成 <b>10 组（实体, 报告）对应</b>（A 被 3 份、B 被 3 份、C 与 D 各 2 份）——<b>正确行为是 4 组</b>。<br>· <b>收益表述</b>：不是含糊的"减重复"，而是<b>"每个实体从最多 N+1 份报告回到恰好 1 份"</b>。</div>
+      <h4 style="margin:12px 0 4px;font-size:14px;">等价刻画：它到底给了什么（2026-09-24，沛东把这一层说透了）</h4>
+      <p><b>一句话</b>：保留集 ＝ <b>{<code>level == N</code> 的社区} ∪ {<code>level &lt; N</code> 的<b>叶子</b>社区}</b>。它同时等价于"每个实体的最深<b>可得</b>社区"。</p>
+      <p><b>为什么等价</b>：对任一实体 e，它在层 ≤N 内只有两种处境——① 分支延伸到第 N 层 ⇒ <code>C_e</code> 是一个 <code>level == N</code> 的社区；② 分支在第 k &lt; N 层就停了（那个社区不再细分＝叶子）⇒ <code>C_e</code> 是一个浅层叶子。两者合起来正是上面那个并集；<b>反过来也成立</b>：<code>level == N</code> 的每个社区至少有一名成员（其成员的最深就是它自己），浅层叶子同理 ⇒ 两边逐个对应。</p>
+      <p><b>用上例验一遍</b>：<code>N=2</code> → level 2 社区 <code>{C77, C78}</code> ∪ 浅层叶子 <code>{C21, C22}</code>（C20 有子社区、不是叶子；C5/C6 也不是）＝ <b><code>{C77, C78, C21, C22}</code></b> ✓；<code>N=1</code> → <code>{C20, C21, C22}</code> ∪ ∅ ✓；<code>N=0</code> → <code>{C5, C6}</code> ∪ ∅ ✓。<span class="why">（四个 <code>N</code> 值 0/1/2/None 已用脚本逐个比对：<b>保留集与并集完全一致</b>，不是只靠嘴上推。）</span></p>
+      <div class="chain"><b>沛东的表述（我认为比 "roll-up" 这个名字更准确）</b>：用户说"我要第 N 层"，<b>想指定的其实是某种粒度</b>；而数据里<b>不见得每条分支都有第 N 层</b>。那些<b>没有第 N 层子社区的社区，它自己就已经是最细粒度了</b>——直接丢掉就是丢信息。所以要把"这些社区里能拿到的最深子社区"取过来，<b>从而在语义（粒度）上、而不是在层级（数据）上对上用户意图</b>。<br>⇒ 换句话说：<b>roll-up 是"粒度意图"与"层号数据"之间的翻译层</b>——代码很少，但干的就是这件事。这也顺带解释了 docstring 为什么用"<b>每个实体</b>"而不是"第 N 层"来定义：<b>因为意图本来就是 per-entity 的。</b></div>
+      <p class="muted"><b>两个附带边界</b>：① 这种翻译会让结果<b>混层</b>（上例 C21/C22 是 L1、C77/C78 是 L2），而上下文表里<b>不带 <code>level</code> 列</b> ⇒ 模型看不出自己在读哪一层。② 当 <code>N</code> 超过语料实际深度时，正确行为是"<b>给全部叶子</b>"（没有 level-N 社区，只能给提前到顶的叶子），而现状是"<b>给全部社区</b>"（含所有非叶祖先）——官方 notebook 的 <code>10 → 10</code> 就是②的现场：社区 0 属于"被完整吸收的非叶祖先"，正确行为下它应当缺席，实得应 ≤9。</p>
+      <p class="muted"><b>给自己的教训</b>：<b>举例子不能只让它在算术上自洽，还得让它在生成它的算法里可达。</b>我那个 C20 的例子在"groupby-max 的结果"上看着没问题，却违反"子社区完整划分父社区"——<b>验证一个例子，先问"这个状态是算法能产出的吗"</b>。这也正是本页反复出现的同一个病：<b>形状对、语义错</b>。</p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">更根本的一层：让用户"指定层级"这个设计本身就有问题（2026-09-24 沛东提出）</h4>
+      <p><b>沛东的论点</b>：顶层社区天然大小不一、深度也不齐。设两个顶层社区，一个最深到 L2、一个只到 L1：用户指定 <code>N=2</code> 或 <code>N=1</code> 时，<b>他想表达的粒度本该不同</b>，可第二个顶层社区<b>两次都只能给出它那个 L1 子社区</b>（那就是它的最细粒度）——<b>同一个旋钮、两棵子树、两套粒度</b>。反过来"严格只取第 N 层"，浅分支又<b>整个消失</b>，照样丢信息。⇒ <b>用户表达不准、系统实现不准，问题不在实现，而在"用层号表达粒度"这个接口本身。</b></p>
+      <p><b>这条我认同，而且可以量化</b>：拿仓库自己 issue <a href="https://github.com/microsoft/graphrag/issues/1650">#1650</a> 里那位用户报的真实分布（社区数 / 平均规模）——L0 <b>27 个 · ~120 节点</b>、L1 <b>61 · ~28</b>、L2 <b>90 · ~12</b>、L3 <b>35 · ~2</b>。⇒ 同层内部规模方差本就大，而<b>各分支能到达的层数还不同</b>，于是"<code>N=2</code>"在一棵树上意味着"2~3 个节点的碎片"，在另一棵树上意味着"上百个节点的整块"。</p>
+      <table>
+        <thead><tr><th>分支</th><th><code>N=0</code></th><th><code>N=1</code></th><th><code>N=2</code></th></tr></thead>
+        <tbody>
+          <tr><td>深分支 T1（L0 40 个实体 → L1 四个各 10 → L2 十六个各 ~2.5）</td><td>1 份（整块 40）</td><td>4 份（各 10）</td><td>16 份（各 ~2.5）</td></tr>
+          <tr><td>浅分支 T2（L0 8 个实体，没再细分）</td><td>1 份（整块 8）</td><td><b>1 份（同一份）</b></td><td><b>1 份（同一份）</b></td></tr>
+          <tr><td colspan="4"><b>后果</b>：<code>N=1 → N=2</code> 的"变细"只作用在深分支上，浅分支<b>纹丝不动</b>；而进到同一个上下文表里的报告，规模能从"2.5 个实体"跨到"40 个实体"——<b>模型还看不到 <code>level</code></b>（见上面边界①）。</td></tr>
+        </tbody>
+      </table>
+      <p><b>不过"按问题自己判断要哪些层"这条路，GraphRAG 里其实已经有了</b>——就是前面写过的 <b>Dynamic Community Selection</b>：它<b>自顶向下沿真实的树走</b>，逐社区按 query 打相关度分，相关的留下并继续下探。它<b>恰好绕开"层号 ≠ 粒度"这个坑</b>：<b>在哪一层找到相关就留哪一层</b>，浅分支自然停在它自己的深度上，不需要谁去猜。</p>
+      <div class="chain"><b>由此能提炼的判据</b>：<br>· <b>静态层号</b>：把"粒度"这个二维量（<b>相关性</b> × <b>可得深度</b>）硬压成一个一维标量 ⇒ <b>信息必然有损</b>，用户表达不准、系统实现不准都是这个压缩的后果。<br>· <b>查询驱动的树遍历</b>：让"能到多深"由<b>数据</b>回答，让"该不该要"由 <b>query</b> 回答 ⇒ 两个维度各归其位。<br>· 但静态旋钮并非一无是处：<b>零额外 LLM 调用、成本可预测、可复现</b>，做<b>基线/调试/对照实验</b>很合适 ⇒ <b>问题不是"该不该有它"，而是"别把它当表达粒度的正式接口"。</b></div>
+      <p><b>还有第三条路，对我们自己的产品最直接可用</b>：把旋钮从"层号"换成"<b>资源 / 覆盖口径</b>"——目标报告数、token 预算、或"覆盖多少比例的 text unit"。这类量<b>用户有直觉</b>（"我要便宜一点 / 全一点"），<b>系统也能自己做好</b>（按预算在每棵子树上决定砍到第几层），且<b>不需要额外 LLM 调用</b>。⇒ 它把"用户做不好、系统也做不好"的那个维度，换成了两边都能对齐的维度。<span class="why">（与我们已定的方向一致：<b>不让用户选层，而按问题形状——点 / 线 / 面、枚举 / 关系 / 连接——决定抓哪些社区，"层"只留作内部成本上限。</b>）</span></p>
+      <p class="muted"><b>一个必须承认的边界</b>：粒度其实是<b>问题与语料共同决定</b>的，不只是问题决定的。就算 query 判得再准，如果某主题在库里只被粗层覆盖（那棵树没长下去），<b>也拿不到细报告</b>——此时正确行为是"<b>给已有最细的 ＋ 明确声明这是最细可得</b>"，而不是假装更细。动态选择在这一点上"天然诚实"（它只能从真实的树里挑）；静态层号则容易让人误以为"我选了细层就该有细节"。</p>
+      <p class="muted"><b>术语提醒</b>：<code>roll up</code> 在数仓里通常指"向上一层汇总"（明细 → 汇总）；这里的用法借的是它"<b>groupby 聚合、多行压一行</b>"的形状义。正是"<b>名字对得上、代码形状也对得上、只有语义被换掉了</b>"这个组合，让这段死代码活了 1.5 年——reviewer 看到 <code>groupby + max</code> 会自然读成"在做聚合"，不会去追问"分组键是不是还是那个键"。<span class="why">（注：上面"为什么要 roll-up／目的是避免重复代表"是由 docstring 措辞 ＋ 层级结构推出的<b>意图解释</b>，注释里没写这句话；<b>三步机制与数字则全部有代码与探针支撑</b>。）</span></p>
+      <p class="muted"><b>代码位置（2026-09 核）</b>：<code>packages/graphrag/graphrag/query/indexer_adapters.py</code> <b>第 74–103 行</b>＝<code>read_indexer_reports</code>（其中 <b>第 85 行</b>＝<code>explode("entity_ids")</code>、<b>第 88–89 行</b>＝两侧 <code>level ≤ N</code> 过滤、<b>第 91–101 行</b>＝roll-up 与 merge、<b>第 96 行</b>＝<code>groupby(["title"])</code>）· 同文件 <b>第 219–225 行</b>＝<code>_filter_under_community_level</code> · <code>packages/graphrag/graphrag/index/workflows/create_communities.py</code> <b>第 161 行</b>＝<code>title = "Community " + community</code> · 报告表 <code>level</code> 的来源＝<code>index/operations/finalize_community_reports.py</code> · 官方说明 <code>docs/index/outputs.md</code>。<br><b>注意</b>：路径区分的是<b>"布局"而不是"时间"</b>——v1/v2 用旧路径 <code>graphrag/query/indexer_adapters.py</code>（少一层 <code>packages/graphrag/graphrag/</code>；<b>含 v2.7.2 这种 2026-03 才发的维护版</b>），v3（2026-01-27 起）才用新路径，两处行号也不同。</p>
+      <p class="muted">永久链接（钉在 <code>769542fb</code>）：<a href="https://github.com/microsoft/graphrag/blob/769542fbf1d8e5b4c6a8677fefc34621c87894c5/packages/graphrag/graphrag/query/indexer_adapters.py#L74-L103">indexer_adapters.py#L74-L103</a> · <a href="https://github.com/microsoft/graphrag/blob/769542fbf1d8e5b4c6a8677fefc34621c87894c5/packages/graphrag/graphrag/index/workflows/create_communities.py#L161">create_communities.py#L161</a></p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">版本线：这个空 roll-up 是哪一版坏的（2026-09-24 逐版本核）</h4>
+      <table>
+        <thead><tr><th>版本</th><th><code>read_indexer_reports</code> 的入参</th><th>分组键 <code>title</code> 是</th><th>roll-up</th><th>源码路径</th></tr></thead>
+        <tbody>
+          <tr><td><b>v1.x</b>（含 v1.2.2）</td><td><code>final_nodes</code>（实体 × 社区的长表）</td><td><b>实体名</b></td><td><span class="ok">✓ 生效</span></td><td>旧路径</td></tr>
+          <tr><td><b>v2.0.0</b> 起<br><span class="muted">PR #1674，2025-02-07 进 v2 线</span></td><td><code>final_communities.explode("entity_ids")</code></td><td><code>"Community N"</code></td><td><span class="no">✗ 空操作</span></td><td>旧路径</td></tr>
+          <tr><td><b>v2.7.2</b><br><span class="muted">2026-03 维护版</span></td><td>同上</td><td><code>"Community N"</code></td><td><span class="no">✗ 空操作</span></td><td>旧路径</td></tr>
+          <tr><td><b>v3.0.0 → v3.2.0</b><br><span class="muted">＝ main HEAD <code>769542fb</code>（2026-09-23）</span></td><td>同上</td><td><code>"Community N"</code></td><td><span class="no">✗ 空操作</span></td><td><code>packages/graphrag/graphrag/…</code></td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>不是 V3 引入的</b>：坏点在 <b>v2 线</b>（2025-02-07 的 PR #1674），<b>v3 只是继承</b>。我们把 main 当"V3"读没错，但别把这条账记在 V3 头上。</li>
+        <li><b>main HEAD <code>769542fb</code> 正好就是 tag <code>v3.2.0</code></b>（2026-09-23）——所以本页"已核"的代码级结论＝<b>v3.2.0 的行为</b>。</li>
+        <li><b>唯一"按实体生效"的是 v1 线</b>：v1.2.2 里 <code>read_indexer_reports(…, final_nodes, …)</code> 仍原样传实体级表，<code>create_final_nodes</code> 也是 <code>base_entity_nodes.merge(… on="title")</code>（<code>title</code>＝实体名）⇒ 那一段设计意图是<b>被真正执行的</b>。</li>
+        <li><b>v2/v3 的 global search 算法骨架没变</b>（同为 map/reduce ＋ <code>MAP_SYSTEM_PROMPT</code>/<code>REDUCE_SYSTEM_PROMPT</code> ＋ <code>max_data_tokens=8000</code> ＋ <code>NO_DATA_ANSWER</code> ＋ <code>allow_general_knowledge</code>）⇒ <b>本页除第 0 步之外的结论对 v2 与 v3 都成立</b>。<span class="why">（依据：v2.7.2 与 v3.2.0 的 <code>structured_search/global_search/search.py</code> 关键符号逐一对照。）</span></li>
+        <li><b>要看最新代码：仓库 <code>microsoft/graphrag</code>、分支 <code>main</code></b>（默认分支；2026-09-24 核对时 HEAD ＝ <code>769542fb</code> ＝ tag <code>v3.2.0</code>，即 V3 线）。另有 <code>releases/v2</code>、<code>releases/v1</code> 两条<b>维护分支</b>——这正是"v2.7.2／v1.2.2 在 2026 年才发布、却仍是老布局"的来源。⇒ <b>复现本页结论、或跟进后续改动，看 <code>main</code> 就够</b>；要读 v2 行为才切 <code>releases/v2</code>。</li>
+      </ul>
+      <h4 style="margin:12px 0 4px;font-size:14px;">是"有意为之"还是 bug？（2026-09-24 翻 PR 与 issue 存档）</h4>
+      <p><b>结论：bug——一次静默的语义回归，不是设计取舍。</b>四条证据：</p>
+      <ol>
+        <li><b>PR 自己只谈"结构"，一字未提语义</b>：<a href="https://github.com/microsoft/graphrag/pull/1674">#1674 "Streamline workflows"</a>（natoverse，40 commits / 144 文件 / +1685−2576）正文要点全是搬家改名——去掉 <code>create_final_</code> 前缀、<b>"Merged the node data into the entities table, since communities now has the entity IDs so a join can be done anytime"</b>、<b>"Removed the nodes table from indexing and query"</b>、合并 workflow、删瞬态表。<b>全文没有一句说 <code>community_level</code> 的含义要变。</b></li>
+        <li><b>留下了"尸体特征"</b>：<code>groupby(["title"]).agg({"community": "max"})</code> 在 <code>title</code>＝社区名时是<b>逐组一行的恒等运算</b>（<code>max</code> 永远等于它自己）。若真有意改成"≤N 全给"，正常写法是 <code>nodes_df["community"].drop_duplicates()</code>；写成 groupby-max，唯一合理解释是<b>照抄旧代码、只换了数据源</b>。</li>
+        <li><b>注释与 docstring 都没跟着改</b>：<code># perform community level roll up</code> 与 "select reports with <b>the max community level that an entity belongs to</b>" 都原样留着——有意改语义的话这两句是必须改的，而改的人正是同一位维护者。</li>
+        <li><b>v1 线是活证据</b>：这段逻辑在 v1 真按实体执行过（见上表），所以"旧语义"不是纸面推测。</li>
+      </ol>
+      <p><b>那为什么 1.5 年没人发现？</b>（这几条同样是可核的机制，不是猜）</p>
+      <ul>
+        <li><b>零测试覆盖</b>：<code>tests/unit/query/</code> 下只有 7 个 <code>.py</code>（<code>context_builder/dynamic_community_selection.py</code>、<code>context_builder/test_entity_extraction.py</code>、<code>input/retrieval/test_entities.py</code> 等），<b>没有任何测试碰 <code>indexer_adapters.py</code></b> ⇒ 语义回归没有哨兵。</li>
+        <li><b>症状看起来"正常"</b>：官方 notebook 打印 <code>Total report count: 10</code> → <code>after filtering: 10</code>，"所有报告都在 level ≤ 2 内"是个完全合理的读法。差异只在"有子社区的祖先报告本该被丢掉"时才显现——而<b>你得先知道设计意图，才看得出它没被丢掉</b>。</li>
+        <li><b>后果是"多给"而不是"出错"</b>：上下文多混了粗层报告，答案仍然合理（甚至显得更全面），不报错、不崩、不空 ⇒ 典型的"哑提升"，最不容易被当 bug 报。</li>
+        <li><b>有人审过这个函数，但审的是崩溃不是语义</b>：2026-05 的 <a href="https://github.com/microsoft/graphrag/issues/2348">issue #2348</a>（2026-07 关闭）就发生在同文件的 <code>_filter_under_community_level</code> 上——"NaN 比较静默丢掉无社区归属的实体"，根因写得极细、还附了修复建议，<b>但同样没提 roll-up 已死</b>；随后开出 6 个几乎重复的修复 PR（多由 AI agent 提交）。⇒ <b>"可见的崩溃"与"不可见的语义"被彻底分开处理了。</b></li>
+        <li><b>全仓检索的旁证</b>：在 issue/PR 里搜 <code>"max community level that an entity belongs to"</code> 命中 <b>0</b>、搜 <code>"community level roll up"</code> 命中 <b>0</b> ⇒ 这句意图<b>从未在任何讨论里被提起过</b>。</li>
+      </ul>
+      <div class="chain"><b>给我们的操作性结论</b>：① 对这种"多给"型回归，<b>有效防线是语义探针，不是 code review</b>——因为代码每一行看着都对（<code>groupby</code>＋<code>max</code> 语法完全合法）。② 重构里<b>"换数据源"比"改逻辑"危险得多</b>：diff 中逻辑一行没动，语义却变了，而 review 的注意力天然落在"改了什么"上。③ 我们自己的检索侧同样要防：凡是<b>把某字段当语义键用</b>的地方（<code>claim_type</code>、归一后的概念字符串、<code>predicate</code>），都要有断言钉住"这个键<b>当前</b>的取值域是什么"。<span class="why">（另注：CLI 侧 <code>--community-level</code> 默认给 <b>2</b>（据 #2348），Python API 侧仍无默认——同一参数两处口径也不同，属同一类"一个语义、多处定义"的病。）</span></div>
+      <h4 style="margin:12px 0 4px;font-size:14px;">那要不要给它提个 bug？（2026-09-24 评估）</h4>
+      <h4 style="margin:12px 0 4px;font-size:14px;">关键补证：用官方 notebook 自己的数字定案（2026-09-24，沛东提出后再核）</h4>
+      <p><b>先纠一条"不够硬"的推理</b>（沛东提出、我早先也用过）："notebook 输出里混着 level 0 和 level 1 的报告，文档却说 <i>from a specified level</i>"——这<b>确实是矛盾，但它只能定"文档措辞有问题"，不能定"代码死了"</b>。因为<b>原设计本来就允许混层</b>：docstring 写的是"每个实体取它所属的<b>最深</b>社区"，实体够不到深的地方就用浅的兜底。<span class="why">（顺带一个易读错处：cell 7 最后一行打的是 <code>report_df.head()</code>——<b>过滤前的原始表</b>，不是过滤结果；过了滤的那个变量叫 <code>reports</code>。）</span></p>
+      <p><b>真正能定案的是同一页 cell 7 与 cell 14 的另一组数字——两者直接冲突：</b></p>
+      <table>
+        <thead><tr><th>来源</th><th>数字</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><b>cell 7</b><br><span class="muted">原始 <code>report_df.head()</code></span></td><td>社区 <b>7 / 8 / 9</b>：level <b>1</b>、parent <b>0</b>、size <b>4 / 3 / 3</b><br>社区 <b>0</b>：level <b>0</b>、parent <b>-1</b>、children <b>[7,8,9]</b>、size <b>10</b></td><td><b>4 ＋ 3 ＋ 3 ＝ 10 ＝ 社区 0 的 size</b> ⇒ 社区 0 的成员<b>正好被 7/8/9 分完</b>，没有任何实体"只属于 0"</td></tr>
+          <tr><td><b>按 docstring 应得</b></td><td>社区 0 里每个实体的最深社区都是 7/8/9 ⇒ <b>报告 0 必须被丢掉</b>（它不可能是任何实体的"最深社区"）</td><td>期望 <b>≤ 9</b> 份</td></tr>
+          <tr><td><b>cell 14</b><br><span class="muted"><code>result.context_data["reports"]</code>＝真正喂给 LLM 的表</span></td><td>id ＝ <b>4, 0, 3, 8, 9, 1, 6, 7, 5, 2</b> ⇒ <b>0–9 全在，报告 0 在场</b>（rank 8.5、occurrence weight 1.0）</td><td>实际 <b>10</b> 份 ⇒ <b>报告 0 没被丢掉</b></td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>在项目自己随包发布的样例数据上，docstring 声明的行为没有发生。</b>这条比合成探针更硬：<b>数字全是官方 notebook 自己打印的</b>，不用装任何东西、不用跑任何代码就能复核——<b>沛东就是在看这一页时发现的</b>。</p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">候选修复：1 行（已在探针里验证）</h4>
+      <p>不用改函数签名、也不用把 <code>entities</code> 表传进来——<code>explode("entity_ids")</code> 之后<b>本来就有一列实体 id</b>，正好就是 docstring 说的"每个实体"：</p>
+      <pre style="background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;overflow-x:auto;font-size:0.85em;line-height:1.5;">    # perform community level roll up
+    nodes_df.loc[:, "community"] = nodes_df["community"].fillna(-1).astype(int)
+    # 改动前：nodes_df = nodes_df.groupby(["title"]).agg({"community": "max"}).reset_index()
+    # 改动后：
+    nodes_df = nodes_df.groupby("entity_ids").agg({"community": "max"}).reset_index()
+    filtered_community_df = nodes_df["community"].drop_duplicates()</pre>
+      <p>探针实测（<code>data/tmp/_graphrag_rollup_probe.py</code>，已加入该修复版；四个 <code>N</code> 值 0 / 1 / 2 / None <b>逐项一致</b>）：</p>
+      <pre style="background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;overflow-x:auto;font-size:0.85em;line-height:1.5;">community_level = 1
+  当前版本(title=Community N)  -> 5 份报告 [5, 6, 20, 21, 22]
+  旧版本(title=实体名)         -> 3 份报告 [20, 21, 22]
+  候选修复(group by entity)    -> 3 份报告 [20, 21, 22]          ← 与 docstring 一致
+
+community_level = 2
+  当前版本 -> 7 份 [5, 6, 20, 21, 22, 77, 78]
+  旧版本   -> 4 份 [21, 22, 77, 78]
+  候选修复 -> 4 份 [21, 22, 77, 78]                              ← 与旧版本相同</pre>
+      <p>⇒ 该修复<b>只恢复"按实体取最深"这一件事</b>，不动其他行为。</p>
+      <p><b>但修复方向有三种，属维护者的产品判断</b>（我们只给证据与候选）：</p>
+      <table>
+        <thead><tr><th>方案</th><th>行为</th><th>代价 / 风险</th></tr></thead>
+        <tbody>
+          <tr><td><b>A 恢复 roll-up</b><br><span class="muted">上面那 1 行</span></td><td>恢复 docstring 语义：每实体取其最深，浅层兜底</td><td>改动最小；但<b>"混层"依旧</b>（那是原设计）⇒ <b>文档措辞也得改</b></td></tr>
+          <tr><td><b>B 严格单层</b></td><td>只取 <code>level == N</code> 的报告</td><td>最贴"from a specified level"字面；但<b>浅层叶子社区的报告会消失</b>（层级不齐时那些实体失去代表）——属<b>行为变更</b>，不只是修 bug</td></tr>
+          <tr><td><b>C 保持现状 ≤N</b></td><td>代码不动</td><td>那就必须改 docstring、删掉那句注释、并明说"报告集合含各层"；<b>否则文档持续骗人</b>（当前正是这个状态）</td></tr>
+        </tbody>
+      </table>
+      <div class="chain"><b>因果链一句话</b>：<code>groupby("title")</code> 的分组键在 #1674 里从"实体名"变成"社区名" ⇒ 这段 roll-up 变成恒等运算 ⇒ 声明语义失效 ⇒ <b>notebook 里报告 0 该丢没丢</b>。</div>
+      <h4 style="margin:12px 0 4px;font-size:14px;">已提交（2026-09-25）：上游 issue <a href="https://github.com/microsoft/graphrag/issues/2573">#2573</a></h4>
+      <p><b><a href="https://github.com/microsoft/graphrag/issues/2573">microsoft/graphrag#2573</a></b> — <code>[Bug]: community_level does not select a level — the community roll-up in read_indexer_reports is a no-op since v2.0.0</code> · <b>open</b>（2026-09-25 提交）· labels <code>bug</code> ＋ <code>triage</code>。<b>正式文本与后续讨论以该 issue 为准</b>，本页不再复制逐字段细节。<span class="why">（提交前的英文草稿留档：<code>data/tmp/_issue_rollup_draft.md</code>；字段映射、勾选项这类"提交流程"细节已删——它们对结论没有信息量，GitHub 上已有权威记录。）</span></p>
+      <ul>
+        <li><b>发出去的口径</b>：不主张"应该按最深社区取"（那是可争的设计取舍），而是指出<b>代码／注释／文档三者互相矛盾</b>——这一条不可争；"哪种行为才对"留给维护者，并给出 A（1 行恢复 roll-up）／B（严格单层）／C（保持 ≤N 但改文档）三个方向。</li>
+        <li><b><code>triage</code> 是什么</b>：词源是医学"<b>分诊</b>"，在 issue 里是<b>队列状态</b>——"<b>还没被评估过</b>"；<b>不是</b>严重性、<b>不是</b>优先级、<b>更不是</b>"已确认是 bug"（那个 <code>bug</code> 标签也是模板自己打的）。真实含义＝"<b>等一个真人来做决定</b>"。</li>
+        <li><b>要盯的自动关闭规则</b>：<code>.github/workflows/issues-autoresolve.yml</code> 每天 01:30 跑 <code>actions/stale</code>，<b>只处理 label 为 <code>awaiting_response</code> 的 issue</b>——7 天无活动 ⇒ <code>stale</code>；再 5 天 ⇒ 关闭并打 <code>autoresolved</code>。⇒ <code>triage</code> 本身不会被自动关；<b>但若维护者要我们补信息，必须 7 天内回</b>。</li>
+        <li><b>项目状态：维护模式</b>（<code>CONTRIBUTING.md</code>）：不接新功能，<b>接收 bug fix 的 PR，但要求先提 issue</b>。我们这类"修既有语义"的单子正好在受理范围内；草稿结尾也表明了愿意按此流程提 PR。</li>
+      </ul>
+      <pre style="background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;overflow-x:auto;font-size:0.85em;line-height:1.5;">def read_indexer_reports(final_community_reports, final_communities, community_level, dynamic_community_selection=False):
+    """... If not dynamic_community_selection, then select reports with the max community level that an entity belongs to."""
+    reports_df = final_community_reports
+    nodes_df = final_communities.explode("entity_ids")        # 一行 = (社区, 它的一个成员实体 id)；title 仍是 "Community N"
+
+    if community_level is not None:
+        nodes_df   = _filter_under_community_level(nodes_df, community_level)   # ← "≤N"
+        reports_df = _filter_under_community_level(reports_df, community_level)
+
+    if not dynamic_community_selection:                        # ← 默认模式才做
+        # perform community level roll up
+        nodes_df["community"] = nodes_df["community"].fillna(-1).astype(int)
+        nodes_df = nodes_df.groupby(["title"]).agg({"community": "max"}).reset_index()   # ← 分组键＝communities.title
+        filtered_community_df = nodes_df["community"].drop_duplicates()
+        reports_df = reports_df.merge(filtered_community_df, on="community", how="inner")
+
+    return read_community_reports(df=reports_df, id_col="id", short_id_col="community")
+
+
+def _filter_under_community_level(df, community_level):
+    return df[df.level &lt;= community_level]                     # ← 只保留 level ≤ N</pre>
+      <p><b>要害在分组键 <code>title</code> 上。</b>"按实体取最深"要成立，<code>title</code> 必须能区分<b>实体</b>。旧版正是如此：当时入参叫 <code>final_nodes</code>，它就是一张 <b>"实体 × 所属社区"的长表</b>（<code>create_final_nodes</code> 里从图上解包出节点，把 <code>label → title</code>、<code>cluster → community</code>，再 <code>drop_duplicates(["title","community"])</code>，代码见 <a href="https://github.com/microsoft/graphrag/blob/e5342236/graphrag/index/flows/create_final_nodes.py">e5342236 版 create_final_nodes.py</a>）——<b><code>title</code> 是实体名（图谱节点的 label）</b>⇒ <code>groupby("title")</code> 真的在<b>按实体</b>分组，<code>max(community)</code> 才等于"这个实体所属的最深社区"。<br><b>而 <code>communities.explode("entity_ids")</code> 的形状跟它一模一样</b>（也是"社区 × 成员实体"的长表）——<b>这就是当年重构时看不出问题的原因</b>：表形似换成等效的，但<b>分组键的语义被换掉了</b>（实体名 → "Community N"）。<span class="why">教训：<b>"两张表形状相同"不等于"这两个字段可互换"</b>；重命名／改数据源时，第一件要核的是<b>被当作语义键用的那一列</b>。</span></p>
+      <p><b>现在入参换成了 <code>communities</code> 表，而它的 <code>title</code> 是 <code>"Community N"</code></b>：<code>create_communities.py</code> 末尾一行 <code>final_communities["title"] = "Community " + community</code>（官方 outputs 文档也把它描述为 "Friendly name of the community"）。本仓库下载的官方样例 <code>docs/examples_notebooks/inputs/operation dulce/communities.parquet</code>，其 <code>title</code> 列实测取值就是 <code>Community 0 … Community 9</code>。⇒ <code>groupby("title")</code> ＝ <b>按社区自己分组</b>，每组只有它自己，<code>max</code> 还是它自己 ⇒ <b>"实体"这一维被整个丢掉，只剩"每个社区一行"，等价于去重。</b></p>
+      <p><b>漂移的时点</b>：2025-02-07 的 <b>PR #1674 "Streamline workflows"</b> 删掉了 <code>create_final_nodes</code> 工作流，把这里的入参从 <code>final_nodes</code> 改成 <code>final_communities.explode("entity_ids")</code>——<b>但下面 <code>groupby(["title"])</code> 一行没跟着改，docstring 也没改</b>。此后这段 roll-up 就静默失效了：<b>声明说"取最深"，实现是"全给"</b>。</p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">探针实测（<code>data/tmp/_graphrag_rollup_probe.py</code>）</h4>
+      <p class="muted">用合成层级精确复刻上面那个函数（<code>C5{A,B,C}</code> L0、<code>C6{D}</code> L0；<code>C20{A,B}</code> / <code>C21{C}</code> / <code>C22{D}</code> L1；<code>C77{A}</code> / <code>C78{B}</code> L2，共 7 个社区，且满足"子社区完整划分父社区"），分别喂"当前 title＝Community N"与"旧版 title＝实体名"。</p>
+      <pre style="background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;overflow-x:auto;font-size:0.85em;line-height:1.5;">community_level = 0
+  当前版本(title=Community N)  -> 2 份报告 [5, 6]
+  旧版本(title=实体名)         -> 2 份报告 [5, 6]
+
+community_level = 1
+  当前版本(title=Community N)  -> 5 份报告 [5, 6, 20, 21, 22]      ← 就是"level ≤ 1 的全部"
+  旧版本(title=实体名)         -> 3 份报告 [20, 21, 22]            ← A→20, B→20, C→21, D→22
+
+community_level = 2
+  当前版本(title=Community N)  -> 7 份报告 [5, 6, 20, 21, 22, 77, 78]   ← 全量
+  旧版本(title=实体名)         -> 4 份报告 [21, 22, 77, 78]              ← A→77, B→78, C→21, D→22
+
+community_level = None
+  当前版本(title=Community N)  -> 7 份报告（全量，不过滤）
+  旧版本(title=实体名)         -> 4 份报告（每实体最深，不受层限）</pre>
+      <p><b>旁证：官方 notebook 自己的数字。</b><code>global_search.ipynb</code> 里 <code>COMMUNITY_LEVEL = 2</code>，输出 <code>Total report count: 10</code> → <code>Report count after filtering by community level 2: 10</code>。<b>若 roll-up 生效，level 0 的祖先社区会被它的子社区吸收掉</b>（它不可能是任何实体的"最深社区"），结果必然 &lt; 10；<b>等于 10 正说明它没生效</b>。该 notebook 数据 <code>period = 2026-01-13</code>，晚于漂移时点，结论自洽。</p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">于是：默认模式的实际语义与边界（2026-09-24 定）</h4>
+      <ul>
+        <li><b>实际语义 ＝ "报告集合 = <code>level &lt;= N</code> 的全体报告"</b>，外加一条几乎恒真的约束（靠那个 inner merge 实现）：报告所属社区必须能在社区表里找到对应行。</li>
+        <li><b><code>community_level = None</code></b>：不过滤 ⇒ <b>全部社区、所有层</b>的报告，不是"每个实体最深社区"。</li>
+        <li><b>不是"选第 N 层"</b>：API docstring 写 "The community level to search at"、notebook 注释写 "higher value means more fine-grained"——<b>说法都是"那一层"</b>，实现是"<b>≤N 的所有层</b>"。⇒ <b>语义与实现不一致，且偏差方向是"给得比说的多"</b>（把更粗的层全都塞进来）。</li>
+        <li><b>报告集合确实"混深度"</b>（C0…CN 全在里面），而 <code>read_community_reports</code> 只映射 <code>id / short_id / title / community / summary / full_content / rank / attributes</code>——<b><code>level</code> 没进对象</b>，上下文表表头里也没有 level 列 ⇒ <b>模型完全不知道自己在读哪一层</b>。⇒ 上面"宏观问题 ＋ 细层判不准"那个放大器<b>依然成立</b>，只是成因要改写成"<b>混深度是默认状态</b>"，而不是"层级不齐时的兜底"。</li>
+        <li><b>"max(community id) ≡ 最深"这条前提</b>：官方文档说社区 id "increment with depth"，此条<b>只在 roll-up 生效时才有意义</b>；当前版本它不参与任何实际判断（留作历史理解）。</li>
+        <li><b>默认模式 vs dynamic 的差别不在这一步</b>：<code>dynamic_community_selection=True</code> 时<b>整个 merge 被跳过</b>，报告集合原本还是"<code>level &lt;= N</code> 的报告"（只少了社区表对齐）；真正的差别在上下文装配阶段（动态模式按 query 逐社区打分剪枝，见下文）。⇒ <b>同一个参数名、两条路径两种含义</b>这个结论不变。</li>
+      </ul>
+      <div class="chain"><b>这条更正对我们自己的意义（比 GraphRAG 本身更重要）</b>：我们一直在追问"如何把用户 query 落到图的确定性入口"；而这里是一个<b>反面教材</b>——一个有效设计（"每个实体只留最深社区"）在重构中被静默降级成"全层都下发"，<b>没有断言、没有日志、没有测试抓到它</b>；连官方 notebook 打印出的 <code>10 → 10</code> 就是这个 bug 的现场证据，却没人当异常看。<b>对我们的直接要求</b>：编译／检索产物里那些充当"路由键"的东西（<code>claim_type</code>、概念归一、边的方向／极性），必须配<b>可跑的语义探针</b>，让"声明的语义"和"实现的语义"对不上时当场响。否则同类的静默漂移会以"结果看着还行、只是不太准"的形式长期潜伏。<span class="why">（这条与我们"基础件人工复核""根因修复闭环"两条纪律同源：<b>语义也是基础件</b>。）</span></div>
+      <h4 style="margin:12px 0 4px;font-size:14px;">第 1 步 · 装配上下文（<code>GlobalCommunityContext.build_context</code>）</h4>
+      <ol>
+        <li><b>算社区权重</b>（仅当传了 entities 且报告尚无该属性）：遍历实体 → 取 <code>community_ids</code> → 把 <code>text_unit_ids</code> 累加到对应社区 ⇒ <b>权重 ＝ 该社区内所有实体关联的去重 text unit 数</b>，再按最大权重<b>归一化到 0–1</b>，写进报告 attributes（默认名 <code>occurrence weight</code>）。⇒ 这就是 notebook 那句 "community weights for context ranking" 的实义：<b>一个"社区里有多少独立文本块"的体量指标，不是相关性</b>。<span class="why"><b>作用</b>：给"批内排序"提供<b>第一关键字</b>（体量大的社区在批内更靠前）；归一化让它变成相对量、便于跨数据集比较。</span></li>
+        <li><b>筛</b>：<code>report.rank &gt;= min_community_rank</code>（默认 0 ⇒ 全过）。此 <code>rank</code> 是报告自己的重要性分（记录 ㉓），<b>不是查询相关度</b>。<span class="why"><b>作用</b>：给使用者一个"<b>直接砍掉低重要性报告</b>"的阈值（省 token 的预过滤）；默认 0 等于不砍。</span></li>
+        <li><b>打乱</b>：<code>random.seed(86)</code> ＋ shuffle ⇒ <b>有固定种子的伪随机</b>，同输入可复现（修正"随机分批"的笼统说法）。<span class="why"><b>作用</b>：<b>避免高价值信息集中在少数连续区域</b>——即破坏"<b>批次划分</b>"与"<b>任何使报告互相关联的维度</b>"之间的对齐。<b>不是特指"同主题"</b>（相关还可能来自同父社区、同源文档、同一次入库批次）。两类真实的"顺序↔相关"对齐来源：① <b>社区表天然顺序</b>（id 随深度递增、同父子社区相邻 ⇒ 同主题报告确实容易挨着，<b>倾向、未完全核实</b>）；② <b>增量入库分段</b>（<b>已证</b>：旧报告在前、delta 报告整体偏移后拼接 ⇒ 同一批入库的报告连续排列，且同源性强）⇒ <b>增量之后"不打散"的危害比单次构建时更大</b>。<br><b>集中为什么有害（两条可核实的机制）</b>：(a) <b>map 单批输出有长度上限</b>（<code>max_length</code> 默认 1000 词）⇒ 一批承载越多，压缩越狠、细节丢得越多；分散后每批只需覆盖一小块。(b) <b>批是失败的最小单元</b>——JSON 解析失败/抛异常 ⇒ <b>整批归零</b>（只打 warning，见第 2 步）⇒ 集中则一次失败全丢、分散则只丢一部分。⇒ 这才是"不要把所有鸡蛋放一个篮子"的可核实版本（<b>它不是"防超窗"，也不是含糊的"防 LLM 抽风"</b>，那两条已被否，见 0029 记录 ⑦「修正补记」）。固定种子则是"打散但可复现"的折中。</span></li>
+        <li><b>分批</b>：逐条累加 token，超 <code>max_context_tokens</code>（类默认 8000；notebook 传 12000）即切批。<b><code>GlobalCommunityContext</code> 硬编码 <code>single_batch=False</code></b>（函数默认是 True，此处被覆盖）⇒ 走这条路<b>一定是多批</b>。<span class="why"><b>作用</b>：让每一批都<b>装得进一次 LLM 调用</b>（否则"没法 map"）；这一步<b>不丢信息</b>，只是切块——真正的丢弃发生在 reduce 的 <code>max_data_tokens</code> 截断。</span></li>
+        <li><b>批内排序 + 成表</b>：切批时按 <code>[occurrence weight, rank]</code> <b>降序</b>排，输出 <code>|</code> 分隔 CSV（表头≈<code>id|title|…attributes…|summary 或 content|rank</code>）⇒ <b>批间打散、批内有序</b>，两个机制同时存在。<span class="why"><b>作用</b>：让体量/重要性更高的报告在<b>批内靠前</b>（影响模型阅读与注意力的先后）；成 CSV 是为了给模型一张<b>带 id 的结构化表</b>，好让它写出 <code>[Data: Reports (…)]</code> 这类引用。</span></li>
+        <li>有对话历史时（默认最多 5 轮、只用 user 轮）前置到每一批之前。<span class="why"><b>作用</b>：支持<b>多轮指代</b>（"那它的成本呢？"）；放在每一批之前，是为了让各批看到同样的上文、口径一致。</span></li>
+      </ol>
+      <h4 style="margin:12px 0 4px;font-size:14px;">第 2 步 · Map（并行，一批一次调用）</h4>
+      <ul>
+        <li>提示词：<code>system = MAP_SYSTEM_PROMPT</code>（带 <code>{context_data}</code> 与 <code>{max_length}</code>）、<code>user = query</code>；<b>强制 JSON 输出</b>。<span class="why"><b>作用</b>：这是"<b>全量扫</b>"的廉价实现——不做检索，让每一批自己<u>摘出重要点并打分</u>，把"筛选"推迟到 reduce；强制 JSON 是为了让分数与要点<b>可程序化解析</b>，而不是一段散文。</span></li>
+        <li>产出解析成 <code>points: [{description, score}]</code> → 归一成 <code>{answer, score}</code>；并发由信号量控制（<code>concurrent_coroutines=32</code>）。<span class="why"><b>作用</b>：把"批"降级成"点集合"，<b>让 reduce 能在一个列表上排序</b>；并行＋信号量是为了让<b>延迟与批数脱钩</b>。<br><b>但要更正一处（2026-09-22，沛东质疑）</b>：本记录此前写"于是跨批可比（同一把分数尺）"，<b>不成立</b>——分数是<b>每批独立自评</b>的（模型只看本批那张表 + 一个没有细则的 0–100 要求），属"<b>批内相对 ＋ 模型先验</b>"，<b>中间与高端跨批不可比</b>；<b>真正可比的只有"0 vs 非 0"这个二值门</b>（0 的语义被明确定义：无可用信息）。而 reduce 提示词还<b>断言</b>"analysts' reports ... are ranked in the descending order of importance" ⇒ <b>系统把一个弱校准的排序当成可信输入，再据此降序截断</b> ⇒ <b>可能把最相关的点丢掉（排序不可靠 ＋ 硬截断）</b>。这与我们项目里"分数区间重叠、无法定阈值"同源，只是发生在 <b>LLM 自评</b>而非嵌入相似度上。<br><b>可复用判据</b>：① 跨批/跨来源的分数要比较，必须先给<b>评分标准 ＋ 锚点 ＋ 校准</b>（或用成对比较）；② <b>"统一了结构" ≠ "统一了刻度"</b>。</span></li>
+        <li><b>失败静默降级</b>：JSON 解析失败 ⇒ 该批只产出 <code>{answer:"", score:0}</code>；抛异常 ⇒ 同样；<b>只打 warning 日志</b>。<span class="why"><b>作用/代价</b>：好处是<b>不阻塞整条链</b>（其余批照常出结果）；代价是<b>答案会缺一块而没有显式提示</b>——这正是我们最忌讳的"静默失败"形态。</span></li>
+      </ul>
+      <h4 style="margin:14px 0 4px;font-size:14px;">map 提示词导读（<code>prompts/query/global_search_map_system_prompt.py</code>）</h4>
+      <p class="muted">原文：<a href="https://github.com/microsoft/graphrag/blob/main/packages/graphrag/graphrag/prompts/query/global_search_map_system_prompt.py">global_search_map_system_prompt.py</a></p>
+      <ul>
+        <li><b>输入（两个模板变量）</b>：<code>{context_data}</code> ＝ 一批社区报告拼成的 <code>|</code> 分隔表（表头 ≈ <code>id|title|…attributes…|summary 或 content|rank</code>）；<code>{max_length}</code> ＝ 要求的输出词数（默认 1000）。<b>用户问题不在这里</b>——它作为 <b>user 消息</b>单独传入（代码是 <code>add_system_message(prompt).add_user_message(query)</code>）。</li>
+        <li><b>结构</b>：<code>---Role---</code>（"helpful assistant"，只谈提供的表）→ <code>---Goal---</code> → <code>---Data tables---</code>（注入上下文）→ <b>把 Goal 整段再重复一遍</b>（与社区报告提示词同一手法："贴身重申"，代价是 prompt 变长）。</li>
+        <li><b>输出</b>：JSON —— <code>{"points":[{"description":"… [Data: Reports (ids)]","score":0-100}]}</code>；调用时强制 <code>response_format_json_object=True</code>；解析时只取 <code>points</code> 里的 <code>description</code> / <code>score</code>；<b>解析失败 ⇒ 该批退回 <code>{answer:"", score:0}</code></b>（见第 2 步第 3 条）。</li>
+        <li><b>约束（七条，逐条对应原文）</b>：① 只用表里的数据做主要上下文；② 不知道就说不知道、<b>不要编</b>；③ 每条要点必须有 <b>Description ＋ 0–100 的整数重要度分</b>，且明确"<b>'I don't know' 型回答必须 0 分</b>"；④ 要点要带引用 <code>[Data: Reports (report ids)]</code>，<b>单条最多 5 个 id</b>、其余写 <code>+more</code>，id 取表格里的 id（不是行号）；⑤ <b>无证据不得写入</b>；⑥ 保留原意与情态动词（shall / may / will）；⑦ 长度限制 <code>{max_length}</code> 词。</li>
+        <li><b>三处值得注意</b>：① <b>打分语义是"对回答用户问题的有用性"（query 相对）</b>——与社区报告的 <code>rank</code>（社区自身重要性、query 无关）<b>不是一回事</b>，正好补上第 1 步"rank 不是相关度"的对照面；② <b>0 分有明确定义</b>（"I don't know" ⇒ 0），与 reduce 的"丢 0 分"衔接；③ <b>map 阶段永远禁止编造</b>——<code>allow_general_knowledge</code> 的注入点在 <b>reduce</b>，不在 map（代码里只加在 reduce 提示词上）。</li>
+      </ul>
+      <div class="chain"><b>更正（2026-09-22，写本节时核出）</b>：此前多处写的"Global Search 最终答案<b>不带引用</b>"<b>是错的</b>——reduce 提示词（<code>global_search_reduce_system_prompt.py</code>）明确要求 "<b>preserve all the data references previously included in the analysts' reports</b>"。<b>准确说法：引用有，但只到"报告"这一级、且无任何校验</b>（要回原文还得再走两跳：报告 → 实体/关系/claim → text unit；单条引用还有"最多 5 个 id ＋ <code>+more</code>"的抽样上限）。0029 记录 ④⑮⑯⑰⑱ 已同步更正。</div>
+
+      <h4 style="margin:14px 0 4px;font-size:14px;">追问：跨批分数不可比，有没有解？（2026-09-22 讨论）</h4>
+      <p><b>分成两半看</b>：给详细评分标准能解决"<b>档位语义</b>"，解决不了"<b>批内相对锚定</b>"。更稳的思路是——<b>别让跨批分数单独承担排序职责</b>。</p>
+      <table>
+        <thead><tr><th>办法</th><th>能解决</th><th>不能解决 / 代价</th></tr></thead>
+        <tbody>
+          <tr><td><b>① 评分细则 ＋ 锚点</b>（如 90–100＝直接回答核心且不可替代；70–89＝重要支撑；40–69＝背景；1–39＝边缘；0＝无信息）＋ 少量 few-shot</td><td>钉住档位语义，<b>压缩区间重叠</b></td><td><b>消不掉批内锚定</b>（模型仍以本批为参照抬高"本批最相关"）；提示词变长，属基础件需人工过目 ＋ 回归</td></tr>
+          <tr><td><b>② 降精度使用</b>：把 0–100 只当"三档"（无关/相关/核心），不当连续量</td><td>承认它<b>只能做粗分类</b>，避免用噪声排序</td><td>放弃细排序（本来也不可靠）</td></tr>
+          <tr><td><b>③ 批内归一化/校准</b>（z-score、top-1 归一）</td><td>抵消"整批偏高/偏低"的偏移</td><td><b>危险</b>：全无关的批会把噪声抬成高分 ⇒ 必须先过 0 分门；且放大低信息批的差异，收益不稳</td></tr>
+          <tr><td><b>④ 把排序交回同一次上下文</b>（map 不打分，reduce 一次看全部候选再排）</td><td><b>天然可比</b>（同一把尺子的前提是真在同一上下文）</td><td>受 reduce 窗口限制（<code>max_data_tokens</code> 8000），候选一多装不下 ⇒ 需要<b>分级归并</b>（先组内选优、再全局排序）</td></tr>
+          <tr><td><b>⑤ 只用"批内可信"的排序</b>：每批取 top-k，再让 reduce 比这些"各批冠军"</td><td>避免跨批直接比分数</td><td>每批只贡献少数点，可能丢掉同批的次优但重要项</td></tr>
+          <tr><td><b>⑥ 把风险从"排序"转移到"截断"</b>：扩预算 / 分级归并 / <b>遗漏声明</b></td><td>排序不可靠也能接受，只要"丢了什么"可见</td><td>需要额外的声明机制——<b>而这正是我们的红线</b></td></tr>
+        </tbody>
+      </table>
+      <div class="chain"><b>一个反直觉的旁证（2026-09-22 查 LLM-as-judge 研究线）</b>：这类"评分协议"问题被正面研究过（pairwise vs pointwise、judgment distribution、judge 一致性）。但 <i>Pairwise or Pointwise?</i>（2025-04）的结论<b>反对"成对比较一定更好"</b>：注入<b>干扰特征</b>时，成对比较更易被翻盘——<b>翻盘率约 35%，绝对打分只有 9%</b>。⇒ <b>换协议不是万能药</b>：先分清病是"<b>跨上下文刻度不一致</b>"还是"<b>抗干扰能力不足</b>"。我们这里是前者，对症的是 ④ 与 ②；盲目改 pairwise 会在另一条轴上更脆。</div>
+      <div class="chain"><b>务实推荐组合</b>：① 0 分门当二值筛选（语义明确、可信）→ ② 分数只当粗分档 → ③ 排序尽量放回同一次上下文（reduce 自排，或每批 top-k 后二次排序）→ ④ 截断风险用"遗漏声明 ＋ 分级归并"兜住。</div>
+
+      <h4 style="margin:14px 0 4px;font-size:14px;">追问：宏观问题 ＋ 细层，重要性判得准吗？（2026-09-22 讨论）</h4>
+      <p><b>结论：判得出，但那不是"匹配"而是"归纳"</b>——模型要把细节升维到主题（"这个 egress proxy 校验步骤属于防护体系"），这是 LLM 的强项；<b>但它把一个局部观察转成了全局判断</b>，于是有三个硬约束：</p>
+      <ol>
+        <li><b>它在信息不足时做全局判断</b>："这条细节在整个体系里重不重要"是<b>相对性</b>问题（取决于其他材料有没有覆盖它），而 map 只看到一批 ⇒ <b>用局部可见代理全局重要性</b>。这正是 global search 的结构性破绽：<b>筛选发生在局部，而"重要性"是全局属性</b>；reduce 虽在同一次上下文里合成，但<b>筛选已经在前一步发生（截断已经丢人）</b>。</li>
+        <li><b>层级差越大越不可比，而且有个写在代码里的放大器</b>：<code>community_level</code> 按文档是"选一层"、实现却是<b>把 <code>level ≤ N</code> 的各层报告全塞进来</b>（<b>混深度是默认状态</b>，见第 0 步更正）；更糟的是 <code>read_community_reports</code> 只映射 <code>id / short_id / title / community / summary / full_content / rank / attributes</code>——<b><code>level</code> 没被读进对象</b>，于是 <code>build_community_context</code> 的表头（<code>id|title|…attributes…|summary 或 content|rank</code>）<b>没有 level 列</b> ⇒ <b>模型连"这批是细节还是概览"都不知道，更谈不上按抽象层级校准重要性</b>。这是个<b>≈零成本可补的缺口</b>。</li>
+        <li><b>宏观问题恰好是"局部最判不准"的那类</b>：点状问题里相关材料自明；宏观问题的"重要性"取决于<b>整体是否已有别的材料说了同一件事</b>、甚至取决于"这些点加起来能不能答上" ⇒ <b>map 的分数对宏观问题的信息量最低，而那正是最需要它的时候</b>。（IR 里叫 <b>granularity / abstraction mismatch</b>。）</li>
+      </ol>
+      <table>
+        <thead><tr><th>缓解办法（按性价比）</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><b>① 选层与问题形状匹配</b></td><td>宏观问题本就该选<b>粗层</b>（层低＝粗且便宜，正好对上）；用细层答宏观问题是"自己制造的错配"</td></tr>
+          <tr><td><b>② 把 <code>level</code> 塞进上下文表</b></td><td>让模型至少知道自己在看哪一层；成本≈0，最便宜的改进</td></tr>
+          <tr><td><b>③ 别让分数独自承担筛选</b></td><td>0 分门当二值筛选 ＋ 粗分档 ＋ 多留点，把"谁更重要"的比较推到 reduce（同一次上下文里做全局比较）</td></tr>
+          <tr><td><b>④ 多层混给</b></td><td>概览层 ＋ 细节层一起进上下文——DRIFT 大致就是这个思路</td></tr>
+        </tbody>
+      </table>
+      <div class="chain"><b>一个可检验的怀疑</b>：论文没给出"哪层最好"的统一答案（Figure 2 里 C0 明显差，C1–C3 在不同数据集/指标上互有胜负），这与"抽象层级不匹配会劣化"一致。<b>可做的实验</b>：固定一批<b>宏观问题</b>扫 C0–C3，看<b>答案质量</b>与<b>被丢弃点的比例</b>；若选细层时被丢的多是宏观关键项，则坐实这条失真（也是我们"三档原语实验"之外的另一个小探针）。</div>
+
+      <h4 style="margin:12px 0 4px;font-size:14px;">第 3 步 · Reduce（一次调用出最终答案）</h4>
+      <ol>
+        <li>汇总所有批的 points，每条标上"来自第几个 analyst（批次号）"；<span class="why"><b>作用</b>：保留"<b>点 ← 哪个批次</b>"的对应关系——这是最终答案里<b>唯一残留的来源线索</b>（批次本身还没到社区/原文那么细）。</span></li>
+        <li><b>丢掉 score = 0</b>；<span class="why"><b>作用</b>：去噪——把"对这个问题没用"的点挡在最终窗口之外。</span></li>
+        <li>若一条不剩且 <code>allow_general_knowledge=False</code> ⇒ <b>直接返回固定的 <code>NO_DATA_ANSWER</code>（"我不知道"），零 LLM 调用</b>；<span class="why"><b>作用</b>：宁可<b>明确说"不知道"</b>也不硬答（对应它"不要编造"的原则）；而且不调 LLM ⇒ 这种情况<b>零成本</b>。</span></li>
+        <li>其余<b>按 score 降序</b>，逐条格式化成 <code>----Analyst N---- / Importance Score: X / &lt;answer&gt;</code>，<b>累加到 <code>max_data_tokens</code>（默认 8000）为止、超了 break</b> ⇒ <b>这里的截断会真的丢点</b>；<span class="why"><b>作用</b>：在<b>有限窗口里优先放最重要的点</b>——这是整条链里真正"筛选"的一步；代价是<b>低分点被直接丢弃</b>，且丢多少取决于预算大小。</span></li>
+        <li>用 <code>REDUCE_SYSTEM_PROMPT</code>（带 <code>{report_data}</code> / <code>{response_type}</code> / <code>{max_length}=reduce_max_length</code> 默认 2000）流式生成；若 <code>allow_general_knowledge=True</code>，末尾追加"可引入通用知识"指令（官方警告会提高幻觉）。<span class="why"><b>作用</b>：把零散的"点"合成<b>一篇连贯回答</b>，并把它约束到 <code>response_type</code> 指定的形状；<code>allow_general_knowledge</code> 决定是否允许模型补充<b>库里没有的外部知识</b>（代价＝幻觉风险）。</span></li>
+      </ol>
+      <h4 style="margin:12px 0 4px;font-size:14px;">第 4 步 · 返回</h4>
+      <p><code>GlobalSearchResult</code> 带 <code>map_responses</code>（每批原始产出）、<code>reduce_context_data/text</code>（reduce 实际用到的点）、分类的调用数与 token 数 ⇒ <b>中间产物全部可查</b>（notebook 最后两个 cell 就是看这个）。<span class="why"><b>作用</b>：让"答案怎么来的"可复盘——这是调试与评测的抓手，也是我们做"验证成本"这类指标的基础（能直接看到 reduce 到底用了哪些点）。</span></p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">四个容易忽略但要点清的机制</h4>
+      <table>
+        <thead><tr><th>机制</th><th>事实</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>随机是<b>伪随机</b></td><td><code>random_state = 86</code>（可传）</td><td>同输入可复现，不是每次不一样</td></tr>
+          <tr><td><b>两处截断</b></td><td>装配阶段按 <code>max_context_tokens</code> 切批（<b>不丢</b>，只是分多批）；reduce 阶段按 <code>max_data_tokens</code> 截断（<b>会丢点</b>）</td><td>真正可能丢信息的是 reduce 那一步</td></tr>
+          <tr><td><b>两个 max_length</b></td><td>map 默认 1000、reduce 默认 2000</td><td>都是"要求模型输出多长"，不是窗口大小</td></tr>
+          <tr><td><b>空结果兜底</b></td><td>全 0 分 ⇒ <code>NO_DATA_ANSWER</code>，不调 LLM</td><td>与 <code>allow_general_knowledge</code> 是两条互斥的路</td></tr>
+        </tbody>
+      </table>
+      <h4 style="margin:12px 0 4px;font-size:14px;">以上的参数取值（notebook 实测）</h4>
+      <div class="chain"><code>use_community_summary=False</code>（用<b>完整报告</b>而非短摘要）· <code>shuffle_data=True</code> · <code>include_community_rank=True</code> · <code>min_community_rank=0</code> · <code>include_community_weight=True</code> · <code>normalize_community_weight=True</code> · <code>max_tokens=12_000</code> · <code>context_name="Reports"</code>；map <code>max_tokens=1000 / temperature=0.0</code>；reduce <code>max_tokens=2000 / temperature=0.0</code>。</div>
+
+      <h4 style="margin:14px 0 4px;font-size:14px;">追一问：社区权重为什么要"查询期重算"？（2026-09-22 核）</h4>
+      <p><b>结论：索引期已经算好了，查询侧重算的是同一个量；重算的原因是"函数拿不到 communities"，不是"索引没设"。</b></p>
+      <ul>
+        <li><b>索引期</b>（<code>index/workflows/create_communities.py</code>）：<code>community.text_unit_ids</code> ＝ 该社区成员实体 <code>text_unit_ids</code> 的<b>去重并集</b>（<code>sorted(set(...))</code>）。</li>
+        <li><b>查询期</b>（<code>_compute_community_weights</code>）：把每个实体的 <code>text_unit_ids</code> 按 <code>community_ids</code> 累加、再去重计数 ⇒ <b>与索引期是同一个集合</b>，只是额外按最大值<b>归一化到 0–1</b>。</li>
+        <li><b>为什么重算</b>：<code>build_community_context(community_reports, entities=None, ...)</code> 的签名里<b>没有 communities</b>——<code>GlobalCommunityContext</code> 虽持有 <code>self.communities</code>，但只用于 dynamic selection，调用时不传 ⇒ 函数只能从 entities 反推。属<b>接口历史遗留</b>。</li>
+        <li><b>代价</b>：纯程序、<b>零 LLM</b>、一次 O(实体×社区) 遍历 ⇒ 很便宜，不是性能问题。</li>
+        <li><b>真正的风险＝口径分叉</b>："社区有多大"在系统里有<b>三个来源</b>：① <code>communities.text_unit_ids</code>（去重并集）；② <code>community_reports.size</code>（outputs 文档写 "entity count"，<b>与①定义不一致</b>；且 <code>Community.size</code> 的注释又写 "Amount of text units"，<b>两处直接冲突，待核</b>）；③ 查询期现算的 <code>occurrence weight</code>（反推 + 归一化）。⇒ <b>同一语义、三处定义、互不保证一致</b>——与记录 ㉞ 的 <code>degree</code>（老值来自全量图、新值来自增量小图）是同一类病。</li>
+      </ul>
+      <div class="chain"><b>由此提炼一条我们的 schema 硬规矩</b>：<b>同一个语义值只允许一个权威来源；其余全部是派生值、且不落库。</b>这样既不必在查询期偷偷重算，也不会出现"社区大小三处定义"的分叉。</div>
+
+      <h3 style="margin-top:18px;">Global Search · 选层与自适应（同上核）</h3>
+      <p><b>一句话</b>：层<b>不是自适应选的</b>，是外部必填；"自适应"只在可选路径里。</p>
+      <h4 style="margin:12px 0 4px;font-size:14px;">层是怎么来的：外部指定，且必填</h4>
+      <ul>
+        <li><b>Python API（主路径）</b>：<code>api/query.py</code> 的 <code>global_search(config, entities, communities, community_reports, community_level: int | None, dynamic_community_selection: bool, response_type, query, ...)</code>——<b><code>community_level</code> 没有默认值，调用者必须给</b>；docstring 原文："The community level to search at"。</li>
+        <li><b>notebook</b>：直接写常量 <code>COMMUNITY_LEVEL = 2</code>，再用 <code>read_indexer_reports(report_df, community_df, COMMUNITY_LEVEL)</code> 过滤。注释说明了方向："<b>higher value means more fine-grained communities (at the cost of higher computation cost)</b>"。</li>
+        <li><b>配置</b>：<code>GlobalSearchDefaults</code> 里<b>没有"默认层"</b>——只有 <code>max_context_tokens = 12_000</code>、<code>dynamic_search_max_level = 2</code>。</li>
+        <li>⇒ <b>结论：不是自适应，是"外部指定 + 全量使用该层报告"。</b></li>
+      </ul>
+      <h4 style="margin:12px 0 4px;font-size:14px;">层的高低意味着什么</h4>
+      <ul>
+        <li><b>C0 ＝ 根</b>（社区最少、每个最大）；<b>越往下越细</b>（社区更多、报告更多更短）。</li>
+        <li>所以<b>选高层 ⇒ 材料更细但更贵</b>（global search 每次要扫 <code>level ≤ N</code> 的<b>全部</b>报告）。<b>选层是个裸超参</b>，论文 §4 专门做实验比较"哪层最好"，本身就说明没有通用答案。</li>
+      </ul>
+      <h4 style="margin:12px 0 4px;font-size:14px;">执行三步（Prepare / Map / Reduce）</h4>
+      <ol>
+        <li><b>Prepare</b>：读入 <code>level ≤ N</code> 的报告（见第 0 步）→ <b>随机打乱</b> → 按预设 token 大小切块（每块＝一次 map 调用）。</li>
+        <li><b>Map</b>：每块独立生成中间答案。当前实现按官方文档描述产出"<b>一列点 ＋ 每点的重要性评分</b>"（论文 §3.1.6 写的是"整批一个 0–100 helpfulness 分"，属版本差异）。</li>
+        <li><b>Reduce</b>：把过滤后的重要点按分降序填进新窗口，生成最终答案。</li>
+      </ol>
+      <h4 style="margin:12px 0 4px;font-size:14px;">关键参数（notebook 实测值）</h4>
+      <div class="chain"><code>max_data_tokens = 12_000</code>（注释：若模型窗口 8k，建议设 5000）· <code>map_llm_params</code> / <code>reduce_llm_params</code> · <code>allow_general_knowledge = False</code>（设 True 会鼓励引入通用知识，官方注释明说"may increase hallucinations"）· <code>json_mode = False</code> · <code>concurrent_coroutines = 32</code> · <code>response_type = "multiple paragraphs"</code>（也可是 prioritized list / single paragraph / multi-page report）。</div>
+      <h4 style="margin:12px 0 4px;font-size:14px;">可选第二条路径：Dynamic Community Selection</h4>
+      <ul>
+        <li>开 <code>dynamic_community_selection=True</code> ⇒ 不再"用固定层的全部报告"，改为<b>自顶向下按 query 相关度剪枝</b>社区树（机制见 0029 记录 ⑧）。</li>
+        <li><b>此时 <code>community_level</code> 的语义变成"cap（最多下探到哪一层）"</b>——API docstring 原文："you can still provide community_level [to] cap the maximum level to search"。<span class="half"><b>2026-09-24 再修正</b></span>：本页此前把它写成"<b>同名不同义</b>"，<b>说得过重了</b>。在"粒度"视角下（见上一节的等价刻画），<b>默认模式那个参数其实也是一种 cap</b>——"每个实体取<b>不超过 N</b> 的最细可得社区"；两条路径的差别不在"层号 vs 上限"，而在<b>选哪些分支的社区</b>：默认＝<b>所有分支</b>（再加 per-entity roll-up），dynamic＝<b>按 query 判相关后留下的子树</b>（保留整社区、可跨层）。<b>结论</b>：这个参数在两条路径下都是"深度上限"，不是"等值过滤"；<b>真正会踩的坑是"以为它等于 level == N"</b>（默认路径下恰好也是靠 roll-up 才没退化，而 roll-up 现在失效了）。</li>
+        <li>配置里的 <code>dynamic_search_max_level</code>（默认 <b>2</b>）是这条路径的兜底上限，描述为 "if none of the processed communities are relevant"。</li>
+        <li><b>输出是"一组可能跨层的社区"，不是一个层</b>（父相关就留、子也相关就继续留，<code>keep_parent</code> 控制是否连父一起保留）。</li>
+        <li>代价：<b>每个候选社区一次 LLM 打分调用</b>，且<b>剪枝剪错会漏召回</b>（记录 ⑧）。</li>
+      </ul>
+      <h4 style="margin:12px 0 4px;font-size:14px;">已知代价（跨记录）</h4>
+      <div class="chain">最终答案<b>带引用，但只到"报告"级且未经校验</b>（<code>[Data: Reports (id)]</code>，reduce 提示词明确要求保留；记录 ④⑮ 中"不带引用"的说法已于 2026-09-22 更正）· 随机分批导致<b>中间答案追溯不到社区/原文</b>（记录 ⑦）· 增量场景下<b>同主题重复计入</b>使"全面性"虚高（记录 ㊲）。</div>
+
+      <h3 style="margin-top:18px;">Local Search <span class="no">（待核）</span></h3>
+      <p class="muted">已知（待补细节）：从 query 命中一组实体当 access points；上下文由实体/关系/社区报告/文本块/协变量按比例装配；排序用 <code>rank</code>（不用 degree），社区按 <code>(matches, rank)</code> 排；参数有 <code>top_k_entities</code> / <code>top_k_relationships</code> / <code>text_unit_prop</code> / <code>community_prop</code> / <code>max_context_tokens</code> / <code>conversation_history_max_turns</code>。</p>
+
+      <h3 style="margin-top:18px;">DRIFT Search <span class="no">（待核）</span></h3>
+      <p class="muted">已知：官方定位＝"builds upon GraphRAG ... <b>combining characteristics of both global and local search</b>"，三阶段核心流程；文档在 <code>docs/query/drift_search.md</code>，有独立 notebook。</p>
+
+      <h3 style="margin-top:18px;">Basic Search <span class="ok">（已核）</span></h3>
+      <p class="muted">见 0029 记录 ⑱：通用 RAG（对原始 chunk 做稠密向量检索，<code>k</code> 默认 10、<code>max_context_tokens</code> 默认 12000），无重排、无图参与；提示词要求 <code>[Data: Sources (...)]</code> 引用，所以它的答案可回锚到具体 chunk。</p>
+
+      <h3 style="margin-top:18px;">Question Generation <span class="ok">（已核）</span></h3>
+      <p class="muted">见官方 <code>docs/query/question_generation.md</code>：给它<b>历史提问</b>，用与 local search 相同的上下文构造器装配材料，生成"最值得追问的后续问题"。它是<b>建议问题</b>，不是检索。</p>
+    </section>
+
+    <section class="card">
+      <h2>第三部分 · 待问清单（逐个核，边问边补）</h2>
+      <table>
+        <thead><tr><th>#</th><th>待核问题</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><b>local search 怎么从 query 命中实体？</b>（描述向量？top-k？阈值？）上下文里各来源的比例参数怎么起作用？<code>rank</code> 到底怎么算？</td><td><span class="no">待问</span></td></tr>
+          <tr><td>2</td><td><b>DRIFT 的三阶段具体是什么？</b>与 local/global 的配比如何调？成本落在哪？</td><td><span class="no">待问</span></td></tr>
+          <tr><td>3</td><td>notebook 提到的 "<b>community weights for context ranking</b>"：entities 怎么算出社区权重、怎么参与排序？（提到但没说清）</td><td><span class="no">待问</span></td></tr>
+          <tr><td>4</td><td><b>token 预算怎么分</b>：<code>max_data_tokens</code> / <code>map_max_length</code> / <code>reduce_max_length</code> 三者的关系与相互作用。</td><td><span class="no">待问</span></td></tr>
+          <tr><td>5</td><td><b>层选择有没有实践建议</b>：论文 §4 的结论到底说了什么（哪层在什么场景最好）？<b>（已核：C0 明显差，C1–C3 在各数据集/指标上互有胜负，<u>没有通用答案</u>；见"层的高低意味着什么"与"宏观问题＋细层"两节）</b></td><td><span class="ok">已核</span></td></tr>
+          <tr><td>6</td><td>是否所有层都参与？<b>（2026-09-24 更正：不是"只读指定层"——<code>read_indexer_reports</code> 按 <code>level &lt;= N</code> 过滤，"取最深"的 roll-up 已失效，见第 0 步）</b></td><td><span class="ok">已核</span></td></tr>
+          <tr><td>7</td><td>输出是否保留引用？<b>（2026-09-24 更正此行的旧说法"global 不保留"：<u>global 是保留的</u>——reduce 提示词明确要求保留 <code>[Data: Reports (id)]</code>，但<b>只到"报告"级、且未经校验</b>，回原文还要两跳；basic 的 <code>[Data: Sources (…)]</code> 可直达 chunk）</b></td><td><span class="ok">已核</span></td></tr>
+          <tr><td>8</td><td><b>Dynamic Community Selection 逐行核</b>：打分机制（提示词／阈值）、剪枝判据、<code>keep_parent</code>、成本、以及"判错会漏召回"具体怎么发生。<b>2026-09-24 沛东定：值得搞，晚点搞</b>——因为"粒度"这条讨论让<b>"为什么需要它"变得显然</b>；按今天的结论，它才是这个问题的正解候选（静态层号只是基线旋钮）。</td><td><span class="half">已立项·待办</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-22 · <b>2026-09-24 更新</b>：① 重写第 0 步；② 更正"≤N ＋ 取最深"（roll-up 自 v2.0.0 起为空操作，附版本线、PR 取证、官方 notebook 补证、1 行候选修复）；③ 补"roll-up 本来在干什么"＋等价刻画（<code>level == N</code> ∪ 浅层叶子）；④ 更正我两处说过头的判断（"代言 ≠ 只出现一次"、"同名不同义"）；⑤ 新增"用层号表达粒度"这条设计批评与三条替代路径 · <b>2026-09-25 更新</b>：本 bug 已提交上游 <a href="https://github.com/microsoft/graphrag/issues/2573">#2573</a>，<b>提交流程细节从本页删除</b>，只留链接与结论（草稿留档 <code>data/tmp/_issue_rollup_draft.md</code>） · <b>进行中</b>（逐模式追加）· 收尾后按规范重排为"分层阅读"并交沛东确认
+    </footer>
+  </div>
+</body>
+</html>

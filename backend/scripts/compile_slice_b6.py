@@ -36,6 +36,7 @@ BACKEND = Path(__file__).resolve().parents[1]  # backend/
 REPO = BACKEND.parent                          # 仓库根目录
 APP_DB = BACKEND / "data" / "app.db"           # 运行时 DB（backend/data）
 KB_DB = BACKEND / "data" / "kb.db"
+COMPILE_DB = BACKEND / "data" / "compile.db"   # 编译产物落库（S9；与 KB 台账分开，可重跑）
 MANIFEST_PATH = REPO / "data" / "kb-src" / "MANIFEST.md"  # 素材台账（仓库根 data/kb-src）
 OUT_DIR = BACKEND / "data" / "tmp"
 DEFAULT_MODEL = "deepseek-chat"

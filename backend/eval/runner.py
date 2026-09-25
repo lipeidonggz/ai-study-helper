@@ -134,9 +134,14 @@ async def _run_once(
                     "error": s["data"].get("error", ""),
                 }
             )
+        elif s["type"] == "llm_stream":
+            # 流式汇总：文本产出按"每轮一条完整文本"进执行轨迹（逐 delta 已在 loop 侧聚合，
+            # 否则一次长回答会落盘上千条碎片，复核页只能看到截断后的乱码）
+            exec_trace.append({"type": "text", "text": s["data"].get("text", "")})
         elif s["type"] == "event":
             evt = s["data"].get("event") or {}
             if evt.get("type") == "text":
+                # 逐 delta 调试模式（TRACE_PER_DELTA=1）下的旧形态：保持兼容
                 exec_trace.append({"type": "text", "text": evt.get("text", "")})
         elif s["type"] == "guardrail":
             exec_trace.append(
@@ -584,7 +589,15 @@ def _default_rag_backend():
 
         deps = build_deps()
         # v1 默认 dense-only：BM25 / rerank 为实验对照，不注入（见 0025 2026-09-04 决策）
-        _RAG_BACKEND = RagBackend(deps.vector_store, deps.embedder)
+        from app.storage.sqlite.compile_store import CompileStore
+        from scripts.compile_slice_b6 import COMPILE_DB
+
+        # 图路由与通道判定都与 chat 一致（同一套检测/兜底逻辑），否则评测与线上行为会分叉
+        from app.api.chat import _route_judge
+
+        _RAG_BACKEND = RagBackend(deps.vector_store, deps.embedder,
+                                  compile_store=CompileStore(COMPILE_DB),
+                                  route_judge=_route_judge(deps))
     return _RAG_BACKEND
 
 

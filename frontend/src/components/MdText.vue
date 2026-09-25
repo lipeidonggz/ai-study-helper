@@ -3,9 +3,12 @@ import { computed, ref } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-const props = defineProps<{ text?: string }>()
+const props = withDefaults(defineProps<{ text?: string; variant?: 'box' | 'inline' }>(), {
+  variant: 'box'
+})
 const raw = ref(false)
 
+const isInline = computed(() => props.variant === 'inline')
 const hasText = computed(() => Boolean((props.text ?? '').trim()))
 const html = computed(() => {
   const t = props.text ?? ''
@@ -15,8 +18,8 @@ const html = computed(() => {
 </script>
 
 <template>
-  <div class="mdtext">
-    <div v-if="hasText" class="mdtext-bar">
+  <div class="mdtext" :class="{ inline: isInline }">
+    <div v-if="hasText && !isInline" class="mdtext-bar">
       <button type="button" class="mdtext-toggle" :class="{ on: !raw }" @click="raw = false">
         渲染
       </button>
@@ -26,13 +29,28 @@ const html = computed(() => {
     </div>
     <div v-if="!raw && html" class="md-body" v-html="html"></div>
     <pre v-else-if="raw && text" class="mdtext-raw">{{ text }}</pre>
-    <span v-else class="ui-muted">（无输出）</span>
+    <span v-else-if="!isInline" class="ui-muted">（无输出）</span>
   </div>
 </template>
 
 <style scoped>
 .mdtext {
   margin-top: 6px;
+}
+/* inline 变体：用于聊天消息等已有气泡样式的场景，去掉盒子与高度限制 */
+.mdtext.inline {
+  margin-top: 0;
+}
+.mdtext.inline .md-body,
+.mdtext.inline .mdtext-raw {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+  max-height: none;
+  overflow: visible;
 }
 .mdtext-bar {
   display: flex;
@@ -80,6 +98,25 @@ const html = computed(() => {
 }
 .md-body p {
   margin: 0.4em 0;
+}
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  margin: 0.7em 0 0.35em;
+  line-height: 1.35;
+}
+.md-body h1 {
+  font-size: 1.3em;
+}
+.md-body h2 {
+  font-size: 1.18em;
+}
+.md-body h3 {
+  font-size: 1.06em;
+}
+.md-body h4 {
+  font-size: 1em;
 }
 .md-body ul,
 .md-body ol {

@@ -17,6 +17,10 @@
   ⑩ S6 合并闭环    S6-A 形合并（graph_merged.json）：① 边不丢（只允许丢自环）；
                    ② 原名可回溯（每个被合并的写法都能在 canonical 或 aliases 里找到）；
                    ③ 实体表＝边端点集合（无悬挂、无孤立）；④ 无别名冲突
+  ⑪ S7 闭环        S7 分类 + S8 引文锚定（statements.json）：① **一一对应**（statement 数＝保留 claim 数、claim_idx 不重不漏）；
+                   ② 可锚（每条有逐段锚定出的 evidence_chunks；section 弱锚只报数不判死）；
+                   ③ 类型有据（claim_type 非空时依据必须是自己引文的一部分）；
+                   ④ 归属齐备（每条都有 doc —asserts→ 它）
 
 用法：cd backend && .venv\\Scripts\\python.exe -m scripts.compile_loop_check --source A5
 退出码：0 全过 / 1 有不过（便于串进脚本）。
@@ -183,6 +187,45 @@ def check(source_id: str, root: Path) -> list[tuple[str, bool, str]]:
         f"｜原名缺失 {len(missing)}{missing[:3]}｜悬挂 {len(dangling)}／孤立 {len(isolated)}"
         f"｜别名冲突 {len(collisions)}{collisions[:2]}"
         f"｜无边移除 {int(mg_audit.get('isolated_dropped') or 0)}",
+    ))
+
+    # ⑪ S7 闭环（statement 组装 + claim_type）：一一对应 / 可锚 / 类型有据 / 归属边齐备
+    sj = _load(d / "statements.json")
+    if sj is None:
+        out.append(("⑪ S7 闭环", True, "跳过：无 statements.json（该篇未跑 S7）"))
+        return out
+    sts = sj.get("statements") or []
+    st_edges = sj.get("edges") or []
+    # 一一对应：statement 数 == 保留的 claim 数，且 claim_idx 不重不漏
+    idxs = [s.get("claim_idx") for s in sts]
+    one_to_one = len(sts) == len(kept) and sorted(idxs) == list(range(len(kept)))
+    # 可锚（S8 口径）：每条 statement 必须有**逐段锚定**出的 evidence_chunks；
+    # 降级到 section 弱锚的按 C5 允许保留，但要报数（不静默）
+    no_anchor = [s["id"] for s in sts if not (s.get("evidence_chunks") or [])]
+    no_quote = [s["id"] for s in sts if not (s.get("evidence_texts") or [])]
+    section_level = [s["id"] for s in sts if s.get("anchor") == "section"]
+    # 类型有据：claim_type 非空时必须有逐字依据（依据必须是它自己引文的一部分）
+    bad_type = []
+    for s in sts:
+        ct = s.get("claim_type")
+        if not ct:
+            continue
+        ev = (s.get("claim_type_evidence") or "").strip()
+        quotes = [q for q in (s.get("evidence_texts") or []) if isinstance(q, str)]
+        if not ev or not any(ev in q or q in ev for q in quotes):
+            bad_type.append(s["id"])
+    # 归属边：每条 statement 必须有 doc —asserts→ 它
+    asserted = {e["to"] for e in st_edges if e.get("predicate") == "asserts"}
+    missing_assert = [s["id"] for s in sts if s["id"] not in asserted]
+    ok11 = one_to_one and not no_anchor and not no_quote and not bad_type and not missing_assert
+    n_lim = sum(1 for s in sts if s.get("claim_type") == "LimitationStatement")
+    n_out = sum(1 for s in sts if s.get("claim_type") == "OutlookStatement")
+    out.append((
+        "⑪ S7 闭环", ok11,
+        f"断言 {len(sts)}（claim {len(kept)}，一一对应={one_to_one}）"
+        f"｜未锚定 {len(no_anchor)}｜缺引文 {len(no_quote)}｜section 弱锚 {len(section_level)}"
+        f"｜类型无据 {len(bad_type)}{bad_type[:3]}｜缺 asserts {len(missing_assert)}"
+        f"｜局限 {n_lim} / 展望 {n_out}",
     ))
     return out
 

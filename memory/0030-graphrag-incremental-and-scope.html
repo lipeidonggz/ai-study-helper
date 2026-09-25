@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0030 · GraphRAG 的增量索引与适用范围（精读专题总结）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0030 · GraphRAG 的增量索引与适用范围（精读专题总结）</h1>
+      <p class="subtitle">来源：0029 精读现场记录 ㉝–㊴（2026-09-22）· 上游：架构文档 ⑤ 业界图景、0028 检索架构笔记 · 状态：<b>初稿待沛东确认</b></p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 现场留痕见 <a href="0029-graphrag-llmwiki-reading-plan.html">0029 精读执行页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>决策层（一分钟摘要）</h2>
+      <blockquote>
+        <b>一句话</b>：GraphRAG 的"增量索引"实为 <b>append-only 的"增量追加"</b>——新内容<b>独立跑一遍小流水线</b>，再把实体/关系/社区/报告几张表<b>拼接</b>进旧索引；<b>不重算社区、不重算度数、删除只检测不落地</b>。
+      </blockquote>
+      <h3>四条结论</h3>
+      <ul>
+        <li><b>对 global search（跨库综述）是实质削弱</b>：跨批主题永不出现、同主题重复计入（把"全面性"指标虚高）、层级粒度不可比、成本随更新单调上涨而覆盖不涨、已删内容继续参与回答。</li>
+        <li><b>对 basic / local search 基本无害、部分有益</b>：向量库 upsert 即可查；实体按 title 合并会<b>并集</b> <code>text_unit_ids</code>、并列 description ⇒ 旧实体被新证据<b>补全</b>。</li>
+        <li><b>"社区不能增量重算"不是工程懒，而是算法性质</b>：Leiden 是全局模块度优化（慢变量），局部重算会卡在接缝上、质量不可验证；保质量就退化成全量重算（还要连带重写报告、失效引用与基线）。这条线学术上研究了近十年仍未成为默认做法。</li>
+        <li><b>它不是"不适合知识库"，而是"不适合高频更新的知识库"</b>；判据＝索引刷新周期要与语料演化速度<b>同量级</b>，且要区分"全局结构"（慢变量）与"局部检索"。</li>
+      </ul>
+      <h3>适用范围（速查）</h3>
+      <table>
+        <thead><tr><th>语料更新频率</th><th>全局结构（global search）</th><th>局部检索（basic / local）</th></tr></thead>
+        <tbody>
+          <tr><td>基本不动（书 / 法规 / 制度集 / 研究集）</td><td><span class="ok">合适</span></td><td>合适</td></tr>
+          <tr><td>每月补充几次</td><td><span class="ok">可行</span>（离线全量重建）</td><td>合适</td></tr>
+          <tr><td>每日新增</td><td><span class="half">需分域 / 分档刷新</span></td><td>合适（追加即可）</td></tr>
+          <tr><td>分钟级流式</td><td><span class="no">不适用</span>（任何"全局结构"都不适用）</td><td>可用，但已超出该范式</td></tr>
+        </tbody>
+      </table>
+      <h3>对我们的三条落点</h3>
+      <ul>
+        <li>我们的语料（精选文章 / 论文 / 书）<b>更新频率天然低</b> ⇒ 落在适用带；</li>
+        <li>我们的方向是<b>扁平受控类别表 ＋ 逐条挂标</b>（而非全局聚类）⇒ 新内容是<b>局部判定</b>，<b>天然可增量</b>；</li>
+        <li>真要做跨库综述，走<b>按需渲染</b>而非预生成摘要（不预生成 ⇒ 没有"预生成过期"）。</li>
+      </ul>
+      <p class="muted">适合谁读：要评估"要不要上某种全局索引 / 结构"的人；要设计增量更新机制的人；以及以后想复用"成熟度判断法"的人。</p>
+    </section>
+
+    <section class="card">
+      <h2>主体层 · 一、增量索引的流程</h2>
+      <p>入口是 CLI 命令 <code>graphrag update --root &lt;dir&gt;</code>（<code>cli/main.py</code> 的 <code>@app.command("update")</code>，内部 <code>is_update_run=True</code>，输出到 <code>update_output/</code>）。它把方法名变成 <code>&lt;method&gt;-update</code>，由 <code>PipelineFactory</code> 选出 8 个 workflow：</p>
+      <div class="chain"><code>update_final_documents</code> → <code>update_entities_relationships</code> → <code>update_text_units</code> → <code>update_covariates</code> → <code>update_communities</code> → <code>update_community_reports</code> → <code>update_text_embeddings</code> → <code>update_clean_state</code></div>
+      <ol>
+        <li><b>算差异</b>：<code>get_delta_docs</code> 把当前输入与上一轮 <code>documents</code> 表<b>按 title 比对</b>，得到 <code>InputDelta(new_inputs, deleted_inputs)</code>；但调用方 <code>load_update_documents</code> <b>只返回 <code>new_inputs</code></b>，<code>deleted_inputs</code> 被丢弃。</li>
+        <li><b>跑一遍 delta 小流水线</b>：仅对新文档做抽取/摘要，产出这个批次的实体、关系、社区、报告（所以 delta 的 <code>degree</code> 是在"只有新文档的小图"里算的）。</li>
+        <li><b>合并实体</b>：按 <b>title 精确匹配</b>建 <code>{delta_id: old_id}</code> 映射；<code>text_unit_ids</code> <b>取并集</b>、<code>description</code> 并列成列表、<code>frequency</code> 重算；<code>degree</code> 保留旧值（代码里是 <code>"degree": "first"</code> 并留了 TODO）。</li>
+        <li><b>合并关系</b>：编号偏移后拼接、按 title 分组去重，并调用 <code>filter_orphan_relationships</code> 丢弃悬空边。</li>
+        <li><b>合并社区</b>：delta 的社区编号整体偏移（<code>v + old_max + 1</code>）后 <b>直接 concat</b>；<code>-1</code>（无社区）不变；社区 <code>title</code> 被覆盖成通用的 <code>"Community N"</code>。</li>
+        <li><b>合并报告</b>：用同一套编号映射把 delta 报告拼到旧报告后面（<code>size</code> / <code>period</code> 就是为这类合并留的记账字段）。</li>
+        <li><b>嵌入与收尾</b>：为新内容补向量；清掉 <code>incremental_update_*</code> 状态。</li>
+      </ol>
+      <p><b>一句话概括</b>：<b>新内容独立成图 ＋ 表级拼接</b>；只有"实体/关系的记录级合并"是真合并，<b>结构级（社区划分、度数）不做重算</b>。</p>
+    </section>
+
+    <section class="card">
+      <h2>主体层 · 二、这个设计带来的效果</h2>
+      <table>
+        <thead><tr><th>效果</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><b>不用全量重跑</b></td><td>省掉对存量语料的重复抽取（LLM 调用是最贵的部分），这是它存在的唯一理由。</td></tr>
+          <tr><td><b>旧实体被新证据补全</b></td><td><code>text_unit_ids</code> 并集 ＋ description 并列 ⇒ 实体/关系的<b>证据集合</b>随更新增长，local search 反而更全。</td></tr>
+          <tr><td><b>记录级去重是有效的</b></td><td>按 title 合并确实阻止了"同一实体在表里出现两份"，实体 id 映射也把新关系正确接到了旧实体上。</td></tr>
+          <tr><td><b>基础检索不受损</b></td><td>向量库 upsert 即可支撑 basic search；局部检索也不需要全局结构。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>主体层 · 三、它解决不了的问题</h2>
+      <table>
+        <thead><tr><th>#</th><th>问题</th><th>机制</th><th>后果</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><b>跨批主题永不出现</b></td><td>社区是"旧树 ＋ 新批次树"并置，无跨批重聚</td><td>global search 的立身之本（跨整个语料综合）被削弱；同主题被分批表述</td></tr>
+          <tr><td>2</td><td><b>重复计入，指标虚高</b></td><td>同一主题两批各有报告，map 各出答案、reduce 汇总</td><td>comprehensiveness / diversity <b>看起来更好</b>（冗余污染指标）</td></tr>
+          <tr><td>3</td><td><b>层级粒度不可比</b></td><td>旧树可能深到 C3，新批次或许只有 C0–C1</td><td>"选同一层"时两边粒度不同，却在一起打 helpfulness 分</td></tr>
+          <tr><td>4</td><td><b>度数口径被污染</b></td><td><code>degree</code> 不重算（老＝全量图、新＝小图）</td><td>社区报告挑"哪些元素进窗口"时按度数排序 ⇒ 新批次可能按错的重要性取材</td></tr>
+          <tr><td>5</td><td><b>删除不落地、陈旧内容留着</b></td><td><code>deleted_inputs</code> 被丢弃；向量库只增不删</td><td>已删内容仍可被召回、仍参与全局综述 ⇒ 不是"覆盖不足"，是<b>把不存在的东西当当前知识</b></td></tr>
+          <tr><td>6</td><td><b>成本单调涨、覆盖不涨</b></td><td>global search 每次扫该层<b>全部</b>报告</td><td>token/延迟随每次更新上升，新增部分常是"另一批对旧主题的复述"</td></tr>
+          <tr><td>7</td><td><b>查询侧不消费"批次"</b></td><td><code>period</code> 只做记账；查询配置无 period 过滤、上下文构建不读 period</td><td>新旧产物被当<b>同质语料</b>混用，用户无从知道哪部分来自哪次更新</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">注：问题 4 的落点在"社区报告取材"，不在 local search 选取——local search 按 <code>rank</code>（不是 degree）排序。</p>
+    </section>
+
+    <section class="card">
+      <h2>主体层 · 四、根因：为什么"社区不能增量重算"不是工程问题</h2>
+      <ol>
+        <li><b>Leiden 是全局优化</b>：它最大化整张图的模块度（全局求和）。加几条边，最优划分<b>可能在任意位置变化</b>，不只在新节点周围。</li>
+        <li><b>解空间有大量近似最优划分</b>（near-degenerate）：分数差极小、成员差很多；算法本身还带随机性——GraphRAG 为此<b>专门固定 seed</b>（"to guarantee clustering stability"）。<b>"必须锁种子"就是"输出对细节敏感"的自证。</b></li>
+        <li><b>"只重算受影响的社区"会卡在接缝上</b>：重算区与冻结区的边界不对应任何一致划分 ⇒ 得到"既非旧最优、也非新最优"的混合体，<b>没有目标函数能判它合不合格</b>。要做只能用"局部模块度 ＋ 边界冻结"，质量不可验证。</li>
+        <li><b>保质量就退化成全量重算</b>：不只要重跑划分，<b>还要重写所有受影响的社区报告</b>（LLM 生成，成本与社区数成正比）；而报告 id ＝ <code>full_content</code> 的 sha512 ⇒ 重算后 id 全变，<b>缓存、引用、评测基线一起失效</b>。增量省下的抽取钱，可能不够付重算报告的钱。</li>
+      </ol>
+      <p><b>层级会放大影响</b>：层级是递归切出来的（"递归到 ≤10 或切不动"）⇒ 一次小插入可能改变分支<b>深度</b>（主题落 C2 还是 C3 都变），而 global search 是"选一层扫全量"⇒ 用户看到的是"<b>一次增量让全局问答的取材范围整体变动</b>"。</p>
+      <div class="chain"><b>这不是没人想到</b>：动态社区检测是一条活跃研究线——DynaMo（2017，"增量最大化模块度"）、DyPerm（2018）、Constrained Spectral Clustering（2019）、Flow stability（2021）、ComNetX: Local Hierarchical Adaptation for Dynamic Community Detection（2026-07）。研究了近十年仍未成为默认做法，原因是<b>"增量带来的结构漂移"必须与"结构可比性 / 稳定性"做交换</b>，而 GraphRAG 的价值正建在"结构是全局的"之上。</div>
+    </section>
+
+    <section class="card">
+      <h2>主体层 · 五、适用范围与提炼</h2>
+      <h3>判断顺序（两问，先问再选型）</h3>
+      <ol>
+        <li><b>语料变化速度 vs 索引刷新周期，差几个数量级？</b>（全局结构是慢变量：需要时间窗收敛；语料若变得比刷新快，"全局主题"还没形成就过时了）</li>
+        <li><b>我要的是"全局结构"还是"局部检索"？</b>（前者只配低频刷新；后者可随写随更）</li>
+      </ol>
+      <h3>持续更新场景的四种对策</h3>
+      <table>
+        <thead><tr><th>对策</th><th>做法</th><th>代价</th></tr></thead>
+        <tbody>
+          <tr><td><b>分层刷新率</b></td><td>高频只做 chunk ＋ embedding；低频做结构重算（Lambda 思路）</td><td>两套路径要维护；新鲜度不均</td></tr>
+          <tr><td><b>分域建图</b></td><td>按主题/来源/时间窗切稳定子域，各自建图各自重算</td><td>跨域连接丢失（正是立项三件事之一）</td></tr>
+          <tr><td><b>滑动窗口图</b></td><td>新内容建小图、老图冻结，查询跨多图</td><td>等于默认接受"结构分批"，需查询侧配合</td></tr>
+          <tr><td><b>接受滞后并声明</b></td><td>索引当快照，标明"数据截至某时间"，定期重建</td><td>用户看到的最新的内容可能不在索引里</td></tr>
+        </tbody>
+      </table>
+      <h3>三条可复用的方法论提炼</h3>
+      <div class="chain"><b>① 成熟度三看法</b>（读任何开源能力都适用）：<b>看文档覆盖</b>（没文档的能力多半在施工）→ <b>看 CHANGELOG 有无后续推进</b>（只有"引入"那次、之后全是外围修补＝搁置）→ <b>看引入与最后相关改动的跨度</b>。本例：增量索引 0.4.0（2024 初）引入、之后近两年只有存储重构/ID 修复/async 这类外围改动，而"Calculate new inputs <b>and deleted inputs</b>"从第一天就算出来、至今没用。</div>
+      <div class="chain"><b>② 索引刷新周期要与语料演化速度同量级</b>：这条能提前挡掉一大类"建的时候爽、维护起来废"的全局索引方案。配套要区分"全局结构"（慢变量，只配低频刷新）与"局部检索"（可随写随更）。</div>
+      <div class="chain"><b>③ "约束哪一端"的第三次回本</b>：我们选择"约束边、放开点"（38 条受控谓词）带来的红利是一条链——<b>可过滤（能当检索键）→ 可归一（一致性靠机制而非指令）→ 可增量（逐条挂标是局部操作）</b>。对比 GraphRAG 的全局聚类，它天生不具备增量性。<br><b>但有条硬约束</b>：若把"类别维度"做成<b>多层级上位概念体系</b>，同样会撞上全局重算（层级越高越需要全局视图）⇒ <b>只有"扁平受控表 ＋ 逐条挂标"才保得住增量性</b>。这条应在讨论"类别维度怎么建"时摆上台面。</div>
+    </section>
+
+    <section class="card">
+      <h2>对我们的落点（与既有决策的接口）</h2>
+      <ul>
+        <li><b>语料更新频率低 ⇒ 我们落在它的适用带</b>；真正的风险不在"更新太快"，而在"结构设计得依赖全局重算"。</li>
+        <li><b>我们的编译产物天然可增量</b>（逐篇编译 ＋ 扁平类别表 ＋ 逐条挂标）；一旦要做增量，<b>先列三档：必须精确 / 可近似 / 必须重算</b>，其中<b>过滤键属"必须精确"</b>——GraphRAG 的 degree 脏账可以容忍（只影响排序），我们的过滤键脏了检索直接错。</li>
+        <li><b>删除必须落地</b>：GraphRAG 把它算了两年没用；我们若做增量，删除要按"标脏 ＋ 局部重算"处理，不能当纯减法。</li>
+        <li><b>跨库综述走按需渲染</b>：不预生成摘要 ⇒ 没有"预生成过期"；这也再次支持"事实层结构化 ＋ 呈现层按需渲染"的路线。</li>
+        <li><b>与既有待办的接口</b>：本条与"编译层只编译第一个文件（S0 未完成，需分批＋断点续跑）"是配套关系，可一起设计。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>附录 · 证据索引</h2>
+      <h3>代码位置（microsoft/graphrag，2026-09-22 核对）</h3>
+      <ul>
+        <li><code>graphrag/index/update/incremental_index.py</code>（<code>InputDelta</code> / <code>get_delta_docs</code> / <code>concat_dataframes</code>）</li>
+        <li><code>graphrag/index/update/{entities,relationships,communities}.py</code>（记录级合并）</li>
+        <li><code>graphrag/index/workflows/update_*.py</code>（8 个更新 workflow）与 <code>workflows/factory.py</code> 的 <code>_update_workflows</code></li>
+        <li><code>graphrag/index/workflows/load_update_documents.py</code>（只返回 <code>new_inputs</code>）</li>
+        <li><code>graphrag/index/workflows/finalize_graph.py</code> ＋ <code>operations/finalize_{entities,relationships}.py</code>（<code>degree</code> / <code>combined_degree</code> 的来源，<b>不在更新流水线内</b>）</li>
+        <li><code>graphrag/query/structured_search/local_search/mixed_context.py</code>（用 <code>rank</code>、不读 <code>degree</code> / <code>period</code>）</li>
+        <li><code>graphrag/cli/main.py</code>（<code>@app.command("update")</code>）、<code>cli/index.py</code>（<code>update_cli</code>）</li>
+      </ul>
+      <h3>CHANGELOG 时间线（增量相关）</h3>
+      <div class="chain">0.3.3 Add entrypoints for incremental indexing → <b>0.4.0 Add Incremental Indexing</b>（＋ config ＋ text units update ＋ <b>Calculate new inputs and deleted inputs on update</b>）→ 0.4.1 Add update cli entrypoint ＋ Fix optional covariates update → 2.0.0 Rework the update output storage structure ＋ Properly increment text unit IDs → 3.0.2 async iterator 用于 load_update_documents → 当前 head 3.2.0（仅依赖升级）。</div>
+      <h3>外部文献</h3>
+      <div class="chain">动态社区检测：DynaMo（2017-09-25）、DyPerm（2018-02-13）、Constrained Spectral Clustering for Dynamic Community Detection（2019-11-04）、Flow stability for dynamic community detection（2021-01-15）、ComNetX: Local Hierarchical Adaptation for Dynamic Community Detection（2026-07-10）。</div>
+    </section>
+
+    <footer class="page-foot">
+      记录创建：2026-09-22 · 由 0029 精读现场记录 ㉝–㊴ 收口而成 · <b>初稿待沛东确认</b>，确认后再定稿并同步索引<br>配套：查询模式（global / local / DRIFT / basic / dynamic selection）的逐项核实见 <a href="0031-graphrag-search-modes.html">0031</a>
+    </footer>
+  </div>
+</body>
+</html>

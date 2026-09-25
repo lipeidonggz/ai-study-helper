@@ -14,7 +14,9 @@ export interface ChatEvent {
 /** Agent 内部处理过程的一个步骤（来自后端 trace 事件）。 */
 export interface TraceStep {
   seq: number
-  type: string // context | round | llm_call | event | tool_exec | done
+  // retrieval | context | round | llm_call | llm_stream | usage | event | tool_exec | guardrail | done
+  // （raw_chunk 只在后端 TRACE_PER_DELTA=1 的逐 delta 调试模式下出现）
+  type: string
   data: Record<string, unknown>
   elapsed_ms: number
 }
@@ -699,6 +701,33 @@ export interface CompileGraph {
   graph_stats?: Record<string, number>
 }
 
+/** S7 断言（statement）：每条 claim 一个，可独立寻址、可挂类型 */
+export interface Statement {
+  id: string
+  claim_idx: number
+  subject: string | null
+  object: string | null
+  predicate: string
+  predicate_surface?: string
+  claim_type: 'LimitationStatement' | 'OutlookStatement' | null
+  claim_type_reason?: string
+  claim_type_evidence?: string
+  reify_reasons?: string[]
+  evidence_texts: string[]
+  evidence_chunks: string[]
+  asserted_by: string
+  about: string[]
+  has_edge: boolean
+}
+
+export interface StatementsPayload {
+  statements: Statement[]
+  edges: { from: string; predicate: string; to: string; produced_by?: string }[]
+  doc: { id: string; type: string; ref: string }
+  stats: Record<string, number>
+  claim_type_demoted?: { id: string; demoted_from: string; evidence: string; why: string }[]
+}
+
 export interface HealthReport {
   source: string
   doc_subject: string
@@ -751,5 +780,8 @@ export const compileApi = {
   },
   graph(id: string, stage: 's5' | 's6' = 's5'): Promise<CompileGraph> {
     return http(`/api/compile/${id}/graph?stage=${stage}`)
+  },
+  statements(id: string): Promise<StatementsPayload> {
+    return http(`/api/compile/${id}/statements`)
   }
 }

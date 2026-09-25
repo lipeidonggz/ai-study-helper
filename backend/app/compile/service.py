@@ -26,13 +26,18 @@ from pathlib import Path
 from app.agent.llm import DeepSeekLLMClient, LLMMessage
 from app.compile.anaphora import resolve_source
 from app.compile.assemble import assemble
+from app.compile.classify import build_statements, classify_claim_types
 from app.compile.merge import merge_stage
 from app.compile.health import run_health_check
+from app.compile.relations import RELATIONS
 from app.kb.manifest import parse_manifest
 from app.storage.sqlite.kb_store import KbStore
+from app.storage.sqlite.compile_store import CompileStore
+from app.storage.sqlite.compile_store import SKELETON_EDGES
 from scripts.compile_slice_b6 import (
     COMPILE_TEMPERATURE,
     KB_DB,
+    COMPILE_DB,
     MANIFEST_PATH,
     PASS1_SYSTEM,
     _build_clean_t,
@@ -107,6 +112,27 @@ class Job:
     summary: dict = field(default_factory=dict)
 
 
+def _validate_stored(stg: dict, merged: dict, counts: dict) -> list[str]:
+    """S9 结构校验（程序）：条目数对账 / id 唯一 / 每条 statement 可锚 / 谓词在词表内。"""
+    problems: list[str] = []
+    stmts = stg.get("statements") or []
+    if counts["statements"] != len(stmts):
+        problems.append(f"statement 落库数 {counts['statements']} != 产物数 {len(stmts)}")
+    if counts["concepts"] != len(merged.get("entities") or []):
+        problems.append(f"concept 落库数 {counts['concepts']} != 产物数 {len(merged.get('entities') or [])}")
+    ids = [s.get("id") for s in stmts]
+    if len(set(ids)) != len(ids):
+        problems.append("statement id 有重复")
+    no_chunk = [s["id"] for s in stmts if not (s.get("evidence_chunks") or [])]
+    if no_chunk:
+        problems.append(f"{len(no_chunk)} 条 statement 没有 evidence_chunks（不可锚）")
+    known = set(RELATIONS) | set(SKELETON_EDGES)
+    off = {e.get("predicate") for e in (stg.get("edges") or []) if e.get("predicate") not in known}
+    if off:
+        problems.append(f"边谓词不在词表内：{sorted(off)[:5]}")
+    return problems
+
+
 class CompileService:
     """按篇管理抽取任务：同一篇同时只允许一个任务。"""
 
@@ -149,6 +175,11 @@ class CompileService:
     def graph(self, source_id: str, merged: bool = False) -> dict | None:
         """图产物：默认 S5（`graph.json`）；merged=True 取 S6-A 形合并后的 `graph_merged.json`。"""
         f = self._root / source_id / ("graph_merged.json" if merged else "graph.json")
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+    def statements(self, source_id: str) -> dict | None:
+        """S7 产物：断言（statement）+ 归属边 + claim_type 判定。"""
+        f = self._root / source_id / "statements.json"
         return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
 
     def all_statuses(self) -> dict[str, dict]:
@@ -335,6 +366,40 @@ class CompileService:
             )
             report["merge"] = mg["audit"]
 
+            # ---- S7 分类（statement 组装 + claim_type）----
+            job.stage = "classify"
+            job.progress = f"断言组装与分类（{len(kept)} 条 claim）"
+            stg = build_statements(kept, mg, clean_t, chunks, source_id=job.source_id)
+            ct = await classify_claim_types(client, stg["statements"], kept)
+            for st in stg["statements"]:
+                r = ct["by_id"].get(st["id"]) or {}
+                st["claim_type"] = r.get("claim_type")
+                st["claim_type_reason"] = r.get("reason") or ""
+                st["claim_type_evidence"] = r.get("evidence") or ""
+            stg["claim_type_demoted"] = ct["demoted"]
+            stg["stats"].update(ct["stats"])
+            print(
+                f"[B6] {job.source_id}: 断言 {stg['stats']['statements']}"
+                f"（局限 {stg['stats'].get('limitation', 0)} / 展望 {stg['stats'].get('outlook', 0)}"
+                f" / 其他 {stg['stats'].get('null', 0)}；依据护栏降级 {stg['stats'].get('demoted', 0)}）"
+            )
+            report["statements"] = stg["stats"]
+
+            # ---- S9 落库（SQLite；幂等：按 source_id 先删后插）+ 结构校验 ----
+            job.stage = "store"
+            job.progress = "编译产物落库"
+            store = CompileStore(COMPILE_DB)
+            counts = store.import_source(
+                source_id=job.source_id,
+                statements_payload=stg,
+                merged=mg,
+                doc_meta={"title": getattr(src, "name", ""), "publisher": getattr(src, "category", "")},
+            )
+            problems = _validate_stored(stg, mg, counts)
+            report["store"] = {**counts, "problems": problems}
+            print(f"[B6] {job.source_id}: 落库 断言 {counts['statements']}、概念 {counts['concepts']}、"
+                  f"边 {counts['edges']}｜结构校验问题 {len(problems)}")
+
             # 归一完成 → 回填报告里"标记清单"的归一化谓词（被丢弃的 claim 没归一，UI 显示 —）
             report["marked"] = [
                 {
@@ -388,6 +453,7 @@ class CompileService:
             (d / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             (d / "graph.json").write_text(json.dumps(gr, ensure_ascii=False, indent=2), encoding="utf-8")
             (d / "graph_merged.json").write_text(json.dumps(mg, ensure_ascii=False, indent=2), encoding="utf-8")
+            (d / "statements.json").write_text(json.dumps(stg, ensure_ascii=False, indent=2), encoding="utf-8")
             summary = {
                 "source_id": job.source_id,
                 "model": model,
@@ -406,6 +472,8 @@ class CompileService:
                 "anaphora": an["stats"],
                 "graph": gr["stats"],
                 "merge": mg["stats"],
+                "statements": stg["stats"],
+                "store": {**counts, "problems": len(problems)},
                 "evidence_fix": {"missing": n_missing_ev, "fixed": n_fixed_ev},
                 "relations": len(nv["kinds"]),
                 "predicate_health": {
