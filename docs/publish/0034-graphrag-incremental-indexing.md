@@ -99,13 +99,15 @@ workflows = config.workflows or cls.pipelines.get(method, [])
 
 | 观察 | 结果 |
 | --- | --- |
-| 日志第一行 | `Starting pipeline with workflows: load_input_documents, create_base_text_units, extract_graph, finalize_graph, create_communities, create_community_reports` —— **8 个合并步骤一个都没跑** |
+| 日志第一行 | `Starting pipeline with workflows: load_input_documents, create_base_text_units, extract_graph, finalize_graph, create_communities, create_community_reports` —— 走的是你列的那条链，`update_*` 那 8 步一步没跑（在这条链里它们本来也不该跑） |
 | 它实际干了什么 | 把 `input/` 里的文档**全部重新索引**了一遍——那一刻 `input/` 下有 **2 篇**（原始那篇 + 上次新增的那篇），产出 126 实体 / 166 关系 / 29 社区 / 26 报告，全写进 `delta/`。该轮 `delta` 里的 `documents` 是 2 行、`text_units` 是 9 块（原始 7 块 + 新增 2 块），正好对得上 |
 | 我的索引 | **一个字节都没变**（还是 136 / 173 / 20 / 12） |
 | 退出码 | **0** |
 | 耗时 | 92 秒——**一次完整索引的钱，白花** |
 
-所以这个坑有两层：你以为在更新，其实跑的是完整索引；更糟的是，跑完**没有任何一步把结果合并回你的索引**，而你还拿到一个成功退出码。
+所以这个坑有两层：**你以为在更新，其实跑的是完整索引**（这笔钱白花）；**更糟的是，这份完整索引被写进了 `delta/` 暂存目录，没有任何一步把它提升为正式索引**——你的 `output/` 一个字节都没变，退出码还是 0。
+
+不过这里有个地方容易绕不过来，我第一版就写错了：**别把"没跑合并"当成第二个 bug**。那次 `delta/` 里装的是一份**包含全部输入文档的完整索引**（实测：`documents` 2 行、`text_units` 9 块 = 原文档 7 + 新增 2），拿它去跟 `previous/` 合并才是错的——会把自己重复一遍。真正缺的不是"合并"，而是**"把 `delta/` 提升为正式索引"这个动作**：在正常的更新链里，前提是"`delta/` 只装新增内容"，所以确实要靠 8 个 `update_*` 把它并进旧索引；可一旦换成全量链，`delta/` 装的是全部内容，而仍然没有代码负责把它提交上去。结果就是：钱花了、结果算了、索引没变。
 
 想避开它只有两条路：**要么别在配置里写 `workflows`**（让 `--method` 生效），**要么把它写成完整的更新链**（`load_update_documents` + 9 个标准链步骤 + 8 个 `update_*`，也就是本文开头那 18 个名字）。
 
