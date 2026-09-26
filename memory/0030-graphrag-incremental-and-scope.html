@@ -151,6 +151,28 @@
     </section>
 
     <section class="card">
+      <h2>实测（2026-09-26，第一次真跑增量）</h2>
+      <p>为写对外文章 <a href="../docs/publish/0034-graphrag-incremental-indexing.md">0034</a>，第一次真跑了 <code>graphrag update</code>。设置：上一轮索引＝一篇中文技术文章（8138 token / 7 块，用<b>完整标准链</b>跑出 100 实体 / 120 关系 / 14 社区 / 8 报告）；增量＝新加一篇同系列文章（2290 token / 2 块）；模型 DeepSeek <code>deepseek-chat</code>；本轮不碰 embedding（<code>embed_text.names: []</code>）。产物在 <code>data/tmp/graphrag-exp-update/</code>。</p>
+      <h3>六条实测结论</h3>
+      <ol>
+        <li><b>18 步被日志证实</b>：<code>load_update_documents</code> + 9 个标准链 + 8 个 <code>update_*</code>，一字不差（此前只是从 factory 读出来的推断）。</li>
+        <li><b>"删除被忽略"比"删除不落地"更准确</b>：把一份文档从 <code>input/</code> 删掉再跑 <code>update</code> ⇒ <b>只执行第一步就结束</b>（后 17 步一步没跑）、<b>退出码 0</b>、6 秒、<code>documents</code> 表里那份文档<b>还在</b>。同名改文件内容同样只跑第一步。⇒ 删除这件事连"处理得不完整"都算不上，是<b>完全不处理</b>。</li>
+        <li><b>实体 degree 实测偏差 3 处</b>（判据＝源码口径"无向去重度数"）：基线 0 处不符、delta 0 处、合并后 <b>3 处</b>，全是"跨批出现且拿到新边"的实体——<code>AI-STUDY-HELPER</code> 停在 4（应为 11）、<code>RAG 评测工程</code> 停在 1（应为 5）、<code>FORMAT</code> 停在 1（应为 2）。<b>只在新批次的实体度数是对的</b>（它们本来只有新边）；边表的 <code>combined_degree</code> 确实重算，脏的只有实体这一侧。</li>
+        <li><b>重汇总开销比"看起来"小得多</b>：进度条刻度 309（=136 实体+173 关系）看着吓人，但按"描述条数 ≥ 2 才调模型"的规则，实际只有 <b>4 次</b>调用（4 个跨批同 title 实体；跨批关系对 0）。</li>
+        <li><b>成本量级</b>：这次增量 <b>24 次 LLM 调用</b>（抽图 4 / 描述汇总 14 / 社区报告 6），墙钟 42 秒；该语料的完整重建是 <b>62 次</b>调用、64 秒。⇒ 约 40%。另：报告的 6 次调用只产出 4 份报告（<b>静默丢报告在增量里同样存在</b>）。调用数由缓存文件计数得到（缓存一条调用一个文件）。</li>
+        <li><b>规模对账</b>：documents 1+1=2、text_units 7+2=9、<b>entities 100+40→136（唯一"不=相加"的表，4 个按 title 合并掉）</b>、relationships 120+53=173（两批无重合边）、communities 14+6=20（新批次编号 0–5 偏移为 <b>14–19</b>）、reports 8+4=12（旧 8 份报告 id 与标题 <b>8/8 全保留</b>）。证据块并集也确认了（1 块+1 块→2 块）。</li>
+      </ol>
+      <h3>两处"读代码的判断"被实测推翻（保留过程）</h3>
+      <ul>
+        <li><b>社区标题没丢</b>：读合并代码看到"把所有社区 <code>title</code> 统一改写成 <code>Community N</code>"，判断是"旧索引里有意义的社区标题会被抹掉"。实测：<code>communities.title</code> 在完整链产出的索引里<b>本来就是 <code>Community N</code></b>，有意义的标题在<b>另一张表</b> <code>community_reports.title</code> 里、且被完整保留 ⇒ 那行重写在实际数据上是 <b>no-op</b>。（教训：读代码看得出"做了什么动作"，看不出"这个动作在当前数据上有没有效果"。）</li>
+        <li><b>度数不符的面没有想象中大</b>：第一版我用"有向边条数"当判据，量出基线索引自己就有 14 处不符、合并后 17 处，差点写成"增量让 17 个实体度数失真"。改用源码口径（无向去重）后真相是<b>基线 0 处、合并后 3 处</b>——原来那 14 处是我<b>换了定义</b>（有向计数 vs 无向去重）。判据口径写不清，结论就会整体跑偏。</li>
+      </ul>
+      <h3>一条实操前提</h3>
+      <p><b>更新链要求上一轮索引"长得齐全"</b>：第一次实验拿六步精简链（跳过 <code>create_final_text_units</code>）的索引当上一轮，跑到 <code>update_text_units</code> 直接 <code>Pipeline error: 'human_readable_id'</code>——那张 <code>text_units</code> 表缺列。⇒ 自己裁剪过流水线的，要先补齐缺列再谈增量。</p>
+      <p class="muted">脚本：<code>_run_update.py</code>（跑增量）/ <code>_analyze_update.py</code>（三份产物逐表对账）/ <code>_check_degree2.py</code>（按源码口径量度数）/ <code>_analyze_calls.py</code>（算真实调用面）/ <code>_levels.py</code>（层级分布）。</p>
+    </section>
+
+    <section class="card">
       <h2>附录 · 证据索引</h2>
       <h3>代码位置（microsoft/graphrag，2026-09-22 核对）</h3>
       <ul>
