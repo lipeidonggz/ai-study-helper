@@ -153,7 +153,7 @@
     <section class="card">
       <h2>实测（2026-09-26，第一次真跑增量）</h2>
       <p>为写对外文章 <a href="../docs/publish/0034-graphrag-incremental-indexing.md">0034</a>，第一次真跑了 <code>graphrag update</code>。设置：上一轮索引＝一篇中文技术文章（8138 token / 7 块，用<b>完整标准链</b>跑出 100 实体 / 120 关系 / 14 社区 / 8 报告）；增量＝新加一篇同系列文章（2290 token / 2 块）；模型 DeepSeek <code>deepseek-chat</code>；本轮不碰 embedding（<code>embed_text.names: []</code>）。产物在 <code>data/tmp/graphrag-exp-update/</code>。</p>
-      <h3>六条实测结论</h3>
+      <h3>七条实测结论</h3>
       <ol>
         <li><b>18 步被日志证实</b>：<code>load_update_documents</code> + 9 个标准链 + 8 个 <code>update_*</code>，一字不差（此前只是从 factory 读出来的推断）。</li>
         <li><b>"删除被忽略"比"删除不落地"更准确</b>：把一份文档从 <code>input/</code> 删掉再跑 <code>update</code> ⇒ <b>只执行第一步就结束</b>（后 17 步一步没跑）、<b>退出码 0</b>、6 秒、<code>documents</code> 表里那份文档<b>还在</b>。同名改文件内容同样只跑第一步。⇒ 删除这件事连"处理得不完整"都算不上，是<b>完全不处理</b>。</li>
@@ -161,6 +161,7 @@
         <li><b>重汇总开销比"看起来"小得多</b>：进度条刻度 309（=136 实体+173 关系）看着吓人，但按"描述条数 ≥ 2 才调模型"的规则，实际只有 <b>4 次</b>调用（4 个跨批同 title 实体；跨批关系对 0）。</li>
         <li><b>成本量级</b>：这次增量 <b>24 次 LLM 调用</b>（抽图 4 / 描述汇总 14 / 社区报告 6），墙钟 42 秒；该语料的完整重建是 <b>62 次</b>调用、64 秒。⇒ 约 40%。另：报告的 6 次调用只产出 4 份报告（<b>静默丢报告在增量里同样存在</b>）。调用数由缓存文件计数得到（缓存一条调用一个文件）。</li>
         <li><b>规模对账</b>：documents 1+1=2、text_units 7+2=9、<b>entities 100+40→136（唯一"不=相加"的表，4 个按 title 合并掉）</b>、relationships 120+53=173（两批无重合边）、communities 14+6=20（新批次编号 0–5 偏移为 <b>14–19</b>）、reports 8+4=12（旧 8 份报告 id 与标题 <b>8/8 全保留</b>）。证据块并集也确认了（1 块+1 块→2 块）。</li>
+        <li><b><code>workflows</code> 盖掉 <code>--method</code>，且是静默的</b>：把一份"六步裁剪清单"写回 <code>settings.yaml</code> 再跑 <code>graphrag update</code> ⇒ 日志第一行就显示用的是那六步（<b>8 个合并步骤一个没跑</b>），它把 <code>input/</code> 里<b>两篇文档全部重新索引</b>（126 实体/166 关系/29 社区/26 报告）写进 <code>delta/</code>，<b>索引本体一个字节没变</b>（仍 136/173/20/12），<b>退出码 0</b>，耗时 92 秒＝一次完整索引的钱白花。⇒ 想用更新链：要么别写 <code>workflows</code>，要么把它写成完整的 18 步。</li>
       </ol>
       <h3>两处"读代码的判断"被实测推翻（保留过程）</h3>
       <ul>
