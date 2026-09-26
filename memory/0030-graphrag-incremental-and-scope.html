@@ -50,6 +50,12 @@
         <li>真要做跨库综述，走<b>按需渲染</b>而非预生成摘要（不预生成 ⇒ 没有"预生成过期"）。</li>
       </ul>
       <p class="muted">适合谁读：要评估"要不要上某种全局索引 / 结构"的人；要设计增量更新机制的人；以及以后想复用"成熟度判断法"的人。</p>
+      <div class="chain"><b>补充与更正（2026-09-26，为写对外文章重核一遍 3.2.0 源码时发现，四处）</b>：
+        <br>① <b>边表的 <code>combined_degree</code> 其实是重算的</b>——主体层表格里"度数不重算"要收窄为"<b>实体 <code>degree</code> 不重算</b>"：更新流程会按合并后的边表重算 <code>source_degree / target_degree / combined_degree</code>（<code>index/update/relationships.py</code>）。两点残留瑕疵：重算发生在 <code>filter_orphan_relationships</code> <b>之前</b>（被丢掉的悬空边已计入度数）；且实体 <code>degree</code> 被查询侧当作实体排序键（<code>query/indexer_adapters.py</code> 的 <code>rank_col="degree"</code>），所以那份脏账不是纯摆设。
+        <br>② <b>合并后会再调一次 LLM</b>（此前漏记）：合并把同一实体的多条描述收成列表，随后 <code>get_summarized_entities_relationships</code> 会调用摘要步骤，而 <code>SummarizeExtractor</code> 对"描述条数 ≥ 2"的条目<b>真的会调模型</b>（0 条返回空 / 1 条原样 / &gt;1 条才调）⇒ <b>所有跨批出现过的实体与关系都要再付一次摘要钱</b>。原笔记"省掉存量抽取"的说法成立，但"增量很便宜"的印象要修正。
+        <br>③ <b>每次增量都会把整个 <code>output/</code> 全表复制一份</b>到 <code>update_output/&lt;时间戳&gt;/previous/</code>（<code>index/run/run_pipeline.py</code> 的 <code>_copy_previous_output</code>，逐表读写）⇒ 磁盘按"每次一份完整索引"的量级增长，且没有任何清理。
+        <br>④ <b>关系合并的分组键是 <code>(source, target)</code>、<code>weight</code> 取<b>平均</b></b>（原笔记写作"按 title 分组去重"）；<code>communities</code> 合并会把所有社区 <code>title</code> 统一改写成 <code>Community N</code>（原笔记已记）。另补一条部署坑：<code>config.workflows</code> <b>会覆盖 <code>--method</code></b>（<code>PipelineFactory.create_pipeline</code> 里是 <code>config.workflows or pipelines[method]</code>）⇒ 若 settings 里显式列了 workflows，<code>graphrag update</code> 跑的是你列的那条链，而不是 18 步的更新链。
+      </div>
     </section>
 
     <section class="card">
