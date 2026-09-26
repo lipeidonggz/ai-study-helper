@@ -211,8 +211,8 @@
           <tr>
             <td><a href="0031-graphrag-search-modes.html">0031</a></td>
             <td>2026-09-22</td>
-            <td>GraphRAG 查询模式逐项核实（进行中）——沛东问、我核代码答、逐条落笔。已有：<b>Global Search 的选层机制＝外部必填、无自适应</b>（<code>api.query.global_search(...)</code> 的 <code>community_level</code> 无默认值；notebook 用常量 <code>COMMUNITY_LEVEL=2</code> 过滤；配置无"默认层"）；层越高越细也越贵；<b>dynamic community selection 是另一条可选路径，此时同名参数语义变成"cap"</b>，输出为可跨层的社区子集，代价是逐社区 LLM 打分与漏召回风险。速查表含四种模式对比，<b>local / DRIFT 待核</b>，另附待问清单 7 条</td>
-            <td><span class="badge">进行中</span></td>
+            <td><b>Global 已收口</b>（2026-09-26 按"分层阅读"重构：机制正文 ＋ 考古层；Local / DRIFT 待核）——沛东问、我核代码答、逐条落笔。Global 基本模式：<b>材料＝<code>level &lt;= N</code> 的全部社区报告</b>（文档写"选第 N 层"、实现是"≤N 全层"；roll-up 自 v2.0.0 起是空操作，已提上游 <a href="https://github.com/microsoft/graphrag/issues/2573">#2573</a>），五步＝选材料 → 装配上下文（切批＝map 次数）→ Map（每批出"一列点 ＋ 0–100 分"）→ Reduce（按分降序填窗口，信息在这里可能被截断）→ 返回（引用只到"报告"级）；<b>选层＝外部必填、无自适应、无默认层</b>，层越高越细也越贵，论文 <span class="half">§</span>4 无通用答案；<b>dynamic community selection 是可选路径</b>，此时同名参数语义变成"cap"、输出为可跨层社区子集，代价是逐社区 LLM 打分与漏召回。另含：跨批分数不可比的解、宏观问题配细层的三条硬约束、社区权重为何查询期重算。速查表含五种模式对比，<b>local / DRIFT 待核</b>，待问清单 8 条</td>
+            <td><span class="badge">Global 已收口</span></td>
           </tr>
           <tr>
             <td><a href="0032-graphrag-a5-experiment.html">0032</a></td>
