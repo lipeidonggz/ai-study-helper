@@ -171,7 +171,8 @@ community_level = 1
 
 这是全量扫的廉价实现：**不做检索，让每一批自己摘出重要点并打分**，把"筛选"推迟到 reduce。
 
-- 提示词：`system = MAP_SYSTEM_PROMPT`（带 `{context_data}` 与 `{max_length}`）、`user = query`；**强制 JSON 输出**。用户问题**不在 system 里**，而是单独作为 user 消息传入。
+- 提示词：`system = MAP_SYSTEM_PROMPT`（模板变量只有 `{context_data}` 与 `{max_length}`）、`user = query`；**强制 JSON 输出**（`response_format_json_object=True`）。
+  **一个容易误读的点**：`MAP_SYSTEM_PROMPT` 通篇在说"回答用户的问题"（*"…responds to **the user's question**"*、*"…how important the point is in **answering** the user's question"*），**但它本身并不包含那个问题**——问题是作为 **user 消息**单独传进来的（📄 `add_system_message(prompt).add_user_message(query)`）。所以"map 到底看不看得到用户问题"的答案是：**看得到，只是走 user 通道，不在 system 模板里**。reduce 阶段同理，也是同一个写法。
 - 产出解析成 `points: [{description, score}]` → 归一成 `{answer, score}`；并发由信号量控制（`concurrent_coroutines=32`），让**延迟与批数脱钩**。
 - **失败静默降级**：JSON 解析失败、或抛异常 ⇒ 该批只产出 `{answer:"", score:0}`，**只打 warning 日志**。好处是不阻塞整条链（其余批照常出结果）；代价是**答案会缺一块而没有显式提示**——正是最该警惕的"静默失败"形态。
 
@@ -197,7 +198,7 @@ community_level = 1
 
 **追问一：跨批打的分，算不算同一把尺？**
 
-不算。每批是**独立调用**，模型只看到自己那一批的材料，打出的 0–100 是"在这批里的相对重要性"。加详细的评分标准能解决**档位语义**（"80 分大概指什么"），解决不了**批内相对锚定**（"这批里最相关的那条才 60 分"）。
+不算。每批是**独立调用**：**问题它看得到，但材料只有自己那一批**——所以打出的 0–100 是"在这批材料里的相对重要性"（锚在批内），不是跨批可比的绝对分。加详细的评分标准能解决**档位语义**（"80 分大概指什么"），解决不了**批内相对锚定**（"这批里最相关的那条才 60 分"）。
 
 更稳的思路是：**别让跨批分数单独承担排序职责。** 比如把 0 分当二值筛选（要不要）、再加粗分档、把"谁更重要"的比较尽量推到 reduce（那是**同一次上下文里的全局比较**）。
 
