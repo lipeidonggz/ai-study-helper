@@ -42,8 +42,6 @@ GraphRAG 的四种检索模式里，只有 Global Search 能干一件事：**回
 
 这一步就定死了后面拿什么当材料。**输入是两张表，输出是"报告列表"**（函数是 `read_indexer_reports`）。
 
-有个容易读拧的地方：**"实体"在这条链里只露一次面**——`explode("entity_ids")` 出来的那一列，而且那一列是 **entity id（哈希）**、不带实体名。函数 docstring 用的是旧版的**实体口径**（"the max community level that an **entity** belongs to"），而代码早已换成**社区口径**。两套口径混在一段话里，读起来自然拧巴——**这是上游的语义漂移被读出来了**。
-
 | 表 | 一行是什么 | 关键列 | `title` 是什么 |
 | --- | --- | --- | --- |
 | `communities`（层级结构） | 一个社区 | `community / level / parent / children / entity_ids / size` | **`"Community N"`**（索引期直接拼字符串，N = 社区 id） |
@@ -64,7 +62,47 @@ GraphRAG 的四种检索模式里，只有 Global Search 能干一件事：**回
 
 roll-up 就是来解决这个"重复代表"的。
 
-**而它现在失效了。** 关键在 `groupby(["title"])` 的这个 `title`：社区表的 `title` 在**索引期**被改成了 `"Community N"`——于是"按 title 分组"从"把同一个实体的多行合并"变成了"把每一个社区各留一行"，而每个社区的 title 本来就唯一 ⇒ **分组这一步什么也没做**。
+**而它现在失效了。** 失效的原因只有**一行实质差别**：分组那一行没变，**变的是传给它的表**。两版对照（📄 源码，链接见文末附录）：
+
+**v1.x（roll-up 生效）**——入参是**实体级**的 `final_nodes` 表，`title` = **实体名**：
+
+```python
+def read_indexer_reports(
+    final_community_reports: pd.DataFrame,
+    final_nodes: pd.DataFrame,        # ← 实体 × 社区的长表（title = 实体名）
+    community_level: int | None,
+    ...
+):
+    nodes_df = final_nodes
+    ...
+    if not dynamic_community_selection:
+        # perform community level roll up
+        nodes_df = nodes_df.groupby(["title"]).agg({"community": "max"}).reset_index()
+        filtered_community_df = nodes_df["community"].drop_duplicates()
+        reports_df = reports_df.merge(filtered_community_df, on="community", how="inner")
+```
+
+**v2.0.0 起（roll-up 变成空操作）**——入参换成**社区表**，`title` = **`"Community N"`**：
+
+```python
+def read_indexer_reports(
+    final_community_reports: pd.DataFrame,
+    final_communities: pd.DataFrame,  # ← 换成社区表
+    community_level: int | None,
+    ...
+):
+    nodes_df = final_communities.explode("entity_ids")   # ← 唯一实质改动
+    ...
+    if not dynamic_community_selection:
+        # perform community level roll up
+        nodes_df = nodes_df.groupby(["title"]).agg({"community": "max"}).reset_index()
+        filtered_community_df = nodes_df["community"].drop_duplicates()
+        reports_df = reports_df.merge(filtered_community_df, on="community", how="inner")
+```
+
+`groupby(["title"])` 那一行**两版一字不差**；变的是 `title` 的含义：旧版里它是**实体名** ⇒ "同一实体的多行合并、取最深社区"（roll-up 生效）；新版里它是 **`"Community N"`**（社区表的 title 在索引期被改写成了编号，每个社区本来就唯一）⇒ **分组等于什么都没做**，最终就等价于"把 `level <= N` 的报告全给出去"。
+
+坏点在 **v2.0.0**（PR #1674，2025-02-07），v3 只是继承；**v1.x 不受影响**。
 
 一个本地探针能把它演清楚（✅ 实测：用合成层级复刻那个函数，喂两种 title 口径）：
 
@@ -259,6 +297,7 @@ C0 = 根（社区最少、每个最大），**越往下越细**（社区更多�
 
 - 版本：`graphrag 3.2.0`（Python 3.11）；代码路径与提示词按官方 `main` 分支核对（钉在提交 `769542fb`）
 - 主要核对位置（📄）：`query/structured_search/global_search/{search.py, community_context.py}`、`query/indexer_adapters.py`（`read_indexer_reports` / `read_community_reports`）、`prompts/query/global_search_{map,reduce}_system_prompt.py`、`config/defaults.py`（`GlobalSearchDefaults`）
+- 2.1 那两版代码的原文（可自行比对）：**v1.2.2** [graphrag/query/indexer_adapters.py](https://github.com/microsoft/graphrag/blob/v1.2.2/graphrag/query/indexer_adapters.py) ／ **v3.2.0** [packages/graphrag/graphrag/query/indexer_adapters.py](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/query/indexer_adapters.py)
 - 官方材料（📎）：原论文 [*From Local to Global: A Graph RAG Approach to Query-Focused Summarization*](https://arxiv.org/abs/2404.16130)（§3.1.6 与 §4）、官方 global search notebook、issue [#2573](https://github.com/microsoft/graphrag/issues/2573) 与 [#1650](https://github.com/microsoft/graphrag/issues/1650)
 - 本地探针：`data/tmp/_graphrag_rollup_probe.py`（用合成层级复刻 `read_indexer_reports`，比对两种 `title` 口径 ⇒ 证明当前版本退化为 `level <= N`）
 - 本文的核对脚本与笔记都在开源仓库：<https://github.com/lipeidonggz/ai-study-helper>
