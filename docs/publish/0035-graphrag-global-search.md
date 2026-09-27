@@ -8,7 +8,7 @@
 >
 > **阅读成本**：约 20 分钟。1 节是一屏流程；2 节讲材料选择（含一个上游 bug 的来龙去脉）；3–5 节是三步执行；6–7 节是容易踩的机制与参数；8 节是三条边界与替代路线。
 >
-> **证据标记**：**✅ 实测**（本地探针／官方 notebook 输出）· **📄 源码**（读 graphrag 3.2.0 与官方仓库）· **📎 官方文档／论文** · **🤔 推断**。
+> **证据标记**：**✅ 实测**（本地探针／官方 notebook 输出）· **📄 源码**（读 `graphrag 3.2.0` 与官方仓库）· **📎 官方文档／论文** · **🤔 推断**。
 
 ---
 
@@ -81,7 +81,7 @@ roll-up 就是来解决这个"重复代表"的。
 
 **而它现在失效了。** 失效的原因只有**一行实质差别**：分组那一行没变，**变的是传给它的表**。两版对照（📄 源码，链接见文末附录）：
 
-**v1.x（roll-up 生效）**——入参是**实体级**的 `final_nodes` 表，`title` = **实体名**：
+**`v1.x`（roll-up 生效）**——入参是**实体级**的 `final_nodes` 表，`title` = **实体名**：
 
 ```python
 def read_indexer_reports(
@@ -99,7 +99,7 @@ def read_indexer_reports(
         reports_df = reports_df.merge(filtered_community_df, on="community", how="inner")
 ```
 
-**v2.0.0 起（roll-up 变成空操作）**——入参换成**社区表**，`title` = **`"Community N"`**：
+**`v2.0.0` 起（roll-up 变成空操作）**——入参换成**社区表**，`title` = **`"Community N"`**：
 
 ```python
 def read_indexer_reports(
@@ -119,7 +119,7 @@ def read_indexer_reports(
 
 `groupby(["title"])` 那一行**两版一字不差**；变的是 `title` 的含义：旧版里它是**实体名** ⇒ "同一实体的多行合并、取最深社区"（roll-up 生效）；新版里它是 **`"Community N"`**（社区表的 title 在索引期被改写成了编号，每个社区本来就唯一）⇒ **分组等于什么都没做**，最终就等价于"把 `level <= N` 的报告全给出去"。
 
-坏点在 **v2.0.0**（PR #1674，2025-02-07），v3 只是继承；**v1.x 不受影响**。
+坏点出现在 **`v2.0.0`**（[PR #1674](https://github.com/microsoft/graphrag/pull/1674)，2025-02-07），**`v3`** 只是继承；**`v1.x` 不受影响**。
 
 一个本地探针能把它演清楚（✅ 实测：用合成层级复刻那个函数，喂两种 title 口径）：
 
@@ -135,7 +135,7 @@ community_level = 1
 
 **结论：这个参数在当前版本的实际语义 = `level <= N` 的全部报告**，不是"只取第 N 层"、也不是"每个实体取最深社区"。
 
-这件事我们提交给了上游：**[microsoft/graphrag#2573](https://github.com/microsoft/graphrag/issues/2573)**（📎）。提交时的口径是：**不主张"应该按最深社区取"**（那是可争的设计取舍），而是指出**代码、注释、文档三者互相矛盾**——这一条不可争；"哪种行为才对"留给维护者，并给出三个方向：A 用一行恢复 roll-up（`groupby("entity_ids")`）、B 严格单层（`level == N`）、C 保持 `<= N` 但改文档与 docstring。
+这件事我们提交给了上游：**[microsoft/graphrag#2573](https://github.com/microsoft/graphrag/issues/2573)**（📎）。
 
 ### 2.2 于是这个参数的实际语义
 
@@ -313,7 +313,7 @@ community_level = 1
 
 - 版本：`graphrag 3.2.0`（Python 3.11）；代码路径与提示词按官方 `main` 分支核对（钉在提交 `769542fb`）
 - 主要核对位置（📄）：`query/structured_search/global_search/{search.py, community_context.py}`、`query/indexer_adapters.py`（`read_indexer_reports` / `read_community_reports`）、`prompts/query/global_search_{map,reduce}_system_prompt.py`、`config/defaults.py`（`GlobalSearchDefaults`）
-- 2.1 那两版代码的原文（可自行比对）：**v1.2.2** [graphrag/query/indexer_adapters.py](https://github.com/microsoft/graphrag/blob/v1.2.2/graphrag/query/indexer_adapters.py) ／ **v3.2.0** [packages/graphrag/graphrag/query/indexer_adapters.py](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/query/indexer_adapters.py)
+- 2.1 那两版代码的原文（可自行比对）：`v1.2.2` [graphrag/query/indexer_adapters.py](https://github.com/microsoft/graphrag/blob/v1.2.2/graphrag/query/indexer_adapters.py) ／ `v3.2.0` [packages/graphrag/graphrag/query/indexer_adapters.py](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/query/indexer_adapters.py)
 - 官方材料（📎）：原论文 [*From Local to Global: A Graph RAG Approach to Query-Focused Summarization*](https://arxiv.org/abs/2404.16130)（§3.1.6 与 §4）、官方 global search notebook、issue [#2573](https://github.com/microsoft/graphrag/issues/2573) 与 [#1650](https://github.com/microsoft/graphrag/issues/1650)
 - 本地探针：`data/tmp/_graphrag_rollup_probe.py`（用合成层级复刻 `read_indexer_reports`，比对两种 `title` 口径 ⇒ 证明当前版本退化为 `level <= N`）
 - 本文的核对脚本与笔记都在开源仓库：<https://github.com/lipeidonggz/ai-study-helper>
