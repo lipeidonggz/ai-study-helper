@@ -126,7 +126,7 @@
         <br>· 开 <code>dynamic_community_selection</code> 时<b>整个 merge 被跳过</b>，这个参数的语义变成"最多下探到哪一层"（见下文"可选第二条路径"）。
       </div>
 
-      <p><b>层从哪来：外部指定，且必填。</b>Python API 里 <code>community_level: int | None</code> 是<b>必填参数</b>（无默认值）；notebook 直接写常量 <code>COMMUNITY_LEVEL = 2</code> 再拿去过滤；配置 <code>GlobalSearchDefaults</code> 里<b>没有"默认层"</b>——只有 <code>max_context_tokens = 12_000</code> 和 <code>dynamic_search_max_level = 2</code>。⇒ <b>不是自适应，是"外部指定 ＋ 全量使用该层及更浅层"。</b></p>
+      <p><b>层从哪来：外部传参，不是自适应——但"默认值"各入口自己给，给的还不一样</b>（<span class="half">2026-09-27 更正</span>：此前写"外部指定，且<b>必填</b>"，不准确）：① <b>Python API</b>（<code>api.query.global_search</code> / <code>..._streaming</code>）里 <code>community_level</code> <b>没有默认值</b>（类型是 <code>int | None</code>）⇒ 不传直接报错，<b>但传 <code>None</code> 合法</b>、含义是"不过滤"；② <b>CLI</b>（<code>graphrag query</code>，默认 <code>-m global</code>）的 <code>--community-level</code> <b>默认值 = 2</b>（<code>cli/main.py</code> 的 <code>typer.Option(2, ...)</code>）⇒ 命令行里不用填，但默认值是 2、<b>不是"全层"</b>；③ <b>notebook</b> 写常量 <code>COMMUNITY_LEVEL = 2</code>（与 CLI 同）；④ <b>配置</b> <code>GlobalSearchDefaults</code> 里<b>没有这一项</b>（只有 <code>max_context_tokens = 12_000</code>、<code>dynamic_search_max_level = 2</code>）⇒ 默认层由入口给、配置层不管。⇒ 准确说法：<b>没有任何"自适应"，这个决定的承担者始终是调用方</b>（要么接受入口默认值，要么自己选）；两端语义差别很大——<b><code>None</code> ＝ 不过滤 ＝ 全部社区所有层</b>，<b>数字 <code>N</code> ＝ <code>level &lt;= N</code></b>。</p>
       <p><b>层的高低意味着什么</b>：C0 ＝ 根（社区最少、每个最大），<b>越往下越细</b>（社区更多、报告更多更短）。所以<b>选高层 ⇒ 材料更细但更贵</b>（每次要扫 <code>level ≤ N</code> 的全部报告）。<b>选层是个裸超参</b>——论文 §4 专门做实验比较"哪层最好"（结论：C0 明显差，C1–C3 在各数据集／指标上互有胜负，<u>没有通用答案</u>），这本身就说明没有默认答案。</p>
       <h4 style="margin:12px 0 4px;font-size:14px;">第 1 步 · 装配上下文（<code>GlobalCommunityContext.build_context</code>）</h4>
       <ol>

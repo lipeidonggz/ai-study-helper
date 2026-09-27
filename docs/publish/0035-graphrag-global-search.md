@@ -31,7 +31,7 @@ GraphRAG 的四种检索模式里，只有 Global Search 能干一件事：**回
 | **低（C0 = 根）** | 社区少而大 | 粗、便宜、偏全景 | "整体有哪些主题" |
 | **高** | 社区多而小 | 细、贵（每次要扫 `level <= N` 的全部报告） | "某个子话题具体怎么做的" |
 
-默认路径下系统**不做这个判断**——它把这个旋钮直接交给调用方，而且是**必填**（2.3 节给出 API、notebook、配置三处证据）。至于"让用户填层号"这个设计本身好不好，8.1 节会说清它的问题。
+默认路径下系统**不做这个判断**——它把这个旋钮交给调用方，各入口给的默认还不一样（Python API 必传但可传 `None`、CLI 默认 `2`，见 2.3）。至于"让用户填层号"这个设计本身好不好，8.1 节会说清它的问题。
 
 这条链上还有几个地方会直接影响你看到的结果，而且**不看代码是不知道的**：材料到底是哪几份、分数是怎么打的、筛选发生在哪一步、引用能追到多细。下面按执行顺序讲。
 
@@ -67,7 +67,7 @@ GraphRAG 的四种检索模式里，只有 Global Search 能干一件事：**回
 默认模式（`dynamic_community_selection=False`）下，代码只做四件事：
 
 1. **把社区表 explode 成"社区 × 成员实体 id"的长表**——这是"实体"唯一的出场；
-2. **两张表各按 `level <= N` 砍一刀**（`N` = 外部必填的 `community_level`）；
+2. **两张表各按 `level <= N` 砍一刀**（`N` = 调用方给的 `community_level`）；
 3. **按 `title` 分组、取 `community` 最大值**——代码注释写着 `# perform community level roll up`，docstring 说它是"每个实体只留它所属的最深社区"。**但这一步在当前版本是空操作**（下一小节说为什么）；
 4. **用这组 community id 与报告表 inner merge** ⇒ 输出报告集合（不是实体集合、也不是社区集合）。
 
@@ -144,9 +144,18 @@ community_level = 1
 - **它不是"选第 N 层"**：API docstring 写 "the community level to search at"、官方 notebook 注释写 "higher value means more fine-grained"——**说法都是"那一层"，实现是"≤N 的所有层"**，而且偏差方向是**"给得比说的多"**（把更粗的层全塞了进来）。
 - **模型不知道自己在读哪一层**：`read_community_reports` 只映射 `id / title / community / summary / full_content / rank / attributes`——**`level` 没进对象**，上下文表头里也没有 level 列。这条后面会变成一个"放大器"（见 4.2）。
 
-### 2.3 层从哪来、层的高低意味着什么
+### 2.3 层从哪来：三个入口、三套默认
 
-**层不是自适应选的，是外部必填**：Python API 里 `community_level: int | None` 是必填参数（无默认值）；官方 notebook 直接写常量 `COMMUNITY_LEVEL = 2` 再拿去过滤；配置 `GlobalSearchDefaults` 里**没有"默认层"**（只有 `max_context_tokens = 12_000`、`dynamic_search_max_level = 2`）。⇒ **不是自适应，是"外部指定 ＋ 全量使用该层及更浅层"。**
+**它不由系统自适应决定，而是外部传进来的一个参数**——但"默认值"是**各入口自己给的，而且给的不一样**：
+
+| 入口 | `community_level` | 说明 |
+| --- | --- | --- |
+| **Python API**（`api.query.global_search` / `..._streaming`） | **无默认值（必传）**，但**可以传 `None`** | 签名里这个参数**没有默认值**（类型是 `int` 或 `None`）⇒ 不传会直接报错；传 `None` 是合法的，含义是"**不过滤**" |
+| **CLI**（`graphrag query`，默认 `-m global`） | **默认 `2`** | 命令行里"不用填"，但默认值是 **2**——不是"全层" |
+| **官方 notebook** | 常量 `COMMUNITY_LEVEL = 2` | 与 CLI 同 |
+| **配置**（`GlobalSearchDefaults`） | **没有这一项** | 只有 `max_context_tokens = 12_000`、`dynamic_search_max_level = 2` ⇒ 默认层由入口给，配置层不管 |
+
+所以准确的说法是：**没有任何"自适应"，这个决定的承担者始终是调用方**（要么接受所在入口的默认值，要么自己选）。而两端的语义差别很大：**`None` ＝ 不过滤 ＝ 全部社区、所有层**（就是 2.2 里那条）；**数字 `N` ＝ `level <= N`**。
 
 **层的高低**对应什么，见第 0 节那张表；这里补一条更要紧的：**选层是个裸超参**——原论文 §4 专门做实验比较"哪层最好"，结论是 C0 明显差、C1–C3 在各数据集与指标上互有胜负、**没有通用答案**（📎）。论文需要专门比出这个结论，本身就说明没有默认答案。
 
