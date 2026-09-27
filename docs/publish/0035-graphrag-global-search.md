@@ -165,19 +165,9 @@ community_level = 1
 
 顺序是：**算社区权重 → 按 rank 筛 → 打乱 → 分批 → 批内排序成表 →（可选）前置对话历史**。
 
-- **算社区权重**（**条件执行，四个条件缺一不可**）：遍历实体 → 取 `community_ids` → 把 `text_unit_ids` 累加到对应社区 ⇒ 权重 = **该社区内所有实体关联的去重 text unit 数**，再按最大值归一化到 0–1，写进报告 attributes（默认名 `occurrence weight`）。这就是官方 notebook 里那句 "community weights for context ranking" 的实义。
-  **"能不算吗"——能，而且这是一条真实分支**。它的执行条件是四个的合取（📄）：
-  ```python
-  compute_community_weights = (
-      entities                                   # ① 传了 entities（且非空）
-      and len(community_reports) > 0             # ② 有报告
-      and include_community_weight               # ③ 开关（默认 True）
-      and (community_reports[0].attributes is None       # ④ 报告里还没有这个属性
-           or community_weight_name not in community_reports[0].attributes)
-  )
-  ```
-  **不传 `entities` 会怎样**：不算，而且**不会报错**——排序那一步的 `weight_column` 直接给 `None`（`community_weight_name if entities and include_community_weight else None`），于是**批内排序从「weight, rank」降级为「只按 rank」**，上下文表里也就没有 `occurrence weight` 这一列。代价是**少一个排序维度**：weight 是"这个社区在语料里的体量"，rank 是"报告自身的重要性"，两者不是一回事。
-  顺带一个**现版本的事实**：条件 ④ 目前**恒为真**——`read_indexer_reports` 调 `read_community_reports` 时没有传 `attributes_cols` ⇒ 每份报告的 `attributes` 都是 `None` ⇒ **"报告里已带该属性就跳过重算"这条分支走不到**，`occurrence weight` 现在 100% 是查询期现算的；索引产出的报告表里也没有这一列。
+- **算社区权重**：遍历实体 → 取 `community_ids` → 把 `text_unit_ids` 累加到对应社区 ⇒ 权重 = **该社区内所有实体关联的去重 text unit 数**，再按最大值归一化到 0–1，写进报告 attributes（默认名 `occurrence weight`）。这就是官方 notebook 里那句 "community weights for context ranking" 的实义——**一个"社区里有多少独立文本块"的体量指标，不是相关性**，用来给批内排序当第一关键字。
+  它需要 `entities` 表参与，而**默认流程一定会传**：CLI 走 global 分支时强制读 `entities` 并传入（`cli/query.py` 的 `output_list` 里就有它），工厂再原样透传给上下文构造器（`query/factory.py`）⇒ **这条计算在默认路径上必然发生**，调用方不用管它。
+  （一个附带事实：读报告时并没有让任何列进 `attributes`——`read_community_reports` 没传 `attributes_cols` ⇒ 报告对象里 `attributes` 是空的 ⇒ 权重**每次查询都现算**，而不是读一份预先算好存下来的。）
 - **按 `rank` 筛**：`report.rank >= min_community_rank`（默认 0 ⇒ 全过）。⚠️ 这个 `rank` 是**报告自身的重要性分**（索引期由社区报告提示词打的），**不是查询相关度**——它的作用是"让你直接砍掉低重要性报告"来省 token。
 - **打乱**（**不是可选项，是写死的载荷步骤**）：`random.seed(86)` ＋ shuffle ⇒ **有固定种子的伪随机，同输入可复现**。构造器 `context_builder_params` 里 `shuffle_data: True` 是硬编码的（`query/factory.py`），公共 API 与配置**都没有这个开关** ⇒ 走 API／CLI／notebook 一律恒开；只有直接调底层 `build_community_context` 才谈得上关掉。
   **为什么要打乱**：破坏"批次划分"与"任何让报告互相关联的维度"之间的对齐。真实的"顺序 ↔ 相关"来源有两类：① **社区表天然顺序**（id 随深度递增、同父子的子社区相邻 ⇒ 同主题的报告天然挨着）；② 同源文档／同一次入库批次。打散让**每一批都尽量是语料的横切面**，而不是"这一批全是同一主题"。
