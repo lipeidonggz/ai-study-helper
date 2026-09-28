@@ -31,6 +31,7 @@ npm-debug.log*
 # IDE / 系统
 .idea/
 .vscode/
+.obsidian/
 *.swp
 .DS_Store
 

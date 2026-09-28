@@ -1,0 +1,121 @@
+"""跑 Dynamic 实验的全量索引（安全版 runner，沿用 2026-09-25 的做法）。
+
+安全设计：
+1. DeepSeek 密钥只从 backend/data/app.db 读进子进程环境变量，绝不写文件、绝不当命令行参数；
+2. 子进程 stdout/stderr 逐行脱敏后再落盘（graphrag 可能把解析后的配置打印出来）；
+3. 跑完扫一遍本实验目录，报告是否出现 sk- 形态的串（只报有/无，不打印内容）。
+
+用法：
+    python _run_index.py            # 真跑全量
+    python _run_index.py --dry-run  # 只校验配置
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+REPO = ROOT.parent.parent.parent
+APP_DB = REPO / "backend" / "data" / "app.db"
+SECRET_RE = re.compile(r"sk-[A-Za-z0-9_\-]{6,}")
+SKIP_DIRS = {".venv", "__pycache__", ".git", "cache", "output"}
+
+
+def read_llm_settings() -> dict[str, str]:
+    con = sqlite3.connect(f"file:{APP_DB}?mode=ro", uri=True)
+    row = con.execute("select value from settings limit 1").fetchone()
+    con.close()
+    if not row:
+        raise SystemExit("app.db 的 settings 表是空的 —— 请先在应用里配置模型")
+    data = json.loads(row[0])
+    missing = [k for k in ("provider", "model", "api_key") if not data.get(k)]
+    if missing:
+        raise SystemExit(f"settings 里缺少字段: {missing}")
+    return data
+
+
+def redact(text: str, secret: str) -> str:
+    return SECRET_RE.sub("<redacted-key>", text.replace(secret, "<redacted-key>"))
+
+
+def scan_for_secrets(secret: str) -> None:
+    real: list[str] = []
+    lookalike = 0
+    for p in ROOT.rglob("*"):
+        if not p.is_file() or p.stat().st_size > 5_000_000:
+            continue
+        if any(part in SKIP_DIRS for part in p.parts):
+            continue
+        if p.suffix.lower() in {".parquet", ".sqlite", ".db", ".lance"}:
+            continue
+        try:
+            text = p.read_text(encoding="utf-8", errors="ignore")
+        except Exception:  # noqa: BLE001
+            continue
+        if secret and secret in text:
+            real.append(str(p.relative_to(ROOT)))
+        elif SECRET_RE.search(text):
+            lookalike += 1
+    print("\n=== 密钥残留扫描（不含 cache/output/.venv）===")
+    print("  真实密钥命中 :", real or "无")
+    print(f"  形似 sk- 的文件数: {lookalike}")
+
+
+def main() -> int:
+    llm = read_llm_settings()
+    print(f"模型配置：provider={llm['provider']} model={llm['model']} api_key=<len={len(llm['api_key'])}>")
+    print(f"experiment root: {ROOT}")
+
+    env = dict(os.environ)
+    env["DEEPSEEK_API_KEY"] = llm["api_key"]
+    env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    env["GRAPHRAG_SHIM_VERBOSE"] = "1"
+    print("已注入 shim：sitecustomize.py（剥掉 API 层的 response_format=pydantic）")
+
+    cmd = [sys.executable, "-m", "graphrag", "index", "--root", str(ROOT), *sys.argv[1:]]
+    print("命令:", " ".join(cmd))
+    print("-" * 70)
+
+    run_log = ROOT / f"run-{time.strftime('%m%d-%H%M%S')}.out.log"
+    print(f"子进程输出写到 {run_log.name}（实时可 tail，内容已脱敏）")
+
+    # 不要把子进程输出转发到本进程 stdout —— 会把管道写满导致死锁（2026-09-25 踩过）
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(ROOT),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+    assert proc.stdout is not None
+    with run_log.open("w", encoding="utf-8") as fh:
+        try:
+            for line in proc.stdout:
+                fh.write(redact(line.rstrip("\n"), llm["api_key"]) + "\n")
+                fh.flush()
+        finally:
+            proc.wait()
+
+    print("-" * 70)
+    print("退出码:", proc.returncode)
+    out_dir = ROOT / "output"
+    if out_dir.exists():
+        print("产出表:", sorted(p.name for p in out_dir.glob("*.parquet")) or "(无 parquet)")
+    print(f"子进程日志: {run_log.name}")
+    scan_for_secrets(llm["api_key"])
+    return proc.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
