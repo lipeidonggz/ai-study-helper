@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>0031 · GraphRAG 查询模式逐项核实（Global 已收口，Local/DRIFT 待核）</title>
+  <title>0031 · GraphRAG 查询模式逐项核实（四种模式已核：Global / Local / DRIFT / Basic）</title>
   <link rel="stylesheet" href="assets/style.css">
   <style>
     .muted { color: var(--muted); }
@@ -18,7 +18,7 @@
   <div class="container">
     <header class="page-head">
       <h1>0031 · GraphRAG 查询模式逐项核实</h1>
-      <p class="subtitle">状态：<span class="ok">✓ Global 基本模式</span>（2026-09-26 重构为"机制正文 ＋ 考古层"，不再整篇一个"进行中"）· <span class="ok">✓ Basic</span> · <span class="ok">✓ Question Generation</span> · <span class="ok">✓ Dynamic Selection</span> · <span class="no">✗ Local</span> · <span class="no">✗ DRIFT</span></p>
+      <p class="subtitle">状态（<b>四种检索模式全部已核</b>）：<span class="ok">✓ Global 基本模式</span>（2026-09-26 重构为"机制正文 ＋ 考古层"）· <span class="ok">✓ Local</span> · <span class="ok">✓ DRIFT</span> · <span class="ok">✓ Basic</span> · <span class="ok">✓ Question Generation</span> · <span class="ok">✓ Dynamic Selection</span>（<b>Local ／ DRIFT 于 2026-09-29 按代码补核</b>）</p>
       <p class="subtitle">做法：<b>沛东问、我核代码答、逐条落笔</b> · 现场来源：0029 精读 · 配套：<a href="0030-graphrag-incremental-and-scope.html">0030 增量与适用范围</a></p>
       <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
     </header>
@@ -40,18 +40,18 @@
           <tr>
             <td><b>Local Search</b><br>实体锚定</td>
             <td>实体 ＋ 关系 ＋ 社区报告 ＋ 文本块 ＋ 协变量（按比例装配）</td>
-            <td>从 query 命中<b>一组实体</b>（取"access points"，不要求精确命中）</td>
-            <td>与命中实体的邻域大小相关</td>
+            <td><b>当前 query ＋ 最近 5 条用户提问</b>拼成一段（不含回答），去<b>实体描述向量</b>（<code>title:description</code>）里检索 <code>top_k_entities</code>(10) <code>× oversample</code>(2) <b>＝ 20 条</b>（<b>不回截</b>，所以实际是 20 个实体）；<b>不要求名字命中</b></td>
+            <td>12k 上下文<b>三分</b>：文本块 0.5 ／ 社区报告 0.15 ／ 实体·关系·协变量 0.35；<b>只 1 次 LLM</b>（钱花在装配）</td>
             <td>点型：某个实体/概念的具体信息</td>
-            <td><span class="no">✗ 待核</span></td>
+            <td><span class="ok">✓ 已核</span></td>
           </tr>
           <tr>
             <td><b>DRIFT Search</b><br>global × local</td>
-            <td>先用社区信息扩大起点，再做局部深挖</td>
-            <td>三阶段流程（细节待核）</td>
-            <td>介于两者之间（官方措辞：平衡成本与质量）</td>
+            <td>社区报告 ＋ 由它派生的<b>后续问题</b>链（每一步仍落到 local 的混合上下文）</td>
+            <td>HyDE 扩 query → 报告相似度取 20 → 折 5 折并行出"中间答案＋后续问题" → 3 轮 × 每轮 20 个问题<b>各跑一次 local</b> → reduce</td>
+            <td><b>最贵</b>：1 ＋ 5 ＋ ≤60 ＋ 1 ≈ 上限 67 次 LLM 调用；local 预算被改成 0.9 ／ 0.1（更偏文本块）</td>
             <td>混合型：既有全局方向又要具体事实</td>
-            <td><span class="no">✗ 待核</span></td>
+            <td><span class="ok">✓ 已核</span></td>
           </tr>
           <tr>
             <td><b>Basic Search</b><br>纯向量</td>
@@ -442,11 +442,72 @@ community_level = None
         <li><b>默认模式 vs dynamic 的差别不在这一步</b>：<code>dynamic_community_selection=True</code> 时<b>整个 merge 被跳过</b>，报告集合原本还是"<code>level &lt;= N</code> 的报告"（只少了社区表对齐）；真正的差别在上下文装配阶段（动态模式按 query 逐社区打分剪枝，见下文）。⇒ <b>同一个参数名、两条路径两种含义</b>这个结论不变。</li>
       </ul>
       <div class="chain"><b>这条更正对我们自己的意义（比 GraphRAG 本身更重要）</b>：我们一直在追问"如何把用户 query 落到图的确定性入口"；而这里是一个<b>反面教材</b>——一个有效设计（"每个实体只留最深社区"）在重构中被静默降级成"全层都下发"，<b>没有断言、没有日志、没有测试抓到它</b>；连官方 notebook 打印出的 <code>10 → 10</code> 就是这个 bug 的现场证据，却没人当异常看。<b>对我们的直接要求</b>：编译／检索产物里那些充当"路由键"的东西（<code>claim_type</code>、概念归一、边的方向／极性），必须配<b>可跑的语义探针</b>，让"声明的语义"和"实现的语义"对不上时当场响。否则同类的静默漂移会以"结果看着还行、只是不太准"的形式长期潜伏。<span class="why">（这条与我们"基础件人工复核""根因修复闭环"两条纪律同源：<b>语义也是基础件</b>。）</span></div>
-      <h3 style="margin-top:18px;">Local Search <span class="no">（待核）</span></h3>
-      <p class="muted">已知（待补细节）：从 query 命中一组实体当 access points；上下文由实体/关系/社区报告/文本块/协变量按比例装配；排序用 <code>rank</code>（不用 degree），社区按 <code>(matches, rank)</code> 排；参数有 <code>top_k_entities</code> / <code>top_k_relationships</code> / <code>text_unit_prop</code> / <code>community_prop</code> / <code>max_context_tokens</code> / <code>conversation_history_max_turns</code>。</p>
+      <h3 style="margin-top:18px;">Local Search <span class="ok">（已核 · 2026-09-29）</span></h3>
+      <p><b>一句话</b>：先拿 query 在<b>实体描述向量</b>里找一组"入口实体"，再围绕这批实体把<b>社区报告 ＋ 实体/关系/协变量 ＋ 原始文本块</b>按<b>预算比例</b>装配成一个窗口，最后<b>一次 LLM 出答案</b>——钱几乎全花在"装配"上，不在生成上。</p>
+      <ol>
+        <li><b>入口</b>（📄 <code>query/context_builder/entity_extraction.py</code> · <code>map_query_to_entities</code>，以及 <code>local_search/mixed_context.py</code> 的 <code>build_context</code>）：
+          <br>① <b>先拼 query 文本</b>：有会话历史时 <code>query = f"{query}\n{pre_user_questions}"</code>，而 <code>pre_user_questions = "\n".join(conversation_history.get_user_turns(5))</code>（📄 <code>context_builder/conversation_history.py</code>：<code>self.turns[::-1]</code> 倒着遍历、<b>只收 <code>role == USER</code></b>、取满 <code>conversation_history_max_turns</code>(5) 条即 <code>break</code> ⇒ 拼接顺序是<b>最新在前</b>，且<b>不含任何 LLM 回答</b>）。<b>这个拼接串只喂给"实体向量检索"</b>——最终出答案那一步的 user 消息仍是<b>原始 query</b>（📄 <code>local_search/search.py</code> 的 <code>add_user_message(query)</code>）。<span class="why">⚠ 若调用方在提问前就把当前这一轮写进了 history，"当前 query"会在拼接串里出现两次，代码<b>不去重</b>——这是调用方约定（v3.2.0 的 CLI 不构造会话历史，会话历史是 Python API 层的能力）。</span>
+          <br>② <b>再检索实体</b>：在实体向量库里做相似检索，<code>k = top_k_entities</code>(<b>10</b>) <code>× oversample_scaler</code>(<b>2</b>) <code>= 20</code>，再按文档 id 回落成实体对象。代码里乘 2 的注释是 <code># oversample to account for excluded entities</code> ⇒ <b>目的是给"被 exclude 掉的"留余量，不是"故意扩大范围提高召回"</b>；而且<b>取回的 20 条不会截回 10 条</b>（函数结尾直接 <code>return included_entities + matched_entities</code>）⇒ exclude 为空时，<b>实际进入上下文装配的是 20 个实体</b>。空 query 才回落到按 <code>rank</code> 取前 10。
+          <br>③ <b>嵌的文本是 <code>title:description</code></b>（📄 <code>index/workflows/generate_text_embeddings.py</code> 的 <code>entity_description_embedding</code>：<code>table_name="entities"</code>、<code>embed_column="title_description"</code>，该列由 <code>data_model/row_transformers.py</code> 的 <code>transform_entity_row_for_embedding</code> 生成：<code>f"{title}:{description}"</code>）⇒ <b>这是"描述级语义命中"，不要求实体名出现在 query 里</b>。</li>
+        <li><b><code>include_entity_names</code> / <code>exclude_entity_names</code>：纯检索期的"入口过滤器"，且没接进任何配置</b>——它<b>不是索引期产物、不改图、不影响其它模式</b>，只在"这一问从哪些实体出发"这一步起作用（因此下游三类材料全跟着变：社区候选按命中实体的 <code>community_ids</code> 统计、关系/协变量与文本块按命中实体的 <code>text_unit_ids</code> 取）。可达性：两者只出现在 query 包（<code>entity_extraction.py</code>、<code>mixed_context.py</code>），<code>config/defaults.py</code>／<code>query/factory.py</code> 搜不到，<b>高层封装 <code>api.local_search()</code> 的签名里也没有</b> ⇒ 唯一实际路径是<b>自己拿到引擎后 <code>engine.search(query, exclude_entity_names=[...])</code></b>（<code>LocalSearch.search</code> 会把 <code>**kwargs</code> 透传给 <code>build_context</code>；注意 <code>stream_search</code> <b>不透传</b>）或直接调 <code>map_query_to_entities</code>。<b>⇒ 常规用法（CLI ／ <code>api</code>）永远碰不到它，默认恒为空列表。</b><br>执行顺序（📄 <code>map_query_to_entities</code>）：① 向量检索得到 <code>matched_entities</code>；② 按 <code>entity.title not in exclude_entity_names</code> <b>精确</b>过滤掉；③ 用 <code>get_entity_by_name</code>（📄 <code>query/input/retrieval/entities.py</code>：<code>[e for e in entities if e.title == entity_name]</code>，<b>严格 <code>==</code>、大小写敏感、无归一化</b>，且同名实体会<b>全部</b>带回）把 include 里的名字查出、<b>前置</b>到列表头；④ 返回 <code>included + matched</code>，<b>不去重</b> ⇒ 既在 include 里又恰好被检索到的实体会<b>出现两次</b>；<b>同名"既 include 又 exclude"时最终仍在</b>（先剔后加，include 不受 exclude 约束）。<span class="why">它像是一个"留了口子但没人用"的调试／消融开关：全包除定义与透传外<b>无调用点</b>，文档里也没提；同文件另一个也带该参数的 <code>find_nearest_neighbors_by_entity_rank</code> 更是<b>死代码</b>。另注意<b>别与索引侧的 exclude 混淆</b>：<code>build_noun_graph</code> 里有 <code>exclude_nouns</code>／<code>exclude_entity_tags</code>／<code>exclude_pos_tags</code>，那是可选"名词短语图"抽取方法里的停用词与词性过滤，跟检索无关。</span></li>
+        <li><b>预算三分</b>（📄 <code>local_search/mixed_context.py</code> · <code>build_context</code>）：<code>max_context_tokens</code> 先扣掉会话历史占用的部分，再切成 <code>community_prop</code> / <code>text_unit_prop</code> / <code>local_prop = 1 − 前两者</code> 三份。<b>运行时生效的是 config 那一层</b>（📄 <code>query/factory.py</code> 把 <code>local_search.*</code> 逐项塞进 <code>context_builder_params</code>）：<code>text_unit_prop=0.5</code>、<code>community_prop=<b>0.15</b></code>、<code>max_context_tokens=<b>12000</b></code> ⇒ <b>local_prop ＝ 0.35</b>。<span class="why">函数签名上的默认值是 0.25 / 8000，<b>不生效</b>——同一份代码里两层默认值不一致，读数要认准哪一层（又一条"判据要标来源"的实例）。</span></li>
+        <li><b>三类材料各怎么排</b>：
+          <ul>
+            <li><b>社区报告</b>（<code>_build_community_context</code>）：先统计"命中实体落在哪个社区"的次数，按 <code>(命中实体数, 社区 rank)</code> 降序排，再交 <code>context_builder/community_context.py</code> 的 <code>build_community_context(..., single_batch=True)</code> 按 token 上限装。<b>默认 <code>use_community_summary=False</code> ⇒ 塞的是报告全文 <code>full_content</code>，不是 summary</b>（该文件第 76 行的三元表达式 <code>report.summary if use_community_summary else report.full_content</code>）；<code>min_community_rank</code> 可当门槛。</li>
+            <li><b>实体 / 关系 / 协变量</b>（<code>_build_local_context</code>）：先把<b>全部</b>命中实体成表（<code>build_entity_context</code>，factory 里 <code>include_entity_rank=True</code> ⇒ 表里带 <code>rank</code> 列），然后<b>逐个实体往前加</b>它相关的关系（<code>top_k_relationships=10</code>，排序键 <code>relationship_ranking_attribute="rank"</code>，<b>不是 degree</b>，factory 里 <code>include_relationship_weight=True</code> 还会带上 weight 列）与协变量；<b>一旦累计 token 超限就 <code>break</code>，并回退到上一个可行状态</b>（不是把当前这条截半）。</li>
+            <li><b>文本块</b>（<code>_build_text_unit_context</code>）：从命中实体的 <code>text_unit_ids</code> 取块（同 id 去重），按 <b>「该实体在命中列表里的顺序, 该块内与命中实体相关的关系条数（降序）」</b> 排 ⇒ <b>排在越前的实体，它名下的块越优先</b>；关系条数由 <code>context_builder/source_context.py</code> 的 <code>count_relationships</code> 计算。</li>
+          </ul>
+        </li>
+        <li><b>出答案</b>（📄 <code>local_search/search.py</code>）：装配完成后<b>只有 1 次 LLM 调用</b>（装配好的上下文进 system、query 进 user，流式返回）。</li>
+        <li><b>一个可直接用的可观测性开关</b>：<code>return_candidate_context=True</code> 时，三个 <code>_build_*</code> 会各自把"候选全集"返回并给每条打 <code>in_context</code> 标记（📄 各自的 <code>get_candidate_*</code> 分支）⇒ <b>可以逐条量"装进去了多少、丢了多少"</b>。注意 <code>factory.py</code> 默认传的是 <code>False</code>。</li>
+      </ol>
+      <p class="muted">对 0031 原待问 ① 的回答收口：<b>入口＝实体描述向量的 top-10 × oversample 2 ＝ 20 条（不回截，实际就是 20 个实体）</b>，没有名字匹配门槛、也没有相似度阈值；比例参数的生效值见第 2 条；<code>rank</code> 是索引期算出的排序属性，关系侧默认用它排、不用 degree；社区侧先按"命中实体数"再按 rank。</p>
+      <div class="chain">
+        <b>业界对照 · 多轮会话怎么喂检索（2026-09-29 补）</b>：graphrag 的做法是"<b>把最近 5 轮用户提问拼进当前 query，一起去做向量检索</b>"；工程化的通行做法是"<b>先把历史压成一句干净的查询，再在结果层做融合与重排</b>"。四点差别：① <b>改写（condensation）</b>——<code>(历史, 当前问题) → 一个自足的独立问题</code>，只把改写结果喂检索（LangChain <code>create_history_aware_retriever</code>、LlamaIndex <code>CondenseQuestionChatEngine</code> 即此模式；不拼串，是因为稠密检索器的训练分布就是单句查询）；② <b>按需改写</b>——先判这轮是否自足，自足就用原 query，省一次调用（真实流量里多数轮次自足）；③ <b>多路召回 ＋ RRF 融合，而不是输入层拼接</b>——当前 query ／ 改写 query ／ 关键实体各检索一次再合并，HyDE 同属这类"扩写后检索"；④ <b>重排用改写后的 query</b>，历史最多作软条件；此外历史要<b>按相关性选取或滚动摘要</b>（不固定取 k 轮）并<b>单列一条 token 预算</b>。<br>
+        <b>对我们的直接要求</b>：<b>检索输入与回答输入分开管</b>，并且<b>每次检索都记下"这次实际用的是哪个串"</b>——否则多轮下的错召回无法归因（同"判据要标来源"）。
+      </div>
+      <div class="chain">
+        <b>论文来路 · 这个"三源混合"从哪来（2026-09-29 补）</b>：① <b>它没有论文</b>——GraphRAG 那篇（2404.16130）全文 <b>"local search" 0 次、"drift" 0 次</b>，论文声明的贡献只有 global sensemaking（社区层级 ＋ map-reduce）⇒ local 是<b>实现与文档</b>里的东西，引用时不能说"出自论文"；② 但思路有来路，而且<b>论文自己点了最近的那条</b>：§2.1 原文 "similar to other approaches that use <b>hierarchical indexing to create summaries</b> (similar to Kim et al., 2023; <b>Sarthi et al., 2024</b>)"，而后者＝<b>RAPTOR</b>（Recursive Abstractive Processing for Tree-Organized Retrieval，arXiv:2401.18059，本地论文参考文献已核）——递归聚类＋摘要建树、检索落在不同层级，<b>比 GraphRAG 更早</b>；③ 三源分工的学术对应物分散在三支：<b>层次化摘要树</b>（RAPTOR）／<b>图作索引并落回原文</b>（HippoRAG 2405.14831、HippoRAG 2 2502.14802、KAG 2409.13731、LinearRAG 2510.10114、EcphoryRAG 2510.08958，编号见 0028 已核清单）／<b>双层检索</b>（LightRAG，<span class="why">编号待核</span>）。⇒ <b>没有一篇专讲"三源同窗混合 ＋ 固定 token 配比"，这也解释了那套比例为什么是拍出来的</b>。<br>
+        <b>参数设计评价 · 这个"预算三分"（2026-09-29 补）</b>：<b>方向是对的，先记三条肯定</b>——① <b>三源分工本身比纯 top-k 向量强</b>：向量只给"最相似的细节"，而这里同时给了<b>全局视角</b>（社区报告）、<b>中观结构</b>（实体/关系表）、<b>细节证据</b>（chunk），三层视角在同一窗口里互补；② <b>把"谁占多少"写成显式比例</b>本身是优点：多数 RAG 系统的占比是"捞回来塞进去"涌现出来的，不可调也不可说，这里是可调、可读、在 config 层的；③ <b>原文块拿最大头（0.5）</b>与"chunk 是事实源、图只是路由"的口径一致，方向没错。<b>糙在实现</b>——事实是：会话历史块先扣，余下的 12k 按<b>固定配额</b>切成<b>社区报告 1800 ／ 实体·关系·协变量 4200 ／ 原文块 6000</b>，三份各自独立设限。四个问题：<br>
+        ① <b>把"目标相关"的量钉死在参数里</b>：纯事实题其实想要 ~100% 原文块，全局题想要更多报告，一个固定比例对所有问题同等不合适（<b>与 findings 5–10 同一种病</b>）；<br>
+        ② <b>三份互不让额度</b>：三个独立的 <code>int(max_context_tokens × prop)</code>，没有回收／重分配 ⇒ 装不满的社区位不会转给原文块，而答案在报告里的问题也只有那 1800（<b>双向浪费</b>，与 findings"两端都被扭"同形）；<br>
+        ③ <b>裁剪粒度 ≠ 配额粒度，而且丢的东西默认不记录</b>：local 那 4200 是"按实体逐个加、超了整体回退"，丢的是实体连带的关系／协变量，而 <code>return_candidate_context</code> 默认 <code>False</code> ⇒ <b>踩"遗漏透明"红线</b>；<br>
+        ④ <b>"token 当统一货币"隐含三类内容同质</b>：0.15 × 12000 ＝ 1800 只够 1–2 份报告（我们量到的报告长度 0.7k–2.9k）⇒ 社区位在真实语料上常退化成"一份报告全文"；且历史块一扣，三份<b>等比缩水</b>，最该保的原文块被一起砍。另外这套数与部署约束脱钩（注释自己承认要按模型手改 <code>max_context_tokens</code>），三个数字也没有任何标定方法。<br>
+        <b>若要改</b>：按问题形状路由、给主导来源大额度 → 换成"按优先级顺序装、装满即停、余量顺延" → 设证据保底（至少 n 条原文块）→ 打开可观测（候选 ／ 进窗口 ／ 丢弃计数）→ 参数由部署约束导出。<br>
+        <b>可复用判据</b>：<b>凡是"该由目标决定的量"，一旦出现在参数里，就一定会在别的目标上失效</b>——findings 5–10、社区数、层号、这个三分比例，全是同一族。
+      </div>
 
-      <h3 style="margin-top:18px;">DRIFT Search <span class="no">（待核）</span></h3>
-      <p class="muted">已知：官方定位＝"builds upon GraphRAG ... <b>combining characteristics of both global and local search</b>"，三阶段核心流程；文档在 <code>docs/query/drift_search.md</code>，有独立 notebook。</p>
+      <h3 style="margin-top:18px;">DRIFT Search <span class="ok">（已核 · 2026-09-29）</span></h3>
+      <p><b>一句话</b>：先"播种"出一批社区级的<b>中间答案 ＋ 后续问题</b>，再拿这些后续问题<b>反复调 local search</b>，最后 reduce 成一份综合回答。它不是新检索器，<b>是"多次 local search ＋ 一个调度循环"的外壳</b>——local 侧那段 <code>if "drift_query" in kwargs:</code>（📄 <code>local_search/search.py</code>）就是 DRIFT 借道的入口。</p>
+      <ol>
+        <li><b>阶段一 · 播种</b>（📄 <code>drift_search/drift_context.py</code> · <code>build_context</code>，以及 <code>primer.py</code>）：
+          <br>① <b>HyDE 式扩展 query</b>（<code>PrimerQueryProcessor.expand_query</code>）：提示词是 "Create a hypothetical answer to the following query"，<b>模板随机抽一份社区报告的全文</b>（<code>secrets.choice(self.reports).full_content</code>），扩展出的文本再算嵌入 ⇒ <b>1 次 LLM 调用</b>。<br><span class="why">这份全文<b>只当"结构模板"用</b>——提示词原话是 "Format it to follow the structure of the template below"，它<b>不参与回答、也不进上下文</b>；后面还跟了一句护栏 "Ensure that the hypothetical answer does not reference new named entities that are not present in the original query"。⇒ 抽出来的作用是<b>给 LLM 一个自家产物的样例（报告长什么样）</b>，不是给它证据；护栏是<b>补丁式</b>的（用一句约束挡住模板内容泄漏），而非机制式的（比如给格式骨架而不给全文）。<br><b>两个连带判断</b>：① 那句护栏只挡"<b>新的命名实体</b>"，<b>挡不住词汇／风格／话题的漂移</b>（与 prompt-tune"随机抽到体育样本 ⇒ 域就变成体育"同构）；② 它还把 <b>HyDE 削平了</b>——标准 HyDE 靠假想文档带出 query 里没有的词汇来弥合"短问句 ↔ 长文档"的风格鸿沟，而"不得引入 query 之外的实体"意味着假想答案基本只是"用 query 自带的词、按报告格式重写一遍"，更接近<b>"把 query 改写成报告体"</b>。<b>顺带一条模式</b>：它的"样例"总来自<b>自家产物</b>——prompt-tune 的 few-shot 是"让模型先在你语料上抽一遍"，这里是"抽一份你自己的社区报告"⇒ <b>样例决定输出、输出又能当样例</b>。</span>
+          <br>② 用这个（扩展后的）query 向量与<b>全部社区报告的 <code>full_content_embedding</code></b> 算余弦相似度（手写 numpy：<code>dot / (‖doc‖·‖q‖)</code>），<code>nlargest(drift_k_followups, "similarity")</code> 取前 <b>20</b> 份报告；
+          <br>③ 这 20 份<b>折成 <code>primer_folds</code>(<b>5</b>) 折并行</b>，每折一次 LLM（<code>DRIFT_PRIMER_PROMPT</code>）⇒ 每折产出 <code>{intermediate_answer, score 0–100, follow_up_queries}</code>。<span class="why">口径注意："正好 2000 字符"与"至少 5 条"是 <code>PrimerResponse</code> 字段描述里的<b>提示词措辞</b>，不是代码强制（代码只校验"有 intermediate_answer、有 follow_up_queries"，缺了会抛 <code>RuntimeError</code>）。</span>
+          <br>④ 五折汇总成一个初始 action：intermediate_answer 拼接、score 取平均、follow-ups 全部入队；且这个 action 被写成"<b>已有答案</b>"的完成态（📄 <code>action.py</code> · <code>from_primer_response</code> 把它塞进 <code>answer</code>）。
+          <br>⇒ <b>播种阶段 ＝ 1 ＋ 5 ＝ 6 次 LLM 调用</b>。</li>
+        <li><b>阶段二 · 迭代深挖</b>（📄 <code>drift_search/search.py</code> 主循环）：<code>while epochs &lt; n_depth</code>(<b>3</b>)：每轮取"未完成的 action"里前 <code>drift_k_followups</code>(<b>20</b>) 个，<b>每个都当一次 query 去调 local search</b>（📄 <code>action.py</code> · <code>search()</code>：<code>query=self.query, drift_query=全局原始问题</code>）；返回的是 JSON，被解析成 <code>{response, score, follow_up_queries}</code>，新问题继续入队。⇒ 上限 <b>3 × 20 ＝ 60 次 local search</b>。
+          <br>⚠ 这里 local 的预算<b>被换过一套</b>（📄 <code>config/defaults.py</code> · <code>DriftSearchDefaults</code>）：<code>local_search_text_unit_prop</code>(<b>0.9</b>)、<code>local_search_community_prop</code>(<b>0.1</b>)、<code>local_search_top_k_mapped_entities</code>(10)、<code>local_search_top_k_relationships</code>(10)、<code>local_search_max_data_tokens</code>(12000) ⇒ <b>比 standalone local 更偏原始文本块</b>（0.9 ⇄ 0.5）。</li>
+        <li><b>阶段三 · reduce</b>：默认 <code>reduce=True</code>，把所有 action 的 (query, answer) 汇总成一份综合回答（<code>reduce_temperature=0</code>）⇒ <b>＋1 次 LLM</b>；这一步是"再一次总结"，报告丢失/走形的风险也落在这里；<b>而且它没有输出上限</b>（<code>reduce_max_completion_tokens=None</code>／<code>reduce_max_tokens=None</code>）。</li>
+      </ol>
+      <p><b>成本量级（按调用数）</b>：HyDE 1 ＋ 播种 5 ＋ 主循环 ≤60 ＋ reduce 1 ⇒ <b>上限约 67 次 LLM 调用/查询</b>，是<b>四种模式里最贵的一个</b>（Basic 1 次、Local 1 次、Global 1 次 × 批数）。<span class="why">顺带更正速查表里"介于两者之间"那句——那是官方文档的措辞（"balance cost and quality"），按调用数其实不成立，已同步改正。</span></p>
+      <div class="chain">
+        <b>两个必须记下的"不确定性源"（都来自代码，不是推测）</b>：<br>
+        ① <b>HyDE 的模板是随机抽的</b>（<code>primer.py</code> 的 <code>secrets.choice(self.reports).full_content</code>）⇒ 同一 query 跑两次，扩展文本可能不同，<b>进而改变"哪 20 份社区报告被选进播种"</b>；<br>
+        ② <b>主循环里那个"排序"其实是洗牌</b>：<code>rank_incomplete_actions()</code> 不带 scorer 时会走 <code>random.shuffle</code>（📄 <code>drift_search/state.py</code>：<code>if scorer: …sorted…</code> / <code># shuffle the list if no scorer</code>），而主循环正是不带 scorer 调用的 ⇒ <b>每轮"做哪 20 个 follow-up"是随机挑的</b>，那个 <code>score</code> <b>在默认路径下</b>只被记录下来、不参与选择（该函数本身支持传 scorer，一旦有调用方传入就变成按分排序——所以准确说法是"默认路径下不参与"）。<br>
+        ⇒ 结论：<b>DRIFT 自带两个不可复现环节</b>（模板抽样 ＋ 轮内洗牌），再叠上底层模型没有 seed 配置，"同一问题两次结果不同"是它的<b>设计内行为</b>，不是偶发噪声。
+      </div>
+      <div class="chain">
+        <b>补记两处"控制面"缺陷（2026-09-29 核）</b>：<br>
+        ① <b>两个死参数</b>：<code>drift_search.data_max_tokens</code> 与 <code>drift_search.concurrency</code> 只出现在 <code>config/defaults.py</code>（默认值）和 <code>config/models/drift_search_config.py</code>（Pydantic 字段）里，<b>查询侧没有任何读取点</b>——对照 <code>global_search.data_max_tokens</code> 在 <code>query/factory.py</code> 里是被消费的（<code>max_data_tokens=gs_config.data_max_tokens</code>）⇒ <b>在 settings.yaml 里设 drift 这两个键不会生效</b>。与 <code>exclude_entity_names</code>、<code>find_nearest_neighbors_by_entity_rank</code> 同族：<b>声明了、没人用</b>。<br>
+        ② <b>提示词可配置性是不对称的</b>：<code>drift_search_system_prompt</code>（DRIFT 借 local 时用的提示词）与 <code>drift_reduce_prompt</code> 会被写进生成的 settings.yaml、<b>可以改</b>；而 <b><code>DRIFT_PRIMER_PROMPT</code> 是硬编码</b>（<code>primer.py</code> 里直接 <code>DRIFT_PRIMER_PROMPT.format(...)</code>）⇒ <b>能改的两个阶段（深挖 ／ reduce）不是决定走向的那个；真正决定"中间答案与后续问题长什么样"的播种阶段反而改不了</b>，而它还用随机模板抽报告。这跟我们 0035 里"域框定被钉死在索引期"是同一类病，只是搬到了查询期。
+      </div>
+
+      <div class="chain">
+        <b>流程设计评价 · DRIFT 这个"分层跳转 ＋ 迭代问题链 ＋ 汇总"（2026-09-29 补）</b>：<b>骨架是对的</b>——它把 global 的<b>覆盖面</b>（社区报告给全局起点）和 local 的<b>细节</b>（实体/关系/原文）接在一起，再叠一层"用答案生成新问题"的迭代，形成"<b>全局起点 → 局部证据 → 汇总回答</b>"的完整链；官方文档自己的定位也是 "a more comprehensive option for local search"（用社区洞见把 query 细化成一串后续问题）。<span class="why">两处精确化：① "分层"其实是<b>一次跨层跳转</b>——报告池来自用户填的 <code>community_level</code>（≤N，和 global/local 同一个 helper），primer 在里面按相似度取 20 份，<b>这 20 份跨层、不保证深浅</b>，所以是"社区报告层 → 实体/关系/原文层"的跳转，不是逐层下钻；② "迭代"迭代的是<b>问题链，不是证据集合</b>——每轮是 n 次平行 local search，上一轮的材料不传给下一轮，跨轮只传问题文本，证据在 reduce 时才汇总。</span><br>
+        <b>糙在流程控制</b>：① <b>无中途判停</b>——主循环就是 <code>while epochs &lt; n_depth</code>，唯一的自然终止是"没有未完成 action"；而<b>判停信号其实已经现成</b>（每个 action 的 <code>score</code>、primer 的五折平均分）却都没被用来决定"够了没有"，也缺 LLM-Wiki 那种 T_max / patience；② <b>"至少 5 条"写死</b>——提示词规格、每题每折 ≥5 ⇒ 五折 <b>≥25 条初始问题</b>，而每轮只取 20 ⇒ <b>第一轮就溢出</b>；且只有下限没有上限，每条 follow-up 的回答还能再产"最多 20 条"新问题 ⇒ 候选池按 20×20 膨胀，<b>绝大多数问题永远不被执行，也没有"未执行／被丢弃"的记录</b>；③ <b>去重靠巧合</b>——<code>DriftAction.__hash__ = hash(query)</code>、<code>__eq__</code> 按 query 字符串比 ⇒ 措辞完全相同的问题隐式合并，"差一个字"就各跑一次；④ <b>一个旋钮两个含义</b>——<code>drift_k_followups</code> 同时决定"primer 取多少份报告"与"每轮做多少个问题"，这两个数在语义上无关；⑤ <b>未执行清单缺失</b>（与 Local 的"丢弃不记录"同形）。<br>
+        <b>若要改</b>：① 用现成的 <code>score</code> ＋ 一条"充分性"判据做显式判停；② 条数改成"按需 ＋ 上限"并做显式去重／归一化；③ 把两个 20 拆成两个参数；④ 未执行的 follow-up 落一份"未覆盖清单"；⑤ reduce 加输出上限。
+      </div>
 
       <h3 style="margin-top:18px;">Basic Search <span class="ok">（已核）</span></h3>
       <p class="muted">见 0029 记录 ⑱：通用 RAG（对原始 chunk 做稠密向量检索，<code>k</code> 默认 10、<code>max_context_tokens</code> 默认 12000），无重排、无图参与；提示词要求 <code>[Data: Sources (...)]</code> 引用，所以它的答案可回锚到具体 chunk。</p>
@@ -460,9 +521,9 @@ community_level = None
       <table>
         <thead><tr><th>#</th><th>待核问题</th><th>状态</th></tr></thead>
         <tbody>
-          <tr><td>1</td><td><b>local search 怎么从 query 命中实体？</b>（描述向量？top-k？阈值？）上下文里各来源的比例参数怎么起作用？<code>rank</code> 到底怎么算？</td><td><span class="no">待问</span></td></tr>
-          <tr><td>2</td><td><b>DRIFT 的三阶段具体是什么？</b>与 local/global 的配比如何调？成本落在哪？</td><td><span class="no">待问</span></td></tr>
-          <tr><td>3</td><td>notebook 提到的 "<b>community weights for context ranking</b>"：entities 怎么算出社区权重、怎么参与排序？（提到但没说清）</td><td><span class="no">待问</span></td></tr>
+          <tr><td>1</td><td><b>local search 怎么从 query 命中实体？</b>（描述向量？top-k？阈值？）上下文里各来源的比例参数怎么起作用？<code>rank</code> 到底怎么算？<b>（2026-09-29 已核，见上文 Local Search 节：<u>实体描述向量 <code>title:description</code> 取 top-10、oversample ×2、<b>无阈值、无名字匹配</b></u>；比例＝config 层 <code>0.5 ／ 0.15 ／ 0.35</code>、<code>max_context_tokens=12000</code>（函数签名里的 0.25 ／ 8000 不生效）；<code>rank</code> 是索引期算出的排序属性——关系侧默认按它排、社区侧按 <code>(命中实体数, rank)</code> 排）</b></td><td><span class="ok">已核</span></td></tr>
+          <tr><td>2</td><td><b>DRIFT 的三阶段具体是什么？</b>与 local/global 的配比如何调？成本落在哪？<b>（2026-09-29 已核，见上文 DRIFT 节：播种（HyDE 1 次 ＋ 5 折并行）→ 主循环（<code>n_depth=3</code> × <code>drift_k_followups=20</code> 次 local）→ reduce；配比全在 <code>DriftSearchDefaults</code>，其中 <code>local_search_text_unit_prop=0.9</code>／<code>community_prop=0.1</code> 与 standalone local 不同；成本上限 ≈ 67 次 LLM 调用，<b>是四种模式里最贵的</b>）</b></td><td><span class="ok">已核</span></td></tr>
+          <tr><td>3</td><td>notebook 提到的 "<b>community weights for context ranking</b>"：entities 怎么算出社区权重、怎么参与排序？（提到但没说清）<b>（2026-09-29 已核：权重＝"该社区内实体关联的<b>去重 text unit 数</b>"，默认归一化到最大值，写进报告的 <code>occurrence</code> 属性，再与 <code>rank</code> 一起排序——📄 <code>context_builder/community_context.py</code> 的 <code>_compute_community_weights</code> / <code>_rank_report_context</code>。但<b>只有 global search 传了 <code>entities</code></b>（📄 <code>global_search/community_context.py</code> 第 108 行），<b>local search 没传 ⇒ 这条路在 local 里不生效</b>，local 用的是它自己的 <code>(命中实体数, rank)</code> 两步排序）</b></td><td><span class="ok">已核</span></td></tr>
           <tr><td>4</td><td><b>token 预算怎么分</b>：<code>max_data_tokens</code> / <code>map_max_length</code> / <code>reduce_max_length</code> 三者的关系与相互作用。</td><td><span class="no">待问</span></td></tr>
           <tr><td>5</td><td><b>层选择有没有实践建议</b>：论文 §4 的结论到底说了什么（哪层在什么场景最好）？<b>（已核：C0 明显差，C1–C3 在各数据集/指标上互有胜负，<u>没有通用答案</u>；见"层的高低意味着什么"与"宏观问题＋细层"两节）</b></td><td><span class="ok">已核</span></td></tr>
           <tr><td>6</td><td>是否所有层都参与？<b>（2026-09-24 更正：不是"只读指定层"——<code>read_indexer_reports</code> 按 <code>level &lt;= N</code> 过滤，"取最深"的 roll-up 已失效，见第 0 步）</b></td><td><span class="ok">已核</span></td></tr>
@@ -473,7 +534,7 @@ community_level = None
     </section>
 
     <footer class="page-foot">
-      记录创建：2026-09-22 · <b>2026-09-24 更新</b>：① 重写第 0 步；② 更正"≤N ＋ 取最深"（roll-up 自 v2.0.0 起为空操作，附版本线、PR 取证、官方 notebook 补证、1 行候选修复）；③ 补"roll-up 本来在干什么"＋等价刻画（<code>level == N</code> ∪ 浅层叶子）；④ 更正我两处说过头的判断（"代言 ≠ 只出现一次"、"同名不同义"）；⑤ 新增"用层号表达粒度"这条设计批评与三条替代路径 · <b>2026-09-25 更新</b>：本 bug 已提交上游 <a href="https://github.com/microsoft/graphrag/issues/2573">#2573</a>，提交口径、<code>triage</code> 含义、自动关闭规则、issue 正文等细节集中在<b>考古层</b>（草稿留档 <code>data/tmp/_issue_rollup_draft.md</code>） · <b>2026-09-26 重构（沛东确认三条）</b>：Global 部分改为 <b>「机制正文（一屏流程 ＋ 第 0–4 步 ＋ 参数）→ 边界 → 考古层」</b>；roll-up 那条链（约 2.8 万字符）整体搬进考古层、结论并回第 0 步；合并原先散在两处的"选层设计"结论；清掉两个只有一个空标题的段落 · <b>其余模式（Local / DRIFT）仍待核</b>，保持原样
+      记录创建：2026-09-22 · <b>2026-09-24 更新</b>：① 重写第 0 步；② 更正"≤N ＋ 取最深"（roll-up 自 v2.0.0 起为空操作，附版本线、PR 取证、官方 notebook 补证、1 行候选修复）；③ 补"roll-up 本来在干什么"＋等价刻画（<code>level == N</code> ∪ 浅层叶子）；④ 更正我两处说过头的判断（"代言 ≠ 只出现一次"、"同名不同义"）；⑤ 新增"用层号表达粒度"这条设计批评与三条替代路径 · <b>2026-09-25 更新</b>：本 bug 已提交上游 <a href="https://github.com/microsoft/graphrag/issues/2573">#2573</a>，提交口径、<code>triage</code> 含义、自动关闭规则、issue 正文等细节集中在<b>考古层</b>（草稿留档 <code>data/tmp/_issue_rollup_draft.md</code>） · <b>2026-09-26 重构（沛东确认三条）</b>：Global 部分改为 <b>「机制正文（一屏流程 ＋ 第 0–4 步 ＋ 参数）→ 边界 → 考古层」</b>；roll-up 那条链（约 2.8 万字符）整体搬进考古层、结论并回第 0 步；合并原先散在两处的"选层设计结论"；清掉两个只有一个空标题的段落 · <b>2026-09-29 补核完成：Local ／ DRIFT 两个"待核"小节升为"已核"</b>（只读代码、不依赖记忆；出处逐条标在文内：<code>query/context_builder/entity_extraction.py</code>、<code>local_search/mixed_context.py</code>、<code>context_builder/{local_context,community_context,source_context}.py</code>、<code>query/factory.py</code>、<code>index/workflows/generate_text_embeddings.py</code>、<code>data_model/row_transformers.py</code>、<code>drift_search/{drift_context,primer,search,state,action}.py</code>、<code>config/defaults.py</code>），并顺带更正/补记四条：① 速查表里 DRIFT"介于两者之间"是按官方措辞写的，<b>按调用数它是最贵的一个</b>；② 运行时生效的是 <b>config 层默认值</b>，函数签名里的默认值（local 的 0.25 ／ 8000）不生效；③ 待问 ③ 的"community weights"找到确切出处与适用范围（<b>global 用、local 不用</b>）；④ DRIFT 的两个<b>不可复现环节</b>（HyDE 模板随机抽 ＋ 轮内洗牌）为代码事实。⇒ <b>四种检索模式至此全部已核</b>；剩余待问 #4（token 预算三者关系）仍在清单里
     </footer>
   </div>
 </body>

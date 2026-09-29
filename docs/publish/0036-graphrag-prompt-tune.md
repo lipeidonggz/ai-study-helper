@@ -6,7 +6,7 @@
 >
 > **适合谁读**：正在用、或准备用 `prompt-tune` 调 GraphRAG 提示词的同学。
 >
-> **阅读成本**：约 15 分钟。1 节是实验与结果；2 节是四种选块模式 ＋ 完整流程（含"那张实体类型表是怎么来的"）；3–4 节是两个缺陷（含可直接复现的脚本）；5 节解释它们为什么能长期存在；**6 节是"先用还是先修"，含两个 bug 各自的修法**。
+> **结构速览**：1 节是实验与结果；2 节是四种选块模式 ＋ 完整流程（含"那张实体类型表是怎么来的"）；3–4 节是两个缺陷（含可直接复现的脚本）；5 节解释它们为什么能长期存在；**6 节是"先用还是先修"，含两个 bug 各自的修法**。
 >
 > **证据标记**：**✅ 实测**（本地脚本／真实调用）· **📄 源码**（`graphrag 3.2.0`）· **📎 官方文档** · **🤔 推断**。
 
@@ -29,7 +29,7 @@
 - **缺陷一（第 3 节）是"承诺的能力根本没实现"**：`auto` 模式号称"用嵌入挑最有代表性的样本"，实际等价于"**从语料前 n-subset-max 块里近乎随机地取 k 块**"。这是实打实该修的。
 - **缺陷二（第 4 节）是"产物有瑕疵、但影响很小"**：生成的 few-shot 示例与它自己的输入对不上。我专门做了对照实验，**它并不会污染抽取结果**（见 4.4）。
 
-本文的实验规模：一份 51 篇英文新闻语料（取自公开数据集 MultiHop-RAG 的一个子集，122,387 token，切成 **141 块**），命令固定为：
+本文的实验规模：一份 51 篇英文新闻语料（取自公开数据集 MultiHop-RAG，按"索引实际读入的文本"计 **124,330 token**，切成 **141 块**——**就是论文 News 数据集用的那份语料**，我们抽了约 9%），命令固定为：
 
 ```bash
 graphrag prompt-tune --root . --selection-method auto --n-subset-max 32 --k 4
@@ -588,14 +588,14 @@ tasks = [
 
 ### 下一篇：Dynamic Community Selection
 
-这篇的主角是"调优工具"，下一篇回到检索：GraphRAG 有一条**官方文档几乎没写**的可选路径——它想解决"用户不知道该选哪一层"这个问题。我把它的打分器、剪枝算法、三组实测和一年半的功能史都核了一遍，包括一个"失败反而更贵"的设计。下一篇逐行核这些。
+这篇的主角是"调优工具"，下一篇回到检索：GraphRAG 有一条**官方文档几乎没写**的可选路径——它想解决"用户不知道该选哪一层"这个问题。我把它的打分器、剪枝算法、三组实测和一年半的功能史都核了一遍，包括一个"失败反而更贵"的设计。下一篇《[GraphRAG 有条"按问题挑材料"的隐藏路径：文档 0 提及，实测也未必更省](https://github.com/lipeidonggz/ai-study-helper/blob/master/docs/publish/0037-graphrag-dynamic-selection.md)》逐行核这些。
 
 ---
 
 ## 附：核对方式
 
 - 版本：`graphrag 3.2.0`（Python 3.11），DeepSeek `deepseek-chat` 作补全模型、本地 `multilingual-e5-large` 作嵌入
-- 语料：MultiHop-RAG 子集 51 篇英文新闻（122,387 token / 141 块），分层抽样，`subset_manifest.json` 记录每篇的标题、URL、分类与 token
+- 语料：论文 News 数据集的同源子集——51 篇英文新闻（**124,330 token**（按索引实际读入的文本计，含文件标题；正文合计 122,387）/ 141 块，取全量 1,381,153 token 的约 9%），固定种子 42 分层抽样；`subset_manifest.json` 记录每篇的标题、URL、分类与 token
 - 主要代码位置（📄，链接钉在 tag `v3.2.0` 上）：[`prompt_tune/loader/input.py`](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/prompt_tune/loader/input.py)（选块与 `_sample_chunks_from_embeddings`）、[`prompt_tune/generator/entity_relationship.py`](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/prompt_tune/generator/entity_relationship.py)（示例生成）、[`graphrag_llm/utils/completion_messages_builder.py:245`](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag-llm/graphrag_llm/utils/completion_messages_builder.py#L245)（`build()` 返回引用）、[`prompt_tune/generator/extract_graph_prompt.py`](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/prompt_tune/generator/extract_graph_prompt.py)（示例配对）、[`cli/main.py:278-335`](https://github.com/microsoft/graphrag/blob/v3.2.0/packages/graphrag/graphrag/cli/main.py#L278-L335)（默认值）
 - 本文用到的脚本（都在仓库的 [`experiments/graphrag-exp-multihop/`](https://github.com/lipeidonggz/ai-study-helper/tree/master/experiments/graphrag-exp-multihop) 下，点文件名即可看源码）：
 

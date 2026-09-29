@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0035 · GraphRAG 的假设与适用范围（高层总结）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0035 · GraphRAG 的假设与适用范围</h1>
+      <p class="subtitle">状态：<span class="half">△ 进行中</span>——沛东<b>四条</b>已成文（第 4 条＝"约束该落在<b>抽象层级</b>的定义上"，<b>随文否掉了我给的四条候选</b>，见 §3）；<b>两数据集实验已按他 2026-09-29 的判断暂缓</b>（"不用再验证了，思路其实很清楚了"） · 现场时间：<b>2026-09-29</b> 起 · 做法：把 0033 / 0034 / 0038 / 0039 的实测收拢成高层判断 · <b>本轮的完整理论来路见 <a href="#ko">第三部分 · 专题总结</a></b></p>
+      <p class="subtitle">起因（原话）："我对于 GraphRAG 已经有比较多的理解了，可以开始思考和汇总来产生一些更高层次的总结了"——要回答：<b>它基于什么假设做了什么？适用范围到底是什么？</b></p>
+      <p class="subtitle">配套：<a href="0034-graphrag-dynamic-selection.html">0034 Dynamic 逐行核</a> · <a href="0033-graphrag-indexing-method.html">0033 索引篇</a> · <a href="0031-graphrag-search-modes.html">0031 检索模式</a> · 对外稿 <code>docs/publish/0039-graphrag-compression-is-goal-dependent.md</code></p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+      <p class="muted">这一部分给未来的自己复习用：先讲当时在想什么、最后落到什么结论。要复原现场（prompt-tune 的 7 条提示词、域飘的两次实测、全集 token 口径）跳到 <a href="#scene">第二部分 · 现场细节</a>。</p>
+
+      <h3 style="margin-top:16px;">1. 骨架：它做了什么、凭什么成立</h3>
+      <p><b>GraphRAG 做的事</b>：把"<b>压缩</b>"这件本质上"<b>目标相关</b>"的事，<b>提前到索引期</b>，用一次"<b>领域框定</b>"把它做掉——框定的载体是五件套：<b>域 → persona → 实体类型表 → 评分口径 → 报告角色</b>（再叠加 findings 5–10 条与报告长度上限这两个硬参数）。之后查询期只做选材与 map-reduce。</p>
+      <div class="chain">
+        <b>由此推出的假设（本笔记的核心主张）</b>：<br>
+        ① <b>目标在索引期就已知，且之后不再变</b>——因为压缩的尺度（收哪些实体、报告写多细、评多少分算重要）全部在那时定死；<br>
+        ② <b>提问者的方向只有一个</b>——一套提示词只能承载一个"方向"（泛新闻分析？体育新闻分析？技术产业分析？）；<br>
+        ③ <b>语料要"够大且够松"</b>——每根社区能分到的材料必须显著大于报告长度地板，否则报告比原文还长。
+      </div>
+
+      <h3>2. 沛东的三条"感觉"（本轮结论的主干）</h3>
+
+      <h4 style="margin:14px 0 4px;">感觉 ①：压缩比是"领域内某个方向的专家"的函数——而且<b>一套索引只能服务一个方向</b></h4>
+      <p>0039 已经说明"压缩比是目标的函数"；沛东把它推得更准：<b>更确切地说是"领域内某个方向的专家"的函数</b>。方向本身可泛（泛新闻分析专家）也可具体（体育新闻分析专家），<b>但现在的整套提示词设计，无法用一套索引结果同时支持两类或多类专家</b>。</p>
+      <p><b>我们已有的证据</b>：</p>
+      <ul>
+        <li><b>换域即换图</b>（0039 主表，同一份 51 篇语料）：B 手写六域 vs A2 prompt-tune 自动域 → 实体 3,099 → 2,482（−20%）、社区 735 → 456（−38%）、根层压比 37.4% → 28.7%、全层 457% → 308%；</li>
+        <li><b>五件套是一条单向链</b>（<a href="#scene">现场细节 6.2（4）</a>）：域 → persona → 评分口径 → 类型表 → 报告角色，后四个全部由"域"派生；改动域，五件套整体换掉；</li>
+        <li><b>persona 那一步完全不看语料</b>（只吃域字符串），role 与评分口径又是"域 ＋ persona ＋ 全语料"——所以"方向"的信息在一条提示词里被写两遍，却没有一处是对着语料校验的；</li>
+        <li><b>域这一步本身不可复现</b>：同一份输入两次分别答 "Sports" 与 "News and Current Events"（三次里还出现过 "Technology and Business News"），下游五件套随之整体换（体育套 vs 新闻套）。</li>
+      </ul>
+
+      <h4 style="margin:14px 0 4px;">感觉 ②：C0 压比大概率随语料增大而变高——因为 findings 有 10 条上限</h4>
+      <p>机制是清楚的：<b>压比 ≈ 每根社区材料 ÷ 每份报告长度</b>（0038）。语料变大 ⇒ 每根社区能分到的材料变多（分子涨）；而报告长度被 findings 的 <b>10 条上限</b>与长度上限封顶（分母封顶）⇒ <b>语料越大越"压得动"</b>。</p>
+      <p><b>已有证据</b>：findings 实测（0038 §5.1）根层 47 份里 <b>40.4% 正好顶到 10 条</b>、最大 11 条（越界）；L2 有 23.1% 恰好 5 条、20 份连 5 条都没到。语料规模与压比：3.2 万 token → 129%、10.9 万 → 126%、12.4 万（新闻）→ 37.4%、论文 101 万 → 2.6%、171 万 → 2.3%。<span class="why">注意这条目前是"顺着方向"的样本，不是受控实验——<b>两数据集实验就是为它设计的</b>（见第 5 节：同一套提示词，51 篇 vs 609 篇）。</span></p>
+
+      <h4 style="margin:14px 0 4px;">感觉 ③：findings 5–10（与"最大 2000"）是跟论文语料类型与规模匹配的经验值，换类型/换规模就失配</h4>
+      <p>理由：它是<b>毫无逻辑的硬约束</b>——不随材料量、不随语料类型、不随提问者变化。实测后果：<b>两端都被扭</b>——材料最多的根层被截（40% 顶到 10 条），材料最少的 L2 被撑（23% 恰好 5 条，还有 20 份写不够 5 条）。而那个"2000"（<code>max_report_length</code>）在 prompt-tune 产物里<b>已被丢掉</b>（0038 §5.2）⇒ 只剩"下限有人管、上限没人管"。</p>
+      <div class="chain">
+        <b>沛东这句（当时说到一半）</b>：<i>"真正可跨域、跨规模的约束，不应该是这样的，而是——"</i>　<b>2026-09-29 补完，见下。</b>
+      </div>
+
+      <h3>3. 沛东的第 4 条：约束该落在"<b>抽象层级</b>"的定义上（我给的四个候选被否）</h3>
+      <p>我按"改参数"的思路补了四个候选，沛东看完说<b>不是这个方向</b>——他要拆的不是"总结该写多长"，而是"<b>索引期必须先做总结</b>"这个前提本身。原话全文见<a href="#scene">现场细节 6.5</a>，要点三条：<b>①</b> 该定义的是<b>抽象层级</b>（"类似人类编撰百科全书"，上层分类 ＋ 目录条目，"由粗到细找到最终要的细节"）；<b>②</b> <b>社区报告对通用全局洞察助手可能不需要</b>——"只要涉及总结，就必然是领域相关的"；<b>③</b> 该做的是"<b>一套跨领域的、基于有结构语义的索引能力 ＋ 根据用户实际问题而动态产生的全局类问答的缓存</b>"，<b>用这个缓存代替预索引</b>。</p>
+      <table>
+        <thead><tr><th>我之前给的候选</th><th>做法</th><th>为什么不是他要的</th></tr></thead>
+        <tbody>
+          <tr><td><b>(a) 条数随材料量伸缩</b></td><td>findings 条数 = f(该社区材料 token)，例如 ≥1 条 / 1k token，不设固定上限</td><td>只跨规模、不跨目标：什么算一条"该写的洞见"仍由域决定</td></tr>
+          <tr><td><b>(b) 把"条数"换成"信息预算"</b></td><td>给每份报告一个 <b>token 预算</b>（如 ≤ 材料的 x%），写几条、写多长由模型自定</td><td>还是"先写总结、再限它多长"——总结仍在索引期做、仍带视角</td></tr>
+          <tr><td><b>(c) 规格由"角色 ＋ 问题类型"推出</b></td><td>先定提问者角色与其会问的问题，再由它推出"该抽什么实体、报告写多细"（0039 §7 的落地顺序）</td><td>方向对，但它承认"一个方向一套索引"，等于把多方向的需求推给"多建几套索引"</td></tr>
+          <tr><td><b>(d) 判据从"相关性"换成"充分性"</b></td><td>"手里的材料够不够回答"决定要不要继续深入（0034 §6.12 / 0037 §3.2）</td><td>只在<b>查询期</b>换了判断标准，没动"索引期预生成总结"这件事</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">一句话概括差别：<b>我那四条都在"总结的输出规格"这个平面上打转；他要换的是"要不要在索引期产出总结"这个前提。</b></p>
+
+      <h4 style="margin:16px 0 4px;">3.1 他的判断拆开看：三个论断，各有实测支撑</h4>
+      <ul>
+        <li><b>论断一 · "总结必然领域相关"</b>——成立，但要拆成两半：<b>抽取侧</b>的领域相关性<b>可降</b>（类型表可以做宽、做中性）；<b>总结侧不可降</b>，因为"哪条重要"本身就是视角。证据：0039 换域之后不只是数量变（实体 −20% / 社区 −38%），<b>写法也变</b>（每份报告 773 → 841 token、逐层都长）；0032 那轮更直接——评分口径领域化后 rank 中位 <b>6.0 → 9.0</b>、48/52 份挤在 8–10 ⇒ <b>"评分标准领域化"≠"评分有信息量"</b>。</li>
+        <li><b>论断二 · GraphRAG 的"层级"不是抽象层级</b>——这条最硬，两层实测：<b>① 层级是按实体数硬拆的</b>（0034 §6.18：L0 median 87 实体 / L1 median 10 / <b>L2 100% ≤10</b>，<code>max_cluster_size=10</code>）⇒ 它是<b>分块树</b>；<b>② 父报告从不读子报告</b>（0034 §6.20：1,185 个社区 <code>context_exceed_limit</code> 全 0），"越上层越粗"只靠"<b>材料更大 ＋ findings 上限截断</b>"。⇒ <b>父节点不是子节点的概括，只是"更大的框"</b>——他的百科全书类比正好点在这里：百科全书的父条目是<b>概括</b>，GraphRAG 的父社区只是<b>更大的框</b>。</li>
+        <li><b>论断三 · 通用助手下预索引不值</b>——部分成立，条件是"目标未定<b>或</b>问题不重复"（代价那半见 3.3）。</li>
+      </ul>
+
+      <h4 style="margin:16px 0 4px;">3.2 "抽象层级"要能验收，还缺两条判据（我补，待沛东定）</h4>
+      <table>
+        <thead><tr><th>判据</th><th>定义</th><th>为什么必要</th></tr></thead>
+        <tbody>
+          <tr><td><b>涵盖性</b></td><td>父条目的每条要点都能指回它覆盖的子条目；子条目出现的新主题，必须能注册到某个父条目（或新增一个）</td><td>有它，"由粗到细下钻"才在逻辑上无损——父条目不含子条目推不出的东西</td></tr>
+          <tr><td><b>穷尽性 / 可枚举性</b></td><td>某一层的条目集合有限、无重不漏</td><td>有它，才能回答"<b>都有哪些</b>"——这正是向量检索与社区报告都做不到的那件事，也是我们项目立项理由"枚举 / 跨源连接 / 关系查询"里的第一条</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">对照：GraphRAG 的社区层级<b>两条都不满足</b>，它满足的只是"每层都有一块可读的文本"。⇒ 所以"社区报告不需要"这个判断在机制层是可以论证的，不必只当直觉。</p>
+
+      <h4 style="margin:16px 0 4px;">3.3 方案形态：结构语义索引 ＋ 查询期动态生成（＋缓存）——他原话里没说、但得先定的三件事</h4>
+      <ul>
+        <li><b>① 缓存什么粒度</b>：缓存<b>答案文本</b>只对<b>完全相同</b>的问题有用；更有价值的形态是缓存<b>中间产物</b>（"某主题的跨源要点集 ＋ 证据指针"），因为它是<b>问题无关的骨架</b>。⇒ 本质上就是<b>把"索引期一次做完的总结"改成"第一次有人问到的时候做完、然后落盘"</b>——这正是 GraphRAG 论文自己列为未来方向的 <b>just-in-time community report generation</b>（0028 考古层第五十段），也就是它没走完的那半。</li>
+        <li><b>② 代价随问题分布浮动（这不是反对，是前提）</b>：预索引是"一次性付费、之后每次问答便宜"，赌注是<b>目标预知</b>；他这个方案是"索引便宜 ＋ 跨域"，代价是<b>每次全局问答都要现扫</b>（成本形态回到论文里 TS 那一侧），缓存只能把<b>重复问题</b>的第二次起变便宜。⇒ 判据不该是"谁更好"，而是"<b>全局问答的出现频率与重复率</b>"：低频一次性（探索型）→ 他这个方案赢；高频同形（日报型）→ 预索引赢，而缓存会把差距缩回来。这条可以做成实验（见 6.4 待办 ③）。</li>
+        <li><b>③ 一个已知的坑要先避："上层分类"这一层不能白拿</b>：AGENTS.md 已立过"<b>主题键不能靠 section 标题白拿</b>（论文语料必须从内容产出）"；而让 LLM 从内容里产出分类树，就会重蹈 prompt-tune"域三次三答"（本页 6.2（3））。⇒ 抽象层级要能跨域复用，它得有一个<b>与语料无关的形态</b>（分类树 ＋ 每个条目挂证据指针 ＋ 命名约束）。</li>
+      </ul>
+      <div class="chain">
+        <b>顺带一个业界对应（0028 考古层第五十段已核过）：</b>他要的"上层分类"，在业界最接近的形态是 <b>SearchWiki 的"全局主题注册表"</b>（每文档单元一次 LLM 调用 → 摘要 ＋ 向注册表注册，canonical 命名约束）；而 Leiden 聚类给的是"<b>主题簇、不是类</b>"。"由粗到细下钻"则对应 LLM-Wiki 的 <code>browse-first</code> ＋ 渐进披露 ＋ 足够性判断。⇒ <b>他这次的判断，和我们项目 0028 定的路线（编译层＝地图/索引、chunk＝事实源）是同一个方向；GraphRAG 这条线反过来成了它的反证。</b>
+      </div>
+
+      <p class="muted">这一条主张往下的理论来路（LLM-Wiki ／ 维基百科 ／ 大英百科第 15 版 ／ 知识组织 ／ 分面 ／ 私域三类）已收成专题总结：见 <a href="#ko">第三部分 §7</a>。</p>
+
+      <h3>4. 四条合起来 → "适用范围"草稿（待确认）</h3>
+      <table>
+        <thead><tr><th></th><th>在舒适区</th><th>不在舒适区</th></tr></thead>
+        <tbody>
+          <tr><td><b>提问方向</b></td><td>单一、稳定（一个方向一套索引）</td><td>多类专家共用一套索引；问题形状随会话变化</td></tr>
+          <tr><td><b>语料</b></td><td>大且松（每根社区材料 ≫ 报告地板，约 1.4k token）</td><td>小语料、高密度精炼语料（技术笔记/论文/规格）；本库 3.2 万–12.4 万那份都在 100% 以上</td></tr>
+          <tr><td><b>问题类型</b></td><td>全局摘要型（"整体在讲什么"）</td><td>枚举 / 跨源连接 / 关系查询（这些要靠图的结构，不靠摘要）；局部事实题</td></tr>
+          <tr><td><b>报告形态</b></td><td><b>预索引的社区报告能用</b>：目标预知 ＋ 全局问题高频重复（日报型）</td><td>通用助手（方向未定）＋ 低频一次性探索问题——预索引的总结既押错了视角、又摊不薄成本（§3.3 ②）</td></tr>
+          <tr><td><b>落地条件</b></td><td>能自己写/审提示词、能接受"一方向一索引"、能处理报告丢弃与抖动</td><td>把 prompt-tune 当"一键适配"用（三条缺陷见<a href="#scene">现场细节 6.2（7）</a>）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5. 下一步：为感觉 ② 设计的两数据集实验（已备好，待跑）</h3>
+      <p>两个数据集（同一套提示词、同一切块参数）：<b>① 51 篇子集</b>（12.4 万 token / 141 块，0039 用的那份，B 与 A2 两臂已有完整结果）；<b>② MultiHop-RAG 全集 609 篇</b>（正文 138 万 token；按索引口径 140 万 token / 1,560 块）。</p>
+      <p><b>要测</b>：实体数 / token per 实体 / 社区数 / 层级分布 / 根社区数 / 每根社区覆盖 / <b>根层报告 ÷ 原文（C0）</b> / 全层压比 / 每份报告长度。<b>判据</b>：同一套提示词下，全集那份的 C0 是否显著低于 51 篇那份（若成立，感觉 ② 得到支持；若 C0 不降，说明封顶机制不是主因）。<b>成本</b>：全集那半估算 1.8–2 万次调用 / ¥150–250 / 3–5 小时，可分两段（先图后报告）。</p>
+      <p class="muted">已备：<code>data/tmp/graphrag-exp-multihop-full/</code>（609 篇输入 + manifest + settings，指向 <code>prompts-tuned/</code> 即 B 套）——<b>待沛东确认用哪套提示词（B / A2 / 受控多域）后即可开跑</b>。</p>
+    </section>
+
+    <section class="card" id="scene">
+      <h2>第二部分 · 现场细节（2026-09-29）</h2>
+
+      <h3 style="margin-top:16px;">6.1 这次讨论的来路（按发生顺序）</h3>
+      <ol>
+        <li><b>从 0039 的两臂起</b>：沛东问"50 篇里 A1/A2 的实体数为什么会完全一样" → 查明是"抽图被缓存钉住"（A2 的 <code>cache/</code> 从 A1 拷来，<code>extract_graph</code> 278 条对 278 条）；顺带发现"只换报告提示词"这句话不成立（实际换了摘要＋报告两处）。</li>
+        <li><b>进而质疑三臂设计</b>："A1 是实际生产里不会出现的组合" ⇒ A1 整臂下线，0039 改成 B vs A2 两条自洽臂。</li>
+        <li><b>再质疑 §2.3 的比法</b>：先按"来源文档类别"对账（被否：那是代理口径），改成"<b>类型体系对类型体系</b>"：两张类型表 10 类里只有 2 类同名，B 有 84%/A2 有 87% 的实体落在对方没有的类型里；共有实体交叉表暴露"改判"（PERSON→ATHLETE 728、ENTERTAINMENT WORK→TECHNOLOGY PRODUCT 233…）。</li>
+        <li><b>一路质疑到 prompt-tune 本身</b>：为了"看类型多不多"跑了 <code>all</code> 模式 → 20 类全是体育；再查"为什么" → 域推断那一步只允许一个域、且不可复现；最后逐个看了 7 条提示词。</li>
+        <li><b>于是有了这篇</b>：把散在各篇里的实测收拢成"假设 → 适用范围"的骨架。</li>
+      </ol>
+
+      <h3>6.2 关键数据（都可追溯，脚本与产物在 <code>data/tmp/</code> 与 <code>experiments/</code>）</h3>
+
+      <h4 style="margin:12px 0 4px;">（1）prompt-tune 的 7 条调用：谁吃了多少语料</h4>
+      <table>
+        <thead><tr><th>#</th><th>步骤</th><th>吃语料？</th><th>拼法（📄 <code>prompt_tune/generator/*.py</code>）</th></tr></thead>
+        <tbody>
+          <tr><td>①</td><td>域（domain）</td><td>全部</td><td><code>" ".join(docs)</code></td></tr>
+          <tr><td>②</td><td>语言（language）</td><td>全部</td><td><code>" ".join(docs)</code></td></tr>
+          <tr><td>③</td><td>persona</td><td><b>不吃</b></td><td>只吃 <code>domain</code> 一个字符串（提示词里那句 "and sample text" 是残留）</td></tr>
+          <tr><td>④</td><td>评分口径</td><td>全部</td><td><code>" ".join(docs)</code></td></tr>
+          <tr><td>⑤</td><td>实体类型表</td><td>全部</td><td><code>"\n".join(docs)</code></td></tr>
+          <tr><td>⑥</td><td>few-shot 示例</td><td>每篇各一次</td><td><code>for doc in docs_list</code></td></tr>
+          <tr><td>⑦</td><td>报告角色</td><td>全部</td><td><code>" ".join(docs)</code></td></tr>
+        </tbody>
+      </table>
+      <p class="muted">51 篇那份：141 块 = <b>133,346 token</b>（官方 tokenizer）⇒ <b>6 条调用在"用 13 万 token 的输入换几十个字的输出"</b>。实测 API 回报 <code>prompt_tokens=136,696</code>（整份送达，3.3s，回答只有 1 个 token "Sports"）；另用 40 万 token 的合成输入验证过<b>不截断</b>（首/中/尾三个标记全被答出）。</p>
+
+      <h4 style="margin:12px 0 4px;">（2）五条模板（070 域 / persona / 评分口径 / 类型表 / 报告角色）的原文要点</h4>
+      <pre>- 域： "Given a sample text, help the user by assigning **a** descriptive domain that summarizes what the text is about. Example domains: \"Social studies\", \"Algorithmic analysis\", \"Medical science\"…"
+- persona： "Given a specific type of task **and sample text**, help the user by generating a 3 to 4 sentence description of an expert…"（但语料一个字都不传，task = "…specifically within the {domain} domain."）
+- 评分口径： 三个示例（家庭通信邮件 / 《傲慢与偏见》选段 / 环保播客，示例里的 Data 只有 100~200 词），真实段 "{domain} + {persona} + {input_text=全部块}"，只让输出一句 "0-10 的重要性口径"。
+- 类型表： "…The entity types must be relevant to the user task… Don't worry about quantity, always choose quality over quantity."；三个短示例给的都是 2-4 个通用类型；真实段 Text = 全部块。
+- 报告角色： 示例里硬编码了论文自己那份语料——"A technologist reporter that is analyzing Kevin Scott's \"Behind the Tech Podcast\"…"，并明确要求 "your output should look just like the provided example **in structure and content**"。</pre>
+
+      <h4 style="margin:12px 0 4px;">（3）域这一步的三次答案（同一份输入）</h4>
+      <table>
+        <thead><tr><th>输入</th><th>它答的"域"</th></tr></thead>
+        <tbody>
+          <tr><td>全部 141 块（all，第一次）</td><td><b>Sports</b>（下游：20 个体育类型、persona/role 都是"体育记者"）</td></tr>
+          <tr><td>全部 141 块（all，重跑一次）</td><td><b>"News and Current Events"</b>（下游：6 个通用类型 organization/person/location/event/topic/role）</td></tr>
+          <tr><td>前 30 块</td><td><b>"Technology and Business News"</b></td></tr>
+          <tr><td>打乱后的全部</td><td>Sports（说明不是顺序造成的）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">⇒ 输入完整、参数相同、代码相同，三次给出三种域 ⇒ <b>"域"这一环没有可复现性</b>，而后面 6 条全挂在它上面。</p>
+
+      <h4 style="margin:12px 0 4px;">（4）两臂的四件套（0039 的 B vs A2）</h4>
+      <table>
+        <thead><tr><th></th><th>B（手写六域）</th><th>A2（prompt-tune auto）</th></tr></thead>
+        <tbody>
+          <tr><td>域</td><td>显式给：<code>news articles across sports, technology, entertainment, business, health and science</code>（第一次不给域时它自己判成"体育域"）</td><td>auto（k=4）推断 → "技术产业"框定</td></tr>
+          <tr><td>persona</td><td>computational social scientist / network analyst（媒体与传播研究）</td><td>technology industry analyst / consumer electronics market researcher</td></tr>
+          <tr><td>报告角色</td><td>"A computational social scientist and network analyst that is mapping communities of interest across sports, technology, entertainment, business, health, and science news…"</td><td>"A technology industry analyst that is analyzing technology and consumer electronics product recommendations, news, and business updates…"</td></tr>
+          <tr><td>实体类型（各 10 类）</td><td>organization / person / location / event / technology platform / sports team / broadcast media / occupation / entertainment work / financial metric</td><td>technology product / technology company / brand / technology platform / hardware component / software feature / professional sports league / sports team / athlete / live sports event</td></tr>
+          <tr><td>评分口径</td><td>relevance to news analysis across the six domains…</td><td>relevance to technology industry analysis, consumer electronics product evaluation…</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">两臂语言都是 English ⇒ 唯一实质差别是"域框定"；但 A2 的"技术域"其实混着 4 个体育类（体育占语料 33%，auto 只取 4 块样本），而且它的类型是"域化"的，B 是"中性跨域"的 ⇒ 两者不只差域，还差<b>类型抽象层级</b>。</p>
+
+      <h4 style="margin:12px 0 4px;">（5）MultiHop-RAG 全集与论文 News 数据集的对账</h4>
+      <table>
+        <thead><tr><th>口径</th><th>token</th></tr></thead>
+        <tbody>
+          <tr><td>正文（graphrag tokenizer = o200k_base）</td><td>1,381,153</td></tr>
+          <tr><td>正文 ＋ 标题</td><td>1,391,605</td></tr>
+          <tr><td>实际喂索引的 609 个 txt（含两行标题）</td><td><b>1,404,412</b></td></tr>
+          <tr><td>cl100k_base 数正文</td><td>1,394,467</td></tr>
+          <tr><td><b>按论文口径切块（600/100 重叠）</b></td><td><b>2,963 块 / 1,777,800</b></td></tr>
+          <tr><td>论文自报（News）</td><td>3,197 块 / ∼1.7M</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">609 篇、类别分布（sports 211 / technology 172 / entertainment 114 / business 81 / science 21 / health 10）、时间跨 2013-09～2023-12 与论文 §4.1 的描述逐项吻合 ⇒ <b>同一数据集</b>；但论文没公布输入文件，所以只能说"同源、同口径复算差 7%（块数）"，不能说逐字节相同。我们索引按 1200/100 切块 ⇒ 全集 1,560 块、51 篇子集 141 块。</p>
+
+      <h4 style="margin:12px 0 4px;">（6）已有的规模-压比样本（为感觉 ② 攒的）</h4>
+      <table>
+        <thead><tr><th>语料</th><th>源 token</th><th>根层压比</th></tr></thead>
+        <tbody>
+          <tr><td>7 篇小语料</td><td>32,363</td><td>129%</td></tr>
+          <tr><td>14 篇技术笔记</td><td>108,786</td><td>126%</td></tr>
+          <tr><td>51 篇新闻（B 套）</td><td>124,330</td><td>37.4%</td></tr>
+          <tr><td>51 篇新闻（A2 套）</td><td>124,330</td><td>28.7%</td></tr>
+          <tr><td>论文 · 播客</td><td>1,014,611</td><td>2.6%</td></tr>
+          <tr><td>论文 · 新闻</td><td>1,707,694</td><td>2.3%</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">这两列是"顺着方向"的证据，不是受控实验——语料类型与规模同时变。第 5 节那个两数据集实验就是为把"规模"单独拎出来。</p>
+
+      <h4 style="margin:12px 0 4px;">（7）prompt-tune 的三条缺陷——"<b>一套索引只能服务一个方向</b>"的论据链</h4>
+      <ul>
+        <li><b>① <code>auto</code> 的采样下标错配</b>（0036 §3；0034 §6.24）：<code>DataFrame.sample()</code> 会把行序打乱，而 <code>embeddings[j]</code> 对应的是<b>打乱之后</b>第 j 个元素，代码却把距离算出的下标套回"<b>原顺序的全量表</b>" ⇒ <b>质心 / 嵌入 / 距离在 <code>auto</code> 下退化成装饰</b>（实测 <code>n_subset_max=32</code> 时三次全落在 <code>article-001~009</code>，覆盖不到全语料）；</li>
+        <li><b>② few-shot 示例与它自己那段输入对不上</b>（0036 §4）：<code>build()</code> 返回内部 list 引用（不是副本）＋ 循环外共用 builder ＋ <code>asyncio.gather</code> ⇒ 每个示例实际都是"<b>最后一个文档</b>"的抽取结果，却被按 <code>examples[i] ↔ docs[i]</code> 配进提示词。<b>但实测它不污染抽取</b>（把示例换掉做对照，结论是"<b>示例无效</b>"而非"示例有害"）——这条别拿来当抽取质量的归因；</li>
+        <li><b>③ "域"这一步只按单域工作、且不可复现</b>（见 6.2（3））：域提示词写的是 assigning <b>a</b> descriptive domain（单数）＋ 三个单学科示例（Social studies / Algorithmic analysis / Medical science）；同一份输入三次给出三种域 ⇒ <b>下游五件套整体换</b>。<b>这才是"一套索引只能服务一个方向"的技术根</b>——不是我们没试，是这一环在设计上就只有一个槽位。</li>
+      </ul>
+
+      <h3>6.3 过程中被打脸的几次（记住，别重犯）</h3>
+      <ul>
+        <li><b>"越不相关反而越贵"</b>（把跨域那组 +41% 归给"根层全灭 ⇒ 整层全评"的兜底）：按官方代码离线重放 9 次运行，<b>兜底一次都没触发</b>（它要求根层 17 个社区全 0 分，实测根层通过 6–16 个）。</li>
+        <li><b>"先花小钱量图 / 把顺序倒过来"</b>：抽取不是小钱（51 篇那套占全链 <b>42%–49%</b>），而且它本来就是第一步——不存在"换顺序"。</li>
+        <li><b>引用"流行说法"</b>（"GraphRAG 比 RAG 省 97% token"）：论文的 2.3–2.6% 是 <b>C0 ÷ TS</b>；对向量 RAG（SS）则是质量赢、成本输。我举不出这句说法的出处 ⇒ 撤回。</li>
+        <li><b>口径类</b>：分母该用"索引实际读入的文本"（新闻那份 124,330，不是正文 122,387）；比总量要先换成单量（每条描述 37.1 → 36.5 基本没变，而"总量 −21%"只是实体数少 20% 的镜像）；比"类型多不多"要先比类型体系（84%/87% 落在对方没有的类型里）。</li>
+      </ul>
+
+      <h3>6.4 待办</h3>
+      <ol>
+        <li><b>把"抽象层级"落成可验收的定义</b>（§3.2 那两条判据：涵盖性 / 穷尽可枚举）——并定"上层分类"由<b>人编</b>还是 LLM 抽（后者会重蹈"域三次三答"，得先解决可复现性）。</li>
+        <li><b>两数据集实验</b>：定提示词套（B / A2 / 受控多域）→ 跑全集 609 篇（可先图后报告）→ 与 51 篇对照，验感觉 ②。<span class="why">有了第 4 条之后，这个实验的意义也升级了：从"findings 上限是不是主因"变成"<b>预索引在什么规模开始划得来</b>"。</span></li>
+        <li><b>新实验：查询期现算 ＋ 缓存 能不能在成本上赢预索引</b>——同一批全局问题，比 (A) 预索引版本（结果已有）与 (B) 无预索引、查询期现建主题树再回答；判据 = <b>token × 问题重复率</b>。可接到 AGENTS.md 已立项的"三档检索原语对比实验"。</li>
+        <li><b>"域＝单槽位"这一层</b>要不要补进 0036 对外稿（采样错配、few-shot 错配那两条已在稿里；这里说的是新增的第三条——域提示词的单域假设 ⇒ 一套索引只能服务一个方向）。</li>
+      </ol>
+
+      <h3>6.5 沛东的原话（2026-09-29）——第 4 条的完整表述</h3>
+      <p class="muted">对第 3 节那四个候选的回应：<i>"我看你推荐了几个跨域、跨规模的约束，但是跟我想的不一样。我觉得应该是对<b>抽象层级的定义</b>，就类似人类编撰百科全书，任何查找资料的人，都是可以从这个索引里面由粗到细的来找到最终要的细节的，而这个索引（包括上层的分类，以及某一本书内的目录的每个条目）都是某种抽象层级。我感觉<b>社区报告这个东西，如果是要做一个通用的全局洞察助手，可能不需要</b>，因为社区报告只要涉及总结，其实就必然是领域相关的。也许应该实现的是：<b>一套跨领域的基于有结构语义的索引能力 ＋ 根据用户实际问题而动态产生的全局类问答的缓存</b>，用这个缓存来代替预索引。"</i></p>
+
+      <p class="muted">记录创建：2026-09-29 · 状态：进行中（第 4 条已补完并写进 §3；待办＝把"抽象层级"落成可验收定义 ＋ 两个实验）</p>
+    </section>
+
+    <section class="card" id="ko">
+      <h2>第三部分 · 专题总结：抽象层级与知识组织（2026-09-29 讨论）</h2>
+      <p class="muted">这一部分把本轮从"抽象层级"一路聊到 LLM-Wiki ／ 维基百科 ／ 大英百科 ／ 知识组织 ／ 分面 ／ 公域私域分类的一条线收口，是 §3 第 4 条那条主张的理论来路。复习时可以先读这里，再回 §3 看它的落点。</p>
+
+      <h3 style="margin-top:16px;">7.1 一句话定位</h3>
+      <p>这一轮讨论的问题不是"GraphRAG 哪里差"，而是"<b>抽象层级该由谁定义、定义在哪一层</b>"；再往下问一层，它是<b>知识组织（KO）与检索（IR）的接口问题</b>——KO 管"怎么摆、怎么连、粒度怎么定"，IR 管"谁在问、问什么形状、够了没有"。GraphRAG 的失误是把 KO 的判断（粒度、视角）塞进了 IR 的运行时前提，所以一换目标就崩。</p>
+
+      <h3>7.2 五条线各自做到了什么</h3>
+      <table>
+        <thead><tr><th>线</th><th>组织形态</th><th>预编译？</th><th>它的"层级"是什么</th><th>"都有哪些"靠谁</th><th>缺什么</th></tr></thead>
+        <tbody>
+          <tr><td><b>GraphRAG</b></td><td>Leiden 聚类 ＋ 每社区一份报告</td><td><b>是</b>（索引期）</td><td><b>分块树</b>：按实体数硬拆（L2 100% ≤10 实体），父报告从不读子报告（<code>context_exceed_limit</code> 全 0）</td><td>谁都不靠——它<b>答不了</b>，只给"看起来齐全"的清单</td><td>粒度定义、可对账的完整、目标无关性</td></tr>
+          <tr><td><b>LLM-Wiki</b></td><td>Wiki 页 ＋ 双向链接（论文自称 <i>machine-traversable substrate</i>）</td><td>否（查询期导航）</td><td><b>过程的</b>：一次 <code>wiki_read</code> 走一步（browse-first ＋ 足够性判断），结构上扁平</td><td>不保证</td><td>层级与粒度定义都没有；且全文没提 knowledge graph（0 次），对照物只是扁平 chunk RAG ⇒ 数字不能当论证</td></tr>
+          <tr><td><b>SearchWiki</b></td><td>三层 wiki：<code>documents/</code> 概览 → <code>topics/</code> 跨文档概念页 → <code>sources/</code> 页级来源</td><td>是（注册式编译）</td><td><b>注册表</b>：每文档单元一次调用同时出摘要 ＋ 向全局主题注册表注册（canonical 命名、抑制近重复）</td><td>主题注册表（可对账）</td><td>没定义粒度；<b>只有论文、无代码</b></td></tr>
+          <tr><td><b>维基百科</b><br><span class="muted">（人类实践）</span></td><td>四机制并行：条目 ＋ wikilink ／ Category ／ 列表条目 ／ 导航模板·Outline</td><td>否</td><td>Category 是<b>多父 DAG</b>：深度不齐、不给来源、不保证穷尽</td><td><b>列表条目 ＋ 红链 ＋ WikiProject 缺口清单</b></td><td>"由粗到细"靠 summary style 与 Outline，<b>都是编辑约定，机器校验不了</b></td></tr>
+          <tr><td><b>大英第 15 版</b><br><span class="muted">（人类实践）</span></td><td>三部分：Propædia（知识大纲）／ Macropædia（长条目）／ Micropædia（短条目）</td><td>是（人工预编）</td><td><b>人类最自觉的一次抽象粒度分层</b></td><td>Micropædia ＋ 索引</td><td>1974→1985 的妥协说明<b>粒度定义就是争议本身</b>，而且它同样败在"读者找不到东西"</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">两条人类实践放在一起看很有说服力：<b>维基把"完整"交给列表与红链（等于承认分类不完整），大英把"粒度"交给编辑部（并且吵了十一年）</b>——两者都没把粒度做成可校验的结构。维基百科自己还有一份指引《Categories, lists, and navigation templates》明确说三者互补、不要互相替代，这在知识管理史上挺罕见。</p>
+
+      <h3>7.3 知识组织这门学科已经给过名字</h3>
+      <table>
+        <thead><tr><th>我们说的</th><th>学科里的名字</th></tr></thead>
+        <tbody>
+          <tr><td>每层的抽象粒度要定义清楚</td><td>分类的<b>深度 ／ 特定性</b>（depth of classification、specificity）——一百多年来没有跨领域通用答案，一直是"按用途定"</td></tr>
+          <tr><td>层内内容可相互链接</td><td>叙词表的 <b>BT ／ NT ／ RT</b>（上位／下位／相关，ISO 25964）；百科的 see / see also 是同一件事</td></tr>
+          <tr><td>一套索引服务不了两类专家</td><td>单一层级 vs <b>分面分类</b>（阮冈纳赞 1933，冒号分类法 PMEST）</td></tr>
+          <tr><td>缺口要能看见</td><td>编目的 want list、维基百科的红链</td></tr>
+          <tr><td>同一份材料、不同目的编出不同结果</td><td>"分类是<b>目的相关</b>的"（Bliss 1929；literary ／ user warrant）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7.4 分面：这轮最有用的一块，因为它把粒度问题降级了</h3>
+      <p><b>定义</b>：几条彼此正交的轴，每条轴内部是一棵小树或一张受控词表；一个对象在每条轴上各取一个值，<b>组合</b>起来才是完整地址（如"中国 · 1950 年代 · 图书馆 · 编目自动化"）。日常例子：电商左侧筛选（品类是树，品牌／尺寸／颜色是面）、MeSH 的主题词 ＋ 副主题词。</p>
+      <table>
+        <thead><tr><th></th><th>分层</th><th>分面</th></tr></thead>
+        <tbody>
+          <tr><td>结构</td><td>一棵树，父含子</td><td>若干条正交轴，每轴内部再是一棵树</td></tr>
+          <tr><td>一个对象的归属</td><td>落在<b>唯一</b>路径上</td><td>每轴各取一个值，组合成地址</td></tr>
+          <tr><td>粒度定义在哪</td><td><b>全局</b>——整棵树该切多细（大英十五版的争议就在这儿）</td><td><b>局部</b>——每个面的词表列到多细</td></tr>
+          <tr><td>能答"都有哪些"吗</td><td>只有树穷尽时才行</td><td>每面词表有限无重不漏，就答得了</td></tr>
+          <tr><td>视角</td><td>被树的结构钉死</td><td>结构固定，<b>组合与重点随查询变</b></td></tr>
+        </tbody>
+      </table>
+      <p><b>它能不能支撑全局问答的选材？能——把全局问答拆成三步就清楚了</b>：<b>提问</b>（全局问题几乎没有判别性关键词，"相似度"无从下手）→ <b>选材</b>（要的是<b>覆盖与可对账</b>，不是排序）→ <b>成文</b>（聚合压缩）。<b>向量给的是排序，分面给的是划分；全局问题要的正是划分与枚举</b>——所以分面正好管中间那一步，而那一步就是向量做不到、GraphRAG 花大钱预编译去换的东西。</p>
+      <div class="chain">
+        <b>三个附带结论</b>：<br>
+        ① <b>重要度不必写死在口径里</b>——"一个主题出现在 60% 的源里 vs 只出现在一个源里"是<b>话语料事实、跨目标中立</b>的统计量，要按某类角色重排只是换个加权，不必重建索引。这是对付"总结必然领域相关"的一条出路（口径仍要写明：分布只说明"讲得多"，不等于"对用户重要"）。<br>
+        ② <b>分面没有豁免"遗漏透明"红线</b>——它只把遗漏从"写报告时没想到"换成"某个面里没这个词条 ／ 某个面压根没建"，后者<b>可点数、可对账</b>。前提三条：每块要打标、每面词表要全、<b>而且必须承认"你穷尽的是你选的那几个面"</b>。<br>
+        ③ <b>分工收口：分面管枚举，图管跨源连接与关系查询</b>——正是当初给图谱立项的三条理由各归其位，不是二选一；分面只能把候选范围缩小，<b>连起来要靠命题 ／ 图那一层</b>。
+      </div>
+
+      <h3>7.5 沛东的三类（私域视角）→ 修正后收敛成一张矩阵</h3>
+      <p><b>他的定位</b>：公域信息已经被大模型用"不那么可解释的方法"搞定了，现在要补的是<b>私域</b>——而私域有两条特征让问题变小：<b>一来没那么大、二来常常自带组织结构</b>。于是三类：<b>①</b> 组织级问答助手（资料本身有结构，让 LLM 忠实依据它回答即可）<b>②</b> 个人知识库（乱、无组织，先补一层 LLM 自动／辅助分类，分好后复用 ①，分类体系可用分面）<b>③</b> 基于扁平收集内容做聚焦领域的全局洞察（GraphRAG 论文要解决的问题；他认为逻辑上可归入 ②）。</p>
+      <p><b>我的两处修正</b>：</p>
+      <ul>
+        <li><b>类 ① 简单的原因不是"有结构"，而是"问题多为局部事实型 ＋ 有权威原文"</b>。组织资料的结构反映的是"谁写的、什么时候写的"，不是"谁会问什么"（按部门组织、按时间记纪要）；而且组织级有三个个人库里不存在的硬约束——<b>权限、版本时效、可审计</b>（引用了作废版本比不回答更糟）。一旦组织里问"过去一年投诉的主要模式是什么"，它立刻变成类 ③ 的难度 ＋ 权限问题，这也正是企业搜索几十年难做的原因。</li>
+        <li><b>类 ② 的"分类"要放宽成"打标"</b>：可多值、允许重叠、允许以后加面（＝分面的用法），再配<b>原文回锚</b>与<b>人在环可修正</b>——个人库的最终权威是本人，AI 分错要能一眼看见、一键改（组织级反而不用，组织有既定口径）。追求"一次分好、长期复用"的树，会把粒度／可复现／视角那些老问题重新引进来。</li>
+      </ul>
+      <p><b>类 ③ 与类 ② 的关系</b>：相同的是输入形态（扁平收集内容）与"问题没有预设"；不同的是类 ③ <b>领域聚焦、目标明确、问题会重复问</b>，类 ② <b>目标杂、一次性问题多</b>。这个差别直接决定一件事——<b>类 ③ 可以接受预编译，类 ② 不该预编译</b>。收口一句：<b>GraphRAG 的预编译不是错的，是被当成了通用解法</b>；它真正的适用域就是类 ③ 这一格（输入扁平 ＋ 领域聚焦 ＋ 问题重复 ＋ 目标预知）。</p>
+      <table>
+        <thead><tr><th>格</th><th>结构从哪来 ／ 问题形状</th><th>该上什么机制</th></tr></thead>
+        <tbody>
+          <tr><td><b>组织级</b></td><td>语料自带 ／ 多为局部事实型</td><td>结构导航（列举 ＋ 下钻）＋ 内容检索兜底 ＋ 忠实引用；<b>不需要预编译摘要</b>，但权限／版本／审计要单做</td></tr>
+          <tr><td><b>个人库</b></td><td>要我们造 ／ 检索型、局部为多</td><td>打标（分面、可多值）＋ 原文回锚 ＋ 人可修正；别追求一次分好</td></tr>
+          <tr><td><b>聚焦领域洞察</b></td><td>要我们造 ／ 跨源全局型</td><td>预编译或"查询期首做再缓存"＋ 跨源连接；<b>这才是 GraphRAG 的格</b></td></tr>
+        </tbody>
+      </table>
+      <p class="muted">两个变量都好判：<b>"结构是语料给的、还是要我们产的"</b>（＝AGENTS.md 那条"先问这个信号是语料偶然给的，还是方法本身要产出的"）与<b>"问题要事实、还是要图景"</b>。</p>
+
+      <h3>7.6 这轮讨论解决不了的（留档）</h3>
+      <ol>
+        <li><b>面怎么选、选几个</b>——阮冈纳赞靠"基本范畴"理论，现代靠领域分析；选错照样漏，而"漏"会被穷尽性的表象掩盖。</li>
+        <li><b>每个面的词表由谁产出、怎么保证可复现</b>——让 LLM 从内容抽，就会重蹈"域三次三答"（6.2（3））；所以词表需要与语料无关的形态（受控词表 ＋ 命名约束 ＋ 每条挂证据指针）。</li>
+        <li><b>"重要度＝面内分布"的口径要写死到什么程度</b>——分布只说明"语料里讲得多"。</li>
+        <li><b>分格之后的聚合粒度</b>——格子装不下时又要压缩，这时粒度应由格子实际大小决定，而不是 findings 5–10 这种常数。</li>
+        <li><b>类 ① 的权限与版本</b>——我们从来没设计过，而它可能是组织级的第一性问题。</li>
+      </ol>
+
+      <h3>7.7 落到我们自己的项目</h3>
+      <p>我们这个项目更像<b>类 ②（收集型语料 ＋ 学习者的杂问题），带一角类 ③ 的需求</b>。现有编译层（Pass 1/2 ＋ 图 ＋ chunk 事实源）做的就是"造结构"，而我们在"人可修正、可对账"上下的功夫（红线、体检、抽样人工核）恰好是类 ② 该有的姿态——<b>所以那条路是对的，缺的是"打标"这层轻结构，而不是更重的报告</b>。</p>
+      <p><b>两条立刻可做的</b>：① 给已上线的"统一约束模型"（源 ／ 类型 ／ 谓词 ／ 概念）补上<b>每个面的受控、可枚举、带上下位的词表</b>（现在的近义词映射还只是雏形）；② 给已立项的"三档检索原语对比"实验<b>补一条全景型探针</b>（"这个库整体在讲什么、都有哪些主题"）——现有探针偏"对比 ／ 局限"型，正好漏掉了分面最该赢的那类问题。</p>
+
+      <p class="muted">本节整理：2026-09-29 · 是 §3 第 4 条的理论来路（LLM-Wiki → 维基百科 → 大英十五版 → 知识组织 → 分面 → 私域三类）</p>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,306 @@
+{
+  "note": "Dynamic Community Selection 三次采样（3 问题 × 3 次）的选择过程重放明细。replay_matches_library=True 表示按官方代码离线重放与线上逐次一致；fallback_fired 为空表示那条'整层全评'的兜底从未触发。unit_* 是 prompt token 单价（打分一份 / 放进 map 一份），model_predicted_tokens = 2595 × (rated + selected) + reduce。",
+  "pool_size": 141,
+  "unit_default_map_tokens": 2595,
+  "runs": [
+    {
+      "query": "1",
+      "run": 1,
+      "arm": "dynamic",
+      "rated": 86,
+      "selected": 47,
+      "rated_by_level": {
+        "0": 17,
+        "1": 50,
+        "2": 19
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 24,
+        "1": 7,
+        "2": 8,
+        "3": 7,
+        "4": 2,
+        "5": 38
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 237535,
+        "map": 113763,
+        "reduce": 12682
+      },
+      "output_tokens_by_stage": {
+        "build_context": 15364,
+        "map": 16385,
+        "reduce": 5729
+      },
+      "prompt_tokens_total": 363980,
+      "replay_matches_library": true
+    },
+    {
+      "query": "1",
+      "run": 2,
+      "arm": "dynamic",
+      "rated": 81,
+      "selected": 46,
+      "rated_by_level": {
+        "0": 17,
+        "1": 41,
+        "2": 23
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 20,
+        "1": 5,
+        "2": 11,
+        "3": 5,
+        "4": 4,
+        "5": 36
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 221073,
+        "map": 109884,
+        "reduce": 12666
+      },
+      "output_tokens_by_stage": {
+        "build_context": 13516,
+        "map": 17078,
+        "reduce": 5019
+      },
+      "prompt_tokens_total": 343623,
+      "replay_matches_library": true
+    },
+    {
+      "query": "1",
+      "run": 3,
+      "arm": "dynamic",
+      "rated": 93,
+      "selected": 48,
+      "rated_by_level": {
+        "0": 17,
+        "1": 53,
+        "2": 23
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 30,
+        "1": 8,
+        "2": 7,
+        "3": 4,
+        "4": 10,
+        "5": 34
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 253895,
+        "map": 119469,
+        "reduce": 12579
+      },
+      "output_tokens_by_stage": {
+        "build_context": 15934,
+        "map": 17577,
+        "reduce": 5330
+      },
+      "prompt_tokens_total": 385943,
+      "replay_matches_library": true
+    },
+    {
+      "query": "2",
+      "run": 1,
+      "arm": "dynamic",
+      "rated": 66,
+      "selected": 26,
+      "rated_by_level": {
+        "0": 17,
+        "1": 29,
+        "2": 20
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 27,
+        "1": 18,
+        "2": 13,
+        "3": 7,
+        "5": 1
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 189483,
+        "map": 63121,
+        "reduce": 7811
+      },
+      "output_tokens_by_stage": {
+        "build_context": 10121,
+        "map": 7272,
+        "reduce": 5668
+      },
+      "prompt_tokens_total": 260415,
+      "replay_matches_library": true
+    },
+    {
+      "query": "2",
+      "run": 2,
+      "arm": "dynamic",
+      "rated": 76,
+      "selected": 27,
+      "rated_by_level": {
+        "0": 17,
+        "1": 35,
+        "2": 24
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 34,
+        "1": 18,
+        "2": 19,
+        "3": 2,
+        "4": 2,
+        "5": 1
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 214085,
+        "map": 66757,
+        "reduce": 9510
+      },
+      "output_tokens_by_stage": {
+        "build_context": 11330,
+        "map": 8863,
+        "reduce": 4695
+      },
+      "prompt_tokens_total": 290352,
+      "replay_matches_library": true
+    },
+    {
+      "query": "2",
+      "run": 3,
+      "arm": "dynamic",
+      "rated": 63,
+      "selected": 26,
+      "rated_by_level": {
+        "0": 17,
+        "1": 29,
+        "2": 17
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 25,
+        "1": 12,
+        "2": 19,
+        "3": 6,
+        "5": 1
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 181743,
+        "map": 64501,
+        "reduce": 9622
+      },
+      "output_tokens_by_stage": {
+        "build_context": 9392,
+        "map": 9129,
+        "reduce": 4199
+      },
+      "prompt_tokens_total": 255866,
+      "replay_matches_library": true
+    },
+    {
+      "query": "3",
+      "run": 1,
+      "arm": "dynamic",
+      "rated": 128,
+      "selected": 79,
+      "rated_by_level": {
+        "0": 17,
+        "1": 66,
+        "2": 45
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 20,
+        "1": 55,
+        "2": 28,
+        "3": 15,
+        "4": 9,
+        "5": 1
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 330906,
+        "map": 188849,
+        "reduce": 12774
+      },
+      "output_tokens_by_stage": {
+        "build_context": 25469,
+        "map": 34538,
+        "reduce": 7110
+      },
+      "prompt_tokens_total": 532529,
+      "replay_matches_library": true
+    },
+    {
+      "query": "3",
+      "run": 2,
+      "arm": "dynamic",
+      "rated": 131,
+      "selected": 76,
+      "rated_by_level": {
+        "0": 17,
+        "1": 67,
+        "2": 47
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 25,
+        "1": 61,
+        "2": 22,
+        "3": 16,
+        "4": 6,
+        "5": 1
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 342794,
+        "map": 186931,
+        "reduce": 12654
+      },
+      "output_tokens_by_stage": {
+        "build_context": 25154,
+        "map": 32781,
+        "reduce": 6253
+      },
+      "prompt_tokens_total": 542379,
+      "replay_matches_library": true
+    },
+    {
+      "query": "3",
+      "run": 3,
+      "arm": "dynamic",
+      "rated": 127,
+      "selected": 83,
+      "rated_by_level": {
+        "0": 17,
+        "1": 66,
+        "2": 44
+      },
+      "fallback_fired": [],
+      "rating_histogram": {
+        "0": 15,
+        "1": 66,
+        "2": 28,
+        "3": 12,
+        "4": 4,
+        "5": 2
+      },
+      "prompt_tokens_by_stage": {
+        "build_context": 324415,
+        "map": 194492,
+        "reduce": 12669
+      },
+      "output_tokens_by_stage": {
+        "build_context": 26093,
+        "map": 33411,
+        "reduce": 6708
+      },
+      "prompt_tokens_total": 531576,
+      "replay_matches_library": true,
+      "unit_rating_tokens": 2554,
+      "unit_map_tokens": 2343,
+      "model_predicted_tokens": 557598,
+      "model_error_pct": 4.9
+    }
+  ]
+}
