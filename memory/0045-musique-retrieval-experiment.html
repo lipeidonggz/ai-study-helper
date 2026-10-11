@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0045 · MuSiQue 检索对照实验 · 语料与编译基线（30 题／572 段）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+    table { font-size: 0.92em; }
+    .toc { background: var(--code-bg); border-radius: 8px; padding: 12px 18px; margin: 0 0 18px; }
+    .toc-title { margin: 0 0 6px; }
+    .toc ul { margin: 4px 0 4px; padding-left: 18px; }
+    .toc li { margin: 2px 0; font-size: 0.93em; line-height: 1.5; }
+    .toc a { text-decoration: none; }
+    .tbl-wide { font-size: 0.82em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0045 · MuSiQue 检索对照实验 · 语料与编译基线</h1>
+      <p class="subtitle"><b>一句话</b>：把 <a href="0044-weknora-retrieval-outline.html">0044</a> 那篇检索对照实验的<b>原料与基线</b>钉死——数据取自哪、30 道题具体是哪些、语料怎么切、投进 WeKnora 全量编译花了多少（实测，不是估算）。</p>
+      <p class="subtitle">状态：<span class="half">△ 语料与编译基线已定；题量放大与三臂问答对照待做</span> · 现场时间：2026-10-10 → 2026-10-11 · 上游：<a href="0044-weknora-retrieval-outline.html">0044</a>（检索篇提纲）／<a href="0037-llmwiki-weknora-setup.html">0037</a>（编译源码细读）／<code>docs/publish/0043-llmwiki-compile-pipeline.md</code>（对外编译篇）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 复现资产：<code>experiments/weknora/{download_musique,musique_shape,prep_musique_corpus,weknora_musique,usage_report}.py</code></p>
+    </header>
+
+
+
+
+
+      <div class="toc">
+        <p class="toc-title"><b>本页目录</b></p>
+        <ul>
+          <li><a href="#s1">第一部分 · 思路简要描述 ＋ 结论</a>
+            <ul>
+              <li><a href="#s2">0. 实验设计（跑之前先定，避免事后解释）</a></li>
+              <li><a href="#s3">0.1 五个臂各自怎么跑（机制，逐条）</a></li>
+              <li><a href="#s4">1. 为什么要单独记这一篇</a></li>
+              <li><a href="#s5">2. 数据来源与口径</a></li>
+              <li><a href="#s6">3. 这 30 道题（分层：2／3／4 跳各取前 10 条）</a></li>
+              <li><a href="#s7">4. 语料怎么切</a></li>
+              <li><a href="#s8">5. WeKnora 侧：编译基线（全量实测）</a></li>
+              <li><a href="#s9">6. 已否决：靠"合并文档"降成本</a></li>
+              <li><a href="#s10">7. 首轮问答实测（2026-10-11）：quick vs wiki</a>
+                <ul>
+                  <li><a href="#s11">7.1 逐题结果（30 题 × 2 臂，✅ 2026-10-11）</a></li>
+                  <li><a href="#s12">7.2 quick 臂到底怎么跑的（✅ 拿第 1 题的真实流水线日志逐段核过）</a></li>
+                  <li><a href="#s13">7.3 两臂的 token 账（✅ 按 session 聚合日志，2026-10-11）与生产选型视角</a></li>
+                  <li><a href="#s14">7.4 环境改动：配好重排模型（✅ 2026-10-11，三步都验过）</a></li>
+                  <li><a href="#s15">7.5 B 臂结果：quick ＋ rerank（✅ 2026-10-11，30 题单轮）</a></li>
+                  <li><a href="#s16">7.6 四臂总表（✅ 2026-10-11 第二轮跑批，各 30 题单轮；C／D／E 为配好 rerank 后新跑）</a></li>
+                  <li><a href="#s17">7.7 为什么 C 的召回高、D 的低，F1 却一样（✅ 逐题交叉验证，2026-10-11）</a></li>
+                  <li><a href="#s18">7.8 smart 臂到底怎么跑的（✅ 2026-10-11 核过配置与实测调用）</a></li>
+                  <li><a href="#s19">7.9 成本口径与一次自我更正（数字见上表）</a></li>
+                  <li><a href="#s26">7.10 smart-v3 与 wiki 的逐跳对照（✅ 2026-10-11）</a></li>
+                  <li><a href="#s27">7.11 4 跳专项：那 211 万 token 的题到底发生了什么（✅ 2026-10-11）</a></li>
+                  <li><a href="#s28">7.12 谁在踩刹车：判停机制盘点（✅ 源码 + 实测，#28 与 wiki 的对照组）</a></li>
+                  <li><a href="#s29">7.13 为什么 wiki 会停、smart 不会停：工具的「有没有否信号」（✅ 实测，2026-10-11）</a></li>
+                  <li><a href="#s30">7.14 2 跳专项：10 题逐题对照（quick / smart-v3 / wiki，✅ 2026-10-11）</a></li>
+                  <li><a href="#s31">7.15 #9／#10 专项：wiki 答对了，但代价为什么这么高（✅ 2026-10-11）</a></li>
+                  <li><a href="#s32">7.16 3 跳专项：10 题逐题对照（✅ 2026-10-11）</a></li>
+                  <li><a href="#s33">7.17 4 跳专项：10 题逐题对照（✅ 2026-10-11）</a></li>
+                  <li><a href="#s34">7.18 汇总：按跳数 × 三臂（✅ 2026-10-11）</a></li>
+                  <li><a href="#s35">7.19 #13 为什么「弱的答对、强的答错」：题面的词义陷阱（✅ 2026-10-11 逐轮核过）</a></li>
+                  <li><a href="#s36">7.20 全 30 题里「quick 对、smart 错」的只有一例（✅ 2026-10-11）</a></li>
+                  <li><a href="#s37">7.21 多轮均值（过程记录：当时只跑完四臂）</a></li>
+                  <li><a href="#s38">7.22 「越跑越贵」是怎么来的：逐条排查（✅ 2026-10-11）</a></li>
+                  <li><a href="#s39">7.23 wiki 有没有同样的长尾点火？（✅ 有，而且更明显）</a></li>
+                  <li><a href="#s40">7.24 五臂三轮均值（✅ 2026-10-11，各 3 轮）</a></li>
+                  <li><a href="#s41">7.25 论文结果数据速查（LLM-Wiki，备查）</a></li>
+                  <li><a href="#s42">7.26 我们的绝对值为什么远低于论文：三条候选的量化</a></li>
+                  <li><a href="#s43">7.27 把经典臂的 top-k 从 10 调到 20：实测是负收益（✅ 2026-10-11）</a></li>
+                  <li><a href="#s44">7.28 换 DeepSeek V4 Pro 试了一轮：它把 9/30 道题判成「需要联网」并跳过检索（✅ 2026-10-11）</a></li>
+                  <li><a href="#s45">7.29 「意图判错」是怎么发生的：一段提示词 ＋ 一处代码（✅ 2026-10-11 源码 ＋ 日志逐条对账）</a></li>
+                  <li><a href="#s46">7.30 同管线只换作答模型（flash ⇄ V4 Pro）：F1 不动，30 题里 21 题同题同错（✅ 2026-10-11，各 3 轮）</a></li>
+                  <li><a href="#s47">7.31 点火实验：同一道题连跑 8 次，成本差 19 倍（✅ 2026-10-11）</a></li>
+                </ul>
+              </li>
+              <li><a href="#s20">8. smart 臂为什么跑不起来（拦路缺陷，值得单独提 issue）</a></li>
+              <li><a href="#s48">9. 阶段性结论（2026-10-11）：Agentic Wiki vs Agentic RAG</a></li>
+              <li><a href="#s49">10. 逐题拆 Wiki vs Agentic RAG：三条路线各占一段（下一篇的引子）</a></li>
+              <li><a href="#s21">11. 待定与下一步</a></li>
+            </ul>
+          </li>
+          <li><a href="#s22">第二部分 · 现场细节（考古层）</a>
+            <ul>
+              <li><a href="#s23">时间线（2026-10-10 → 10-11）</a></li>
+              <li><a href="#s24">踩到的坑（都记下来）</a></li>
+              <li><a href="#s25">复现资产</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+    <section class="card">
+      <h2 id="s1">第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 id="s2" style="margin-top:16px;">0. 实验设计（跑之前先定，避免事后解释）</h3>
+
+      <p><b>定位</b>：这不是论文复现，而是<b>生产选型</b>视角的一次对照——今天要把一套知识库接给 agent，<b>编译成页面再让 agent 遍历</b>（wiki 路线）与<b>把经典检索手段全上</b>（向量＋关键词＋重排）相比，在同一个任务、同一份语料、同一个回答模型下，质量差多少、成本差多少、这个差随问题难度怎么变。</p>
+
+      <p><b>要回答的三个问题</b>：<b>Q1 质量</b>——同等条件下两种路线谁答得对？<b>Q2 深度</b>——差距是否随跳数（2／3／4 跳）放大？<b>Q3 代价</b>——各自烧多少 token、多少端到端时延、多少轮工具调用，也就是"在什么成本档位上它才划算"。</p>
+
+      <p><b>被测系统的五个臂</b>（同一个 MuSiQue 库、同一个回答模型 deepseek-flash）：</p>
+      <table>
+        <thead><tr><th>臂</th><th>端点</th><th>检索单位</th><th>工具／流程</th><th>需 rerank</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td><b>A</b> quick（基线）</td><td><code>/knowledge-chat</code></td><td>块</td><td>改写 → 向量＋关键词 → 无重排 → top-10 → 一次生成</td><td>否</td><td>✅ 已跑（无 rerank 的裸奔形态）</td></tr>
+          <tr><td><b>B</b> quick ＋ rerank</td><td><code>/knowledge-chat</code></td><td>块</td><td>同上 ＋ 重排（＝业界"已有手段全上"）</td><td><b>是</b></td><td>✅ 已解锁，待跑</td></tr>
+          <tr><td><b>C</b> smart</td><td><code>/agent-chat</code></td><td>块</td><td>agent 循环：<code>search_knowledge</code>／<code>read_document</code>／<code>list_documents</code>（rag-qa）</td><td><b>是</b></td><td>✅ 已解锁，待跑</td></tr>
+          <tr><td><b>D</b> wiki</td><td><code>/agent-chat</code></td><td>页</td><td>agent 循环：<code>wiki_search</code>／<code>wiki_read_page</code>／<code>read_document</code>（wiki-qa）</td><td>否</td><td>✅ 已跑</td></tr>
+          <tr><td><b>E</b> hybrid</td><td><code>/agent-chat</code></td><td>页＋块</td><td>预设 <code>hybrid-rag-wiki</code>：wiki 建导航、块做精确引用</td><td><b>是</b></td><td>✅ 具备条件，待跑</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="s3">0.1 五个臂各自怎么跑（机制，逐条）</h3>
+      <p>共同前提：同一个知识库（572 段、1,408 块）、同一个回答模型 <code>deepseek-flash</code>、每题新会话、题目末尾统一追加英文短答案指令；agent 类走 <code>/agent-chat</code>，经典类走 <code>/knowledge-chat</code>。</p>
+      <p><b>臂 A／B（经典管线，走 <code>/knowledge-chat</code>）</b>：固定七段流水线——LoadHistory（读最近 5 轮）→ MemoryRecall（兴趣记忆，通常不注入）→ <b>QueryUnderstand</b>（一次 LLM 改写，<code>enable_rewrite=true</code>，实测约 0.7s）→ <b>SearchParallel</b>（块检索：向量与关键词并行 → RRF 融合；实体检索因图谱关闭恒为 0；候选池 ＝ max(topk×5, 默认值) 封顶 500，本库共 1,408 块）→ <b>Rerank</b> → Merge／FilterTopK（去重、父子块、邻块扩展、FAQ 优先）→ <b>一次生成</b>（带引用）。<b>A 与 B 的唯一差别是 Rerank</b>：A 没配重排模型（<code>rerank_cnt=0</code>，整段跳过）；B 用 <code>qwen3-rerank</code> 打分并按阈值 0.3 过滤（实测 10 条候选 → 7 条进上下文）。<b>关键性质：只有一次检索</b>，模型不能自己决定再搜一次；命中的那 8–9 条块就是全部证据（渲染出的 prompt 约 7.6k 字符）。实测 2.0s／4.6s 每题。</p>
+      <p><b>臂 C（smart，走 <code>/agent-chat</code>，<code>agent_type=rag-qa</code>）</b>：工具 4 个——<code>search_knowledge</code>（分块检索，可指定 hybrid／semantic／keyword 与 limit）／<code>read_document</code>（按序读某文档的块，可分页或文内查找）／<code>list_documents</code>（列文档）／<code>query_knowledge_graph</code>（图谱，本库关闭、形同虚设）；<code>max_iterations=50</code>、temperature 0.7、thinking 关。<b>流程是 ReAct 循环</b>：每轮把 [系统提示 ＋ 运行上下文 ＋ 历史 ＋ 已回灌的工具结果] 交给模型，模型自己决定调哪个工具或直接作答，直到给出最终答案或撞上限。<b>实测 30 题共 264 次调用</b>（search_knowledge 224／list_documents 32／read_document 8／图谱 0），中位 4 次、最大 50（撞上限），约 6.4s 每题。⚠️ 注意一处不对等：这个 agent 是照抄内置 agent 建的，<b>system_prompt 为空且没有 system_prompt_id</b> ⇒ 用的是引擎默认提示词，而不是 rag-qa 预设的 <code>progressive_rag_agent</code>（见 §7.8）。</p>
+      <p><b>臂 D（wiki，走 <code>/agent-chat</code>，<code>agent_type=wiki-qa</code>）</b>：工具 4 个——<code>wiki_search</code>（在 Wiki 里找页）／<code>wiki_read_page</code>（读页，返回关系、链接与来源）／<code>read_document</code>（回原文核引文）／<code>wiki_flag_issue</code>（标记问题）；<code>max_iterations=30</code>，自带提示词是 wiki-first：先用 wiki_search 找入口（用户要总览时先读索引）、读页、<b>只在解决具体缺口时才跟链接</b>，需要精确引文或数字时回原文。<b>实测 30 题共 462 次调用</b>（wiki_search 304／wiki_read_page 124／read_document 34），中位 14 次、6.0s 每题。<b>它的检索单位是页、不是块</b>——页是编译产物，带双向链接与来源。</p>
+      <p><b>臂 E（hybrid，走 <code>/agent-chat</code>，<code>agent_type=hybrid-rag-wiki</code>，WeKnora 自带预设）</b>：工具 6 个——wiki 四件 ＋ <code>search_knowledge</code> ＋ <code>list_documents</code>；<code>max_iterations=40</code>，<code>system_prompt_id=hybrid_rag_wiki_agent</code>。预设语义是<b>先用 wiki 建导航与背景、再用分块检索做精确引用</b>，并规定退化路径（只有块就当纯 RAG、只有 wiki 就当纯 wiki）。<b>实测 30 题共 498 次调用</b>，其中 <code>search_knowledge</code> 占 <b>66%（330 次）</b>、<code>wiki_read_page</code> 只有 38 次 ⇒ <b>它实际跑成了块 agent 偶尔看一眼 wiki</b>，没体现预设宣称的 wiki-first；13.9s／题、16.6 次／题（最贵），单题最多 114 次调用。</p>
+      <p>两条共性机制：① agent 类的工具结果在历史里会被压缩成 details omitted from history，所以模型当轮看到的与历史里留下的是两回事（这也正是我们改从 agent_steps 取证据的原因）；② 重排只在 search_knowledge 这条路上生效，wiki 工具不经过重排。</p>
+      <p><b>语料与题目</b>：MuSiQue <code>full dev</code> 的可答子集，按跳数分档各取文件顺序前 10 条（共 30 题：2／3／4 跳各 10）；语料 ＝ 这 30 题的 context 段落<b>并集</b>（一段一个知识条目，共 572 条），<b>真证据与干扰段全留</b>——这是论文口径，也是"多跳＋干扰"难度的来源。每题 20 段，其中 2–4 段是证据（<code>is_supporting</code>）。</p>
+
+      <p><b>指标（三层，各自分工）</b>：</p>
+      <table>
+        <thead><tr><th>层</th><th>指标</th><th>口径</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>答案质量（主）</td><td>Answer <b>F1 ＋ EM</b>，并按 2／3／4 跳分层</td><td>论文口径：SQuAD 式归一化（小写、去标点、去 a／an／the、去引用标签）后算 EM 与词级 F1；预测与金答案及 <code>answer_aliases</code> 取最好分；逐题算完对整表取宏平均</td><td>✅ 已有实现</td></tr>
+          <tr><td>检索质量</td><td><b>证据召回</b>：金标支撑段被摸到的比例、在第几轮摸到</td><td>MuSiQue 白送 <code>is_supporting</code> 与 <code>paragraph_support_idx</code>；不受答案措辞影响，直接回答"遍历到底有没有帮上忙"</td><td>⬜ 待补（需抓工具输出）</td></tr>
+          <tr><td>成本</td><td><b>端到端 token</b>（该题所有 LLM 调用的 prompt＋completion）、<b>端到端时延</b>、<b>工具调用轮数</b>、检索候选／保留条数</td><td>日志 <code>[LLM Usage]</code> 按请求聚合到会话；时延＝POST 到流结束的墙钟</td><td>✅ 已有</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>公平性设定（六条）</b>：① 所有臂用<b>同一个知识库、同一个回答模型</b>；② 每题<b>新建会话</b>，杜绝历史污染；③ 题目末尾统一加同一句 <i>Answer with only the answer span itself, in English. No explanation.</i>（不加则中文作答，跨语言直接毁掉 F1；这句话对五臂完全一致，不偏袒任何一方）；④ 温度、最大轮数等<b>用产品默认</b>，不为某一臂特调；⑤ <b>不用 k 去对齐两臂 token</b>（见下）；⑥ 同一题多跑几次取均值，避免把单次抖动当结论。</p>
+
+      <p><b>为什么不用"召回条数 k"来对齐 token</b>（✅ 实测支撑）：两臂的成本驱动因素根本不同——quick 每题 token 中位 <b>15,330</b>，几乎与题目无关（检索上下文只占其中约 1k）；wiki 每题中位 <b>110,991</b>、p90 <b>749,064</b>、最大 187 万，成本由<b>轮数 × 逐轮累积的上下文</b>决定，与 k 无关。把 k 从 10 拉到几百也追不上，还会把证据淹掉。⇒ 正确的做法是<b>在各自的生产旋钮上扫档</b>（quick 扫 k；agent 侧扫 <code>max_iterations</code>），画<b>质量-成本</b>与<b>质量-时延</b>曲线，结论取"同等成本下谁质量更高／同等质量下谁更便宜"。</p>
+
+      <p><b>与论文的差异（九条，逐条要在文中声明）</b>：</p>
+      <table>
+        <thead><tr><th>#</th><th>维度</th><th>论文</th><th>我们</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>目的</td><td>证明 LLM-Wiki 优于七种基线（含 BM25／Dense／RAPTOR／GraphRAG／LightRAG／HippoRAG 2）</td><td>生产选型：只比"经典全上"与"wiki 路线"，并量代价</td></tr>
+          <tr><td>2</td><td>题量</td><td>每基准<b>前 500 题</b></td><td><b>30 题</b>（2／3／4 跳各 10），只看趋势不看绝对值</td></tr>
+          <tr><td>3</td><td>语料规模</td><td>该 500 题的 context 并集（如 2Wiki 有 3,440 passages）</td><td>该 30 题的并集（<b>572 段</b>），候选池小得多 ⇒ 更容易</td></tr>
+          <tr><td>4</td><td>回答／编译模型</td><td>统一 <b>GLM-5.1</b>；嵌入 Qwen3-Embedding-8B</td><td><b>deepseek-flash</b>；嵌入 qwen3.7-text-embedding（明显更弱的一档）</td></tr>
+          <tr><td>5</td><td>经典基线形态</td><td>Dense RAG ＝ 纯稠密 ＋ <b>top-5</b> ＋ 生成，<b>无重排</b>；BM25 同 top-5</td><td>A ＝ 向量＋关键词＋top-10 <b>无重排</b>；B ＝ 再加<b>重排</b>（强于论文基线）</td></tr>
+          <tr><td>6</td><td>"wiki 臂"的实现</td><td>自研：SelectPages 最多 5 页、T_max=15、patience P=3、Error Book 每 10 批复验</td><td>WeKnora 的 <code>wiki-qa</code> agent：<code>wiki_search</code> 走正则（且不认别名）、页面<b>不进检索索引</b>、<code>max_iterations=30</code>、<b>无 Error Book 回灌</b> ⇒ 只能算"部分实现"</td></tr>
+          <tr><td>7</td><td>指标</td><td>Answer F1／EM ＋ 平均时延（AuthTrace 才用 GPT-4o-mini 判官）</td><td>同主指标，<b>另加证据召回与 token 账</b>（论文没报这两项）</td></tr>
+          <tr><td>8</td><td>回答语言</td><td>英文基准原生作答</td><td>KB 默认输出中文 ⇒ <b>必须强制英文短答案</b>，这是测量有效性的前置条件</td></tr>
+          <tr><td>9</td><td>不可答半</td><td>MuSiQue-Full 用它做 answerability 判断</td><td>只当"限定语料"的探针（共享语料下它们全部变回可答），本轮不打分</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>已知 confound 与限制（诚实清单）</b>：① A 臂缺重排（是"下限形态"）；② 图谱关闭 ⇒ 实体检索恒为 0；③ 编译产物是<b>中文页面</b>（英文语料），影响页面可读与检索匹配；④ 每档只有 10 题、单次运行，同题重跑结果会变；⑤ 回答模型偏弱；⑥ 语料池偏小；⑦ 块↔段落证据映射未做，故暂不能算证据召回；⑧ 判官缺席（纯字符串指标会冤枉语义等价的答案，如 <code>610 Bay Street</code>）。</p>
+
+      <p><b>事先声明的判读规则（避免事后解释）</b>：① <b>主判据</b>＝3／4 跳上 wiki 路线（D／E）的 F1 是否<b>稳定高于</b>经典全上（B），且差距不靠单题；② <b>成本判据</b>＝把 token 与端到端时延并排报，若 wiki 路线的 token 是 B 的 5 倍以上，则必须同时给出"同等成本"下的对照，否则结论只能写成"质量换钱"；③ 2 跳上双方接近即符合论文预期（简单题经典检索不吃亏）；④ 任何一档只有 10 题时，<b>单题 0.1 F1</b>，差 0.1 以内不称为差异；⑤ 出现"某臂赢在个别题"时，一律回到逐题表核对。</p>
+
+      <p><b>执行顺序与成本估计</b>：B（quick＋rerank，2 分钟）→ E（hybrid，约 5–10 分钟）→ C（smart，约 5–10 分钟）→ 与已有 A／D 合并报表 → 补齐证据召回后重算一次。全部 30 题、单次运行，预计半小时内跑完；需要多轮均值时再翻倍。</p>
+
+      <h3 id="s4" style="margin-top:16px;">1. 为什么要单独记这一篇</h3>
+      <p>0044 定了实验设计（用论文同款公开基准 <b>MuSiQue</b>；语料＝所选题目的 context 段落并集，一段一条入库编译），但"原料与基线"是后面会被反复引用的硬事实：<b>具体是哪 30 道题、多少条语料、编译烧了多少 token 与多久</b>。这些如果只躺在 <code>data/tmp/</code> 的 jsonl 里，不算记录（随时可能被清理，也无法在文里引用）。所以固化成本篇。</p>
+
+      <h3 id="s5">2. 数据来源与口径</h3>
+      <ul>
+        <li><b>取数</b>：官方数据在 Google Drive，HuggingFace 上是镜像；本机可达 GitHub／PyPI，HF 与 Google 要走本地代理（<code>127.0.0.1:7890</code>）。已用 <code>download_musique.py</code> 从镜像 <code>voidful/MuSiQue</code> 拉到 <code>data/tmp/musique/</code>。</li>
+        <li><b>三个 split 的形状（✅ 实测）</b>：<code>musique_full_v1.0_dev</code>＝4,834 行（2,417 可答 ＋ 2,417 不可答）；<code>musique_ans_v1.0_dev</code>＝2,417 行（与 full 的可答半 <code>id</code> 集合完全一致，但<b>按跳数排过序</b>，前 1,252 行全是 2 跳）；<code>musique_full_v1.0_test</code>＝4,918 行，<b>没有 answer 字段</b> ⇒ 不能用来打分。</li>
+        <li><b>"不可答"是官方造的对照对</b>（📎 MuSiQue 论文 §5 步骤 S8：为每条可答题造一条孪生题，随机挑其中一个单跳子问题，保证该跳答案<b>不出现在 context 的任何段落里</b>，其余照常构造）⇒ 问题文本相同、金答案相同，只有段落不同；配对键是 <code>id</code>（4,834 行 ＝ 2,417 个 id × 2；同 id 两行必为一 true 一 false），不是行位置（成对两行平均相隔 1,363 行）。✅ 实测两版 context 平均重叠 13／20 段，被拿掉的支撑段是原支撑段的子集。</li>
+        <li><b>我们的取法</b>：只用 <b>full dev 的可答子集、保持文件里的原始顺序</b>——最接近论文那句 <i>"first 500 QA examples in the original dataset order"</i> 且还能打分。⚠️ 论文全文没写用哪个 split（连 dev／test 字样都没出现），这条差异要在文里声明。</li>
+        <li><b>不可答半的正确用法</b>：它只相对于"自己那 20 段"成立。我们的语料来自可答行，所以任何 U 行被拿掉的那段证据<b>本来就在语料里</b>（✅ 30 题里 30/30 能找到）⇒ 在这份共享语料下它们全部变回可答。要测"证据不足时会不会硬答"，必须把检索范围限定为该行自己的 20 段。</li>
+        <li><b>白送的评测料</b>：MuSiQue 不只给答案，还给证据标注（<code>paragraphs[].is_supporting</code> ＋ <code>question_decomposition[].paragraph_support_idx</code>）⇒ 除 Answer F1／EM 外还能算<b>证据召回</b>。</li>
+      </ul>
+
+      <h3 id="s6">3. 这 30 道题（分层：2／3／4 跳各取前 10 条）</h3>
+      <p class="muted">选法＝在 full dev 可答子集里按跳数分档，各取文件顺序前 10 条（<b>不是随机抽样</b>；full dev 本身是打散的，接近任意但不等价；要严格随机可加 <code>--seed</code>）。机器副本：<code>data/tmp/musique/slice-30-strat/questions.jsonl</code>。</p>
+      <table>
+        <thead><tr><th>#</th><th>id</th><th>跳</th><th>问题</th><th>金答案</th><th>支撑段（标题）</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><code>2hop__231890_595414</code></td><td>2</td><td>Which county does Lloyd Dane&#x27;s birthplace belong to?</td><td><b>Miller County</b></td><td class="muted">Lloyd Dane, Eldon, Missouri</td></tr>
+          <tr><td>2</td><td><code>2hop__525242_52835</code></td><td>2</td><td>Who wrote &quot;Turn Me On&quot; by performer of &quot;Happy Pills&quot;?</td><td><b>John D. Loudermilk</b></td><td class="muted">Happy Pills (song), Turn Me On (Mark Dinning song)</td></tr>
+          <tr><td>3</td><td><code>2hop__169443_83769</code></td><td>2</td><td>Who did the screenwriter for Good Will Hunting play in Dazed and Confused?</td><td><b>Fred O&#x27;Bannion</b></td><td class="muted">List of awards and nominations received by Matt Damon, Dazed and Confused (film)</td></tr>
+          <tr><td>4</td><td><code>2hop__21104_16335</code></td><td>2</td><td>The group representing at least 70% of Jews worldwide and Italians may be genetically similar due to what two factors?</td><td><b>inter-marriage and conversions in the time of the Roman Empire</b></td><td class="muted">Jews, Ashkenazi Jews</td></tr>
+          <tr><td>5</td><td><code>2hop__499003_853511</code></td><td>2</td><td>What is the record label for the band which performed Pythons?</td><td><b>Kanine Records</b></td><td class="muted">Tarot Classics, Pythons (album)</td></tr>
+          <tr><td>6</td><td><code>2hop__82910_75184</code></td><td>2</td><td>Who played the girlfriend of Alex P. Keaton&#x27;s actor on Family Ties in Back to the Future?</td><td><b>Claudia Wells</b></td><td class="muted">Alex P. Keaton, List of Back to the Future characters</td></tr>
+          <tr><td>7</td><td><code>2hop__88372_83837</code></td><td>2</td><td>Who sings home alone tonight with the singer of you can crash my party anytime?</td><td><b>Karen Fairchild</b></td><td class="muted">Home Alone Tonight, Crash My Party</td></tr>
+          <tr><td>8</td><td><code>2hop__669456_108549</code></td><td>2</td><td>Who wrote the show that Jimmy Olsen works for?</td><td><b>Alfred Gough</b></td><td class="muted">Smallville, Aaron Ashmore</td></tr>
+          <tr><td>9</td><td><code>2hop__16267_25719</code></td><td>2</td><td>At the end of which year did the tribes in the area where the Ashkenazi Jews can trace their ancestry to Jews who settled there invade the roman empire?</td><td><b>406</b></td><td class="muted">Galicia (Spain), Ashkenazi Jews</td></tr>
+          <tr><td>10</td><td><code>2hop__44590_510545</code></td><td>2</td><td>Who is the spouse of the person who voices Jarvis in Iron Man?</td><td><b>Jennifer Connelly</b></td><td class="muted">A Beautiful Mind (soundtrack), Paul Bettany</td></tr>
+          <tr><td>11</td><td><code>3hop1__241001_568433_47686</code></td><td>3</td><td>Where do Greyhound buses leave from in the city where Arna Selznick&#x27;s employer is headquartered?</td><td><b>Toronto Coach Terminal</b></td><td class="muted">Arna Selznick, Natalie Turner, Toronto Coach Terminal</td></tr>
+          <tr><td>12</td><td><code>3hop2__19639_90098_10557</code></td><td>3</td><td>What was the version of the language where the last name Sylvester originates, used in the era of the king that united the tribes in the 9th century, later called?</td><td><b>Medieval Latin</b></td><td class="muted">Germans, Middle Ages, Sylvester</td></tr>
+          <tr><td>13</td><td><code>3hop2__326964_36852_7713</code></td><td>3</td><td>How long was the city the Qing lost in 1853 the capital of the province where Yaxing Coach is headquartered?</td><td><b>about 400 years</b></td><td class="muted">Yaxing Coach, Qing dynasty, Nanjing</td></tr>
+          <tr><td>14</td><td><code>3hop2__31398_2130_2232</code></td><td>3</td><td>What franchise of the pro soccer organization headquartered in New York, is based in the city that produced the album considered the true portrait of the No Wave movement?</td><td><b>New York City FC</b></td><td class="muted">New York City, New York City, Post-punk</td></tr>
+          <tr><td>15</td><td><code>3hop1__506062_792411_51423</code></td><td>3</td><td>What is the name of the castle in the place of birth of the performer of When I Was a Boy?</td><td><b>Casa Loma</b></td><td class="muted">Casa Loma, Gavin Bradley, When I Was a Boy</td></tr>
+          <tr><td>16</td><td><code>3hop2__304722_230978_63959</code></td><td>3</td><td>When was the last time the team Matthew Webb was a member of beat the winner of the 1894-95 FA Cup?</td><td><b>1 December 2010</b></td><td class="muted">1894–95 FA Cup, Second City derby, Matthew Webb (footballer)</td></tr>
+          <tr><td>17</td><td><code>3hop2__88342_93066_47738</code></td><td>3</td><td>When did the team that won the AL East in 2017 last play in the event after which the MLB MVP is awarded?</td><td><b>the 2009 season</b></td><td class="muted">2017 American League Championship Series, Major League Baseball Most Valuable Player Award, New York Yankees</td></tr>
+          <tr><td>18</td><td><code>3hop1__818422_160545_34751</code></td><td>3</td><td>What year did the country where the place of birth of Beatrice Heuser is located form an alliance with Japan?</td><td><b>1941</b></td><td class="muted">Beatrice Heuser, Pacific War, Bang Bon District</td></tr>
+          <tr><td>19</td><td><code>3hop1__145411_443779_52195</code></td><td>3</td><td>Who is the president of the newly declared independent country that is part of the Commission of Truth and Friendship with the country where Sumardi was born?</td><td><b>Francisco Guterres</b></td><td class="muted">Indonesia–Timor Leste Commission of Truth and Friendship, East Timor, Sumardi</td></tr>
+          <tr><td>20</td><td><code>3hop1__831499_228453_10972</code></td><td>3</td><td>When did the city where the headquarters of Barton Premium Blend&#x27;s manufacturer is located elect its first black mayor?</td><td><b>1970s</b></td><td class="muted">Black people, Sazerac, Barton Premium Blend</td></tr>
+          <tr><td>21</td><td><code>4hop1__436202_765799_282674_759393</code></td><td>4</td><td>What is the seat of the county sharing a border with the county in which J. P. Hayes was born?</td><td><b>Green Bay</b></td><td class="muted">Pulaski High School, J. P. Hayes, Jerome Quinn, John C. Petersen</td></tr>
+          <tr><td>22</td><td><code>4hop1__17192_17130_70784_61381</code></td><td>4</td><td>When was the region immediately north of the region where the country that secured southern Lebanon is located and the Persian Gulf established?</td><td><b>1932</b></td><td class="muted">Israel, Israel, Saudi Arabia, Geography of Saudi Arabia</td></tr>
+          <tr><td>23</td><td><code>4hop1__56635_49925_13759_736921</code></td><td>4</td><td>The German priest, who wanted to reform the religious denomination now the largest in the US, preached a sermon on Marian devotion soon before his death in which German state?</td><td><b>Saxony-Anhalt</b></td><td class="muted">Mary, mother of Jesus, Wittenberg (district), Reformation, Religion in the United States</td></tr>
+          <tr><td>24</td><td><code>4hop3__323121_88460_30152_20999</code></td><td>4</td><td>How were people from whom new coins were a proclamation of independence by the Somali Muslim Ajuran Empire expelled from the natural boundary between Thailand and A Magne&#x27;s country?</td><td><b>The dynasty regrouped and defeated the Portuguese</b></td><td class="muted">A Magne, Geography of Myanmar, Ottoman Empire, Myanmar</td></tr>
+          <tr><td>25</td><td><code>4hop1__33012_53706_795904_580996</code></td><td>4</td><td>What city shares a border with the place where the person who went to the state known for its Mediterranean climate during the gold rush worked?</td><td><b>Rio Linda</b></td><td class="muted">California Gold Rush, Geography of the United States, Rio Linda High School, History of Sacramento, California</td></tr>
+          <tr><td>26</td><td><code>4hop3__316459_41402_145922_13584</code></td><td>4</td><td>Besides areas of the country gaining control of Florida after the conflict Charles Edmund Nugent participated in, what other differences exist between where Carlos Barral died and Real Madrid?</td><td><b>two cities</b></td><td class="muted">Jacksonville, Florida, Carlos Barral, Charles Edmund Nugent, FC Barcelona</td></tr>
+          <tr><td>27</td><td><code>4hop1__342858_131850_33952_34053</code></td><td>4</td><td>What was the wettest year in the second largest city in the state where Yuma&#x27;s Library District is located?</td><td><b>1905</b></td><td class="muted">Yuma County Library District, Yuma, Colorado, Tucson, Arizona, Tucson, Arizona</td></tr>
+          <tr><td>28</td><td><code>4hop1__158877_53706_795904_580996</code></td><td>4</td><td>What shares a border with the city where the person who went to the state where Baskin-Robbins was founded during the gold rush works?</td><td><b>Rio Linda</b></td><td class="muted">History of Sacramento, California, Baskin-Robbins, Rio Linda High School, California Gold Rush</td></tr>
+          <tr><td>29</td><td><code>4hop3__160230_470287_345497_72134</code></td><td>4</td><td>When did the death city of Taito Kantonen become the capital of the US state having the statue being the title of the various Latin Mother goddess?</td><td><b>1839</b></td><td class="muted">Springfield, Illinois, Taito Kantonen, Alma mater, Alma Mater (Illinois sculpture)</td></tr>
+          <tr><td>30</td><td><code>4hop1__131820_59747_211319_557671</code></td><td>4</td><td>Which county shares a border with the county where the most populous city in the state where WEKL operates is located?</td><td><b>Presque Isle County</b></td><td class="muted">List of municipalities in Georgia (U.S. state), WEKL, Alpena Power Company, Sno*Drift</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="s7">4. 语料怎么切</h3>
+      <ul>
+        <li>把这 30 题的 <code>paragraphs</code> <b>全量</b>取出（每题 20 段 ＝ 600 个段落位，<b>真证据 ＋ 干扰段都留</b>，这是论文口径，也是"多跳 ＋ 干扰"难度的来源）；</li>
+        <li>去重按 <b>(标题, 正文)</b>——<b>不能只按标题</b>：MuSiQue 同一篇文章会被不同题取成不同片段（30 题内 36 个标题带多版正文，"Ashkenazi Jews" 一个标题 14 版），只按标题去重会<b>静默丢掉</b> 67 条；</li>
+        <li>产出：<b>572 条</b>（<code>corpus/</code>，299,356 字符 ／ 67.5k token；其中 67 条因同名不同正文带 <code>__N</code> 后缀）；脚本 <code>experiments/weknora/prep_musique_corpus.py --n 30 --stratified</code>，产物目录 <code>data/tmp/musique/slice-30-strat/</code>（<code>questions.jsonl</code> ＋ <code>corpus/</code> ＋ <code>manifest.json</code>）；</li>
+        <li>✅ 校验：md 正文与 jsonl 对应段落<b>逐字节一致</b>（572/572）。</li>
+      </ul>
+
+      <h3 id="s8">5. WeKnora 侧：编译基线（全量实测）</h3>
+      <p>库：<b>MuSiQue · 30题分层 · 检索对照</b>，<code>kb_id = e1874078-71a8-4d7f-8d8a-95ca313334ed</code>（type=wiki；vector ＋ keyword ＋ wiki 全开，graph 关；chat＝<code>deepseek-flash</code>，embedding＝<code>qwen3.7-text-embedding</code>；<code>extraction_granularity=standard</code>，与 A5／P6+P7 同档便于对照）。</p>
+      <table>
+        <thead><tr><th>项</th><th>实测值</th><th>口径</th></tr></thead>
+        <tbody>
+          <tr><td>投喂</td><td>572 条，<b>3.9 秒</b>，失败 0</td><td>接口只入队（并发 6）</td></tr>
+          <tr><td>编译墙钟</td><td><b>18.0 分钟</b></td><td>首条 POST 20:01:58 → 页面数连续 3 轮不变 20:20:26；其中纯 LLM 调用阶段 14.8 分钟</td></tr>
+          <tr><td>产物</td><td><b>4,094 页</b>：entity 2,820 ／ concept 701 ／ summary 572 ／ index 1</td><td>wiki stats</td></tr>
+          <tr><td>链接 ／ 目录</td><td>23,393 条链接；29 个顶层目录；孤儿页 3</td><td>wiki stats ／ folders</td></tr>
+          <tr><td>lint</td><td>8,168 条（0 error ／ 495 warning ／ 7,673 suggestion，health 100）</td><td>wiki lint</td></tr>
+          <tr><td>块</td><td><b>1,408 个 chunk</b>（每篇 2–5 块，均值 2.46）</td><td>✅ psql <code>chunks</code> 表</td></tr>
+          <tr><td>来源结构</td><td><b>3,644 页（89%）只挂 1 个来源文档</b>；≥2 来源的 450 页；summary 页恰好 572＝每篇一张</td><td>wiki pages 全量对账</td></tr>
+          <tr><td>token</td><td><b>13,975,641</b>（prompt 12.15M ＋ completion 1.82M；prompt 缓存命中 <b>40.4%</b>）／<b>7,010 次</b>调用</td><td>日志 <code>[LLM Usage]</code>，按 时间戳＋purpose＋token 去重</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>purpose</th><th>调用数</th><th>token</th><th>占比</th></tr></thead>
+        <tbody>
+          <tr><td><code>wiki_page_modify</code>（写页）</td><td>4,215</td><td>9,777,940</td><td>70%</td></tr>
+          <tr><td><code>wiki_candidate_slug</code>（抽候选）</td><td>572</td><td>1,235,853</td><td>8.8%</td></tr>
+          <tr><td><code>wiki_summary</code>（摘要页）</td><td>572</td><td>766,576</td><td>5.5%</td></tr>
+          <tr><td><code>wiki_chunk_citation</code>（引用）</td><td>572</td><td>719,056</td><td>5.1%</td></tr>
+          <tr><td><code>wiki_deduplication</code>（判同）</td><td>361</td><td>551,608</td><td>3.9%</td></tr>
+          <tr><td><code>document_summary</code></td><td>572</td><td>499,281</td><td>3.6%</td></tr>
+          <tr><td><code>wiki_taxonomy_plan</code>（目录）</td><td>119</td><td>376,743</td><td>2.7%</td></tr>
+          <tr><td><code>wiki_index_intro</code></td><td>27</td><td>48,584</td><td>0.3%</td></tr>
+          <tr><td><b>合计</b></td><td><b>7,010</b></td><td><b>13,975,641</b></td><td>100%</td></tr>
+        </tbody>
+      </table>
+      <p><b>单价的三个口径</b>：每篇小文档 ≈ <b>24.4k token</b>、产出 <b>7.2 页</b>；语料 token 被放大 <b>207×</b>；<b>页 / 千字符 ＝ 13.7</b>（对照：中文对照篇 1.34、A5 1.86、P6+P7 1.10 ⇒ 维基段落这种"实体密集"文本产页密度高一个数量级）。</p>
+      <p><b>线性外推（仅供选题量参考）</b>：100 题（1,794 条）≈ 4,400 万 token／约 1 小时；150 题分层（2,355 条）≈ 5,700 万／约 1.2 小时；300 题（4,547 条）≈ 1.1 亿／约 2.4 小时；<b>500 题＝论文口径（6,799 条）≈ 1.66 亿／约 3.6 小时</b>；全部 2,417 题（21,024 条）≈ 5.1 亿／约 11 小时。⚠️ 500 题那档会把 wiki 推到 4～5 万页，正落在论文自己 Limitations 说的 <i>"as the Wiki grows to tens of thousands of pages, directory indices may become unwieldy and page selection may degrade"</i> 区间。</p>
+
+      <h3 id="s9">6. 已否决：靠"合并文档"降成本</h3>
+      <p>设想＝把"一题的全部支持材料"合并成一个文档（每材料一段），以此减少文档数。分析结论（✅ 有实测支撑）：</p>
+      <ul>
+        <li><b>省不到三分之一</b>：能省的只有"每篇文档一次"的那部分（candidate_slug ＋ summary ＋ document_summary ＋ taxonomy ≈ 2.88M，占 20.6%）＋ 572 张 summary 页的写页（≈1.3M）；省不掉的是 entity／concept 页的写页（≈8.4M）、引用与判同 ⇒ 14M 降到约 10M。</li>
+        <li><b>根因：钱花在"页"上，不在"文档"上</b>——89% 的页只挂 1 个来源文档，说明页不是"多篇合并出来的"，而是每篇各自抽出一串实体／概念各写一页；合并只是把同样的实体搬进同一个输入再抽一遍。</li>
+        <li><b>我一开始说的"会毁掉实验"是错的，撤回</b>：WeKnora 的检索单位是 <b>chunk</b>（本库 572 段 → 1,408 块），合并只改编译单位、不改检索单位，块数与检索池基本不变。</li>
+        <li><b>但合并确实有三个真实副作用</b>：① <b>邻块扩展</b>——检索期对每个命中块追加 <code>PreChunkID</code>／<code>NextChunkID</code>（📄 <code>knowledgebase_search_results.go:159–167</code>，标记 <code>MatchTypeNearByChunk</code>），而前后链只在<b>同一文档内</b>串（📄 <code>chunk_write.go:33 sameChunkDocument</code>）⇒ 合并后"命中即带出同题相邻段落"，难度下降；② <b>证据映射要自建</b>（MuSiQue 的证据标注是段落级，WeKnora 不存块↔段落映射）；③ <b>口径偏离</b>（语料不再是"段落并集"，共享段落会在多个 bundle 里重复）。</li>
+        <li>真正会"毁掉难度"的是另一种做法：<b>只投证据段、砍掉干扰段</b>——那才是把防捷径设计拆了。按题全投 20 段不会。</li>
+      </ul>
+
+      <h3 id="s10">7. 首轮问答实测（2026-10-11）：quick vs wiki</h3>
+      <p>三臂只跑通两臂：<b>quick</b>（<code>/knowledge-chat</code>，经典管线）与 <b>wiki</b>（<code>/agent-chat</code> ＋ <code>agent_type=wiki-qa</code>，工具＝<code>wiki_search</code>／<code>wiki_read_page</code>／<code>read_document</code>）；30 题各跑一遍，每题一个新会话，题目末尾统一加一句 <i>"Answer with only the answer span itself, in English."</i>（否则模型用中文作答，跨语言会让 F1 失真——这本身也是一条观察）。打分照论文：SQuAD 式归一化后的 EM ＋ 词级 F1，金答案与 <code>answer_aliases</code> 取最好分。</p>
+      <p><b>判分口径（代码在 <code>experiments/weknora/weknora_qa_eval.py</code> 的 <code>normalize</code>／<code>f1_em</code>／<code>best_match</code>）</b>：<b>不用 LLM 判官</b>，纯字符串指标——因为论文报的就是 Answer F1／EM，而字符串指标可复现、零额外成本、无判官偏见。两步：① <b>归一化</b>：转小写 → 去掉 <code>&lt;kb … /&gt;</code> 引用标签与 markdown 链接 → 去标点 → 去 a／an／the → 折叠空白（所以 <code>"1970s"</code> 与 <code>1970s</code>、<code>About 400 years</code> 与 <code>about 400 years</code> 都算命中）；② <b>EM</b>＝归一化后两串完全相同（1／0）；<b>F1</b>＝按词袋算精确率／召回率再取调和平均（<code>2PR/(P+R)</code>），逐题算完对整表取<b>宏平均</b>（每题等权），再按 2／3／4 跳分层。答案取该会话最后一条 assistant 消息的正文（流式文本兜底）。<b>别名</b>：每题拿预测分别与金答案和 <code>answer_aliases</code> 比，取最高分（MuSiQue 官方评测同口径）。</p>
+      <p><b>这个口径的代价（必须写进文里，否则读者会误读分数）</b>：① 语义对但用词不同的答案直接归零——实测 wiki 臂第 11 题答 <code>610 Bay Street</code>（Toronto Coach Terminal 的地址），F1＝0；② 多答一点会被扣分——第 8 题答 <code>Alfred Gough and Miles Millar</code>（两人都是编剧，别名里也确实有 Miles Millar），F1＝0.571、EM＝0，但人工看其实是"更全"的答案；③ 反过来，别名也会"送分"——quick 臂第 1 题答错成 <code>Eldon, Missouri</code>，只因与别名 <code>Miller County, Missouri</code> 共享 <code>missouri</code> 一词，白得 0.4 F1。⇒ 所以这一轮分数只适合看<b>相对关系</b>；要谈"到底对不对"，得再加一道判官（LLM 或人工抽检）。</p>
+      <p><b>论文的评测口径（📎 逐处核过，2026-10-11）</b>：§4.3 原话 <i>"Public QA benchmarks use <b>Answer F1 and Exact Match (EM)</b>, with hop-wise and type-wise F1 for fine-grained analysis. <b>AuthTrace uses judged accuracy (AC, %)</b> under GPT-4o-mini with the benchmark's 0–3 answer-correctness rubric"</i> ⇒ <b>论文对三套多跳基准（HotpotQA／MuSiQue／2Wiki）用的就是字符串 F1＋EM</b>，判官只用在另一套长答案结构化基准 AuthTrace 上；Table 1 标题写明 "500 questions per benchmark"；Table 3 消融改用 F1（EM 太稀疏）；"compilation cost" 属 one-time 只进 Limitations。我们这轮 = MuSiQue ⇒ 口径同族（并用 <code>answer_aliases</code> 取最好分，与 MuSiQue 官方评测一致）。<b>但"论文用"不等于"够用"</b>：论文自己就加了 hop-wise／type-wise 细粒度分析，也承认"比较的是端到端系统、不对齐各组件"。⇒ 补强方向（待定，见 §9）：① <b>证据召回</b>——MuSiQue 白送 <code>is_supporting</code>／<code>paragraph_support_idx</code>，可直接看检索与遍历有没有摸到金标支撑段，这条<b>直接对准"编译产物到底帮没帮上忙"</b>且不受答案措辞影响；② 语义判官或 30 题人工抽检（修 <code>610 Bay Street</code> 这类等价答案）；③ 过程量与时延账（对齐论文 Table 10）。</p>
+      <p><b>提示词口径：只加了一句，且已够用（2026-10-11 实测）</b>：跑批时在每道题末尾统一追加 <i>"Answer with only the answer span itself, in English. No explanation."</i>——两臂完全相同的后缀，所以臂间比较不受影响。为什么不加更多约束？✅ 实测：两臂的预测长度<b>中位数都只有 13 字符</b>（quick 均值 78、wiki 均值 102；长答分别是 1/30 与 5/30，且那几道长答本来多数是答错或"库里没有"的拒答）；把长答统一截成"首行／首句"后，quick 的 F1 从 0.3210 变 0.3144、wiki 从 0.4591 变 0.4631 ——<b>±0.007，在噪声内</b>。⇒ 再加"不要展开"类的约束<b>没有收益</b>；反倒有三种副作用：① 逼"材料不足"的题给答案会诱发幻觉（本轮 #19／#24／#30 都是模型主动说证据不够）；② 若顺带压制"先调用工具／先读页"，会破坏 agent 臂赖以取胜的机制本身；③ 任何这类约束都是我们加的测量设定、不是产品默认行为，必须在文里声明。<b>必须保留的只有"英文作答"这一句</b>——不做时两臂都用中文作答（首跑实测），跨语言会让 F1 直接归零。对外若要讲"产品今天给用户什么"，应另报一组"产品默认（中文作答、带引用）"的数。</p>
+      <table>
+        <thead><tr><th>臂</th><th>F1（总）</th><th>EM（总）</th><th>2 跳 F1</th><th>3 跳 F1</th><th>4 跳 F1</th><th>时延均值</th><th>工具调用/题</th><th>报错</th></tr></thead>
+        <tbody>
+          <tr><td><b>quick</b>（经典 RAG）</td><td>0.321</td><td>0.233</td><td><b>0.595</b></td><td>0.229</td><td>0.140</td><td><b>2.0s</b>（1.4–3.6）</td><td>0</td><td>0</td></tr>
+          <tr><td><b>wiki</b>（Agentic＋wiki 工具）</td><td><b>0.459</b></td><td><b>0.400</b></td><td>0.564</td><td><b>0.500</b></td><td><b>0.313</b></td><td>7.1s（1.4–22.4）</td><td>17.5</td><td>0</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>整体</b>：wiki 比 quick 高 <b>+0.138 F1 / +0.167 EM</b>（相对 ≈ +43%），代价是时延 3.6 倍、每题约 17.5 次工具调用。</li>
+        <li><b>分层</b>：2 跳上 quick 略优（0.595 vs 0.564）；<b>3 跳 wiki 大幅领先</b>（0.500 vs 0.229，+0.271）；<b>4 跳仍领先但幅度回落</b>（0.313 vs 0.140，+0.173）。⇒ 论文"优势随推理深度放大"这条在 2→3 跳上复现得很干净，4 跳上没继续放大。<b>但每层只有 10 题，单题就是 0.1 F1，这个拐点不可当真结论</b>，得扩样才能定。</li>
+        <li><b>典型对照（第 1 题，"Which county does Lloyd Dane's birthplace belong to?"）</b>：quick 答 <code>Eldon, Missouri</code>（停在中转实体上），wiki 答 <code>Miller County</code>（顺链接走了第二跳）——这就是"页面＋链接可遍历"与"一次检索"的差别，题目本身也刚好是 2 跳里 quick 输掉的那一档。</li>
+        <li><b>绝对值远低于论文</b>（论文 MuSiQue：Dense 0.611／LLM-Wiki 0.739）——三个原因要在文里写清：① 回答模型是 <code>deepseek-flash</code>（论文用 GLM-5.1）；② 语料是 30 题的共享段落池（干扰重）；③ 我们强制"只给答案 span"。所以这轮只能看<b>相对关系</b>，不能比绝对水平。</li>
+        <li><b>两条观察</b>：① 不强制英文时，两个臂都用中文作答（跨语言会毁掉 F1）；② 有 2 题（#18／#30）首跑撞上 DeepSeek 侧 EOF 报错（<code>create chat completion stream … EOF</code>），重跑后 #18 恢复正确、#30 仍答"库里没有这一页"——<b>同一个库、同一个问题，重跑结果会变</b>。</li>
+      </ul>
+
+      <h4 id="s11" style="margin-top:18px;">7.1 逐题结果（30 题 × 2 臂，✅ 2026-10-11）</h4>
+      <p class="muted">列含义：<b>金答案</b>｜quick 预测（括号＝F1/EM）｜wiki 预测（括号＝F1/EM）｜两臂时延（秒）。预测里的引用标签已去掉。行底色：<span class="ok">绿</span>＝wiki 明显更好（F1 高 0.01 以上），<span class="no">红</span>＝quick 明显更好，无色＝打平。逐字命中记 <span class="ok">ok</span>，有部分重叠记 <span class="half">half</span>，零重叠记 <span class="no">no</span>。</p>
+      <table>
+        <thead><tr><th>#</th><th>跳</th><th>问题</th><th>金答案</th><th>quick（经典 RAG）</th><th>wiki（Agentic＋wiki 工具）</th><th>时延 q／w</th></tr></thead>
+        <tbody>
+<tr class="ok"><td>1</td><td>2</td><td>Which county does Lloyd Dane&#x27;s birthplace belong to?</td><td><b>Miller County</b></td><td class="half">Eldon, Missouri <span class="muted">(0.40/0)</span></td><td class="ok">Miller County <span class="muted">(1.00/1)</span></td><td class="muted">1.6 / 3.5</td></tr>
+<tr><td>2</td><td>2</td><td>Who wrote &quot;Turn Me On&quot; by performer of &quot;Happy Pills&quot;?</td><td><b>John D. Loudermilk</b></td><td class="ok">John D. Loudermilk <span class="muted">(1.00/1)</span></td><td class="ok">John D. Loudermilk <span class="muted">(1.00/1)</span></td><td class="muted">2.1 / 1.9</td></tr>
+<tr class="no"><td>3</td><td>2</td><td>Who did the screenwriter for Good Will Hunting play in Dazed and Confused?</td><td><b>Fred O&#x27;Bannion</b></td><td class="ok">Fred O&#x27;Bannion <span class="muted">(1.00/1)</span></td><td class="no">Wooderson <span class="muted">(0.00/0)</span></td><td class="muted">2.4 / 4.2</td></tr>
+<tr class="ok"><td>4</td><td>2</td><td>The group representing at least 70% of Jews worldwide and Italians may be genetically similar due to what two </td><td><b>inter-marriage and conversions in the ti</b></td><td class="half">inter-marriage and conversions <span class="muted">(0.55/0)</span></td><td class="half">intermarriage and conversion during the Roman Empire <span class="muted">(0.57/0)</span></td><td class="muted">1.9 / 4.0</td></tr>
+<tr><td>5</td><td>2</td><td>What is the record label for the band which performed Pythons?</td><td><b>Kanine Records</b></td><td class="half">Sire Records <span class="muted">(0.50/0)</span></td><td class="half">Sire Records <span class="muted">(0.50/0)</span></td><td class="muted">2.2 / 1.4</td></tr>
+<tr class="no"><td>6</td><td>2</td><td>Who played the girlfriend of Alex P. Keaton&#x27;s actor on Family Ties in Back to the Future?</td><td><b>Claudia Wells</b></td><td class="ok">Claudia Wells <span class="muted">(1.00/1)</span></td><td class="no">Elisabeth Shue <span class="muted">(0.00/0)</span></td><td class="muted">2.4 / 2.5</td></tr>
+<tr><td>7</td><td>2</td><td>Who sings home alone tonight with the singer of you can crash my party anytime?</td><td><b>Karen Fairchild</b></td><td class="ok">Karen Fairchild <span class="muted">(1.00/1)</span></td><td class="ok">Karen Fairchild <span class="muted">(1.00/1)</span></td><td class="muted">2.2 / 1.6</td></tr>
+<tr class="ok"><td>8</td><td>2</td><td>Who wrote the show that Jimmy Olsen works for?</td><td><b>Alfred Gough</b></td><td class="no">Jerry Siegel and Joe Shuster <span class="muted">(0.00/0)</span></td><td class="half">Alfred Gough and Miles Millar <span class="muted">(0.57/0)</span></td><td class="muted">1.5 / 2.6</td></tr>
+<tr><td>9</td><td>2</td><td>At the end of which year did the tribes in the area where the Ashkenazi Jews can trace their ancestry to Jews </td><td><b>406</b></td><td class="no">720s BCE <span class="muted">(0.00/0)</span></td><td class="no">453 <span class="muted">(0.00/0)</span></td><td class="muted">2.0 / 5.2</td></tr>
+<tr class="ok"><td>10</td><td>2</td><td>Who is the spouse of the person who voices Jarvis in Iron Man?</td><td><b>Jennifer Connelly</b></td><td class="half">Jennifer Aniston <span class="muted">(0.50/0)</span></td><td class="ok">Jennifer Connelly <span class="muted">(1.00/1)</span></td><td class="muted">1.6 / 5.9</td></tr>
+<tr><td>11</td><td>3</td><td>Where do Greyhound buses leave from in the city where Arna Selznick&#x27;s employer is headquartered?</td><td><b>Toronto Coach Terminal</b></td><td class="no">610 Bay Street <span class="muted">(0.00/0)</span></td><td class="no">610 Bay Street <span class="muted">(0.00/0)</span></td><td class="muted">1.9 / 2.7</td></tr>
+<tr class="no"><td>12</td><td>3</td><td>What was the version of the language where the last name Sylvester originates, used in the era of the king tha</td><td><b>Medieval Latin</b></td><td class="ok">Medieval Latin <span class="muted">(1.00/1)</span></td><td class="no">Old Norse <span class="muted">(0.00/0)</span></td><td class="muted">2.0 / 4.5</td></tr>
+<tr class="no"><td>13</td><td>3</td><td>How long was the city the Qing lost in 1853 the capital of the province where Yaxing Coach is headquartered?</td><td><b>about 400 years</b></td><td class="ok">About 400 years <span class="muted">(1.00/1)</span></td><td class="no">**约四百年** <span class="muted">(0.00/0)</span></td><td class="muted">1.6 / 5.2</td></tr>
+<tr class="ok"><td>14</td><td>3</td><td>What franchise of the pro soccer organization headquartered in New York, is based in the city that produced th</td><td><b>New York City FC</b></td><td class="half">New England Revolution <span class="muted">(0.29/0)</span></td><td class="ok">New York City FC <span class="muted">(1.00/1)</span></td><td class="muted">2.2 / 7.7</td></tr>
+<tr class="ok"><td>15</td><td>3</td><td>What is the name of the castle in the place of birth of the performer of When I Was a Boy?</td><td><b>Casa Loma</b></td><td class="no">Mearns Castle <span class="muted">(0.00/0)</span></td><td class="ok">Casa Loma <span class="muted">(1.00/1)</span></td><td class="muted">2.0 / 5.6</td></tr>
+<tr><td>16</td><td>3</td><td>When was the last time the team Matthew Webb was a member of beat the winner of the 1894-95 FA Cup?</td><td><b>1 December 2010</b></td><td class="no">1995 <span class="muted">(0.00/0)</span></td><td class="no">1895年3月11日 <span class="muted">(0.00/0)</span></td><td class="muted">2.1 / 6.0</td></tr>
+<tr><td>17</td><td>3</td><td>When did the team that won the AL East in 2017 last play in the event after which the MLB MVP is awarded?</td><td><b>the 2009 season</b></td><td class="no">2012 <span class="muted">(0.00/0)</span></td><td class="no">The knowledge base doesn&#x27;t state who won the AL East in 2017 or the Re <span class="muted">(0.00/0)</span></td><td class="muted">1.4 / 10.4</td></tr>
+<tr class="ok"><td>18</td><td>3</td><td>What year did the country where the place of birth of Beatrice Heuser is located form an alliance with Japan?</td><td><b>1941</b></td><td class="no">1902 <span class="muted">(0.00/0)</span></td><td class="ok">1941 <span class="muted">(1.00/1)</span></td><td class="muted">2.2 / 5.2</td></tr>
+<tr class="ok"><td>19</td><td>3</td><td>Who is the president of the newly declared independent country that is part of the Commission of Truth and Fri</td><td><b>Francisco Guterres</b></td><td class="no">I can&#x27;t answer this one reliably, and I want to be upfront about why.
+ <span class="muted">(0.00/0)</span></td><td class="ok">Francisco Guterres <span class="muted">(1.00/1)</span></td><td class="muted">3.6 / 11.6</td></tr>
+<tr class="ok"><td>20</td><td>3</td><td>When did the city where the headquarters of Barton Premium Blend&#x27;s manufacturer is located elect its first bla</td><td><b>1970s</b></td><td class="no">1973 <span class="muted">(0.00/0)</span></td><td class="ok">&quot;1970s&quot; <span class="muted">(1.00/1)</span></td><td class="muted">1.6 / 6.4</td></tr>
+<tr class="ok"><td>21</td><td>4</td><td>What is the seat of the county sharing a border with the county in which J. P. Hayes was born?</td><td><b>Green Bay</b></td><td class="no">Charlotte <span class="muted">(0.00/0)</span></td><td class="ok">Green Bay <span class="muted">(1.00/1)</span></td><td class="muted">2.3 / 10.9</td></tr>
+<tr><td>22</td><td>4</td><td>When was the region immediately north of the region where the country that secured southern Lebanon is located</td><td><b>1932</b></td><td class="no">July 21, 1849 <span class="muted">(0.00/0)</span></td><td class="no">The relevant path is: Israel secured southern Lebanon → the region imm <span class="muted">(0.00/0)</span></td><td class="muted">1.7 / 19.4</td></tr>
+<tr><td>23</td><td>4</td><td>The German priest, who wanted to reform the religious denomination now the largest in the US, preached a sermo</td><td><b>Saxony-Anhalt</b></td><td class="no">Wittenberg <span class="muted">(0.00/0)</span></td><td class="no">Wittenberg <span class="muted">(0.00/0)</span></td><td class="muted">2.1 / 4.3</td></tr>
+<tr class="ok"><td>24</td><td>4</td><td>How were people from whom new coins were a proclamation of independence by the Somali Muslim Ajuran Empire exp</td><td><b>The dynasty regrouped and defeated the P</b></td><td class="no">No information available. <span class="muted">(0.00/0)</span></td><td class="half">**The Portuguese**
+
+(Reasoning: the &quot;new coins&quot; that proclaimed indepe <span class="muted">(0.12/0)</span></td><td class="muted">2.0 / 22.4</td></tr>
+<tr><td>25</td><td>4</td><td>What city shares a border with the place where the person who went to the state known for its Mediterranean cl</td><td><b>Rio Linda</b></td><td class="no">San Francisco <span class="muted">(0.00/0)</span></td><td class="no">Bathurst <span class="muted">(0.00/0)</span></td><td class="muted">2.0 / 13.8</td></tr>
+<tr><td>26</td><td>4</td><td>Besides areas of the country gaining control of Florida after the conflict Charles Edmund Nugent participated </td><td><b>two cities</b></td><td class="no">Barcelona <span class="muted">(0.00/0)</span></td><td class="no">佛罗里达
+
+&lt;kb doc=&quot;Anzoátegui&quot; chunk_id=&quot;7860c950-d2d4-4b73-8ca3-92922d7a3 <span class="muted">(0.00/0)</span></td><td class="muted">1.7 / 8.1</td></tr>
+<tr><td>27</td><td>4</td><td>What was the wettest year in the second largest city in the state where Yuma&#x27;s Library District is located?</td><td><b>1905</b></td><td class="ok">1905 <span class="muted">(1.00/1)</span></td><td class="ok">1905 <span class="muted">(1.00/1)</span></td><td class="muted">2.3 / 3.2</td></tr>
+<tr><td>28</td><td>4</td><td>What shares a border with the city where the person who went to the state where Baskin-Robbins was founded dur</td><td><b>Rio Linda</b></td><td class="no">Massachusetts <span class="muted">(0.00/0)</span></td><td class="no">San Francisco <span class="muted">(0.00/0)</span></td><td class="muted">2.2 / 13.1</td></tr>
+<tr class="ok"><td>29</td><td>4</td><td>When did the death city of Taito Kantonen become the capital of the US state having the statue being the title</td><td><b>1839</b></td><td class="no">1800 <span class="muted">(0.00/0)</span></td><td class="ok">1839 <span class="muted">(1.00/1)</span></td><td class="muted">2.1 / 8.2</td></tr>
+<tr class="no"><td>30</td><td>4</td><td>Which county shares a border with the county where the most populous city in the state where WEKL operates is </td><td><b>Presque Isle County</b></td><td class="half">Mecklenburg County <span class="muted">(0.40/0)</span></td><td class="half">The knowledge base does not contain any page for Fulton County or its  <span class="muted">(0.01/0)</span></td><td class="muted">2.0 / 10.0</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>逐字命中（EM）</b>：quick <b>7/30</b>、wiki <b>12/30</b>；交集 3 题（#2／#7／#27），两臂都错 14 题。</li>
+        <li><b>胜负分布</b>：wiki 赢 <b>9 题</b>（#1／#10／#14／#15／#18／#19／#20／#21／#29），quick 赢 <b>4 题</b>（#3／#6／#12／#13）。⇒ wiki 的领先不是靠个别题撑起来的，但 quick 也不是全输。</li>
+        <li><b>分层</b>：2 跳 quick 0.595／wiki 0.564；<b>3 跳 0.229／0.500</b>；<b>4 跳 0.140／0.313</b>。</li>
+        <li><b>quick 赢的那 4 题</b>都是答案就在第一个实体附近的短链（如 #12 Medieval Latin、#13 about 400 years），一次检索足够；wiki 反而在 #3／#6 上多走了几步、猜到了同片区的另一个角色（Wooderson／Elisabeth Shue）。</li>
+        <li><b>两臂都错的那 14 题</b>是主要瓶颈，类型集中在：① 需要县的县治这类行政层级换算（#21 除外）；② 多跳里出现同名实体（#25／#28 的 Rio Linda）；③ 链尾是某事件发生在何时这类要读整段才有的时间点（#16／#22／#29）。</li>
+      </ul>
+
+      <h4 id="s12">7.2 quick 臂到底怎么跑的（✅ 拿第 1 题的真实流水线日志逐段核过）</h4>
+      <p>一句话：<b>一次检索 ＋ 一次生成</b>，模型自己不能决定再搜一次。实测的完整链路（括号里是第 1 题 08:32:30.842 → 08:32:32.402 的真实耗时）：</p>
+      <ul>
+        <li><b>LoadHistory</b>：读最近 5 轮会话（本题 0 轮）；</li>
+        <li><b>MemoryRecall</b>：兴趣记忆注入（本题 injected=false）；</li>
+        <li><b>QueryUnderstand</b>（约 0.74s，是时延大头）：一次 LLM 调用做查询理解／改写（enable_rewrite=true），输出改写后的 query；</li>
+        <li><b>SearchParallel</b>（约 0.30s）：块检索与实体检索并行 —— 本题 chunk_results=10、entity_results=0（我们关了图谱，实体检索恒为 0）。块检索本身是向量 ＋ 关键词并行 → RRF 融合，池子 ＝ max(topk×5, 默认值) 封顶 500，本库共 1,408 块；</li>
+        <li><b>Rerank</b>：⚠️ 本题<b>被跳过</b> —— 日志里 rerank_model 为空、rerank_cnt=0，因为我们这套环境压根没配重排模型；</li>
+        <li><b>Merge → FilterTopK</b>：去重、父子块、邻块扩展（Pre/NextChunk）、FAQ 优先等装配，最终 10 条进上下文，渲染成 7,664 字符的 prompt 内容；</li>
+        <li><b>IntoChatMessage → ChatCompletionStream</b>：一次生成（deepseek-flash），带引用标注；总共约 2.0 秒。</li>
+      </ul>
+      <p><b>与 wiki 臂的本质差别</b>：quick 拿的是<b>块</b>、而且只赌一次——命中的 10 块就是全部证据；wiki 臂拿的是<b>页</b>，可以 wiki_search → wiki_read_page → 顺着 links_to 再读，直到自己认为够了（实测平均每题 17.5 次工具调用）。第 1 题就是分水岭：quick 的 10 块里只有 Eldon, Missouri（第一跳），于是答成 Eldon, Missouri；wiki 顺着页走到 Miller County。</p>
+      <p><b>三条会影响结论的 confound（写文时要声明）</b>：① <b>我们没配 rerank 模型</b>，所以 quick 臂少了一道重排，比完整配置的 WeKnora 更弱；② QueryUnderstand 那一次 LLM 改写就吃掉约 0.7s，是 quick 时延的主要成分；③ wiki_boost 插件（页面块 ×1.3）在代码里存在但永不生效——页面没进索引，与 0043 附录 A.5 一致。</p>
+      <p><b>论文基线有没有重排／召回几条（📎 2026-10-11 逐处核过）</b>：<b>没有重排</b>——§4.2 原文只写 Vanilla RAG (Dense) ＝ Qwen3-Embedding-8B dense retrieval ＋ <b>top-5 passages</b> ＋ LLM generation（BM25 那档同样 top-5）；全文只有参考文献标题里出现 reranking（Qwen3 Embedding 那篇的题目），正文与附录都没提重排步骤，附录案例里 Dense RAG 用的也仍是固定 5 段，§5.4 复述为 compared with RAG fixed 5 passages。⇒ 两边对照：<b>论文 dense 基线 ＝ top-5 且无重排；我们 quick 臂 ＝ top-10 且无重排</b>（同样缺 rerank 模型）。所以重排这点我们与论文同构，差异只在<b>召回条数 5 比 10</b>、以及语料池大小（论文 500 题并集，例如 2Wiki 3,440 passages；我们 30 题并集 572 段）。<br>⇒ 这件事改变了配 rerank 的性质：<b>配上之后 quick 臂会强于论文的 dense 基线</b>（不是对齐而是超出），必须在文里声明；而 smart 臂仍必须配 rerank 才跑得起来（那是 WeKnora 的硬约束，与论文口径无关）。</p>
+      <h4 id="s13">7.3 两臂的 token 账（✅ 按 session 聚合日志，2026-10-11）与生产选型视角</h4>
+      <ul>
+        <li><b>quick</b>：每题总 token <b>中位 5,110</b>（输入 5,058 ＋ 输出 45；均值 5,075，最大 5,997，每题 2 次 LLM 调用）——几乎与题目无关的常数。</li>
+        <li><b>wiki</b>：每题总 token <b>中位 38,737</b>（输入 38,426 ＋ 输出 311；均值 65,591，最大 462,994，调用中位 6 次）；smart 中位 20,856（均值 135,542、最大 211 万）、hybrid 中位 23,735（均值 245,614、最大 399 万）。⇒ <b>agent 类每题 token 中位是经典类的 3–8 倍，均值差 10–50 倍，且长尾极贵</b>；成本由轮数 × 逐轮累积上下文驱动。</li>
+        <li><b>所以用 k（召回条数）去对齐两臂 token 是行不通的</b>：quick 的成本是常数、且 k 对它的影响很小（多 60 块大约多 7k token），追不到 wiki 的 11 万；而 wiki 的成本跟 k 无关。正确的做法是<b>在各自的生产旋钮上扫档、画质量-成本曲线</b>——quick 扫 k（5／10／20），agent 侧扫 max_iterations，结论取同等成本下谁质量更高／同等质量下谁更便宜。</li>
+      </ul>
+      <p><b>融合方案不用自己做：WeKnora 自带 hybrid 预设</b>（📄 <code>config/agent_type_presets.yaml:105</code>，id <code>hybrid-rag-wiki</code>）：<code>allowed_tools</code> 同时含 <code>wiki_search</code>／<code>wiki_read_page</code>／<code>search_knowledge</code>／<code>read_document</code>／<code>list_documents</code>／<code>wiki_flag_issue</code>，<code>max_iterations=40</code>，注释原话是<b>先用 Wiki 建立导航和背景、再用分块检索精确引用</b>（wiki-first, RAG-verify，并带 chunk-only／wiki-only 的退化规则）。预设族共四种：<code>rag-qa</code>／<code>wiki-qa</code>／<code>hybrid-rag-wiki</code>／<code>custom</code>；gent_type 只影响预填，<code>allowed_tools</code> 是真正生效的清单（工具过滤按 <code>DeriveKBFilterFromTools</code> 取 any_of）。⇒ 只要配上 rerank 模型，<b>hybrid 臂不需要改一行代码</b>就能跑。</p>
+      <p><b>下一轮实验矩阵（待沛东定）</b>：A quick（现状 top-10、无 rerank，作基线）／B quick ＋ rerank（＝业界标准的全上经典 RAG）／C wiki（现状）／D hybrid（wiki ＋ 分块，需 rerank）／外加 B 与 A 各来一档 k=5 便于与论文数字照面。报表四轴：F1／EM、token、端到端时延、工具轮数（再加证据召回更佳）。</p>
+      <h4 id="s14">7.4 环境改动：配好重排模型（✅ 2026-10-11，三步都验过）</h4>
+      <ul>
+        <li><b>第一步 建模型</b>：库里加了一条 <code>qwen3-rerank</code>（type=Rerank，provider=<code>aliyun</code>，base_url 用 DashScope 原生端点 <code>https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank</code>，API Key 复用已有的千问 key；model id <code>fcbcf3a1-ea46-4011-8fda-2c07c2b8f7f6</code>）。✅ 验证：<code>POST /models/{id}/debug</code> 返回 ok=true、291ms、4 条文档都带 relevance_score —— key 与端点都通。</li>
+        <li><b>第二步 挂到 agent</b>：重排在 WeKnora 里是<b>按 agent 指定</b>的（源码注释写明不再从租户级继承）⇒ 给 <code>exp-musique-quick</code>／<code>exp-musique-smart</code>／<code>exp-musique-wiki</code> 三个实验 agent 都写上 <code>rerank_model_id</code>。</li>
+        <li><b>第三步 验证生效</b>：跑一题看日志 —— quick 管线里 <code>stage=Rerank</code> 从原来的 <code>rerank_model 为空 / rerank_cnt=0</code> 变成<b>实际打分与过滤</b>（<code>action=composite_top base_score=0.0164 final_score=0.6167 rank=1</code>、<code>action=output filtered_cnt=7</code>）；smart 臂也从原先的报错（rerank model is not configured）＋流悬挂超时，变成<b>正常跑完</b>（1 题 2.5s、2 次 search_knowledge 调用、无报错）。</li>
+      </ul>
+      <p><b>含义</b>：① 从此 quick 臂可以跑向量＋关键词＋rerank 的<b>全上形态</b>（对照组 B）；② smart 臂解锁（原始块工具循环）；③ <code>hybrid-rag-wiki</code> 预设也具备了运行条件（wiki ＋ 分块）。⚠️ 注意：配了 rerank 之后，经典臂<b>强于论文的 dense 基线</b>（论文基线无重排、top-5），与论文数字对比时须声明。</p>
+      <h4 id="s15">7.5 B 臂结果：quick ＋ rerank（✅ 2026-10-11，30 题单轮）</h4>
+      <table>
+        <thead><tr><th>臂</th><th>F1（总）</th><th>EM（总）</th><th>2 跳</th><th>3 跳</th><th>4 跳</th><th>时延均值</th><th>进上下文条数</th></tr></thead>
+        <tbody>
+          <tr><td>A quick（无 rerank）</td><td><b>0.321</b></td><td>0.233</td><td><b>0.595</b></td><td>0.229</td><td>0.140</td><td><b>2.0s</b></td><td>8.7</td></tr>
+          <tr><td><b>B quick ＋ rerank</b></td><td>0.300</td><td>0.233</td><td>0.497</td><td>0.229</td><td><b>0.173</b></td><td>4.6s（最大 41s）</td><td>7.0</td></tr>
+          <tr><td>D wiki（参照）</td><td>0.459</td><td>0.400</td><td>0.564</td><td>0.500</td><td>0.313</td><td>7.1s</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <p><b>怎么读</b>（按 §0 事先声明的判读规则）：<b>A 与 B 的差异在噪声量级</b>——整体 −0.021 F1、EM 完全相同；分层看 2 跳 −0.098、3 跳持平、4 跳 +0.033，而每档只有 10 题、<b>单题就是 0.1 F1</b>。⇒ 这一轮<b>既不能证明 rerank 有用，也不能证明它没用</b>；只能说"在这套配置下（qwen3-rerank ＋ 阈值 0.3），没看到可见增益"。<b>一个可疑点</b>：重排后进上下文的条数从 8.7 掉到 7.0（日志 <code>filtered_cnt=7</code>），阈值 0.3 可能把有用候选砍掉了——若要下结论，应把"重排阈值"也做一档对照，并把同题多轮均值补上。</p>
+
+      <h4 id="s16">7.6 四臂总表（✅ 2026-10-11 第二轮跑批，各 30 题单轮；C／D／E 为配好 rerank 后新跑）</h4>
+      <table class="tbl-wide">
+        <thead><tr><th>臂</th><th>F1</th><th>EM</th><th>2 跳</th><th>3 跳</th><th>4 跳</th><th>证据召回</th><th>any／all</th><th>时延</th><th>工具／题</th><th>输入 token（中位）</th><th>输出 token（中位）</th><th>合计（中位）</th><th>合计（均值）</th><th>单题最大</th><th>LLM 调用（中位）</th></tr></thead>
+        <tbody>
+          <tr><td>A quick（无 rerank）</td><td>0.321</td><td>0.233</td><td>0.595</td><td>0.229</td><td>0.140</td><td>0.623</td><td>0.93／0.30</td><td><b>2.0s</b></td><td>0</td><td>5,058</td><td>45</td><td><b>5,110</b></td><td>5,075</td><td>5,997</td><td>2</td></tr>
+          <tr><td>B quick＋rerank（经典全上）</td><td>0.300</td><td>0.233</td><td>0.497</td><td>0.229</td><td>0.173</td><td>0.582</td><td>0.90／0.27</td><td>4.6s</td><td>1.9</td><td>4,863</td><td>45</td><td><b>4,903</b></td><td>4,725</td><td>6,004</td><td>2</td></tr>
+          <tr><td><b>C smart</b>（旧提示词）</td><td>0.589</td><td>0.533</td><td>0.844</td><td><b>0.707</b></td><td>0.215</td><td>0.863</td><td>1.00／0.60</td><td>6.4s</td><td>8.8</td><td>14,492</td><td>194</td><td>14,625</td><td>33,539</td><td>269,317</td><td>3</td></tr>
+          <tr><td><b>C smart</b>（v3 预设提示词）</td><td><b>0.609</b></td><td>0.533</td><td>0.862</td><td>0.564</td><td><b>0.402</b></td><td>0.859</td><td>1.00／0.63</td><td>12.0s</td><td>15.5</td><td>20,561</td><td>259</td><td>20,856</td><td>135,542</td><td>2,112,497</td><td>3</td></tr>
+          <tr><td><b>D wiki</b>（agent＋页面工具）</td><td>0.588</td><td>0.533</td><td><b>0.864</b></td><td>0.600</td><td>0.300</td><td>0.682</td><td>0.90／0.30</td><td>6.0s</td><td>15.4</td><td>38,426</td><td>311</td><td>38,737</td><td>65,591</td><td>462,994</td><td>6</td></tr>
+          <tr><td>E hybrid（wiki＋块）</td><td>0.522</td><td>0.467</td><td>0.713</td><td>0.652</td><td>0.202</td><td><b>0.881</b></td><td>1.00／0.70</td><td><b>13.9s</b></td><td><b>16.6</b></td><td>23,423</td><td>273</td><td>23,735</td><td>245,614</td><td>3,986,075</td><td>3</td></tr>
+        </tbody>
+      </table>
+      <p><b>7.6 表的列说明（每列怎么来的）</b>：</p>
+      <ul>
+        <li><b>F1 ／ EM</b>：主指标，照论文口径（SQuAD 式归一化 → EM 与词级 F1；预测与金答案及 <code>answer_aliases</code> 取最好分；先逐题算、再对 30 题取宏平均）。EM ＝ 归一化后完全相同；F1 ＝ 词袋精确率与召回率的调和平均。实现见 <code>weknora_qa_eval.py</code> 的 <code>normalize</code>／<code>f1_em</code>／<code>best_match</code>。</li>
+        <li><b>2 跳／3 跳／4 跳</b>：同样这两个指标按跳数分层的宏平均，每层 10 题（跳数取 MuSiQue 自带的 <code>question_decomposition</code> 长度）。单题即可移动 0.1，所以层内差异小于 0.1 不当结论。</li>
+        <li><b>证据召回</b>＝每题<b>命中的金标支撑段落数 ÷ 该题金标支撑段落总数</b>，再对 30 题取宏平均。金标来自 <code>paragraphs[].is_supporting</code>（每题 2–4 段）；判定按段落做集合交（标题去 <code>__N</code>、转小写后与库 <code>knowledges.title</code> 对 id）。<b>触达口径</b>：quick 类＝assistant 消息的 <code>knowledge_references</code>；<b>agent 类＝库里 <code>messages.agent_steps</code> 的完整工具结果</b>（每条带 <code>knowledge_id</code>）＋ 工具输出里的 <code>&lt;sources&gt;</code>。</li>
+        <li><b>any／all</b>：该臂 30 题里至少碰到一段金标证据／碰到全部金标证据的题目比例——用来看经典臂总是碰到一部分、很少凑齐的病灶（A 0.93／0.30、D 0.90／0.30）。</li>
+        <li><b>时延</b>：从 POST 到该题流结束的端到端墙钟（含所有 LLM 调用与工具轮），30 题取平均。</li>
+        <li><b>工具调用／题</b>：该题里捕获到的工具调用数均值（quick 类是管线阶段暴露的 <code>query_understand</code>／<code>knowledge_search</code>，不是 agent 工具）。</li>
+      </ul>
+      <p><b>召回口径怎么修的（C／E 从测不到变成可测）</b>：原先只能读被压缩过的 SSE 工具输出（<code>search_knowledge</code> 返回 <code>details omitted from history</code>），所以纯块 agent 的召回测不到。<b>解法＝从库里读 <code>messages.agent_steps</code></b>——那是 agent 每轮的完整工具调用记录，每条命中结果都带 <code>knowledge_id</code>／<code>knowledge_title</code>／<code>content</code>。现在 recall 的触达取三者并集：quick 类用 <code>knowledge_references</code>、agent 类用 <code>agent_steps</code> 里的全部 <code>knowledge_id</code>（含 JSON 内被转义的 <code>&lt;sources&gt;</code>），再与金标段落 id 求交。⇒ C 由 0 修到 <b>0.863</b>、E 由 0.178 修到 <b>0.881</b>。<b>但 D 的 0.682 修不动，也不是 bug</b>：wiki 路线读的是<b>页</b>、金标标的是<b>段</b>，两者不是一一对应。实测第 1 题：agent 读了 <code>entity/eldon-missouri</code>／<code>entity/lloyd-dane</code>／summary 等页，而 <code>&lt;sources&gt;</code> 里只出现 <code>Lloyd Dane</code> 这一段的 id —— 它照样答对了 <code>Miller County</code>，因为<b>事实已经通过编译进了页面与链接</b>。所以对 wiki 臂更贴切的口径应是<b>页面内容里有没有金标事实</b>（页级召回），段落级召回天然低估它。</p>
+      <p><b>逐题示例</b>（同一题、不同臂，看触达差在哪）：第 1 题金标＝<code>Lloyd Dane</code> ＋ <code>Eldon, Missouri</code>。A quick 的 10 条引用里命中了 <code>Lloyd Dane</code>、漏掉 <code>Eldon, Missouri</code> ⇒ recall 0.50（这也解释了它为什么答成 Eldon, Missouri——拿到第一跳、丢了第二跳）；D wiki 读的页只有一个来源、同样命中 <code>Lloyd Dane</code> ⇒ 也是 0.50。第 11 题金标＝<code>Arna Selznick</code>／<code>Natalie Turner</code>／<code>Toronto Coach Terminal</code>，A 与 D 都命中前两者、漏掉 <code>Natalie Turner</code> ⇒ 0.67。</p>
+      <p><b>三个主要读数</b>：① <b>agent 路线整体领先一大截</b>——C／D 的 F1 0.589／0.588、EM 0.533，比"经典全上"（B 0.300／EM 0.233）高约 <b>+0.29 F1</b>（近翻倍）；② <b>但增益来源要小心归因</b>：<b>C 只用块工具、完全没碰 wiki 页面，成绩却与 D 打平</b>（4 跳上 D 略优 0.300 vs 0.215）⇒ 这一轮的增益主要来自"<b>agent 多轮检索</b>"本身，而不是"编译成页面＋链接"这一层；③ <b>E hybrid 没有两全</b>：F1 只有 0.522，却是最贵的一档（13.9s、16.6 次调用），工具构成里 <code>search_knowledge</code> 占 66%（330/498）、<code>wiki_read_page</code> 仅 38 次 ⇒ 它实际是"块 agent 偶尔看看 wiki"，没体现预设宣称的 wiki-first。</p>
+      <p><b>证据召回的读法</b>：A 0.623 ／ B 0.582 ／ C <b>0.863</b> ／ D 0.682 ／ E <b>0.881</b>；<b>any／all</b>：A 0.93／0.30、B 0.90／0.27、C <b>1.00／0.60</b>、D 0.90／0.30、E <b>1.00／0.70</b>。两个模式很清楚：① <b>agent 路线的召回随跳数上升</b>（C：2 跳 0.79 → 3 跳 0.89 → 4 跳 0.91；E 同向 0.82→0.89→0.93），而<b>经典路线随跳数下降</b>（A 0.78→0.58→0.51）——这就是多轮检索能凑齐链条、一次检索只能碰到一部分的量化版；② <b>all-hit</b> 的差距更大（C 0.60／E 0.70 vs 经典 0.27–0.30）。<b>D（wiki）的 0.682 不是能力更低，而是口径错位</b>：见下条。</p>
+      <p><b>其它记录</b>：① 第二轮跑批期间容器 DNS 多次抖动（<code>cannot verify if it resolves to safe IP</code>，deepseek 与 dashscope 都中过），已给 runner 加自动重试，残留空洞逐题补跑，最终五臂各 30 题全部有效；② 每档仍是 10 题、单轮，按 §0 的判读规则，<b>小于 0.1 的差不算差异</b>，而 C／D 与 B 的差是 0.29，属量级差异；③ 下一步：多轮均值（3 次）、扫 top-k 与 max_iterations 画质量-成本曲线、修 C／E 的证据召接口径、查 4 跳为何优势收窄。</p>
+
+      <h4 id="s17">7.7 为什么 C 的召回高、D 的低，F1 却一样（✅ 逐题交叉验证，2026-10-11）</h4>
+      <p>把召回与答题逐题交叉，答案就出来了：</p>
+      <table>
+        <thead><tr><th>臂</th><th>召回全齐＆答对</th><th>全齐＆答错</th><th>不全＆答对</th><th>不全＆答错</th></tr></thead>
+        <tbody>
+          <tr><td>C smart</td><td>11</td><td><b>7</b></td><td>5</td><td>7</td></tr>
+          <tr><td>D wiki</td><td>5</td><td>4</td><td><b>11</b></td><td>10</td></tr>
+        </tbody>
+      </table>
+      <p><b>D 的召回是系统性低估，不是能力差</b>：D 有 <b>11 题段落召回不全但答对</b>，而这 11 题的<b>读页原文里 11/11 都能找到金答案</b>（按金答案串是否出现在 agent 读过的页面内容里逐题核过）。原因就是口径错位——D 的触达来自页面 sources 里的段落 id，而<b>页面上承载的事实可能来自别的段落、或由编译合并而来</b>，那些段落 id 里没有金标段落。</p>
+      <p><b>C 的召回高不等于答得准，损耗发生在把证据逼成答案这一步</b>：C 那 7 题证据全齐却答错，逐题看是——<b>#29 首行就是 1839（取首行后 EM 0→1、F1 0.07→1.00，纯格式问题）</b>、#8 答成 Alfred Gough and Miles Millar（更全，EM 0／F1 0.57）、#20／#21 输出了推理过程而没给答案、#30 直接拒答、#17（2013 vs the 2009 season）与 #26（Madrid vs two cities）是真错。⇒ 7 题里约 3–4 题不是检索问题，而是<b>答案呈现</b>问题。</p>
+      <p><b>结论</b>：同一个 F1 是两条不同路径挣来的——C 靠搜得全，D 靠页面上有。所以：① 要给 D 补一个<b>页级召回</b>口径（读页原文里能否找到金标事实），否则它在表里永远吃亏；② 要给 agent 臂补一个<b>答案提取</b>口径（取首行／首段）作为辅助列，量化格式损耗——这同时修正了早先的一个结论：加格式约束没有收益只对 wiki 臂成立，对 smart 这类边说边答的臂是有代价的。</p>
+      <h4 id="s18">7.8 smart 臂到底怎么跑的（✅ 2026-10-11 核过配置与实测调用）</h4>
+      <ul>
+        <li><b>入口</b>：<code>POST /agent-chat/{session_id}</code>（<code>qaModeAgent</code>）；<code>agent_mode=smart-reasoning</code>、<code>agent_type=rag-qa</code>、模型 deepseek-flash、重排 qwen3-rerank、<code>max_iterations=50</code>（预设是 30，我们的 agent 继承内置的 50）、temperature 0.7、<code>thinking=false</code>（没有显式思考阶段）。</li>
+        <li><b>循环</b>：ReAct 式——每轮把 [系统提示 ＋ 运行上下文（KB 句柄等）＋ 历史 ＋ 已回灌的工具结果] 交给 LLM，由 LLM 决定调用哪个工具或直接作答；工具执行完结果回灌，进入下一轮；直到模型给出不带工具调用的最终答案，或撞上 <code>max_iterations</code>。</li>
+        <li><b>实测调用量</b>：30 题共 <b>264 次</b>工具调用；中位 <b>4 次/题</b>、均值 8.8、最大 <b>50</b>（撞上限）；每题总 token 中位约 11 万——因为每轮都带着累积上下文，越走越贵。</li>
+      </ul>
+      <table>
+        <thead><tr><th>工具</th><th>作用</th><th>关键参数</th><th>实测调用</th></tr></thead>
+        <tbody>
+          <tr><td><code>search_knowledge</code></td><td>检索知识库分块（向量／关键词／混合 → 重排 → 去重），返回带正文的块</td><td>query（完整问句而非关键词堆）、mode（hybrid 默认／semantic／keyword）、limit（默认 10，最大 30）、knowledge_base_ids</td><td><b>224</b></td></tr>
+          <tr><td><code>read_document</code></td><td>读某文档的元数据并按顺序读块</td><td>id（dN／cN 句柄）、offset／limit（默认 20，最大 100）、query（词或正则做文内查找）、neighbors（前后邻居块 0–5）</td><td>8</td></tr>
+          <tr><td><code>list_documents</code></td><td>列出某个 KB 里的文档</td><td>KB 句柄、标题子串、page／page_size（默认 20，最大 100）</td><td>32</td></tr>
+          <tr><td><code>query_knowledge_graph</code></td><td>查图谱里的实体关系</td><td>knowledge_base_ids、query</td><td><b>0</b>（本库关了图谱，工具形同虚设）</td></tr>
+        </tbody>
+      </table>
+      <p><b>与其它臂的工具面差别</b>：quick 无工具（内部管线）；smart（本臂）＝上面 4 个；wiki＝<code>wiki_search</code>／<code>wiki_read_page</code>／<code>read_document</code>／<code>wiki_flag_issue</code>；hybrid＝两者并集（6 个）。</p>
+      <p><b>⚠️ 查流程时发现的一处不对等（待修）</b>：我们的 smart agent 是照抄<b>内置</b> agent 建的，因此 <b>system_prompt 为空、且没有 system_prompt_id</b> ⇒ 引擎走默认分支（<code>DefaultUseCustomSystemPrompt=false</code>），<b>并没有用 rag-qa 预设该用的 <code>progressive_rag_agent</code> 提示词</b>（那段提示词说的正是：先 search_knowledge、hybrid 为主／精确词用 keyword／转述用 semantic，不够再 read_document，引文与数字回原文核）。对比：quick 与 wiki 都有内置提示词、hybrid 我们设了预设 id，<b>只有 smart 少了这一层</b>。⇒ 影响两面：① 四臂提示词不对等，跨臂比较要声明；② 反过来说，smart 的 0.589 是在没有专门检索提示词的情况下拿到的。修法＝给它补 <code>system_prompt_id=progressive_rag_agent</code> 再跑一轮留档。</p>
+      <h4 id="s19">7.9 成本口径与一次自我更正（数字见上表）</h4>
+      <p><b>口径与一次自我更正</b>：token 来自日志 <code>[LLM Usage]</code>，按 <b>(完整时间戳, purpose, prompt_tokens, completion_tokens) 去重</b>后用 request id 关联到 session（＝每题）。<b>早先我给过的 quick 15,330／wiki 110,991 是错的——重复计了三倍</b>：会话日志被两份文件各写一遍，而我当时的去重键取错了列（把日志行前缀当时间戳），于是同一批调用被算了 3 次（5,110 × 3 ≈ 15,330，正好对上）。现行数字已逐题核对（例：quick 第 1 题＝改写 2,406 ＋ 生成 2,373 ＝ 4,779；wiki 第 1 题 4 轮共 19,780）。</p>
+      <p><b>三点读法</b>：① <b>经典臂的输出极小（45 token）</b>——它被要求只给答案跨度；agent 臂输出 200–300，因为它们倾向把推理过程也写出来（这也正是 §7.7 里格式损耗的来源）。② <b>成本几乎全在输入</b>：agent 臂的输出占比不到 2%，贵在每轮把累积上下文再喂一遍。③ <b>均值远高于中位、最大值离谱</b>（smart-v3 单题 211 万、hybrid 单题 399 万）⇒ 生产上必须设轮数上限与预算闸门，否则长尾会把成本拉爆。</p>
+      <p><b>给 smart 补预设提示词后的变化（v3 vs 旧）</b>：F1 0.589 → <b>0.609</b>；<b>4 跳 0.215 → 0.402（翻倍）</b>，但 3 跳 0.707 → 0.564；时延 6.4s → 12.0s、每题工具 8.8 → 15.5、token 中位 14.6k → 20.9k（均值 33.5k → 135.5k）。⇒ 预设提示词让它<b>搜得更狠</b>：最深的题被救回来一批，中段反而被拉长流程牵连；净效果 +0.02 F1，在 30 题／单轮下属噪声量级。</p>
+      <h4 id="s26">7.10 smart-v3 与 wiki 的逐跳对照（✅ 2026-10-11）</h4>
+      <p>表面看是「smart-v3 的 F1 更高、token 中位更低、时延更长、工具次数差不多」，拆到每跳之后要校正两处：</p>
+      <table>
+        <thead><tr><th>臂</th><th>跳</th><th>token 中位</th><th>token 均值</th><th>时延均值</th><th>工具均值</th><th>F1</th></tr></thead>
+        <tbody>
+          <tr><td>C smart v3</td><td>2</td><td>9,530</td><td>10,525</td><td>3.4s</td><td>2.6</td><td>0.862</td></tr>
+          <tr><td>C smart v3</td><td>3</td><td>31,934</td><td>46,698</td><td>8.8s</td><td>12.4</td><td>0.564</td></tr>
+          <tr><td>C smart v3</td><td>4</td><td>22,408</td><td><b>349,401</b></td><td>23.8s</td><td>31.4</td><td><b>0.402</b></td></tr>
+          <tr><td>D wiki</td><td>2</td><td>17,642</td><td>32,527</td><td>3.6s</td><td>8.2</td><td>0.864</td></tr>
+          <tr><td>D wiki</td><td>3</td><td>41,745</td><td>45,756</td><td>5.9s</td><td>15.6</td><td>0.600</td></tr>
+          <tr><td>D wiki</td><td>4</td><td>74,076</td><td>118,487</td><td>8.6s</td><td>22.4</td><td>0.300</td></tr>
+        </tbody>
+      </table>
+      <p><b>校正一：token 只在「中位」上 smart-v3 更省，总量反而贵一倍</b>。中位 20,856（smart-v3）vs 38,737（wiki）；但<b>该臂总 token 是 4,066,252 vs 1,967,721，smart-v3 是 wiki 的 2.07 倍</b>——差距全在 4 跳的长尾（均值 349k vs 118k，单题最大 211 万）。所以他的读法在「2–3 跳的典型题」成立，在「整体账单」上不成立。</p>
+      <p><b>校正二：工具次数相同不等于工具一样贵</b>。总次数 15.5 vs 15.4 几乎相同，但分布与单价都不同：① <b>分布</b>——smart-v3 在 2 跳只调 2.6 次、4 跳猛增到 31.4 次；wiki 在 2 跳就已经 8.2 次、4 跳 22.4 次；② <b>单价</b>——<code>search_knowledge</code> 每次要走向量＋关键词＋重排（实测约 700ms／次），而 <code>wiki_read_page</code> 是数据库直读（实测约 95ms／次）⇒ 这解释了为什么次数相近而时延差一倍（12.0s vs 6.0s）：<b>wiki 是「多次便宜的调用」，smart 是「多次偏贵的调用」，而它每次带进上下文的还更少（页比块大，wiki 单次更贵在 token）</b>。</p>
+      <p><b>结论</b>：两者是两种代价结构，不是一个比另一个全面更优——wiki 在 2–3 跳又省 token 又省时延（1.7–2 倍），smart-v3 只在 4 跳把 F1 拉起来（0.402 vs 0.300），代价是时延 2.8 倍、均值 token 3 倍。生产上要按「问题深度分布」选：浅问为主选 wiki 路，深链为主且能设预算闸门才考虑 chunk agent。⚠️ 别忘 §7.7 的口径缺口：D 的证据召回被低估，所以「谁检索得更全」还不能下结论。</p>
+      <h4 id="s27">7.11 4 跳专项：那 211 万 token 的题到底发生了什么（✅ 2026-10-11）</h4>
+      <p><b>先看账</b>：C smart v3 在 4 跳 10 题上共 <b>3,494,012 token</b>，其中<b>两道题就占了 83%</b>（#28 单题 2,112,497 ＋ #30 790,316）；答对的 5 题里有 3 题只花 1–2 万 token。wiki 同 10 题合计 1,184,876，最大单题 462,994。</p>
+      <table>
+        <thead><tr><th>题号</th><th>smart-v3 总 token</th><th>工具数</th><th>时延</th><th>F1</th><th>预测 → 金答案</th></tr></thead>
+        <tbody>
+          <tr><td>23</td><td>9,565</td><td>2</td><td>2.8s</td><td>0</td><td>Wittenberg → Saxony-Anhalt</td></tr>
+          <tr><td>27</td><td>11,486</td><td>4</td><td>3.6s</td><td>1</td><td>1905 → 1905</td></tr>
+          <tr><td>24</td><td>20,856</td><td>8</td><td>5.5s</td><td>0</td><td>By the French → the dynasty regrouped…</td></tr>
+          <tr><td>26</td><td>22,120</td><td>8</td><td>5.8s</td><td>0</td><td>Barcelona → two cities</td></tr>
+          <tr><td>29</td><td>22,188</td><td>8</td><td>9.1s</td><td>1</td><td>1839 → 1839</td></tr>
+          <tr><td>25</td><td>22,408</td><td>8</td><td>5.8s</td><td>0</td><td>Orange → Rio Linda</td></tr>
+          <tr><td>21</td><td>113,187</td><td>24</td><td>15.0s</td><td>1</td><td>Green Bay → Green Bay</td></tr>
+          <tr><td>22</td><td>369,389</td><td>44</td><td>29.4s</td><td>1</td><td>1932 → 1932</td></tr>
+          <tr><td>30</td><td>790,316</td><td>58</td><td>42.4s</td><td>0.02</td><td>（说不出结论）→ Presque Isle County</td></tr>
+          <tr><td><b>28</b></td><td><b>2,112,497</b></td><td><b>150</b></td><td><b>118.6s</b></td><td><b>0</b></td><td>（罗列自己搜过的路）→ Rio Linda</td></tr>
+        </tbody>
+      </table>
+      <p><b>机制：成本随轮数平方增长</b>。#28 的会话共 30 次 LLM 调用，而每次都要把<b>累积上下文全部重发</b>：第 1 次 prompt 3,726 token → 第 30 次 <b>153,152 token</b>，单题合计 211 万。⇒ <b>token 约等于轮数的平方</b>；一旦停不下来，账单就是指数感增长。这正是 §7.9 说生产上必须设轮数上限与预算闸门的实证。</p>
+      <p><b>为什么停不下来</b>：#28 问的是「Baskin-Robbins 创立所在州、金矿潮期间去过的某个人，其工作地所在城市与什么接壤」——中间实体在题面里没有唯一解。它先正确推出加州，随后开始<b>换假设</b>：Edward Hargraves（其实是澳大利亚）→ Samuel Brannan → Clarence King → John Sutter → James W. Marshall → Lewis Ralston（科罗拉多）→ 甚至试了棒球手 Brandon Crawford；75 条不同查询、3 次 list_documents、1 次 read_document，最后仍答错。</p>
+      <p><b>对照与反转</b>：同样的题 wiki 只花 115k token、8.6s，直接说搜过但无法验证这条链——<b>chunk agent 不停换假设重试（贵），wiki agent 更快认输（便宜）</b>。反向的一档同样醒目：6 道在 8 次工具内就作答的题里只有 2 道对（F1 0.33）——<b>答得快往往是过早放弃</b>。⇒ 4 跳的真正短板不是搜不到，而是<b>缺少判停标准</b>：既会过早停，也会停不下来。这与总论 §6 记的「LLM-Wiki 没有给出充分性判据」是同一件事。</p>
+      <p><b>同一道题，两条路的失败环节不同（✅ 逐轮核过 #28）</b>：<b>wiki 卡在入口检索</b>——它 8 轮里的动作是：wiki_search(Baskin-Robbins) → wiki_search(gold rush，捞出的是 after-the-gold-rush／Neil Young 这类干扰页) → 读 Baskin-Robbins 页 → 搜 Glendale → 读 California 页 → 搜 went to|traveled to|visited（<b>0 命中</b>）→ 搜 border|borders… → 反复搜 Glendale／city → 认输并说明「链没接上」。<b>但关键证据其实在库里</b>：全库含 Samuel Brannan 的页有 10 个（含 <code>entity/california-gold-rush</code>、<code>California Gold Rush__1 - Summary</code>），它既没搜到、也没用 <code>read_document</code> 回原文。<b>chunk agent 恰恰相反</b>——它的查询里明确出现了 Samuel Brannan／Sacramento，说明<b>证据拿到了，卡在判停</b>（换假设 30 轮、211 万 token，仍错）。⇒ 同一题目上：wiki 便宜 18 倍是因为<b>早认输</b>，不是因为更高效；smart 贵是因为<b>拿到了材料却停不下来</b>。这也说明 wiki 路线的短板有一半在<b>页级检索入口</b>（正则命中 title／slug／summary／content，容易被同名干扰页挤掉，且页面标题是中文）。</p>
+      <h4 id="s28">7.12 谁在踩刹车：判停机制盘点（✅ 源码 + 实测，#28 与 wiki 的对照组）</h4>
+      <p><b>wiki 的 8 轮收尾不是硬编码</b>：我们给它设的 <code>max_iterations=30</code>，它只用了 8 轮就自己收尾（输出「我搜过、但无法验证这条链」）。触发它的是两类信号：① <b>连续几次查询没有可用产出</b>（第 7 次查询 0 命中，其余捞回的是无关页）；② <b>提示词里的效率导向措辞</b>（📎 <code>wiki_researcher</code>：<i>Follow links only to resolve a specific gap</i>、<i>not a requirement to search the Wiki for every message</i>）。</p>
+      <p><b>引擎层面只有技术性护栏，没有语义性判停</b>（📄 <code>internal/agent/const.go</code>）：<code>max_iterations</code>（我们设 50／预设 30–40）之外，只有三个止损——<code>maxRepeatedResponseRounds=2</code>（连续 2 轮<b>完全相同且无工具调用</b>就强制终止）、<code>maxConsecutiveLengthRounds=3</code>（连续 3 轮被输出上限截断就放弃）、<code>defaultLLMStallTimeout=120s</code>（单轮流式静默超时）；另有 <code>maxEmptyResponseRetries=2</code> 兜空回复。⇒ <b>它们判的都是「输出坏了」，不是「检索没有进展」</b>。</p>
+      <p><b>所以 smart 没有同类刹车</b>：v2 用的是引擎默认提示词（没有任何检索策略与收尾指引——就是 §7.8 记的提示词缺口），v3 换成 <code>progressive_rag_agent</code> 后拿到了检索策略（hybrid 默认／精确词用 keyword…），<b>但那份提示词同样没有「何时认输」的条款</b>。结果是它搜得更狠却没人叫停：#28 跑了 30 轮（<b>并未撞上 50 的上限</b>）换假设，直到自己硬给一个答案，2,112,497 token、118.6s，仍错。而且引擎的「重复输出」护栏对它无效——因为每一轮换的假设都是<b>不同的</b>输出。</p>
+      <p><b>一句话</b>：论文里那个 <code>P=3 consecutive empty searches</code>（耐心阈值）在 WeKnora <b>没有对应实现</b>——这就是 §7.11「缺少判停标准」的机制版证据。要补有两条不写代码的路：① 提示词层加一条「连续两次检索没有新增证据就收尾并说明缺什么」；② 把 <code>max_iterations</code> 扫档（8／15／30）画质量-成本曲线，看该在哪一档刹车。</p>
+      <h4 id="s29">7.13 为什么 wiki 会停、smart 不会停：工具的「有没有否信号」（✅ 实测，2026-10-11）</h4>
+      <p><b>先给答案</b>：两条路的差异很大程度来自<b>工具返回结构</b>——块检索几乎永远有结果，页检索常常真的空。</p>
+      <table>
+        <thead><tr><th>工具集</th><th>调用数</th><th>返回 0 命中的比例</th><th>返回条数中位</th></tr></thead>
+        <tbody>
+          <tr><td>smart 的 <code>search_knowledge</code></td><td>189（4 跳 130）</td><td><b>0.5%</b>（4 跳 0.8%）</td><td><b>10</b></td></tr>
+          <tr><td>wiki 的 <code>wiki_search</code>／<code>wiki_read_page</code></td><td>214（4 跳 107）</td><td><b>48.6%</b></td><td>1</td></tr>
+        </tbody>
+      </table>
+      <p><b>机制</b>：① 块检索是「向量相似度 top-k」，<b>永远排得出最像的 10 条</b>，没有「没找到」这个概念；代码里还额外<b>强制保留 top-1</b>（<code>search_knowledge.go</code> 的 <code>preserveTop</code>／<code>agentRerankFallbackMinScore=0.15</code>），更不会空。② 页检索是<b>正则匹配</b>（title／slug／summary／content），不命中就是 0 页，返回的 <code>&lt;search_results count=0&gt;</code> 是个<b>不需要校准的绝对信号</b>。</p>
+      <p><b>更细的一层：块检索连「低分」这个弱信号也不明显</b>。工具输出里其实带分数（<code>&lt;chunk … score=0.698&gt;</code>），但实测首位分数<b>普遍不难看</b>：smart-v3 全部 188 次检索的 top-1 分数中位 <b>0.596</b>（p25 0.484、最小 0.278，低于 0.3 的只占 1%）；#28 那题的 70 次检索里中位 0.524（低于 0.5 的占 39%）。⇒ 模型每次看到的都是「有结果、分数还行」，没有任何提示它这一路走不通。</p>
+      <p><b>结论与设计含义</b>：判断是对的——<b>把 max_iterations 调小不是正确修法</b>（那只是硬刹车，治不了模型感知不到没有进展）。要补的是<b>可判断的否信号</b>，三条路都不改架构：① 提示词里给分数判据（例如「最高分低于 0.35 视为未命中，换策略或收尾」，阈值需标定）；② 提示词要求每轮自评「这次是否带来新证据」，连续两次无新增就收尾；③ 改工具输出，把阈值与判断直接写出来（「top score 0.29 低于 0.30 阈值，可能不相关」）——这条要动代码，但最有效。⚠️ 论文里的 <code>P=3 consecutive empty searches</code> 能成立，前提正是它的 <code>wiki_search</code> 会返回空；搬到块检索上这个前提不成立。</p>
+      <h4 id="s30">7.14 2 跳专项：10 题逐题对照（quick / smart-v3 / wiki，✅ 2026-10-11）</h4>
+      <table class=tbl-wide>
+        <thead><tr><th>#</th><th>问题（简）</th><th>金答案</th><th>quick（F1）</th><th>smart-v3（F1）</th><th>wiki（F1）</th><th>时延 秒 q/s/w</th><th>token k q/s/w</th><th>工具 s/w</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Lloyd Dane 出生地所在县</td><td>Miller County</td><td>Eldon, Missouri 0.40</td><td>Eldon is in Miller Cou 0.55</td><td>Miller County 1.00</td><td>1.6/3.4/3.8</td><td>4.8/9.2/19.8</td><td>2/6</td></tr>
+          <tr><td>2</td><td>Turn Me On 的作者</td><td>John D. Loudermilk</td><td>1.00</td><td>1.00</td><td>1.00</td><td>2.1/3.2/1.5</td><td>5.1/11.5/9.6</td><td>4/4</td></tr>
+          <tr><td>3</td><td>Good Will Hunting 编剧演谁</td><td>Fred O’Bannion</td><td>1.00</td><td>1.00</td><td>1.00</td><td>2.4/2.6/2.8</td><td>5.1/9.5/15.8</td><td>2/4</td></tr>
+          <tr><td>4</td><td>两族群相似的成因</td><td>inter-marriage and conversions…</td><td>0.55</td><td>1.00</td><td>0.57</td><td>1.9/6.5/3.3</td><td>6.0/11.3/17.6</td><td>2/6</td></tr>
+          <tr><td>5</td><td>Pythons 乐队的唱片厂牌</td><td>Kanine Records</td><td>Sire Records 0.50</td><td>Sire Records 0.50</td><td>Sire Records 0.50</td><td>2.2/2.3/1.7</td><td>5.0/9.1/8.9</td><td>2/2</td></tr>
+          <tr><td>6</td><td>Back to the Future 里的女友</td><td>Claudia Wells</td><td>1.00</td><td>1.00</td><td>1.00</td><td>2.4/2.7/2.7</td><td>5.0/9.4/18.1</td><td>2/6</td></tr>
+          <tr><td>7</td><td>Home Alone Tonight 合唱者</td><td>Karen Fairchild</td><td>1.00</td><td>1.00</td><td>1.00</td><td>2.2/2.8/1.7</td><td>5.2/9.0/8.5</td><td>2/4</td></tr>
+          <tr><td>8</td><td>Smallville 编剧</td><td>Alfred Gough</td><td>0.00</td><td>0.57</td><td>0.57</td><td>1.5/3.0/2.8</td><td>5.1/9.3/17.3</td><td>2/6</td></tr>
+          <tr><td>9</td><td>入侵罗马帝国是哪一年</td><td>406</td><td>0.00</td><td>1.00</td><td>1.00</td><td>2.0/3.7/11.2</td><td>5.2/14.8/167.0</td><td>4/34</td></tr>
+          <tr><td>10</td><td>Jarvis 配音演员的配偶</td><td>Jennifer Connelly</td><td>0.50</td><td>1.00</td><td>1.00</td><td>1.6/3.5/4.2</td><td>5.2/12.1/42.6</td><td>4/10</td></tr>
+        </tbody>
+      </table>
+      <p><b>2 跳汇总</b>：quick F1 0.595／EM 0.40／2.0s／5k token；<b>smart-v3 F1 0.862／EM 0.70／3.4s／9k／2.6 次工具</b>；<b>wiki F1 0.864／EM 0.70／3.6s／17k／8.2 次工具</b>。</p>
+      <p><b>读出来的三点</b>：① <b>两个 agent 臂在 2 跳上打平</b>（0.862 vs 0.864），差距都在 quick 之上——<b>增益来自多轮检索本身，不是页面</b>；② <b>wiki 没有系统性更快</b>：逐题看 wiki 快 5 题（#2／#4／#5／#7／#8）、smart-v3 快 4 题（#1／#3／#9／#10）、1 题打平，均值 3.6s vs 3.4s 基本持平；③ <b>wiki 的模式是两极</b>——<b>当题目实体直接命中页面标题／摘要时极快</b>（#2 1.5s／#5 1.7s／#7 1.7s，1 次搜索即中、2–4 次工具），<b>需要跨页桥接时急剧变慢</b>（#9：11.2s、34 次工具、167k token，是 smart-v3 的 11 倍 token）。smart-v3 则比较平（每题 2–4 次调用、9–15k token、2.3–6.5s）。</p>
+      <p><b>一个反例要记住</b>：#5（Pythons 的厂牌）三个臂全错，都答成 Sire Records——这段语料里正确厂牌（Kanine Records）没有出现在检索到的块里，属检索/语料问题，不是模型问题。</p>
+      <h4 id="s31">7.15 #9／#10 专项：wiki 答对了，但代价为什么这么高（✅ 2026-10-11）</h4>
+      <p><b>#9 的轨迹</b>（题目：Ashkenazi Jews 祖源地那批部落哪一年入侵罗马帝国，金答案 406，属 2 跳）：它一共 34 次工具调用、11.2 秒、166,966 token，是全部 30 题里第 3 贵的——<b>以 2 跳题的身份挤进最贵梯队</b>。它的动作是不断换词试探：<code>Ashkenazi Jews ancestry</code>（0 命中）→ <code>Rhine|Rhineland|Germany Jews</code>（5）→ <code>Ashkenazi</code>（10）→ <code>Jews settled</code>（0）→ 读页 → <code>invaded the Roman Empire</code>（0）→ <code>tribes invaded</code>（0）→ <code>invasion</code>（7）→ <code>Slavic tribes</code>（0）→ <code>Huns|匈奴</code>（10）→ <code>Pannonia</code>（10）→ 读页 → …→ 最终拼出 406。<b>它 14 次 wiki_search 里有 7 次是 0 命中（50%）</b>——因为 <code>wiki_search</code> 是<b>正则匹配</b>，把自然语言短语当模式去撞 title／slug／summary／content，撞不上就是空。</p>
+      <p><b>#10 的轨迹</b>（Jarvis 配音者的配偶，金答案 Jennifer Connelly）：10 次工具、4.2 秒、42,626 token，搜索全部有命中（Jarvis→Iron Man→读页→Jennifer Connelly|珍妮弗→读页）。它贵的原因是<b>读页本身重</b>——页里带摘要、关系、链接与来源，一次读页的上下文远大于一个块。</p>
+      <p><b>推广到全部 30 题（wiki）</b>：<code>wiki_search</code> 共 152 次，其中 <b>42 次 0 命中（27.6%）</b>。但「贵不贵」<b>不取决于空命中率</b>——贵题（&gt;50k token，10 题）空命中率 27%、便宜题（≤50k，20 题）29%，两者几乎相同；<b>真正的差别在试探轮数</b>：贵题平均 9.0 次搜索、27.0 次工具，便宜题平均 3.1 次搜索、9.6 次工具。⇒ <b>wiki 的成本 ≈ 试探次数 × 单次读页／搜索的上下文</b>，而试探次数由「题目能不能用页面里的词面命中」决定。</p>
+      <p><b>与 smart-v3 的同题对照</b>：#9 上 smart-v3 只用 <b>4 次向量检索 / 14,751 token / 3.7s</b> 就答对（wiki 是 34 次／166,966／11.2s，token 差 11 倍）；#10 上 smart-v3 用 4 次／12,104／3.5s（wiki 10 次／42,626／4.2s）。原因是<b>查询语言与检索机制的匹配度</b>：向量检索天然接受自然语言问句，正则需要「恰好存在的词」。<b>结论</b>：wiki 路线在「实体名直接出现在页面标题／摘要」的题上极省（§7.14 的 #2／#5／#7），在「需要语义改写或叙述式桥接」的题上会退化为一串试探——这正是它 2 跳 token 中位是 smart 两倍、且出现 #9 这种异常点的原因。</p>
+      <h4 id="s32">7.16 3 跳专项：10 题逐题对照（✅ 2026-10-11）</h4>
+      <table class=tbl-wide>
+        <thead><tr><th>#</th><th>问题（简）</th><th>金答案</th><th>quick（F1）</th><th>smart-v3（F1）</th><th>wiki（F1）</th><th>秒 q/s/w</th><th>token k q/s/w</th><th>工具 s/w</th></tr></thead>
+        <tbody>
+          <tr><td>11</td><td>Greyhound 车站</td><td>Toronto Coach Terminal</td><td>610 Bay Street 0.00</td><td>Toronto Coach Terminal 1.00</td><td>Toronto Coach Terminal 1.00</td><td>1.9/4.0/2.8</td><td>5.4/11.9/16.6</td><td>4/6</td></tr>
+          <tr><td>12</td><td>语言的版本</td><td>Medieval Latin</td><td>Medieval Latin 1.00</td><td>Medieval Latin 1.00</td><td>Medieval Latin 1.00</td><td>2.0/6.4/5.8</td><td>5.4/23.5/43.4</td><td>8/18</td></tr>
+          <tr><td>13</td><td>Qing 丢的城市当了多少年首府</td><td>about 400 years</td><td>About 400 years <b>1.00</b></td><td>（放弃）<b>0.00</b></td><td>About 400 years 1.00</td><td>1.6/<b>24.5</b>/5.2</td><td>5.1/<b>205.4</b>/41.7</td><td><b>36</b>/14</td></tr>
+          <tr><td>14</td><td>纽约足球特许经营权</td><td>New York City FC</td><td>New England Revolution 0.29</td><td>New York Red Bulls 0.50</td><td>New York City FC <b>1.00</b></td><td>2.2/5.9/6.2</td><td>5.1/22.3/41.4</td><td>8/20</td></tr>
+          <tr><td>15</td><td>城堡名</td><td>Casa Loma</td><td>Mearns Castle 0.00</td><td>Casa Loma <b>1.00</b></td><td>（拒答）0.00</td><td>2.0/7.5/6.5</td><td>4.9/34.6/38.0</td><td>12/16</td></tr>
+          <tr><td>16</td><td>Webb 球队最后一次击败谁</td><td>1 December 2010</td><td>1995 0.00</td><td>11 March 1995 0.00</td><td>1895 0.00</td><td>2.1/11.1/4.7</td><td>5.0/40.2/22.8</td><td>16/10</td></tr>
+          <tr><td>17</td><td>AL East 2017 冠军何时打过世界大赛</td><td>the 2009 season</td><td>2012 0.00</td><td>2013 0.00</td><td>2003 0.00</td><td>1.4/13.9/9.0</td><td>5.5/70.9/101.1</td><td>20/24</td></tr>
+          <tr><td>18</td><td>与日本结盟年份</td><td>1941</td><td>1902 0.00</td><td>1941 <b>1.00</b></td><td>1902 0.00</td><td>2.2/3.7/3.4</td><td>5.0/14.6/16.0</td><td>4/8</td></tr>
+          <tr><td>19</td><td>新独立国总统</td><td>Francisco Guterres</td><td>（拒答）0.00</td><td>Sumardi… 0.14</td><td>Francisco Guterres <b>1.00</b></td><td>3.6/3.3/5.9</td><td>3.9/11.6/52.5</td><td>4/16</td></tr>
+          <tr><td>20</td><td>首位黑人市长哪年当选</td><td>1970s</td><td>1973 0.00</td><td>the 1970s 1.00</td><td>1970s 1.00</td><td>1.6/7.6/9.1</td><td>5.2/31.9/83.9</td><td>12/24</td></tr>
+        </tbody>
+      </table>
+      <p><b>汇总</b>：quick F1 0.229／EM 0.20／2.1s／5k；smart-v3 0.564／0.50／8.8s／28k／12.4 工具；wiki <b>0.600／0.60／5.9s</b>／42k／15.6 工具。⇒ 3 跳是两臂与经典差距最大的一档（quick 0.229 → 0.56／0.60），也是 <b>wiki 唯一在 F1、EM、时延三项同时占优的档位</b>（token 仍更贵）。</p>
+      <p><b>逐题胜负</b>：打平 3（#11／#12／#20）、wiki 独赢 3（#13／#14／#19）、smart 独赢 2（#15／#18）、两臂都错 2（#16／#17）。wiki 赢的两题都是<b>页面桥接型</b>：#14 从 New York City 页走到 New York City FC、#19 从 East Timor 走到总统；smart 赢的两题是<b>语料里答案直白但页面没建好</b>：#15 Casa Loma（wiki 直接拒答）、#18 1941（wiki 答 1902）。</p>
+      <p><b>两个极端样本</b>：① <b>#13 是「简单题被 agent 复杂化」</b>——quick 1.6s／5.1k token 答对，wiki 5.2s／41.7k 答对，而 <b>smart-v3 花了 36 次工具／205k token／24.5s 却放弃作答</b>（这是它的失控样本，对照 2 跳的 #9 是「wiki 把简单题做复杂」）。② <b>#16／#17 两臂都错且都烧钱</b>（#17：smart 70.9k／20 工具、wiki 101.1k／24 工具）。</p>
+      <p><b>#17 判定为坏题（有据）</b>：它的 gold 链第 2 跳写 <i>who won the american league east in 2017 → The Yankees</i>，但同一题的支撑段 <code>2017 American League Championship Series</code> 自己写着 Yankees 是 <b>Wild Card</i>（2017 年 AL East 冠军实为红袜）⇒ <b>题面前提与语料互相矛盾</b>，两条路都答不出是合理的。#16 则是<b>表格型证据</b>（要在 Second City derby 的比赛表里找最近一次 Birmingham 胜 Villa），对块/页两种检索都不友好。⇒ 3 跳这一档里至少 2 题属「坏题或极难题」，评价机制时要剔除或单列。</p>
+      <h4 id="s33">7.17 4 跳专项：10 题逐题对照（✅ 2026-10-11）</h4>
+      <table class=tbl-wide>
+        <thead><tr><th>#</th><th>问题（简）</th><th>金答案</th><th>quick（F1）</th><th>smart-v3（F1）</th><th>wiki（F1）</th><th>秒 q/s/w</th><th>token k q/s/w</th><th>工具 s/w</th></tr></thead>
+        <tbody>
+          <tr><td>21</td><td>县治</td><td>Green Bay</td><td>Charlotte 0.00</td><td>Green Bay <b>1.00</b></td><td>Appleton 0.00</td><td>2.3/15.0/6.8</td><td>4.6/113.2/35.9</td><td>24/12</td></tr>
+          <tr><td>22</td><td>地区建立年份</td><td>1932</td><td>July 21, 1849 0.00</td><td>1932 <b>1.00</b></td><td>1932 <b>1.00</b></td><td>1.7/29.4/7.6</td><td>5.2/369.4/74.1</td><td>44/20</td></tr>
+          <tr><td>23</td><td>德国神父的州</td><td>Saxony-Anhalt</td><td>Wittenberg 0.00</td><td>Wittenberg 0.00</td><td>Wittenberg 0.00</td><td>2.1/2.8/3.8</td><td>5.4/9.6/36.6</td><td>2/10</td></tr>
+          <tr><td>24</td><td>新币与独立宣言</td><td>the dynasty regrouped…</td><td>（无信息）0.00</td><td>By the French 0.00</td><td>Somalis 0.00</td><td>2.0/5.5/22.7</td><td>5.1/20.9/<b>463.0</b></td><td>8/<b>58</b></td></tr>
+          <tr><td>25</td><td>与某城接壤</td><td>Rio Linda</td><td>San Francisco 0.00</td><td>Orange 0.00</td><td>Wickham 0.00</td><td>2.0/5.8/12.2</td><td>4.8/22.4/235.2</td><td>8/32</td></tr>
+          <tr><td>26</td><td>两处差异</td><td>two cities</td><td>Barcelona 0.00</td><td>Barcelona 0.00</td><td>France 0.00</td><td>1.7/5.8/7.0</td><td>5.1/22.1/100.6</td><td>8/22</td></tr>
+          <tr><td>27</td><td>最湿年份</td><td>1905</td><td>1905 <b>1.00</b></td><td>1905 <b>1.00</b></td><td>1905 <b>1.00</b></td><td>2.3/3.6/5.2</td><td>5.1/11.5/31.9</td><td>4/14</td></tr>
+          <tr><td>28</td><td>与 Sacramento 接壤</td><td>Rio Linda</td><td>Massachusetts 0.00</td><td>（罗列搜索路径）0.00</td><td>（认输）0.00</td><td>2.2/<b>118.6</b>/8.6</td><td>4.7/<b>2112.5</b>/115.1</td><td><b>150</b>/22</td></tr>
+          <tr><td>29</td><td>成为首府的年份</td><td>1839</td><td>1800 0.00</td><td>1839 <b>1.00</b></td><td>1839 <b>1.00</b></td><td>2.1/9.1/6.9</td><td>5.0/22.2/53.8</td><td>8/18</td></tr>
+          <tr><td>30</td><td>与某县接壤</td><td>Presque Isle County</td><td>Mecklenburg 0.40</td><td>（说不出结论）0.02</td><td>Fulton 0.00</td><td>2.0/42.4/5.5</td><td>5.1/<b>790.3</b>/38.7</td><td><b>58</b>/16</td></tr>
+        </tbody>
+      </table>
+      <p><b>汇总</b>：quick F1 0.140／EM 0.10／2.1s／5k；<b>smart-v3 0.402／0.40／23.8s／22k／31.4 工具</b>；wiki 0.300／0.30／8.6s／64k／22.4 工具。⇒ <b>4 跳是 smart-v3 唯一反超 wiki 的档位</b>（0.402 vs 0.300），代价是时延 2.8 倍（均值 token 也更高）。</p>
+      <p><b>逐题胜负</b>：smart 与 wiki 都对 3（#22／#27／#29）、smart 独赢 1（#21）、<b>两臂都错 6</b>（#23／#24／#25／#26／#28／#30）——<b>4 跳的失败是两条路共同的</b>，quick 只有 1 题对（#27）。这与前面「#28 题面不唯一、#25 同类含糊」的判定一致：<b>4 跳的瓶颈更多在题目/语料，而不在检索机制</b>。</p>
+      <p><b>两个成本爆炸点各自出现</b>：wiki 在 #24（463k／58 工具）与 #25（235k／32 工具）失控，smart-v3 在 #28（2,112k／150 工具）与 #30（790k／58 工具）失控——<b>「停不下来」不是某一条路的专利</b>，两条路都会在坏题上烧钱。</p>
+      <h4 id="s34">7.18 汇总：按跳数 × 三臂（✅ 2026-10-11）</h4>
+      <table class=tbl-wide>
+        <thead><tr><th>跳数</th><th>臂</th><th>F1</th><th>EM</th><th>时延均值</th><th>token 中位</th><th>工具均值</th></tr></thead>
+        <tbody>
+          <tr><td>2 跳</td><td>quick</td><td>0.595</td><td>0.40</td><td>2.0s</td><td>5k</td><td>0</td></tr>
+          <tr><td>2 跳</td><td>smart-v3</td><td>0.862</td><td>0.70</td><td>3.4s</td><td>9k</td><td>2.6</td></tr>
+          <tr><td>2 跳</td><td>wiki</td><td><b>0.864</b></td><td>0.70</td><td>3.6s</td><td>17k</td><td>8.2</td></tr>
+          <tr><td>3 跳</td><td>quick</td><td>0.229</td><td>0.20</td><td>2.1s</td><td>5k</td><td>0</td></tr>
+          <tr><td>3 跳</td><td>smart-v3</td><td>0.564</td><td>0.50</td><td>8.8s</td><td>28k</td><td>12.4</td></tr>
+          <tr><td>3 跳</td><td>wiki</td><td><b>0.600</b></td><td><b>0.60</b></td><td><b>5.9s</b></td><td>42k</td><td>15.6</td></tr>
+          <tr><td>4 跳</td><td>quick</td><td>0.140</td><td>0.10</td><td>2.1s</td><td>5k</td><td>0</td></tr>
+          <tr><td>4 跳</td><td>smart-v3</td><td><b>0.402</b></td><td><b>0.40</b></td><td>23.8s</td><td>22k</td><td>31.4</td></tr>
+          <tr><td>4 跳</td><td>wiki</td><td>0.300</td><td>0.30</td><td><b>8.6s</b></td><td>64k</td><td>22.4</td></tr>
+        </tbody>
+      </table>
+      <p><b>四点读法</b>：① <b>经典管线随跳数崩塌</b>（0.595 → 0.229 → 0.140），而且成本恒定（5k token／2s）——它的问题不是贵，是一次检索不够用；② <b>两条 agent 路线的胜负随深度交叉</b>：2 跳打平、3 跳 wiki 领先且更快、4 跳 smart 反超但慢 2.8 倍 ⇒ <b>没有哪条路在所有深度上都赢</b>；③ <b>成本结构不同</b>：quick 恒定 5k；wiki 逐跳抬升（17→42→64k）；smart 的中位较低（9→28→22k）但<b>均值被长尾拉爆</b>（4 跳均值 349k、单题最大 211 万）；④ <b>共同瓶颈在坏题</b>：4 跳 6/10 两臂都错、3 跳有 #16／#17 坏题、2 跳有 #5 三臂全错 ⇒ 30 题里约 3–5 题属「题面歧义或语料不足」，做结论时应剔除或单列。</p>
+      <h4 id="s35">7.19 #13 为什么「弱的答对、强的答错」：题面的词义陷阱（✅ 2026-10-11 逐轮核过）</h4>
+      <p><b>题与答案句</b>：<i>How long was the city the Qing lost in 1853 the capital of the province where Yaxing Coach is headquartered?</i> → 金答案 <b>about 400 years</b>。答案句在 <code>Nanjing</code> 段末尾：<i>“Nanjing was later the capital city of Danyang Prefecture, and <b>had been the capital city of Yangzhou for about 400 years</b> from late Han to early Tang.”</i> MuSiQue 的链是：Yaxing Coach 总部 → <b>Yangzhou</b>；1853 年 Qing 丢掉的城 → <b>Nanjing</b>；Nanjing 当过 <b>Yangzhou</b> 的首府多久 → about 400 years。</p>
+      <p><b>陷阱</b>：题面把 <b>Yangzhou 写成了 province（省）</b>，但语料里的 Yangzhou 是<b>古代监察区／郡（region）</b>——现代扬州只是江苏的一个地级市。也就是说这道题依赖一个<b>同名不同义的词</b>：题面引导人往「江苏省」想，语料给的是「扬州（古区）」。</p>
+      <p><b>quick 为什么答对</b>（1.6s／5.1k token）：它一次混合检索就把三个金标段都捞进上下文（refs 顺序：<code>Qing dynasty</code>／<code>Yaxing Coach</code>／<code>Nanjing</code>／<code>Nanjing__1</code>），生成时<b>只做浅层匹配</b>——问题里有「capital」「how long」，上下文里有「capital city … for about 400 years」，直接抄了这句。它<b>没有去分辨 Yangzhou 到底是市还是省</b>。</p>
+      <p><b>smart-v3 为什么答错</b>（24.5s／36 次工具／205k token）：它<b>按题面把 province 当成了江苏</b>，于是检索序列变成 <code>Nanjing capital of Jiangsu province</code> → <code>When did Nanjing stop being the capital of Jiangsu</code> → <code>provincial capital of Jiangsu 1952 Nanjing</code> …一路找「江苏省会」的历史年份（1927／1952 之类），而语料里根本没有这种说法 ⇒ 搜不到 → 继续换词 → 18 轮后放弃，输出停在「Yaxing Coach 总部在扬州（江苏）」。<b>它其实多次检索到 Nanjing 段（14 次），答案句就在里面，但它在找「江苏省」而不是「扬州（古区）」，没把两者对上。</b></p>
+      <p><b>结论（两层）</b>：① <b>机制层</b>——这道题上「一次检索 ＋ 一次性阅读」优于「多轮改写检索」：quick 把三段证据一次性放进上下文后直接抄答案；smart 把精力花在「找更精确的表述」上，反而没读完已经齐了的证据。② <b>题目层</b>——<b>#13 属坏题</b>（题面用词与语料口径不一致，依赖同名不同义），而它恰好<b>奖励浅层匹配、惩罚按题面纠错</b>。⇒ 这也是 agentic 路线的一个通用风险：<b>推理更严谨的 agent 会被不严谨的基准题惩罚</b>。（另注：smart 在这题并不是「能力不足」，它把 Yaxing→扬州、Qing→Nanjing 两跳都对上了，卡在第三跳的词义。）</p>
+      <h4 id="s36">7.20 全 30 题里「quick 对、smart 错」的只有一例（✅ 2026-10-11）</h4>
+      <p><b>筛查结果</b>：以 EM 为准，quick 答对而 smart-v3 答错的<b>只有 #13 一道</b>；若放宽到「quick 的 F1 高出 smart-v3 逾 0.1」，再加一道 <b>#30</b>（quick 0.40 vs v3 0.02，但两臂都没答对，只是部分分差异）。其余 28 题要么两臂同向、要么 smart 更好。</p>
+      <p><b>#13 的完整对照（同一道题、四种配置）</b>：</p>
+      <table>
+        <thead><tr><th>配置</th><th>时延</th><th>工具</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>quick（一次检索＋一次生成）</td><td>1.6s</td><td>0</td><td><b>✓ About 400 years</b></td></tr>
+          <tr><td>smart-v2（引擎默认提示词）</td><td>5.6s</td><td>8</td><td><b>✓ about 400 years</b></td></tr>
+          <tr><td>smart-v3（预设 <code>progressive_rag_agent</code>）</td><td>24.5s</td><td>36</td><td>✗ 放弃作答</td></tr>
+          <tr><td>wiki</td><td>5.2s</td><td>14</td><td>✓ About 400 years</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>严格说这不是「quick 赢 smart 这套方法」，而是「quick 赢 v3 这一版提示词」</b>：同一个 agent 换回旧提示词就答对了。</p>
+      <p><b>机制推测（有文本依据，n=1 需谨慎）</b>：v3 用的 <code>progressive_rag_agent</code> 里有一句 <i>“For exact quotes, <b>numbers</b>, or code, verify the underlying source passage rather than relying on document metadata or a generated overview.”</i>；而 #13 问的是 <i>How long …</i>（一个数字），语料给的却是模糊答案 <i>about 400 years</i>。也就是说：<b>提示词越强调「数字要回原文核实」，agent 越可能拒绝接受模糊答案、继续找精确年份</b>（它的检索序列确实变成 1927／1952 这类「江苏省会」年份）。v2 没有这条要求，直接采纳了语料里的答案。</p>
+      <p><b>含义</b>：① 「smart 覆盖 quick」的准确说法是——它覆盖了<b>工具与轮数的能力</b>，但不保证会选择「一次检索＋一次阅读」这条最省路径；在 #13 上 v3 反而放弃了它。② 在「坏题 ＋ 模糊答案」这种组合下，<b>提示词越严格越吃亏</b>——这条与 §7.19 的结论互为印证，也提醒我们：评价 agent 提示词时，不能只看它让模型「多做」了什么，还要看它是否让模型「不肯接受已有答案」。</p>
+      <h4 id="s37">7.21 多轮均值（过程记录：当时只跑完四臂）</h4>
+      <p><b>为什么要跑</b>：温度 0.7、每题新会话，单轮差 0.1 分可能只是运气。这是本系列第一批多轮数据（同一配置重复跑 3 次）。</p>
+      <table class=tbl-wide>
+        <thead><tr><th>臂</th><th>第 1 轮 F1</th><th>第 2 轮 F1</th><th>第 3 轮 F1</th><th>均值</th><th>极差（抖动）</th><th>2 跳均值</th><th>3 跳均值</th><th>4 跳均值</th></tr></thead>
+        <tbody>
+          <tr><td>A quick（无 rerank）</td><td>0.321（.59/.23/.14）</td><td>0.309（.59/.26/.07）</td><td>0.326（.45/.36/.17）</td><td><b>0.318</b></td><td><b>0.017</b></td><td>0.543</td><td>0.283</td><td>0.127</td></tr>
+          <tr><td>B quick＋rerank</td><td>0.300（.50/.23/.17）</td><td>0.331（.59/.23/.17）</td><td>0.319（.55/.23/.17）</td><td><b>0.316</b></td><td>0.031</td><td>0.547</td><td>0.230</td><td>0.170</td></tr>
+          <tr><td>D wiki</td><td>0.588（.86/.60/.30）</td><td>0.488（.76/.40/.30）</td><td>0.493（.66/.41/.41）</td><td><b>0.523</b></td><td><b>0.100</b></td><td>0.760</td><td>0.470</td><td>0.337</td></tr>
+          <tr><td>C smart-v3</td><td>0.609（.86/.56/.40）</td><td>0.444（.77/.36/.20）</td><td>0.534（.84/.56/.20）</td><td><b>0.529</b></td><td><b>0.165</b></td><td>0.823</td><td>0.493</td><td>0.267</td></tr>
+        </tbody>
+      </table>
+      <p><b>三条关键发现</b>：① <b>经典臂几乎不抖</b>（极差 0.017／0.031），因为它是一次检索＋一次生成的确定性流程；<b>agent 臂抖动是它的 3–10 倍</b>（wiki 0.100、smart-v3 0.165）——单轮结论确实不可信。② <b>三轮均值下，wiki 与 smart-v3 基本打平</b>：<b>0.523 vs 0.529（差 0.006）</b>，而第 1 轮时是 0.588 vs 0.609。③ <b>分层结论反转</b>：2 跳 smart-v3 略优（0.823 vs 0.760）、3 跳接近（0.493 vs 0.470）、<b>4 跳 wiki 反超（0.337 vs 0.267）</b>——单轮时 4 跳是 smart-v3 0.402 vs wiki 0.300，三轮后反过来了。④ 附带确认：<b>A（无 rerank）0.318 与 B（有 rerank）0.316 三轮都打平</b>，即 rerank 在这套语料/配置下<b>没有可见增益</b>（单轮的判断被三轮证实）。</p>
+      <p><b>备注</b>：五臂的三轮数据到此齐全（quick 无重排／quick＋rerank／wiki／smart-v3／hybrid）；对照用的提示词变体只跑了 1 轮，结论不具备可归因性，已舍去、不纳入主表。</p>
+      <h4 id="s38">7.22 「越跑越贵」是怎么来的：逐条排查（✅ 2026-10-11）</h4>
+      <p>现象：smart-v3 三轮的成本单调上升（total 均值 13.5 万 → 31.2 万 → 44.7 万／题）。逐条否掉「环境在漂移」的可能：</p>
+      <table class=tbl-wide>
+        <thead><tr><th>假设</th><th>检验</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>API／容器变慢</td><td>每次 LLM 调用墙钟（题耗时 ÷ 调用数）：2 次调用题 1.64s → 1.51s → 1.30s；≥10 次调用题 2.36s → 2.98s → 2.69s</td><td><b>否</b>（没变慢，典型题甚至更快）</td></tr>
+          <tr><td>模型输出变长</td><td>每次 completion 中位 87 → 84 → 80；均值 88 → 104 → 110</td><td><b>否</b>（输出稳定）</td></tr>
+          <tr><td>知识库变了</td><td>smart 的工具全是只读（search／read／list／graph）；文档数与块数未变</td><td><b>否</b>（无写入路径）</td></tr>
+          <tr><td>典型题变贵</td><td>每题 token 中位 259 → 216 → 257；每次调用 prompt 中位 7,068 → 6,744 → 6,604</td><td><b>否</b>（典型题完全稳定）</td></tr>
+          <tr><td>长尾题随机点火</td><td>逐题矩阵里起火的题每轮不同：r1 是 #28；r2 是 #22／#28；r3 是 #28／#25／#17／#24／#30。总量里 top3 题占比 r1 62% ／ r2 76% ／ r3 77%</td><td><b>是</b>（解释力最强）</td></tr>
+        </tbody>
+      </table>
+      <p><b>增长的分解</b>：三轮总 completion token 20,482 → 38,737 → 52,734，可拆成两部分——<b>调用总数 147 → 192 → 205（+40%）</b> 与 <b>每次 prompt 均值 11,174 → 13,876 → 17,907（+60%）</b>；而两者的<b>中位数都没变</b>（调用中位 3 次、prompt 中位约 6.7k）。⇒ 增长<b>全部来自少数题的多轮检索与上下文滚雪球</b>，不是整体变贵。</p>
+      <p><b>结论与保留意见（已被 §7.31 定案）</b>：现阶段证据不支持「系统性越跑越贵」，它更像<b>离群题随机点火 ＋ 总量被少数题主导</b>造成的表象。当时留了两个未决项——① 3 个样本判单调趋势不可靠；② 同一时段外部负载（DeepSeek 侧排队）是否改变了模型的决策倾向。这两条后来用<b>同一道题 #28 连跑 5 次</b>补测掉了（那 5 次是连着跑的，与时段无关，跨度仍达 17 倍）⇒ <b>r1→r2→r3 的「单调上升」只是前三次抽样的偶然顺序</b>，详见 §7.31。</p>
+      <h4 id="s39">7.23 wiki 有没有同样的长尾点火？（✅ 有，而且更明显）</h4>
+      <p>用同一套方法拆 wiki 三轮（逐题 total token）：</p>
+      <table class=tbl-wide>
+        <thead><tr><th>轮次</th><th>总 token</th><th>每题中位</th><th>p90</th><th>最大</th><th>top3 题占比</th><th>点火的题</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1</td><td>1,967,721</td><td>38,737</td><td>166,966</td><td>462,994</td><td>44%</td><td>#24（463k）、#25（235k）、#9（167k）</td></tr>
+          <tr><td>wiki r2</td><td>2,360,649</td><td>38,141</td><td>120,885</td><td>988,001</td><td>55%</td><td>#17（988k）、#20（188k）、#30（121k）、#21（116k）</td></tr>
+          <tr><td>wiki r3</td><td><b>3,774,777</b></td><td>38,545</td><td>286,252</td><td><b>1,305,444</b></td><td><b>68%</b></td><td>#30（1,305k）、#28（993k）、#24（286k）</td></tr>
+        </tbody>
+      </table>
+      <p><b>结论</b>：① <b>wiki 同样有随机点火</b>，三轮总量 1.97M → 2.36M → 3.77M（+92%），<b>每题中位却稳定在 38k 左右</b>——与 smart-v3 是同一个模式（中位稳、长尾涨）。⚠️ 这个"总量上升"后来被 §7.31 证明是<b>抽样顺序</b>，不要当趋势读。② <b>点火的题高度集中在难题上</b>：#17／#24／#25／#28／#30 恰好就是我们前面标记过的坏题或超难题（§7.11／§7.16／§7.19），两臂都在这几道上炸过。⇒ 准确的说法是：<b>难题是火药，但导火索与轮次无关</b>——能被点燃的只有那几道（§7.31 定的），而点不点、点多大，每次独立抽样，跟第几轮没关系。</p>
+      <p><b>下一步（部分已做）</b>：按「同一道题连跑多次」的思路做点火实验——原计划选 4 道：<b>#28</b>（每轮都点）、<b>#17</b>（难题）、<b>#24</b>／<b>#25</b>（只在某一轮点火）。<b>#28 已在 smart-v3 上连跑 5 次，结果见 §7.31</b>（跨度 0.43M–7.44M，仅 2 次收手）；#17／#24／#25 未做。</p>
+      <h4 id="s40">7.24 五臂三轮均值（✅ 2026-10-11，各 3 轮）</h4>
+      <table class=tbl-wide>
+        <thead><tr><th>臂</th><th>F1 均值</th><th>抖动（极差）</th><th>EM</th><th>2 跳</th><th>3 跳</th><th>4 跳</th><th>时延</th><th>token 均值／题</th><th>工具／题</th><th>三轮 F1</th></tr></thead>
+        <tbody>
+          <tr><td>A quick（无 rerank）</td><td>0.318</td><td><b>0.017</b></td><td>0.222</td><td>0.55</td><td>0.28</td><td>0.13</td><td><b>2.2s</b></td><td><b>5,029</b></td><td>1.3</td><td>.321 / .309 / .326</td></tr>
+          <tr><td>B quick＋rerank</td><td>0.316</td><td>0.031</td><td>0.244</td><td>0.55</td><td>0.23</td><td>0.17</td><td>3.6s</td><td>4,741</td><td>1.9</td><td>.300 / .331 / .319</td></tr>
+          <tr><td>D wiki</td><td>0.523</td><td>0.100</td><td>0.467</td><td>0.76</td><td>0.47</td><td><b>0.34</b></td><td>7.9s</td><td>90,035</td><td>17.8</td><td>.588 / .488 / .493</td></tr>
+          <tr><td>C smart-v3</td><td>0.529</td><td><b>0.165</b></td><td>0.456</td><td><b>0.83</b></td><td>0.49</td><td>0.27</td><td>16.2s</td><td><b>298,125</b></td><td>20.0</td><td>.609 / .444 / .534</td></tr>
+          <tr><td>E hybrid（wiki＋块）</td><td><b>0.559</b></td><td>0.099</td><td><b>0.489</b></td><td>0.81</td><td><b>0.67</b></td><td>0.20</td><td>13.6s</td><td>246,661</td><td>17.2</td><td>.522 / .534 / .622</td></tr>
+        </tbody>
+      </table>
+      <p><b>又反转了一次</b>：单轮时 hybrid 是最差的一臂（0.522，被我们判为「没跑成 wiki-first、退化成块 agent」），但<b>三轮均值它反而最高（0.559）</b>，而且三轮是 0.522 → 0.534 → <b>0.622</b>（一路向上）。分层上它也最强的是 <b>3 跳 0.67</b>（wiki 0.47／smart 0.49）。⇒ 「E 没跑好」这个单轮结论也站不住了。</p>
+      <p><b>现在的三条读数</b>：① <b>三轮均值排名</b>：hybrid 0.559 ＞ smart-v3 0.529 ≈ wiki 0.523 ＞ quick 0.318 —— 差距最大的是「经典 vs agent」（+0.20），<b>三条 agent 路线之间差距在 0.03–0.04 量级</b>，落在抖动带里；② <b>分层的互补性很清楚</b>：2 跳 smart 强（0.83）、3 跳 hybrid 强（0.67）、4 跳 wiki 强（0.34）——没有一条路全档最强；③ <b>成本</b>：经典 5k／2s，wiki 90k／7.9s，hybrid 247k／13.6s，smart-v3 298k／16.2s —— agent 路线比经典的贵 20–60 倍 token，但时延只贵 3–7 倍（因为它多是短调用）。</p>
+      <p><b>方法学结论</b>：到此为止我们已经<b>三次</b>因为单轮数据得错结论（rerank 有无增益、smart-v3 vs wiki 谁强、hybrid 是否没跑好），三次都在多轮后被推翻或反转。⇒ 对外文里那张主表<b>必须是多轮均值 ＋ 抖动范围</b>，单轮结果只能当过程记录。</p>
+      <h4><span id="s41">7.25 论文结果数据速查（LLM-Wiki，arXiv 2605.25480，备查）</span></h4>
+      <p><b>表 1 主结果</b>（每基准 500 题，Answer F1／EM；GLM-5.1 作答）</p>
+      <table class=tbl-wide>
+        <thead><tr><th>方法</th><th>HotpotQA F1</th><th>EM</th><th>MuSiQue F1</th><th>EM</th><th>2Wiki F1</th><th>EM</th></tr></thead>
+        <tbody>
+          <tr><td>None（闭卷）</td><td>.551</td><td>.442</td><td>.456</td><td>.372</td><td>.638</td><td>.546</td></tr>
+          <tr><td>Vanilla RAG（BM25）</td><td>.717</td><td>.590</td><td>.545</td><td>.442</td><td>.790</td><td>.684</td></tr>
+          <tr><td>Vanilla RAG（Dense）</td><td>.764</td><td>.642</td><td>.611</td><td>.500</td><td>.815</td><td>.724</td></tr>
+          <tr><td>RAPTOR</td><td>.801</td><td>.674</td><td>.522</td><td>.442</td><td>.707</td><td>.652</td></tr>
+          <tr><td>GraphRAG</td><td>.771</td><td>.650</td><td>.582</td><td>.482</td><td>.720</td><td>.648</td></tr>
+          <tr><td>LightRAG</td><td>.819</td><td>.682</td><td>.659</td><td>.550</td><td>.847</td><td>.764</td></tr>
+          <tr><td>HippoRAG 2</td><td>.805</td><td>.668</td><td>.624</td><td>.514</td><td>.831</td><td>.706</td></tr>
+          <tr><td><b>LLM-Wiki</b></td><td><b>.839</b></td><td><b>.710</b></td><td><b>.739</b></td><td><b>.634</b></td><td><b>.911</b></td><td><b>.854</b></td></tr>
+        </tbody>
+      </table>
+      <p><b>表 3 消融</b>（F1）：full .839／.739／.911；去掉 Wiki 结构 .778／.669／.844（−6.1～−7.0）；去掉渐进遍历 .722／.601／.789（−11.7～−13.8）；去掉 Error Book .801／.699／.877（−3.4～−5.0）。</p>
+      <p><b>表 10 时延</b>（秒/题，Hotpot／MuSiQue／2Wiki）：None 24.7／30.0／21.6；BM25 18.1／30.2／16.7；Dense 16.3／26.9／15.6；RAPTOR 19.9／40.2／28.0；GraphRAG <b>14.0／13.9／10.8</b>；LightRAG 41.4／51.3／39.7；HippoRAG 2 33.5／38.2／32.4；<b>LLM-Wiki 14.9／27.1／15.9</b>。</p>
+      <p><b>表 2 AuthTrace</b>（判官 AC，%）：按 fan-in 分 Single／Low／High／All —— None 12.3／16.8／16.2／14.0；Dense 72.9／49.0／35.0／61.9；GraphRAG 55.8／35.1／26.7／46.8；LightRAG 73.4／34.2／14.5／55.7；HippoRAG 2 78.3／59.6／46.5／68.3；<b>LLM-Wiki 76.0／64.6／55.4／70.4</b>（High multi-doc 领先 HippoRAG 2 <b>+8.9</b>，但 Single-doc <b>−2.3</b>）。</p>
+      <p><b>表 8 2Wiki 分类别 F1</b>：LLM-Wiki 在 Br.-Comp.／Comp.／Compos.／Infer. 上为 <b>.983／.989／.833／.909</b>；其中<b>组成型（Compos.）领先 Dense +15.6、领先 LightRAG +7.3</b>，而对比型已接近天花板（.989）。<b>表 9 换作答模型</b>：GPT-4o 下 LLM-Wiki .792／.608／.805 vs Dense .741／.503／.636（论文表述：+5.1／+10.5／+16.9）。</p>
+      <h4><span id="s42">7.26 我们的绝对值为什么远低于论文：三条候选的量化</span></h4>
+      <p>先纠正一条我早先说错的：<b>「语料池更小」不构成原因</b>——池子小意味着干扰更少，只会更容易，不该解释分数更低。强制英文短答案也不是原因（它是口径对齐，且减少了输出稀释）。剩下三条量化如下：</p>
+      <p><b>候选一：坏题</b>。剔除 5 道有据可查的坏题（#13 题面词义陷阱／#16 表格证据／#17 前提与语料矛盾／#25＋#28 同链且中间实体不唯一）后重算三轮均值：</p>
+      <table class=tbl-wide>
+        <thead><tr><th>臂</th><th>全 30 题 F1</th><th>剔除 5 道后（25 题）</th><th>变化</th></tr></thead>
+        <tbody>
+          <tr><td>A quick（无 rerank）</td><td>0.318</td><td>0.342</td><td>+0.024</td></tr>
+          <tr><td>B quick＋rerank</td><td>0.316</td><td>0.340</td><td>+0.024</td></tr>
+          <tr><td>D wiki</td><td>0.523</td><td>0.601</td><td>+0.078</td></tr>
+          <tr><td>C smart-v3</td><td>0.529</td><td>0.595</td><td>+0.066</td></tr>
+          <tr><td>E hybrid</td><td>0.559</td><td>0.631</td><td>+0.072</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 坏题能解释 <b>0.02（经典臂）～0.08（agent 臂）</b>，但<b>不足以解释 0.34 vs 论文 Dense 0.611 的差距</b>。</p>
+      <p><b>候选二：作答模型</b>（deepseek-flash vs 论文的 GLM-5.1）。当时这条无法分离，现在测了（见 §7.30）：同管线只换模型（flash ⇄ DeepSeek V4 Pro，各 3 轮），F1 0.330 → 0.318／0.322，<b>无增益</b>，且 30 题里 <b>21 题两个模型的三轮均值完全相同</b>（同题同错）。⇒ <b>「换个更强的同家族模型」不成立</b>，它不是 0.34 vs 0.611 的原因（论文用 GLM-5.1，所以只排除了同家族，没排除任选模型）。</p>
+      <p><b>候选三（之前漏掉的）：检索粒度是「块」，不是「整段」</b>。实测 quick 臂（✅ 逐题核对）：每题 top-k 块数中位 <b>9</b>，但只覆盖 <b>7 个独立段落</b>（均值 6.8）。⚠️ <b>此处 2026-10-11 更正</b>：我原先写"每段被切成 2–5 个块"是错的（那是把 summary 块也算进去、又按最坏情况说）。直接查库的实测是——572 个文档产出 <b>1,408 块 ＝ 836 个 text 块 ＋ 572 个 summary 块</b>，即<b>每段平均只有 1.46 个 text 块</b>（text 块均长 374 字符、最大 1,832），只有约 264 段被切成 2 块以上。</p>
+      <p><b>那 572 个 summary 块是 WeKnora 自己生成的</b>（<code>knowledge_process.go</code>）：每个文档入库时调一次 LLM（提示词 <code>generate_summary.yaml</code> 的 <code>default_summary</code>，返回 <code>{summary, gist, topics, doc_type, typical_question}</code>），把 <code>summary</code> 写进 <code>knowledge.description</code>，<b>再新建一个 <code>chunk_type=summary</code> 的块并索引进向量库</b>（内容形如 <code># Summary\n劳埃德·丹恩（Lloyd Dane，1925…）是一位来自密苏里州埃尔登市的纳斯卡…</code>）。⇒ 我们的英文语料被配上了<b>中文摘要块</b>，且它确实进了检索结果：22 个经典轮次合计 refs 6,026 条 ＝ text 4,542 ＋ <b>summary 1,484（24.6%）</b>，各轮稳定在 23–27%。</p>
+      <p><b>它的实际代价（离线估算，2026-10-11）</b>：同一批 refs 里把 summary 全部剔掉重算，金标段落覆盖从 1,128 掉到 1,060 —— <b>summary 的"独家"贡献只有 68 段（6%）</b>，而它占了 24.6% 的槽位 ⇒ <b>约 94% 的 summary 引用是冗余的</b>（那段本来就有文本块被检索到）。</p>
+      <p><b>处置：不改。</b>它<b>不是我们环境搭歪了，而是 WeKnora 实现的一部分</b>——所以按它原样跑、按它原样记（本文比的是 WeKnora 的实现，不是理想化版本）。这条同时是对外文里该写进"被测系统行为"的一条：<b>对中文租户的英文语料，WeKnora 会往检索池里塞每个文档的中文 LLM 摘要</b>。技术上要摘掉也行（`is_enabled=false` 即可，因为类型白名单里含 summary、只能靠这个开关；检索侧先取 50 个候选再过滤，摘掉不会饿死 top-k），但那样就不再是"测 WeKnora"了。</p>
+      <p>接着看三分类结果：</p>
+      <table>
+        <thead><tr><th>情形</th><th>题数</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>金标段落命中 ＋ 答案句在检索块里</td><td><b>15</b></td><td>材料齐了，答不出是生成问题</td></tr>
+          <tr><td>金标段落命中 ＋ <b>答案句不在检索块里</b></td><td><b>13</b></td><td><b>段落找到了，但含答案的那一块没进 top-k</b>（段落被切碎 + 配额不足）</td></tr>
+          <tr><td>金标段落未命中</td><td>2</td><td>真正的检索失败（只有 #19／#30）</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 30 题里 <b>13 题（43%）是段落级检索成功、块级检索失败</b>。而论文的 Dense RAG 用的是<b>整段 passage × 5</b>，不存在这种损耗。这条很可能是我们经典臂绝对值偏低的重要机制，而且它<b>是我们环境里的可控参数</b>（chunk 粒度／top-k 配额）。</p>
+      <p><b>可做的两个分离实验</b>：① 把 KB 的 chunk 调大（让一段≈一块）或把 top-k 从 10 提到 20–30，看 quick 的 F1 是否明显上升——上升即证明粒度/配额是主因；② 换一个更强的作答模型（同 KB、同 30 题）重跑 quick——用于分离模型因素。</p>
+      <h4><span id="s43">7.27 把经典臂的 top-k 从 10 调到 20：实测是负收益（✅ 2026-10-11）</span></h4>
+      <p><b>怎么调的</b>：经典管线的 top-k 来自 <b>agent 配置</b>的 <code>embedding_top_k</code>／<code>rerank_top_k</code>（不是租户级 <code>retrieval_config</code>——那个在库里是 null，也没注册 HTTP 路由；server config.yaml 另有 30 的默认值）。改成 20 后实测进上下文的块从 10 变 20，确认开关生效。两个 quick agent 各跑 3 轮。</p>
+      <table class=tbl-wide>
+        <thead><tr><th>配置</th><th>F1 均值</th><th>抖动</th><th>EM</th><th>2 跳</th><th>3 跳</th><th>4 跳</th><th>时延</th><th>token</th><th>进上下文块数</th><th>三轮 F1</th></tr></thead>
+        <tbody>
+          <tr><td>A quick 无 rerank · top-k 10</td><td><b>0.318</b></td><td>0.017</td><td>0.222</td><td>0.55</td><td>0.28</td><td><b>0.13</b></td><td>2.2s</td><td>5,029</td><td>8.4</td><td>.321/.309/.326</td></tr>
+          <tr><td>A quick 无 rerank · <b>top-k 20</b></td><td>0.293</td><td>0.092</td><td>0.200</td><td>0.57</td><td>0.23</td><td>0.07</td><td>2.5s</td><td>6,600</td><td><b>16.9</b></td><td>.334/.302/.242</td></tr>
+          <tr><td>B quick＋rerank · top-k 10</td><td><b>0.316</b></td><td>0.031</td><td>0.244</td><td>0.55</td><td>0.23</td><td><b>0.17</b></td><td>3.6s</td><td>4,741</td><td>6.8</td><td>.300/.331/.319</td></tr>
+          <tr><td>B quick＋rerank · <b>top-k 20</b></td><td>0.286</td><td>0.018</td><td>0.200</td><td>0.58</td><td>0.24</td><td>0.04</td><td>2.6s</td><td>5,516</td><td><b>11.0</b></td><td>.298/.281/.280</td></tr>
+        </tbody>
+      </table>
+      <p><b>机制检查（关键）</b>：同期把「金答案是否出现在检索到的块里」也数了一遍（3 轮 × 30 题）：A·top-k10 为 14/30、A·top-k20 为 <b>18/30</b>；B·top-k10 为 14/30、B·top-k20 为 <b>17/30</b>。段落命中结构基本不变（全命中 11–12 / 部分命中 15–16 / 全未命中 2–3）。</p>
+      <p><b>结论</b>：top-k 翻倍确实<b>把含答案的块从 14/30 提到 18/30（+29%）</b>，但<b>最终 F1 反而降了</b>（A 0.318→0.293、B 0.316→0.286），降幅集中在 <b>4 跳</b>（0.13→0.07、0.17→0.04）。⇒ <b>瓶颈不在找得到，而在用得好</b>：多塞进来的 8–10 条上下文里大部分是干扰段，反而稀释了作答（这也解释了论文的 Dense RAG 为何用 top-5 而不是 top-20）。</p>
+      <p><b>对下一步的含义</b>：既然加证据量无效，剩下值得测的只有两条——① <b>改粒度</b>（让一段等于一块：命中即整段，不增加槽位、不额外引入干扰，与加大 top-k 机制不同）；② <b>换更强的作答模型</b>（4 跳的失败形态是答不出／答错，属生成侧）。</p>
+      <h4><span id="s44">7.28 换 DeepSeek V4 Pro 试了一轮：它把 9/30 道题判成「需要联网」并跳过检索（✅ 2026-10-11）</span></h4>
+      <p><b>怎么试的</b>：新建模型 <code>deepseek-v4-pro</code>（provider=deepseek，复用同一把 key，debug 连通 2s），再建 agent <code>exp-musique-quick-pro</code>——配置与 B 臂完全一致（经典管线、top-k 10、开重排），<b>只把作答模型从 deepseek-flash 换成 V4 Pro</b>，跑 1 轮 30 题。</p>
+      <p><b>结果</b>：F1 <b>0.171</b>／EM 0.067（2 跳 0.282、3 跳 0.057、4 跳 0.173，时延均值 4.0s），远低于 flash 版的 0.316。表面看像「更强的模型反而更差」。</p>
+      <p><b>根因（✅ 日志实证）</b>：30 题里有 <b>9 题的回答是「我无法联网／请补充信息」这类追问</b>，而这些题的 <code>refs=0</code>——根本没检索到任何块。日志给出直接原因：</p>
+      <pre>[PIPELINE] stage=QueryUnderstand action=prompt_override intent=web_search   （9/30 次）
+[PIPELINE] stage=SearchParallel  action=skip reason=intent_no_search
+[PIPELINE] stage=IntoChatMessage action=no_search_with_template has_template=true</pre>
+      <p>即：<b>Pro 在查询理解阶段把这 9 道知识库问题判成 <code>intent=web_search</code>，而 web 搜索未启用 ⇒ 管线按 <code>intent_no_search</code> 直接跳过知识库检索，改用「无检索模板」作答</b>。这个分支<b>不是 Pro 独有的</b>——flash 版同样会踩，只是踩的题不同、频率低得多（逐条对账见 §7.29）。</p>
+      <p><b>为什么值得单独记</b>：这是一条产品层面的实证——换更强作答模型，改变的不只是答案准不准，而是<b>整条流水线的路由决策</b>（intent 分类 → 要不要检索 KB）。而且查询理解提示词里明明写着 <i>Default: when unsure, always choose kb_search</i>、web_search 只用于实时／最新／外部信息，Pro 仍这样判了 30%。⇒ 顺带记一个 WeKnora 的可修点：<b>intent=web_search 且 web 未启用时，应当回退到 KB 检索，而不是静默不检索</b>。</p>
+      <p><b>公平的模型对照怎么补（已做，见 §7.30）</b>：agent 配置的 <code>rewrite_prompt_system</code> 可覆盖查询理解提示词，把意图钉成 <code>kb_search</code> 后重跑——闸门对三条臂一致关闭（30/30 题都走检索），模型对照才算干净。本轮只保留「Pro 的意图判定与 flash 差异巨大」这条观察。</p>
+      <h4><span id="s45">7.29 「意图判错」是怎么发生的：一段提示词 ＋ 一处代码（✅ 2026-10-11 源码 ＋ 日志逐条对账）</span></h4>
+      <p><b>先把提示词摊开</b>（<code>WeKnora/config/prompt_templates/rewrite.yaml</code> → <code>default_rewrite</code>）：它用一个 system prompt 干三件事——问题改写、意图分类、图片描述。意图分 9 类，规则是「从上往下取第一个命中」，所以 <b><code>web_search</code>（第 3 条）的优先级高于 <code>kb_search</code>（第 4 条）</b>。web_search 的定义原文是：</p>
+      <pre>web_search — The question explicitly asks for real-time, latest, or external
+information unlikely in the knowledge base（例："今天天气怎么样"、"最新的新闻"）</pre>
+      <p>末尾还有一句兜底：<i>Default: when unsure, always choose kb_search.</i></p>
+      <p><b>病灶在这条定义上</b>：「unlikely in the knowledge base」是一个<b>关于知识库内容的判断</b>，而这一步的提示词里<b>没有任何知识库信息</b>——user prompt 只注入当前时间、用户问题、JSON 输出格式三样（见 <code>query_understand.go: buildPrompts</code> 的 <code>{{conversation}} / {{query}} / {{language}}</code>），没有库名、没有文档清单、也没有一句「本轮是在问这个库里的东西」。模型被要求判断一个它看不见的属性，只能拿<b>话题先验</b>顶替：影视／歌曲／体育／历史，或带 "newly / wettest / latest" 字样的问法，看着像外部资讯就判 <code>web_search</code>。兜底那句「不确定就选 kb_search」压不住一个看起来很贴切的类目。</p>
+      <p><b>判错为什么是「断供」而不是「绕路」</b>（<code>internal/types/chat_manage.go</code>）：</p>
+      <pre>func (c *ChatManage) NeedsRetrieval() bool {
+    if c.Intent == IntentWebSearch {
+        return c.WebSearchEnabled        // ← web 未启用 ⇒ false
+    }
+    return c.Intent.NeedsKBRetrieval()
+}</pre>
+      <p>评测请求里没开 web search（<code>resolveWebSearchEnabled</code> = agent 配置 ∧ 请求开关，脚本 body 里没传 ⇒ false），于是 <code>search_parallel.go</code> 走到 <code>action=skip reason=intent_no_search</code>——<b>块检索和实体检索一起被跳过，refs=0</b>。而接管 system prompt 的 <code>intent_prompts.yaml</code> 里那张 <code>web_search</code> 模板写着「请尽量基于用户的知识库回答」——<b>知识库恰恰没检索，这条指令在机制上无法满足</b>。WeKnora 显然预见到了「web 不可用」这个场景（模板是专门写的），只是没把 KB 检索留作退路。</p>
+      <p><b>判错本身还带随机性</b>：这一步调用在 <code>query_understand.go</code> 里硬编码 <code>Temperature: 0.3</code>、<code>MaxCompletionTokens: 150</code>，于是边界题会翻来翻去——同一道题、同一模型、同一提示词，跑两次可以给两个答案。</p>
+      <p><b>逐条对账</b>（经典管线 13 轮 × 30 题 ＝ 390 题次，按 session id 与日志 <code>intent_no_search</code> 对齐；quick 系含 top-k 10／20 两个配置，外加 Pro 那轮）：</p>
+      <table class=tbl-wide>
+        <thead><tr><th>题</th><th>题面（截）</th><th>被跳过</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>#19</td><td>Who is the president of the newly declared independent country…</td><td><b>12 / 13</b></td><td>几乎每轮必中；唯一正常的是 Pro 那轮（Pro 判 kb_search）</td></tr>
+          <tr><td>#27</td><td>What was the wettest year in the second largest city…</td><td>6 / 13</td><td><b>同一模型下 8 次 kb ／ 6 次 web，来回翻</b></td></tr>
+          <tr><td>#7</td><td>Who sings Home Alone Tonight with the singer of…</td><td>5 / 13</td><td>另一种引号措辞的 4 次里又翻成 2 ／ 2</td></tr>
+          <tr><td>#17</td><td>When did the team that won the AL East in 2017 last play…</td><td>3 / 13</td><td>—</td></tr>
+          <tr><td>#16</td><td>When was the last time the team Matthew Webb was a member of…</td><td>1 / 13</td><td>—</td></tr>
+          <tr><td>#3／#6／#10／#11／#13／#14／#18</td><td>影视／体育／历史类</td><td>各 1（仅 Pro 那轮）</td><td>换 Pro 后整体换了一批题踩</td></tr>
+        </tbody>
+      </table>
+      <p><b>合计 34 / 390 题次（8.7%）</b>；单轮 1–4 题（3%–13%），Pro 那轮 9/30（30%）。⇒ 它既有<b>稳定成分</b>（#19 十二轮必中，是「newly」这类措辞把 real-time/latest 勾出来了），也有<b>采样抖动</b>（#27、#7 在同一模型下来回翻，13 轮里各错 6 次、5 次）；换模型则整体换一批题踩（Pro 的 9 题里 7 题是 flash 从没踩过的）。</p>
+      <p><b>三条 agent 路线完全没碰到这个坑</b>：wiki-v2 ×3 轮、smart-v3 ×3 轮 ＋ smart-v2 ＋ smart4、hybrid-v2 ×3 轮，共 12 轮 360 题次，按 session id 在日志里查，<b>QueryUnderstand 事件 0 条、skip 0 条</b>——三条 agent 路线根本不走「改写 ＋ 意图判定」这一步。这个风险只存在于经典管线，<b>机制上</b>：agent 入口（<code>/agent-chat</code> → <code>AgentQA()</code>）不组装 chat_pipeline，<code>QUERY_UNDERSTAND</code>／<code>CHUNK_SEARCH_PARALLEL</code> 根本不在链子里；而且 <code>web_search</code>／<code>web_fetch</code> 在 <code>WebSearchEnabled=false</code> 时会被 <code>agent_service.go</code> 从 allowlist 里剥掉（实测三臂的运行时 <code>allowed_tools</code> 都没有它，330 题次的 tool_calls 也从未出现），所以<b>同一个开关在经典侧是「这一轮要不要检索」，在 agent 侧只是「要不要发这件工具」</b>。</p>
+      <p><b>影响量级</b>：把被跳过的题剔掉、只用真正检索过的题重算，经典两臂从 <b>0.316 → 0.334</b>（＋0.02）；全 13 轮口径 0.293 → 0.317（＋0.024）。与抖动带（0.017–0.031）同量级，<b>不改变任何排序</b>；但它是<b>系统性低估</b>，而被低估的恰好是当对照基准的经典臂 ⇒ 主表里「经典 vs agent 差 ＋0.20」实际上略被夸大（真实约 ＋0.18）。§7.27 的 top-k 实验两个配置同样带这个闸门，方向一致。</p>
+      <p><b>规避手段</b>：agent 配置里有 <code>rewrite_prompt_system</code>／<code>rewrite_prompt_user</code>（<code>session_qa_helpers.go:280</code> 会应用），加一句「本场景是知识库问答，一律判 kb_search」就能把这个变量按住，重跑一轮才是公平的模型对照。上游修法：<code>NeedsRetrieval()</code> 里 <code>web_search</code> ＋ web 未启用时应<b>回退到 KB 检索</b>，而不是静默不检索。</p>
+      <h4><span id="s46">7.30 同管线只换作答模型（flash ⇄ DeepSeek V4 Pro）：F1 不动，30 题里 21 题同题同错（✅ 2026-10-11，各 3 轮 × 30 题）</span></h4>
+      <p><b>怎么做到「只换模型」</b>：三条臂共用同一份配置——经典管线、top-k 10 ＋ rerank、<b>同一套改写提示词</b>（§7.29 那份把意图钉成 <code>kb_search</code> 的覆写，对三条臂一致关闭 web 闸门），只改 <code>model_id</code>。因为改写也由作答模型执行，第三条臂另把 <code>query_understand_model_id</code> 单独钉回 flash，用来分开「作答」与「改写」各自的作用。</p>
+      <table class=tbl-wide>
+        <thead><tr><th>臂（作答 / 改写）</th><th>F1 均值</th><th>抖动</th><th>EM</th><th>2 跳</th><th>3 跳</th><th>4 跳</th><th>时延</th><th>token/题</th><th>三轮 F1</th></tr></thead>
+        <tbody>
+          <tr><td>flash / flash</td><td><b>0.330</b></td><td><b>0.017</b></td><td><b>0.244</b></td><td>0.562</td><td><b>0.257</b></td><td>0.173</td><td><b>2.5s</b></td><td>2,845</td><td>.328/.340/.323</td></tr>
+          <tr><td>Pro / flash</td><td>0.318</td><td>0.056</td><td>0.189</td><td>0.557</td><td>0.236</td><td>0.161</td><td>2.8s</td><td>2,853</td><td>.318/.290/.346</td></tr>
+          <tr><td>Pro / Pro</td><td>0.322</td><td>0.066</td><td>0.189</td><td>0.556</td><td>0.237</td><td>0.173</td><td>3.3s</td><td>2,874</td><td>.359/.293/.315</td></tr>
+        </tbody>
+      </table>
+      <p><b>读数一：换模型没有可测量的增益。</b>三条臂 F1 落在 0.318–0.330，全在抖动带内；分层看也没有一档是 Pro 明显更好（3 跳反而 flash 略高）。把改写模型钉回 flash 也没用，夹在两者中间。</p>
+      <p><b>读数二：EM 反而 flash 更好，但那是句式不是知识。</b>flash 答案均值 <b>2.1 词</b>、90 个题次里只有 3 次超过 5 词；Pro 是 3.9–5.4 词、13–14 次超过 5 词（例如 <code>Paul Bettany's spouse is Jennifer Connelly.</code>）——EM 直接判 0，F1 给满分。「只回答案本身」这句提示词对 Pro 不生效。</p>
+      <p><b>读数三（最硬的一条）：两个模型在同一批题上一起对、一起错。</b>逐题取三轮均值，<b>30 题里 21 题的 flash 均值与 Pro 均值完全相同</b>；差幅 &gt;0.3 的只有 4 题——#10（0.83↔0.48）、#12（1.0↔0.67）、#13（1.0↔0.66）偏 flash，#14（0.29↔0.62）偏 Pro。⇒ 瓶颈<b>在生成之前</b>（检索粒度／多跳证据拼接），不在作答模型。</p>
+      <p><b>读数四：成本。</b>时延 Pro 每轮多 0.8 s（2.5→3.3 s，＋32%）；token 几乎一致（2,845→2,874），因为 prompt 占绝对多数、答案都很短。</p>
+      <p><b>顺带第四次单轮反转</b>：Pro/Pro <b>第 1 轮 0.359</b>（高于 flash 的 0.330），三轮均值掉到 0.322（低于 flash）；它的抖动 0.066 是 flash 的 4 倍。这已经是本实验第四次被单轮数据带偏。</p>
+      <p><b>复现资产</b>：agent <code>exp-musique-quick-kb-flash</code>／<code>exp-musique-quick-kb-proflash</code>／<code>exp-musique-quick-pro-kb</code>；脚本 <code>experiments/weknora/weknora_qa_eval.py</code> 的 <code>mkarm</code> 子命令（克隆既有 agent 配置、可覆写作答/查询理解模型与改写提示词）；数据 <code>qa-{kbflash,kbproflash,quickprokb}-r*.jsonl</code>。</p>
+      <h4><span id="s47">7.31 点火实验：同一道题连跑 8 次，成本差 19 倍（✅ 2026-10-11）</span></h4>
+      <p><b>怎么测的</b>：拿 smart-v3 上「每轮都点火」的 <b>#28</b>（4 跳，问 Rio Linda），除原有 r1–r3 外，<b>再连跑 5 次</b>（b1–b5，19:46→19:55 连续跑完）。同一 agent、同一知识库、同一个问题、同一套提示词。</p>
+      <table class=tbl-wide>
+        <thead><tr><th>次</th><th>时段</th><th>总 token</th><th>LLM 调用</th><th>单次 prompt 最大</th><th>用时</th><th>收尾</th></tr></thead>
+        <tbody>
+          <tr><td>r1</td><td>14:17</td><td>2,112,497</td><td>30</td><td>153,152</td><td>119s</td><td>放弃（"搜遍了"）</td></tr>
+          <tr><td>r2</td><td>16:17</td><td>4,064,938</td><td>45</td><td>168,410</td><td>145s</td><td>放弃</td></tr>
+          <tr><td>r3</td><td>16:27</td><td><b>8,133,131</b></td><td>45</td><td>348,533</td><td>246s</td><td>放弃</td></tr>
+          <tr><td>b1</td><td>19:46</td><td>7,443,369</td><td>49</td><td>305,771</td><td>205s</td><td>放弃</td></tr>
+          <tr><td>b2</td><td>19:50</td><td>4,814,198</td><td>44</td><td>239,625</td><td>154s</td><td>放弃</td></tr>
+          <tr><td>b3</td><td>19:52</td><td>2,681,161</td><td>24</td><td>209,979</td><td>87s</td><td>放弃</td></tr>
+          <tr><td>b4</td><td>19:54</td><td>632,591</td><td>14</td><td>115,063</td><td>29s</td><td>直答 <code>Canton</code></td></tr>
+          <tr><td>b5</td><td>19:54</td><td><b>434,193</b></td><td>10</td><td>99,543</td><td>19s</td><td>直答 <code>Springfield, Illinois</code></td></tr>
+        </tbody>
+      </table>
+      <p>八次跨度 <b>0.43M → 8.13M（19 倍）</b>，LLM 调用 10 → 49 次，中位 3.37M。三条结论：</p>
+      <p><b>① 「越跑越贵」是抽样幻觉，这条定案。</b>b1–b5 是<b>连着跑</b>的（间隔 2–4 分钟），跨度仍有 17 倍（7.44M → 0.43M）⇒ 与时段、外部负载、环境漂移都无关。<b>r1→r2→r3 的"单调上升"就是前三次抽样的偶然顺序</b>，紧接着的 5 次是往下走的。</p>
+      <p><b>② 成本的分野不在题的难度，在「模型什么时候放弃」。</b>长跑几次的收尾全是"我搜遍了知识库但没找到"（烧掉 2M–8M 才认输）；短跑两次直接甩一个答案。<b>八次全错</b>，代价却差 19 倍。接 §7.13：块型工具几乎不返回"空信号"，"该不该停"完全由模型即兴决定，方差极大。</p>
+      <p><b>③ 这也解释了 §7.22／§7.23 的怪现象</b>：每题<b>中位</b>三轮稳在 38k（wiki）／17.5k（smart），但<b>总量</b>忽高忽低——总量被这几道随机点火题主导，而点火题的成本近似<b>调用次数的平方级</b>（每轮 prompt 累加上下文：单次 prompt 最大从 99k 到 348k）。</p>
+      <p><b>保留意见</b>：b1–b5 恰好单调下降（5/5），纯随机下概率约 0.8%，值得记一笔；但样本太小，更可能是重尾分布下的巧合。要排除需再跑 10 次并<b>故意打乱节奏</b>（不要连着跑）。<b>已排查的旁路</b>：无 FAQ 短路（库里没有 FAQ 表）、知识库未被写（<code>wiki_page_issues</code> 0 条、<code>wiki_pages</code> 末次写入 10-10 20:16）、长期记忆为空（<code>memory_items</code> 0 条）。</p>
+      <h3 id="s20">8. smart 臂为什么跑不起来（拦路缺陷，值得单独提 issue）</h3>
+      <ul>
+        <li><b>症状</b>：走 <code>/agent-chat</code> 调 rag-qa 型 agent 时，服务端 129ms 就"完成"，但 SSE 一直不关（客户端挂满超时），最终答案为空。</li>
+        <li><b>根因（📄 源码）</b>：<code>session_agent_qa.go:117–134</code> 要求"只要 <code>allowed_tools</code> 里有 <code>search_knowledge</code> 就必须配 rerank 模型"（<code>agentRequiresRerankModel</code>，见 <code>agent_share.go:47</code>），而当前租户只注册了 chat 与 embedding 两个模型，<b>没有 rerank 模型</b> ⇒ 直接 <code>return errors.New("rerank model is not configured…")</code>。wiki 型 agent 的 <code>allowed_tools</code> 不含 <code>search_knowledge</code>，所以不受影响。</li>
+        <li><b>顺带一个产品缺陷</b>：这个错误<b>没有以 SSE error 事件推给客户端</b>（客户端只收到 <code>agent_query</code> 事件，之后连接空转），前端体验就是"转圈到超时"。对比：<code>/knowledge-chat</code> 未配模型时也会报错，但至少流会结束。</li>
+        <li><b>另一条路已经排除</b>：<code>/knowledge-chat</code> <b>永远走经典管线</b>（<code>qa.go:942 qaModeNormal</code>），带 <code>agent_id</code> 也不会进 agent 循环——第一轮我拿它跑 smart 得到的其实是"经典管线 ＋ smart 的配置"，两臂答案高度雷同，已作废重跑。</li>
+        <li><b>要跑 smart 臂的前提</b>：给 WeKnora 注册一个 rerank 模型（例如 DashScope 的 qwen3-reranker），或在 agent 配置里给出可用的 <code>rerank_model_id</code>。这一步要动环境配置，等沛东定。</li>
+      </ul>
+
+      <h3 id="s48" style="margin-top:16px;">9. 阶段性结论（2026-10-11）：Agentic Wiki vs Agentic RAG</h3>
+      <p><b>一句话</b>：在这套测试集上，<b>Agentic Wiki（D）与 Agentic RAG（C）没有明显差距</b>，两条 agent 路线都明显优于经典单次检索；Wiki 唯一站得住的好处是<b>均值口径</b>的成本与时延更低——而这个好处的性质比"省 token"复杂一层。</p>
+      <p><b>口径</b>：各臂 3 轮 × 30 题；「剔 5」＝剔除 5 道有据可查的坏题（#13 词义陷阱／#16 表格证据／#17 前提与语料矛盾／#25＋#28 同链且中间实体不唯一）。另外，<b>所有实测都跑在 WeKnora 原样实现上</b>——包括它给每个文档自动生成、并参与检索的那个摘要块（占经典臂实测 refs 的 <b>24.6%</b>，且约 94% 是冗余占位，见 §7.26）。我们<b>刻意没有摘掉它</b>：本文比的是 WeKnora 这个实现，改掉实现对再对比没有意义；这条应作为「被测系统的行为」写进对外文，而不是当成待修的缺陷。</p>
+      <table class=tbl-wide>
+        <thead><tr><th>臂</th><th>口径</th><th>F1</th><th>token/题/轮 · 均值</th><th>token · 中位</th><th>token · 最大</th><th>时延 · 均值</th><th>时延 · 中位</th></tr></thead>
+        <tbody>
+          <tr><td>B quick＋rerank（经典）</td><td>全 30</td><td>0.316</td><td>4,741</td><td>4,894</td><td>6,002</td><td>3.6s</td><td>2.6s</td></tr>
+          <tr><td>B quick＋rerank（经典）</td><td>剔 5</td><td>0.340</td><td>4,765</td><td>4,903</td><td>6,002</td><td>3.0s</td><td>2.6s</td></tr>
+          <tr><td>D wiki</td><td>全 30</td><td>0.523</td><td><b>90,035</b></td><td>42,676</td><td>488,355</td><td>7.9s</td><td>5.7s</td></tr>
+          <tr><td>D wiki</td><td>剔 5</td><td>0.601</td><td>67,463</td><td>40,564</td><td>488,355</td><td>6.8s</td><td>5.3s</td></tr>
+          <tr><td>C smart-v3（Agentic RAG）</td><td>全 30</td><td>0.529</td><td>298,125</td><td>18,769</td><td>4,770,189</td><td>16.2s</td><td>4.8s</td></tr>
+          <tr><td>C smart-v3（Agentic RAG）</td><td>剔 5</td><td>0.595</td><td>121,729</td><td><b>15,969</b></td><td>1,272,543</td><td>9.5s</td><td><b>3.7s</b></td></tr>
+          <tr><td>E hybrid</td><td>全 30</td><td>0.559</td><td>246,661</td><td>24,526</td><td>4,404,597</td><td>13.6s</td><td>6.0s</td></tr>
+          <tr><td>E hybrid</td><td>剔 5</td><td>0.631</td><td><b>57,787</b></td><td>24,007</td><td>367,836</td><td>8.1s</td><td>5.6s</td></tr>
+        </tbody>
+      </table>
+      <p><b>1）F1：两条 agent 路线持平，且都明显优于经典。</b>剔掉坏题后 wiki 0.601／smart 0.595／hybrid 0.631——wiki 与 smart 只差 <b>0.006</b>，远小于 agent 臂自身抖动（0.10–0.17）；相对经典 0.340 是 <b>+0.26</b> 的量级。⇒ 「agent 化」本身是主要增益来源，「编译成页面」在这套语料上没有额外增益。</p>
+      <p><b>2）成本：均值与中位的排序是相反的，「wiki 更省」只在均值口径成立。</b>均值看 wiki 全 30 题最省（90k ＜ hybrid 247k ＜ smart 298k），但<b>剔掉难题后 hybrid 反而最省（57,787）</b>、wiki 退到第二（67,463）⇒ 这个优势不稳健，它取决于包里有没有那几道会点火的题。而中位看：<b>典型题上 wiki 是三个 agent 臂里最贵的</b>（42,676，剔题后 40,564，仍最贵），smart 最便宜（18,769／15,969）。时延同理（中位 5.7s vs 4.8s）。⇒ 一句话：<b>wiki 是稳压器（典型题贵一点、不容易炸），smart 是赌一把（典型题最便宜、偶尔炸穿）</b>；两者的均值优劣完全由尾部决定，不由典型题决定。</p>
+      <p><b>3）「优势来自 LLM 自主决定检索」是推断，不是消融结论。</b>支持它的三条排除：① §7.30 换更强的同家族模型 F1 不动 ⇒ 不是模型能力；② §7.27 top-k 翻倍、含答案块 14/30→18/30 但 F1 反降 ⇒ 不是「给更多上下文」；③ 全链覆盖分析（40% 全链命中、单次检索够不到多跳远端段落）⇒ 不是「单次检索做得不够好」。剩下的解释变量确实只有「多轮自主检索」，但我们没做严格消融（给经典管线同等预算的多轮检索），所以这一条要标成推断。</p>
+      <p><b>4）外部效度边界（对后续立论很关键）</b>：MuSiQue 的<b>输入</b>是短段落、一个实体≈一段（572 段，字符中位 464）。⚠️ <b>此处 2026-10-11 更正</b>：我原先写"wiki 编译出来基本是 1:1 的实体页＋摘要"是<b>推论、且推错了</b>。查 <code>wiki-stats</code> 的实测是——这个库 <b>4,094 页 ＝ summary 572 ＋ entity 2,820 ＋ concept 701 ＋ index 1</b>，页间 <b>23,393 条链接</b>（孤儿 3），即<b>每段平均长出 7.2 页</b>；summary 页正文中位 <b>1,054 字符</b>，是源段落中位的 <b>2.3 倍</b>（重写＋<code>[[entity/...]]</code> 链接化），entity 页中位 263、concept 页中位 322。⇒ wiki 臂手里是有一个<b>完整的结构化层</b>的（<code>wiki_search</code> 返回里还带 links、可以顺链跳），所以它没赢下 F1，<b>不能归因于"没东西可编译"</b>——这反而让"编译成页面在这类任务上没有额外增益"这个结论更有分量。页级检索确实没有经典臂那种碎片损耗（summary 页是整段重写）。要检验它本该有的优势（枚举／跨源连接／关系查询），得到<b>真实长文档、跨文档关系多</b>的语料上去测。</p>
+      <p><b>5）「偏向 wiki」的机制：入口那一跳常常是关键词题（✅ 离线验证）</b>。把金标标题里的消歧括号（<code>(song)</code>／<code>(film)</code>／<code>(Mark Dinning song)</code>）剥掉后做字面匹配，看有多少直接出现在题面里：</p>
+      <table>
+        <thead><tr><th>跳数</th><th>金标段落标题字面出现在题面里</th></tr></thead>
+        <tbody>
+          <tr><td>2 跳</td><td><b>10 / 20 = 50%</b></td></tr>
+          <tr><td>3 跳</td><td>9 / 30 = 30%</td></tr>
+          <tr><td>4 跳</td><td>7 / 40 = <b>18%</b></td></tr>
+          <tr><td>合计</td><td>26 / 90 = <b>29%</b></td></tr>
+        </tbody>
+      </table>
+      <p>#2 是典型形态：<code>Who wrote "Turn Me On" by performer of "Happy Pills"?</code>——两个金标段落（<code>Turn Me On (Mark Dinning song)</code>、<code>Happy Pills (song)</code>）<b>都在题面里字面出现</b>，正则入口直接命中；#7 也是 2/2。⇒ 2 跳题有一半是这种形态，<b>入口那一跳退化成关键词题</b>，这正是 wiki 的正则入口能工作的原因。</p>
+      <p>但<b>「不需要语义检索」只对入口成立</b>。同口径（top-10）下用纯关键词检索器在 572 段语料上离线跑一遍，和实测的经典臂对照：</p>
+      <table class=tbl-wide>
+        <thead><tr><th>单次检索器</th><th>全链命中</th><th>2 跳</th><th>3 跳</th><th>4 跳</th></tr></thead>
+        <tbody>
+          <tr><td>BM25（纯词袋）</td><td><b>6/30 = 20%</b></td><td>5/10</td><td>1/10</td><td>0/10</td></tr>
+          <tr><td>标题字面命中优先 ＋ BM25 补足</td><td><b>6/30 = 20%</b></td><td>5/10</td><td>1/10</td><td>0/10</td></tr>
+          <tr><td>经典臂（embedding ＋ rerank，9 轮 270 题次实测）</td><td><b>40%</b></td><td>70%</td><td>30%</td><td>20%</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>单次检索这一步，语义的贡献约两倍</b>——而且注意 BM25 进窗口的是 10 个<b>整段</b>，经典臂是 10 个<b>块</b>（≈7 个段落），槽位更少、覆盖反而更高。</p>
+      <p><b>但真正的自变量是「迭代」，不是语义。</b>把两种入口与外层放一起排：单次关键词 20% → 单次语义 40% → <b>关键词入口 ＋ 迭代</b>（wiki）F1 <b>0.601</b> → <b>语义入口 ＋ 迭代</b>（smart）F1 <b>0.595</b>。也就是：<b>语义与关键词之间的那道沟，被「能不能多轮去找」抹平了</b>——这是论文 <i>retrieval as reasoning</i> 的一个自家实证。⇒ 本实验真正压出来的结论是「<b>多轮自主检索 &gt; 单次检索</b>」，而不是「语义检索 &gt; 关键词检索」；同时它也是这套语料<b>同时偏向 wiki 正则入口</b>的机制。在真实长文档语料里，问题措辞与原文用词的错位会大得多，入口那一跳不会这么好过。</p>
+
+      <h3 id="s49" style="margin-top:16px;">10. 逐题拆 Wiki vs Agentic RAG：三条路线各占一段（下一篇的引子）</h3>
+      <p><b>为什么值得单独拆</b>：总量上两者无差异（0.601 vs 0.595），但 30 题这个样本够小、够逐题看，能问一个更细的问题——<b>它们是不是各有主场？</b>如果是，下一步就不是"从里面选一个"，而是"把长处拼起来"。</p>
+      <p><b>① 宏观：30 题里只有 3 题分化</b>（判定＝该臂 3 轮里对 ≥2 轮）</p>
+      <table>
+        <thead><tr><th>判定</th><th>题数</th><th>题号</th></tr></thead>
+        <tbody>
+          <tr><td>两个臂都对</td><td><b>17</b></td><td>1–8、10、12–14、18、19、22、27、29</td></tr>
+          <tr><td>两个臂都错</td><td><b>10</b></td><td>11、15–17、23–26、28、30</td></tr>
+          <tr><td><b>wiki 主场</b>（wiki 对、smart 错）</td><td><b>2</b></td><td>20、21</td></tr>
+          <tr><td><b>smart 主场</b>（smart 对、wiki 错）</td><td><b>1</b></td><td>9</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>27/30 同命</b>（这是"两者无显著差异"最直观的一种表述）。分档看更清楚：<b>2 跳 9/10 都对、3 跳 5/10、4 跳 3/10</b>。</p>
+      <p><b>② 分层：三条路线各占一段，而且三轮内一致</b></p>
+      <table class=tbl-wide>
+        <thead><tr><th>跳数</th><th>wiki</th><th>smart</th><th>hybrid</th><th>最强</th></tr></thead>
+        <tbody>
+          <tr><td>2 跳</td><td>0.764（.864/.764/.664）</td><td><b>0.826</b>（.862/.774/.844）</td><td>0.811（.713/.874/.847）</td><td><b>smart</b>（也最稳）</td></tr>
+          <tr><td>3 跳</td><td>0.470（.600/.400/.410）</td><td>0.492（.564/.355/.557）</td><td><b>0.669</b>（.652/.554/.800）</td><td><b>hybrid</b>（三轮全胜）</td></tr>
+          <tr><td>4 跳</td><td><b>0.335</b>（.300/.300/.405）</td><td>0.268（.402/.202/.201）</td><td>0.198（.202/.175/.217）</td><td><b>wiki</b>（三轮全胜）</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 不是"谁全面更好"，而是<b>各占一段</b>：smart 赢浅链、hybrid 赢中链、wiki 赢深链。三个主场在各自的 3 轮里都成立，不像噪声。</p>
+      <p><b>③ 三个分化题的现场</b></p>
+      <ul>
+        <li><b>#9（2 跳，答案 <code>406</code>）</b>：smart 三轮全对且极省（工具数 4/8/4）；wiki 对-错-错，且答对那一轮用了 <b>34</b> 次工具。⇒ 浅链上"块级一击命中"更省更稳。</li>
+        <li><b>#20（3 跳，<code>1970s</code>）</b>：hybrid 3/3、wiki 2/3、smart 1/3。⇒ 中链上"页＋链接接力"更顺。</li>
+        <li><b>#21（4 跳，<code>Green Bay</code>）</b>：<b>三个臂全在这题上摇摆</b>（wiki 错-对-对、smart 对-错-错、hybrid 错-错-对）。⇒ 证据其实都在，胜负取决于最后怎么取舍，是采样问题而不是能力差异。</li>
+      </ul>
+      <p><b>④ 融合的口子：三个待解问题</b>（这一节就是下一篇的引子）</p>
+      <p>有意思的是 <b>hybrid 臂本身就是一次融合尝试</b>（wiki 导航 ＋ 块级引用），而它的 profile 恰恰说明<b>这个融合方式不对</b>——它在 3 跳赢麻了，却在 <b>4 跳上比两个纯臂都差</b>（0.198 vs 0.335／0.268）。于是问题变得很具体：</p>
+      <ul>
+        <li><b>能不能按"预期跳数"自适应选入口？</b>既然 2／3／4 跳各有一条最优路线，那更合理的第一步是"先从问题形态估跳数，再决定用块、用页还是用 hybrid"，而不是全局固定一条。</li>
+        <li><b>为什么 hybrid 融合之后在深链上反而最差？</b>是导航策略（wiki-first）在深链上过早收敛／被页级摘要带偏，还是预算分配问题？（反例很干净：融合体在最难的一档输给两个纯臂。）</li>
+        <li><b>wiki 在 4 跳的优势到底来自哪？</b>是页间链接能"接力"（结构），还是它更早止损、不瞎猜？——我们已知页检索 48.6% 返回空（有"否信号"），而块检索几乎不返回空。这两个机制对应<b>完全不同的改法</b>，必须先拆开。</li>
+      </ul>
+      <p><b>口径提醒</b>：每档只有 10 题 × 3 轮，所以"各自主场"方向明确但<b>样本小</b>——对外文里应写"分层上呈互补态势"，不写成"wiki 在 4 跳上更强"这种定论。</p>
+
+      <h3 id="s21">11. 待定与下一步</h3>
+      <ul>
+        <li><b>题量</b>：30 题已跑通（18 分钟／14M token）；扩到多少待沛东定（建议先 100 题）。</li>
+        <li><b>补齐 smart 臂</b>：先解决 rerank 模型（见 §8），或决定跳过它只报 quick vs wiki。</li>
+        <li><b>扩样</b>：现在每档只有 10 题，4 跳的"拐点"不可信；要定"优势是否随深度放大"，建议至少 30 题/档（＝90 题语料，按实测单价约 8,700 万 token／1 小时编译）。</li>
+        <li><b>多跑几次看抖动</b>：同一题重跑会变（见过 #18 一变一稳、#30 两次都错），单次结果不能当定论；至少 3 次取均值。</li>
+        <li><b>confound 必须写清</b>：我们的 Agentic 臂 ≠ 论文的 LLM-Wiki 臂（页面没进索引／wiki 工具只在 agent 模式注册／<code>wiki_search</code> 是正则且不认别名）；回答模型也不同（deepseek-flash vs GLM-5.1）。</li>
+        <li><b>可选小探针</b>：拿不可答半做"证据不足会不会硬答"（须把检索范围限定为该行自己的 20 段）；以及"缩放到 100 题后目录会不会漂移"。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2 id="s22">第二部分 · 现场细节（考古层）</h2>
+
+      <h3 id="s23">时间线（2026-10-10 → 10-11）</h3>
+      <ul>
+        <li><b>下载</b>：官方在 Google Drive，本机不通；HF 上也直连超时 ⇒ 发现<b>本机 HF／Google 要走本地代理 <code>127.0.0.1:7890</code></b>（GitHub／PyPI 可直连），Python <code>urllib</code> 走代理拉下 dev／test／ans 三个文件。</li>
+        <li><b>形状核对</b>：<code>musique_shape.py</code> 出 <code>shape.json</code>；随后发现 <code>ans</code> 文件按跳数排序、<code>test</code> 无答案 ⇒ 定下"full dev 可答子集 ＋ 原始顺序"。</li>
+        <li><b>论文口径</b>：拉 ar5iv 全文（<code>data/tmp/musique/musique_paper_ar5iv.html.txt</code>）核 §4.1／§4.4／§5.4／Limitations；论文未写 split，且 Table 10 的时延是<b>端到端</b>口径（闭卷也有数正是证据）。</li>
+        <li><b>可答／不可答对照对</b>：README ＋ 论文 §5 S8 原文 ＋ 实测三路印证（id 配对、问题与答案相同、两版 context 平均重叠 13/20）。</li>
+        <li><b>切语料</b>：<code>prep_musique_corpus.py</code>；先按 title 去重（505 条）→ 校验 md 与 jsonl 逐字节一致时<b>发现同标题多正文</b> → 改成 (标题, 正文) 去重 → 572 条。</li>
+        <li><b>编译基线</b>：20:01:49 起服务（新会话日志）→ 20:01:58 建库并投喂 → 20:02 起编译 → 20:20:26 页面稳定；收工前 <code>dump</code> 全部 wiki 产物。</li>
+        <li><b>成本分析</b>：先按 purpose 记账（<code>usage_report.py</code>）→ 再查 chunks 表确认检索单位是块 → 再对账 4,094 页的来源数（89% 单源）⇒ 得出"钱花在页上"的结论，并撤回"合并会毁掉实验"的说法。</li>
+      </ul>
+
+      <h3 id="s24">踩到的坑（都记下来）</h3>
+      <ul>
+        <li><b>列表接口默认分页 20 条</b>：第一版脚本用 <code>/knowledge-bases/{id}/knowledge</code> 直接数文档，只看到 20 条，误以为投喂失败 ⇒ 必须显式 <code>page_size=1000</code> 并读 <code>total</code>。</li>
+        <li><b>usage 统计读早了</b>：编译刚起时跑 <code>usage_report.py</code>，只看到 692 行（最后一次 12:02:55），一度以为日志跟随掉了；实际是那会儿日志里就只有这些，后来 10,032 行都能解析。<b>教训：统计要等窗口结束再取，别拿进行中的快照当全量。</b></li>
+        <li><b>按 title 去重是静默丢数据</b>：不留痕迹地丢 67 条（500 题时 912 条），而且丢掉的可能是某题的金标证据。发现方式是"md ↔ jsonl 逐字节对账"——这类<b>集合对账</b>比汇总指标可靠。</li>
+        <li><b>我一度把检索单位当成文档</b>，由此下了"按题合并会毁掉实验"的错误结论；查了 <code>chunks</code> 表（1,408 块／572 篇）与邻块扩展源码后撤回。</li>
+      </ul>
+
+      <h3 id="s25">复现资产</h3>
+      <ul>
+        <li>脚本：<code>experiments/weknora/download_musique.py</code>（走代理下载）／<code>musique_shape.py</code>（形状）／<code>prep_musique_corpus.py</code>（切语料）／<code>weknora_musique.py</code>（建库·投喂·等稳定·dump）／<code>usage_report.py</code>（逐次调用记账）。</li>
+        <li>数据：<code>data/tmp/musique/</code>（三个 split ＋ <code>shape.json</code> ＋ 论文文本）／<code>data/tmp/musique/slice-30-strat/</code>（30 题 ＋ 572 段）。</li>
+        <li>实验产物：<code>data/tmp/weknora-musique/</code>（<code>run-summary.json</code>／<code>state.json</code>／<code>upload-results.json</code>／<code>wait-trace.json</code>／<code>wiki-{stats,lint,graph,index,folders,pages,pages-all}.json</code>）。</li>
+        <li>日志：<code>data/tmp/weknora-logs/weknora-20261010-200149.log</code>（含逐次 <code>[LLM Usage]</code>）。</li>
+      </ul>
+
+      <p class="muted">记录创建：2026-10-11 · 上游：<a href="0044-weknora-retrieval-outline.html">0044</a>（检索篇提纲：设计与判据）· 相关：<a href="0037-llmwiki-weknora-setup.html">0037</a>（编译七阶段源码细读）· 对外稿：<code>docs/publish/0043-llmwiki-compile-pipeline.md</code>（编译篇，已定稿）。</p>
+    </section>
+  </div>
+</body>
+</html>

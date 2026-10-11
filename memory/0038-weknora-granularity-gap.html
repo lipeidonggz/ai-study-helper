@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0038 · WeKnora 缺陷实录：粒度/领域配置只接了一半管道</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0038 · WeKnora 缺陷实录：粒度/领域配置只接了一半管道</h1>
+      <p class="subtitle"><b>一分钟摘要</b>：WeKnora 的 <code>wiki_config.extraction_granularity</code>（focused／standard／exhaustive）只控制 <b>Pass 0 候选抽取</b>；<b>引用匹配那一阶段还有一个"补 slug"的次要任务</b>，它<b>既不带粒度指引、也不带用户的领域指令</b>。实测：同一份文档，focused 下 Pass 0 老老实实只抽 6 项（符合"3–7 条"要求），引用阶段却补了 <b>14 项</b>——最终 20 页里 <b>70% 来自不听指令的那条通道</b>。</p>
+      <p class="subtitle">状态：<span class="half">△ 证据已齐，待提 issue</span>（沛东"有空再去提"）· 对象：<code>Tencent/WeKnora</code> tag <code>v0.8.2</code>（commit <code>3e8b0bf</code>）· 现场时间：2026-10-08 · 上游：本发现出自 <a href="0037-llmwiki-weknora-setup.html">0037</a> 的阶段一/二源码细读</p>
+      <p class="subtitle"><b>证据标记</b>：<span class="half">📄 源码</span>（v0.8.2 本地克隆）· <span class="ok">✅ 实测</span>（本机三次真实 ingest）· <b>🤔 判断</b>（修复建议）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 相关：<a href="0037-llmwiki-weknora-setup.html">0037</a>（平台与准备／阶段一、二细读）</p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 问题、证据与修复建议</h2>
+
+      <h3 style="margin-top:16px;">1. 问题（一句话）</h3>
+      <p><b>用户配的"抽取粒度／领域重点"只对 Pass 0 生效；引用阶段有一条独立的"补 slug"通道，它不读这两项配置，且能自己产出页面。</b>结果是：<b>focused 只兑现了一小半</b>——用户以为会得到 7 个左右的页面，实际拿到 20 个。</p>
+
+      <h3>2. 证据 A：代码（五处）</h3>
+      <table>
+        <thead><tr><th>位置</th><th>代码事实</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>internal/types/wiki_page.go:529</code></td><td>字段注释原文：<i>"ExtractionGranularity controls how many candidate slugs <b>Pass 0</b> extracts per document"</i></td><td>官方口径里，这个配置<b>就是 Pass 0 专用</b>的</td></tr>
+          <tr><td><code>internal/application/service/wiki_ingest_cite.go:97-105</code></td><td>Pass 0 的模板数据带 6 个键：<code>Content / Language / PreviousSlugs / <b>Granularity</b> / <b>GranularityGuidance</b> / <b>CustomInstructions</b>+InstructionScope</code></td><td>Pass 0 <b>完整</b>接收粒度与业务指令</td></tr>
+          <tr><td><code>internal/application/service/wiki_ingest_cite.go:284-288</code></td><td>引用阶段的模板数据只有 <b>3 个键</b>：<code>CandidateSlugs / ChunksXML / Language</code></td><td><b>没有</b>粒度、<b>没有</b>领域指令</td></tr>
+          <tr><td><code>internal/agent/prompts_wiki.go:260</code><br>（<code>WikiChunkCitationPrompt</code>）</td><td>它有 "### Secondary task: new slugs" 一节，判据是固定的一句：<i>"Only add genuinely new, substantively-discussed items"</i>——<b>整个提示词里没有任何 <code>{{.Granularity}}</code>／<code>{{.GranularityGuidance}}</code> 占位符</b></td><td>补 slug 的标准是<b>写死的</b>，与用户的粒度选择无关</td></tr>
+          <tr><td><code>wiki_ingest_cite.go:463+</code><br>（<code>mergeCitationsIntoItems</code>）</td><td>citation 返回的 <code>new_slugs</code> 会被<b>追加进条目集</b>（按 slug 去重后 append 到 entities／concepts）</td><td>补出来的 slug <b>会变成正式页面</b>，不是临时信息</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3. 证据 B：三次实测（同一份文档，A5，28,956 字符／70 块）</h3>
+      <table>
+        <thead><tr><th></th><th>standard · 首跑（全新库）</th><th><b>focused · 首跑（全新库）</b></th><th>standard · 重跑（同库重解析）</th></tr></thead>
+        <tbody>
+          <tr><td><b>Pass 0 抽出</b></td><td>34</td><td><b>6</b>（concept 2 ＋ entity 4）</td><td>43</td></tr>
+          <tr><td><b>引用阶段补 slug</b></td><td>+9</td><td><b>+14</b></td><td>+8</td></tr>
+          <tr><td>合并后候选</td><td>43</td><td><b>20</b></td><td>51</td></tr>
+          <tr><td>落库页面（含摘要页）</td><td>44</td><td>—（见 8.1 原始行）</td><td>52</td></tr>
+          <tr><td>引用到的块</td><td>68／70</td><td>56／70</td><td>65／70</td></tr>
+          <tr><td>未引用条目</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>map 阶段耗时</td><td>24.2 s</td><td><b>12.9 s</b></td><td>27.0 s</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>两个对照都能读出来</b>：<br>
+        · <b>Pass 0 服从粒度</b>：focused 下只抽 6 项，正好落在提示词要求的"实体＋概念合计 3–7 条"区间 ⇒ 这个旋钮<b>本身工作正常</b>。<br>
+        · <b>补 slug 通道不服从</b>：focused 下反而补得<b>更多</b>（+14 vs standard 的 +9），且补的都是 focused 明令排除的类型——<b>次要主题</b>（人在回路监督、审批疲劳）与<b>实现细节</b>（工具输出攻击面、持久记忆投毒、多智能体信任升级、智能体身份）。<br>
+        · <b>净效果</b>：focused 的页数只从 43 降到 <b>20（−53%）</b>，而不是按 focused 意图的 ~7 页（−85%）；这 20 页里 <b>70% 出自不听配置的那条通道</b>。
+      </div>
+
+      <h3>4. 影响（谁会踩）</h3>
+      <ul>
+        <li><b>想用 focused 控索引膨胀的人</b>：聚焦档的核心卖点就是"只留主要对象、避免索引被顺带提到的东西撑大"，而现在这条泄漏几乎抵消了它一半的效果。</li>
+        <li><b>想用 <code>extraction_instructions</code> 指定领域重点的人</b>：Pass 0 会听你的，但引用阶段仍按自己的标准继续补条目——<b>用户设的"视角"其实只管上半场</b>。</li>
+        <li><b>想比较三档粒度的人（比如我们）</b>：只看 <code>candidates=</code> 会得出"focused 极有效"的错结论；必须看<b>合并后候选数／落库页数</b>。</li>
+      </ul>
+      <p class="muted">注：这不必然意味着作者"漏了"。另一种解释是"有意让发现与裁剪解耦"——发现交给模型、裁剪交给下游。但即便如此，<b>至少文档与配置语义需要对齐</b>：现在的字段说明是"Pass 0"，而界面文案给人的印象是"控制这套 wiki 抽多少"。</p>
+
+      <h3>5. 最小修复建议（三个选项，按代价从小到大）</h3>
+      <table>
+        <thead><tr><th>选项</th><th>改法</th><th>代价／风险</th></tr></thead>
+        <tbody>
+          <tr><td><b>A. 让补 slug 也看粒度</b>（推荐）</td><td>把 <code>Granularity</code>／<code>GranularityGuidance</code> 传进 <code>WikiChunkCitationPrompt</code>，并在 "Secondary task: new slugs" 里加一句"严格按 {{.Granularity}} 的范围补"（focused 时可要求"除非是文档主要对象，否则不要新增"）</td><td>改动小（一个提示词 ＋ 一处调用）；风险是会让 focused 的召回更窄——但那正是用户要的</td></tr>
+          <tr><td><b>B. 给补 slug 加开关</b></td><td>新增 <code>wiki_config.allow_discovery</code>（或 <code>discovery_scope</code>），默认开；想要"严格 focused"的人可关掉</td><td>更明确，但多一个配置项；需要同时决定默认值</td></tr>
+          <tr><td><b>C. 只改文档／界面文案</b></td><td>把字段说明与界面提示改成"仅控制 Pass 0 候选抽取；补充发现不受此影响"</td><td>零风险，但用户拿到的仍是"半个旋钮"</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">我倾向 <b>A</b>：既然 <code>extraction_instructions</code>（领域重点）已经在 Pass 0 生效，那"补 slug"不读它更像是<b>管道没接完</b>；A 是把手接上，B 是加阀门——两者可以同时做（A 打底、B 给极端需求）。</p>
+
+      <h3>6. 复现步骤（本机已验证）</h3>
+      <pre># 1) 起服务（v0.8.2）
+docker compose up -d
+
+# 2) 建一个 wiki 型知识库，粒度设 focused
+#    POST /api/v1/knowledge-bases
+{"name":"repro","type":"wiki",
+ "embedding_model_id":"&lt;embed-model-id&gt;",
+ "indexing_strategy":{"vector_enabled":true,"keyword_enabled":true,"wiki_enabled":true},
+ "wiki_config":{"synthesis_model_id":"&lt;chat-model-id&gt;","extraction_granularity":"focused"}}
+
+# 3) 灌一份文档（手工 Markdown 或上传文件都可）
+#    POST /api/v1/knowledge-bases/&lt;kb-id&gt;/knowledge/manual
+
+# 4) 读编译统计
+docker compose logs app | grep "mapped knowledge"
+# → ... candidates=20 chunks=70 batches=3 cited_chunks=56 uncited_slugs=0 new_slugs=14 ...
+#   candidates 是合并后的总数；new_slugs 就是引用阶段补出来的条数
+
+# 5) 换成 standard 再建一个新库跑同一份文档做对照
+#    standard: candidates=43 new_slugs=9   /   focused: candidates=20 new_slugs=14</pre>
+      <p class="muted">附：span 接口 <code>GET /api/v1/knowledge/:id/spans</code> 的 <code>postprocess.wiki</code> 输出里有完整统计（<code>candidate_slugs</code>／<code>new_slugs</code>／<code>cited_chunks</code>／<code>pages_written</code>…），其下的 classify 子 span 还带 <code>new_slugs_sample</code>（补了哪几个 ＋ 各引几块）。</p>
+    </section>
+
+    <section class="card" id="draft">
+      <h2>第二部分 · issue 正文草稿（可直接复制）</h2>
+      <p class="muted">写给上游的形态：现象 → 代码定位 → 最小复现与数据 → 影响 → 可能修法。语言用英文（仓库 README／issue 模板是英文）。</p>
+      <pre>Title: wiki_config.extraction_granularity only governs Pass 0 — the citation stage's "new_slugs" discovery ignores granularity (and extraction_instructions)
+
+### What happens
+
+`wiki_config.extraction_granularity` (focused / standard / exhaustive) is only applied to Pass 0
+candidate extraction. `WikiChunkCitationPrompt` has a secondary task that can add
+entities/concepts that are not in the candidate list (`new_slugs`), and that call receives
+neither the granularity guidance nor the user's `extraction_instructions`. The newly
+discovered slugs are then merged into the item set and end up as wiki pages.
+
+### Why it matters
+
+With `focused`, Pass 0 honors the guidance (it extracted 6 items for a 28,956-char document,
+matching the prompt's "at most 3-7 items"), but the citation stage added 14 more — i.e. 70% of
+the resulting 20 pages came from the stage that ignores the setting. `focused` therefore only
+halves the page count instead of shrinking it to the document's main subjects. The same
+asymmetry applies to `extraction_instructions`: it steers Pass 0 but not the discovery channel.
+
+### Where (v0.8.2, commit 3e8b0bf)
+
+* `internal/types/wiki_page.go:529` — the field comment itself says "ExtractionGranularity
+  controls how many candidate slugs **Pass 0** extracts per document".
+* `internal/application/service/wiki_ingest_cite.go:97-105` — Pass 0 receives `Granularity` /
+  `GranularityGuidance` / `CustomInstructions` / `InstructionScope`.
+* `internal/application/service/wiki_ingest_cite.go:284-288` — the citation call passes only
+  `CandidateSlugs` / `ChunksXML` / `Language`.
+* `internal/agent/prompts_wiki.go:260` (`WikiChunkCitationPrompt`) — "### Secondary task: new
+  slugs" has a fixed criterion ("Only add genuinely new, substantively-discussed items"), and
+  the template contains no `{{.Granularity}}` / `{{.GranularityGuidance}}` placeholder at all.
+* `internal/application/service/wiki_ingest_cite.go:463` (`mergeCitationsIntoItems`) — the
+  returned `new_slugs` are appended to the entity/concept slices, so they become pages.
+
+### Minimal reproduction (same document, two fresh knowledge bases)
+
+1. create a `type=wiki` KB with `wiki_config.extraction_granularity = "standard"`, ingest the
+   document, then read the ingest stats line:
+   `candidates=43 chunks=70 batches=3 cited_chunks=68 uncited_slugs=0 new_slugs=9`
+2. create a second `type=wiki` KB with `extraction_granularity = "focused"`, ingest the same
+   document:
+   `candidates=20 chunks=70 batches=3 cited_chunks=56 uncited_slugs=0 new_slugs=14`
+   (Pass 0 extracted 6 items; the other 14 came from the citation stage)
+
+`candidates` is the post-merge total; `new_slugs` counts the items added by the citation stage.
+Read them with: `docker compose logs app | grep "mapped knowledge"`.
+
+### Suggested fixes
+
+* (preferred) thread the granularity through to the citation prompt and make the secondary task
+  respect it — e.g. with `focused`, only add items that are primary subjects of the document;
+* and/or add an explicit switch (`wiki_config.allow_discovery` / `discovery_scope`) so a strict
+  `focused` run can suppress discovery entirely;
+* at minimum, align the field docs / UI hint with the actual scope (Pass 0 only).</pre>
+    </section>
+
+    <section class="card" id="scene">
+      <h2>第三部分 · 现场细节（原始数据与来路）</h2>
+
+      <h3 style="margin-top:16px;">8.1 三次运行的原始统计行（日志原文）</h3>
+      <pre># A) standard · 首跑（全新库，2026-10-07）
+wiki ingest: mapped knowledge 11b50d63-… title="A5 · How we contain Claude across products"
+  candidates=43 chunks=70 batches=3 cited_chunks=68 uncited_slugs=0 new_slugs=9 updates=44
+  reparse_slugs=0 stale_slugs=0 pass0_fallback=false elapsed=24.191s
+wiki ingest stats: kb=8990fb05-… status=success elapsed=49.288s pages(total=44)
+
+# B) standard · 重跑（同库重新解析，2026-10-08）
+wiki ingest: mapped knowledge 11b50d63-… candidates=51 chunks=70 batches=3 cited_chunks=65
+  uncited_slugs=0 new_slugs=8 updates=95 reparse_slugs=42 stale_slugs=1 pass0_fallback=false elapsed=27.027s
+
+# C) focused · 首跑（新库 a2741031-…，2026-10-08）
+wiki ingest: mapped knowledge 7b1e6086-… candidates=20 chunks=70 batches=3 cited_chunks=56
+  uncited_slugs=0 new_slugs=14 updates=21 reparse_slugs=0 stale_slugs=0 pass0_fallback=false elapsed=12.9s</pre>
+      <p class="muted">两次首跑（A 与 C）才是可比的：都是全新库、<code>previous_slugs</code> 为空。B 的 <code>reparse_slugs=42</code> 说明重跑时把 42 个既有 slug 当作上下文喂回了 Pass 0——<b>所以"重跑 vs 首跑"不能当抖动基线</b>。</p>
+
+      <h3>8.2 span 里的 <code>new_slugs_sample</code>（focused 轮，原文）</h3>
+      <pre>"new_slugs_sample":[
+  {"chunks":"5","name":"人在回路监督","slug":"concept/human-in-the-loop","type":"concept"},
+  {"chunks":"3","name":"审批疲劳","slug":"concept/approval-fatigue","type":"concept"},
+  {"chunks":"3","name":"Claude Code自动模式","slug":"concept/claude-code-auto-mode","type":"concept"},
+  {"chunks":"1","name":"Claude Mythos Preview","slug":"entity/claude-mythos-preview","type":"entity"},
+  {"chunks":"2","name":"工具输出攻击面","slug":"concept/tool-output-attack-surface","type":"concept"},
+  {"chunks":"2","name":"持久记忆投毒","slug":"concept/persistent-memory-poisoning","type":"concept"},
+  {"chunks":"1","name":"多智能体信任升级","slug":"concept/multi-agent-trust-escalation","type":"concept"},
+  {"chunks":"1","name":"智能体身份","slug":"concept/agent-identity","type":"concept"}]</pre>
+      <p class="muted">（接口只预览前 8 条，本轮实际 14 条。）focused 轮 Pass 0 抽到的 6 项是：<code>concept/agent-containment</code>／<code>concept/blast-radius</code>／<code>entity/anthropic</code>／<code>entity/claude-code</code>／<code>entity/claude-cowork</code>／<code>entity/claude-ai</code>——都是文档的主要对象。</p>
+
+      <h3>8.3 环境与版本</h3>
+      <ul>
+        <li><code>Tencent/WeKnora</code> v0.8.2（commit <code>3e8b0bf</code>），Docker Compose 标准部署（ParadeDB ＋ Redis ＋ docreader）</li>
+        <li>合成模型 <code>deepseek-flash</code>；嵌入 <code>qwen3.7-text-embedding</code>（1024 维）</li>
+        <li>语料：Anthropic《How we contain Claude across products》经我们自己的抽取器转 Markdown：28,956 字符／70 块／15 节</li>
+        <li>脚本：<code>experiments/weknora/weknora_round1.py</code>（建库／投喂／抓统计）、<code>experiments/weknora/weknora_up.ps1</code>（起环境＋日志落盘）</li>
+        <li>原始日志：<code>data/tmp/weknora-logs/weknora-20261008-201455.log</code>；span 接口 <code>GET /api/v1/knowledge/:id/spans</code></li>
+      </ul>
+
+      <h3>8.4 这件事是怎么被发现的</h3>
+      <p>读 <a href="0037-llmwiki-weknora-setup.html">0037</a> 的阶段二提示词时，沛东先注意到两点：<b>"它用来发现新 slug 的提示词里，居然没有配套详细度的说明，也没有考虑用户业务领域的抽取重点"</b>，并追问"我们这次针对 A5 的运行，这个阶段有补 slug 吗"。查证路径：先确认代码只传三个键 → 从日志里找到首跑 <code>new_slugs=9</code> → 为回答"补 slug 是否受粒度控制"建 focused 新库重跑 → 得到 <code>new_slugs=14</code> 的反向结果 → 判定为<b>管道没接完</b>（而非"设计如此"），遂单独成篇待提 issue。</p>
+
+      <p class="muted">记录创建：2026-10-08 · 状态：证据已齐，待提 issue（沛东有空时提交）· 关联：<a href="0037-llmwiki-weknora-setup.html">0037 §3.4</a>（阶段二细读与三次实测表）</p>
+    </section>
+  </div>
+</body>
+</html>

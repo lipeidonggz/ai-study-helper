@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0039 · WeKnora 缺陷实录：去重召回只看标题，别名那一侧没接上</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0039 · WeKnora 缺陷实录：去重召回只看标题，别名那一侧没接上</h1>
+      <p class="subtitle"><b>一分钟摘要</b>：WeKnora 判"新抽出的条目是不是已有页面"时，<b>召回只看已有页的 <code>title</code></b>——提示词要求 name／alias <b>四向比对</b>、官方文档也写"名称与别名双向比对"、连<b>被它取代的旧实现都两侧带别名</b>，但迁到 pg_trgm 之后<b>页侧别名这一半丢了</b>。后果是"只靠别名相连"的同义（跨语言名、缩写↔全称、译名）<b>永远进不了候选</b>，只能长出孪生页。<b>属召回缺口（该合没合），不会错合并。</b></p>
+      <p class="subtitle">状态：<span class="half">△ 证据已齐，待提 issue</span>（可与 <a href="0038-weknora-granularity-gap.html">0038</a> 一起提）· 对象：<code>Tencent/WeKnora</code> tag <code>v0.8.2</code>（commit <code>3e8b0bf</code>）· 现场时间：2026-10-09 · 上游：本发现出自 <a href="0037-llmwiki-weknora-setup.html">0037</a> §3.4（阶段二 去重与身份对齐）</p>
+      <p class="subtitle"><b>证据标记</b>：<span class="half">📄 源码</span>（v0.8.2 本地克隆）· <span class="ok">✅ 实测</span>（真实库 SQL ＋ 两次端到端探针）· <b>🤔 判断</b>（影响面与修复建议）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 相关：<a href="0037-llmwiki-weknora-setup.html">0037</a>（平台与准备／逐阶段细读）· <a href="0038-weknora-granularity-gap.html">0038</a>（另一则缺陷：粒度/领域只接了一半管道）</p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 问题、证据与修复建议</h2>
+
+      <h3 style="margin-top:16px;">1. 问题（一句话）</h3>
+      <p><b>去重的候选召回只查已有页的 <code>title</code>，不查 <code>aliases</code>。</b>于是"新条目／新条目的别名"与"已有页的别名"之间的同义关系<b>在召回阶段不可见</b>——模型连这对候选都看不到，后面的判同规则再准也没用。</p>
+
+      <h3>2. 证据 A：代码（八处）</h3>
+      <table>
+        <thead><tr><th>位置</th><th>代码事实</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>internal/application/repository/wiki_page.go:1074-1078</code></td><td><code>SELECT slug, title, …, aliases, out_links, similarity(lower(title), :q) AS sim</code><br><code>WHERE … AND lower(title) % :q ORDER BY sim DESC LIMIT :k</code></td><td><b>召回谓词只有 <code>lower(title)</code></b>；<code>aliases</code> 只是被 SELECT 出来，供后续渲染给模型</td></tr>
+          <tr><td><code>internal/application/service/wiki_ingest.go:2433-2466</code>（<code>probe</code>）</td><td>查询串 = <code>item.Name</code> ＋ <b>每个 alias</b>，逐条调用 <code>FindSimilarPages</code></td><td>条目侧是"多面"的——<b>方向不对称</b>：多面 × 单一标题</td></tr>
+          <tr><td><code>internal/application/service/wiki_ingest_dedup.go:98-113</code>（旧的 <code>selectDedupCandidatePages</code>）</td><td>页侧特征 <code>surfaces = [p.Title] + p.Aliases</code>，条目侧 <code>= [it.Name] + it.Aliases</code>，再做 Go 侧 bigram Jaccard</td><td><b>旧实现两侧都带别名</b> ⇒ 迁到 pg_trgm 后丢了页侧别名，属<b>功能回退</b></td></tr>
+          <tr><td><code>internal/application/service/wiki_ingest_dedup.go:178-200</code>（<code>dedupMergeRejectReason</code>）</td><td>合并目标必须属于<b>该条目自己的</b>候选集（<code>srcCandidates[dstSlug]</code>），否则拒绝</td><td>别名对既然进不了候选，<b>即使模型想合也会被程序拒掉</b></td></tr>
+          <tr><td><code>internal/application/service/wiki_ingest_dedup.go:512-575</code>（<code>attachExactIdentityPages</code>）</td><td>用 <code>normalizeWikiIdentityTitle(item.Name)</code> 去 <code>FindPagesByNormalizedTitles</code>，比的是 <b>页 title</b></td><td>另一条兜底通道（精确身份）<b>同样只看标题</b></td></tr>
+          <tr><td><code>internal/agent/prompts_wiki.go:481-485</code>（<code>WikiDeduplicationPrompt</code>）</td><td>"Compare name-to-name, name-to-alias, alias-to-name, and <b>alias-to-alias</b>."</td><td>提示词承诺四向比对</td></tr>
+          <tr><td><code>website-docs/03-features/14-wiki.md:223</code></td><td>"名称与别名<b>双向比对</b>（名称对别名、别名对别名）"</td><td>官方文档同样承诺</td></tr>
+          <tr><td><code>migrations/versioned/000041_task_queue_and_wiki_indexes.up.sql</code> ＋ 运行库 <code>pg_indexes</code></td><td>只建了 <code>idx_wiki_pages_title_trgm ON wiki_pages USING GIN (lower(title) gin_trgm_ops)</code>；<b>aliases 上没有任何索引</b></td><td>别名连"可被索引查询"的基础设施都没有</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">顺带一条代码卫生：那个旧的 <code>selectDedupCandidatePages</code> 如今<b>只有测试在调用</b>（<code>wiki_ingest_dedup_test.go</code>）——CI 全绿，但测的是已经被绕开的老路，<b>live 路径的别名行为零覆盖</b>。</p>
+
+      <h3>3. 证据 B：真实数据直接证伪（✅ 可复现）</h3>
+      <p>在跑完 P6＋P7 的真实库里，<code>concept/rag</code> 这一页的别名里<b>一字不差</b>地写着这串英文；而 live 谓词一行都召不回：</p>
+      <pre>-- 1) 别名里确实有
+SELECT slug, title, aliases::text,
+       round(similarity(lower(title),'retrieval-augmented generation')::numeric,3) AS sim_title
+FROM wiki_pages
+WHERE knowledge_base_id='7c601025-5bc2-42b9-9cee-6b07c49cbadd' AND slug='concept/rag';
+    slug     |    title     |                  aliases                  | sim_title
+-------------+--------------+-------------------------------------------+-----------
+ concept/rag | 检索增强生成 | ["RAG", "Retrieval-Augmented Generation"] |     0.000
+
+-- 2) live 谓词（等价于 FindSimilarPages 的 WHERE）
+SELECT count(*) FROM wiki_pages
+WHERE knowledge_base_id='7c601025-5bc2-42b9-9cee-6b07c49cbadd'
+  AND lower(title) % 'retrieval-augmented generation';
+ count
+-------
+     0
+</pre>
+      <div class="chain">
+        <b>结论</b>：这条别名在召回阶段"等于不存在"。阈值：<code>pg_trgm.similarity_threshold</code> 实测 <b>0.3</b>（Postgres 默认值，代码里没改过；<span class="no">仓库注释写"below 0.1 are dropped"与实测不符</span>）。<br>
+        <span class="muted">另有一条数据卫生问题：<b>162 行里 29 行的 <code>aliases</code> 是 JSON <code>null</code> 而不是数组</b>（<code>jsonb_typeof(aliases::jsonb)</code> = null）——将来若按别名召回，必须先规范化。</span>
+      </div>
+
+      <h3>4. 证据 C：端到端探针（✅ 跑了两次，但被"命名一致"掩盖）</h3>
+      <p>往该库投两篇小文（Z1 带 <code>(RAG)</code>；Z2 <b>只写全称、绝不出现 RAG</b>），两次都<b>没有</b>长出孪生页——新内容全并进了 <code>concept/rag</code>：<code>source_refs</code> 1→2→3、<code>version</code> 1→3。</p>
+      <p class="muted">原因（这本身是个更有意思的发现）：该库输出语言是<b>中文</b>，模型把英文文档里的概念也命名成"检索增强生成" ⇒ 与旧页<b>标题完全相同</b>，于是走<b>精确身份层</b>就地更新，压根没轮到别名出场。<b>⇒ 缺口的暴露面被"命名一致 ＋ 精确身份层"掩盖了；本例因此只能证明代码问题，不能作为现象级证据。</b></p>
+
+      <h3>5. 影响面与定性（🤔）</h3>
+      <ul>
+        <li><b>定性</b>：<b>召回缺口 / 功能回退</b>（recall-only）——症状是"该合没合"，产出<b>孪生页</b>（同一事物两页）；<b>不会错合并</b>（判同那一步有 per-item 校验兜底）。</li>
+        <li><b>触发条件（三条同时满足才会咬人）</b>：① 新条目的名字与旧页标题<b>既不相同、字面也不相似</b>（trigram &lt; 0.3）；② 旧页的<b>别名</b>与新条目（名或别名）相同/相近；③ 新条目自己的 slug <b>不等于</b>旧页 slug（否则 slug 同名会就地更新，见下）。</li>
+        <li><b>典型受害场景</b>：跨语言名（中文页 vs 英文条目）、缩写↔全称、译名——正是提示词里那几条"正确合并"的示例。</li>
+        <li><b>为什么现在没炸</b>：模型的命名通常稳定（同一语言环境下同一事物会得到同一个名字），而"名字相同"由精确身份层兜住；另外 slug 同名（<code>concept/rag</code> 这种情况）也会就地更新——<b>这两条都在掩盖缺口</b>。</li>
+      </ul>
+
+      <h3>6. 修复建议（三选一）</h3>
+      <ul>
+        <li><b>A（推荐）扩召回谓词</b>：把 <code>WHERE lower(title) % :q</code> 扩成"标题或任一等价别名命中"，例如
+          <pre>WHERE lower(title) % :q
+   OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(aliases::jsonb)='array' THEN aliases::jsonb ELSE '[]'::jsonb END) a
+              WHERE lower(a) % :q)</pre>
+          并给别名侧补一个可索引的表达（现在只有 <code>lower(title)</code> 的 GIN trgm 索引；直接 <code>OR</code> 会退化成顺序扫）：<b>推荐维护一个 <code>alias_text</code> 生成列（lower ＋ 空格拼接）＋ <code>gin_trgm_ops</code></b>，或单开 <code>wiki_page_aliases(page_id, alias)</code> 表加索引。</li>
+        <li><b>B（改动最小）</b>：保留 trigram 主路，另外用现成的 <code>List&nbsp;query</code> 通道（它已经支持 <code>aliases::text ILIKE</code>）按<b>新条目的 name／alias</b> 精确回捞一次，把命中的页补进 <code>candidatePages</code> 与 <code>itemCandidates</code>。代价是全表 ILIKE，需限流或加前缀索引。</li>
+        <li><b>C（最省）</b>：不改实现，改文档与提示词——把"别名对别名"的承诺收回来。代价是明确放弃这类召回能力。</li>
+      </ul>
+      <p class="muted">无论走哪条，都建议<b>补 live 路径的测试</b>（现在只有那个已绕开的老函数有测试），最小用例＝"页 title=中文、页 alias=英文全称；新条目 name=英文全称" ⇒ 应命中候选。</p>
+
+      <h3>7. 最小复现步骤（可复制）</h3>
+      <pre># 0) 环境（WeKnora 已部署，见 0037 §1.1／§7.9）
+powershell -NoProfile -ExecutionPolicy Bypass -File experiments\weknora\weknora_up.ps1 -Action up
+
+# 1) 直证：别名里明明有这串，live 谓词却召不回（把 kb 换成你库里任一有英文别名的页）
+docker exec WeKnora-postgres psql -U postgres -d WeKnora -c "SELECT slug,title,aliases::text FROM wiki_pages WHERE slug='concept/rag';"
+docker exec WeKnora-postgres psql -U postgres -d WeKnora -c "SELECT count(*) FROM wiki_pages WHERE lower(title) % 'retrieval-augmented generation';"
+
+# 2) 端到端探针（投喂两篇小文并比对页集合；注意：本库输出语言中文会把命名拉回同名，需人工判读）
+.\\backend\\.venv\\Scripts\\python.exe experiments\\weknora\\probe_alias_recall.py --long</pre>
+
+      <h3>8. 可直接提的 issue 草稿（英文）</h3>
+      <pre>Title: Wiki dedup candidate recall ignores page aliases (only `lower(title)` is matched)
+
+## Summary
+The wiki ingest dedup pre-filter (`FindSimilarPages` -> `idx_wiki_pages_title_trgm`)
+matches new items against existing pages by **title only**. Page `aliases` are
+selected into the result payload (and are used by the LLM later), but they are
+never used as a search key. So a merge is only ever *offered* to the model when
+the item's name/aliases are trigram-similar to the existing page's **title**.
+
+This contradicts:
+* `WikiDeduplicationPrompt` — "Compare name-to-name, name-to-alias, alias-to-name, and alias-to-alias."
+* `website-docs/03-features/14-wiki.md` — "名称与别名双向比对（名称对别名、别名对别名）".
+* the implementation this path replaced: `selectDedupCandidatePages` scored
+  `[Title] + Aliases` on BOTH sides (Go-side bigram Jaccard).
+
+## Impact (recall only)
+Same-entity pairs whose surfaces only meet through an alias (translations,
+acronyms, full forms) can never become candidates, so they keep growing as
+duplicate ("twin") pages. No wrong merges are introduced — the per-item guard
+`dedupMergeRejectReason` still rejects cross-item targets.
+
+## Evidence
+Real KB (86 pages) contains:
+  slug=concept/rag  title=检索增强生成  aliases=["RAG","Retrieval-Augmented Generation"]
+but:
+  SELECT count(*) FROM wiki_pages
+   WHERE lower(title) % 'retrieval-augmented generation';   -- 0
+  similarity(lower('检索增强生成'), 'retrieval-augmented generation') = 0.000
+(pg_trgm.similarity_threshold = 0.3, the PostgreSQL default; the code comment in
+repository/wiki_page.go:1046-1048 says "below 0.1", which does not match.)
+
+## Repro
+1. Have a page whose title differs from a new document's surface, with the bridge
+   stored only in the page's `aliases` (e.g. title="检索增强生成",
+   aliases=["RAG","Retrieval-Augmented Generation"]).
+2. Ingest a document that only ever says "Retrieval-Augmented Generation".
+3. The dedup pre-filter returns no candidate for that page; if the extracted item's
+   deterministic slug also differs, a duplicate page is created instead of merging.
+
+## Suggested fix
+Extend the predicate to cover aliases, e.g.
+  WHERE lower(title) % :q
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(
+                  CASE WHEN jsonb_typeof(aliases::jsonb)='array' THEN aliases::jsonb ELSE '[]'::jsonb END) a
+                WHERE lower(a) % :q)
+and back it with an index (a generated `alias_text` column with `gin_trgm_ops`, or a
+`wiki_page_aliases` table). Also add a test for the live path — today only the
+retired in-Go helper is covered, and it is exercised by tests but no longer called
+by production code.
+
+## Notes
+* `aliases` is JSON `null` (not an array) on 29 of 162 rows in our KB — normalize
+  before querying.
+* Our end-to-end probe did not reproduce a twin page, because the KB's output
+  language is Chinese and the model re-named the English item to the existing
+  Chinese title, which is caught by the exact-identity path
+  (`FindPagesByNormalizedTitles`). The bug is real at the code level; whether it
+  bites depends on naming stability.</pre>
+    </section>
+
+    <section class="card" id="scene">
+      <h2>第二部分 · 现场细节（2026-10-09）</h2>
+
+      <h3 style="margin-top:16px;">8.1 探针脚本与两次运行</h3>
+      <p>脚本：<code>experiments/weknora/probe_alias_recall.py</code>（投喂 → 等编译 → 比对页集合；<code>--long</code> 变体＝只写全称、绝不出现缩写）。</p>
+      <pre># 第一次（带缩写 (RAG)）
+投喂前：86 页；已有 concept/rag refs=1、concept/rag-evaluation refs=1
+投喂 Z1（835 字符）→ 5 new docs 状态 finalizing → completed
+投喂后：91 页（+5：生成评估指标/生成器/检索评估指标/检索器/summary）
+被改动的页：~ concept/rag refs 1→2，chars 1849→2564
+结论（事实）：没有新建 RAG 孪生页；概念页被就地更新
+
+# 第二次（--long，只写全称）
+投喂前：91 页
+投喂 Z2（838 字符）→ 95 页（+4：生成质量/检索失败模式/检索质量/summary）
+被改动的页：~ concept/rag refs 2→3，chars 2564→2607
+结论（事实）：仍未新建孪生页；concept/rag 继续被就地更新</pre>
+      <p class="muted">日志佐证（同一窗口）：<code>wiki ingest: 3 similar existing pages selected for 5 new items</code>（第二次是 <code>… for …</code> 同类行）——说明 trigram 预筛确实在跑，但<b>命中的是 <code>concept/rag-evaluation</code> 之类的标题相似页，不是靠别名桥接的 <code>concept/rag</code></b>。</p>
+
+      <h3>8.2 方法学教训（我这两次探针为什么"没炸"）</h3>
+      <ul>
+        <li><b>confound 1：输出语言</b>。库的语言解析结果是中文，模型把英文文档里的概念也命名成中文 ⇒ 与旧页标题<b>完全相同</b> ⇒ 走精确身份层。想验别名通道，得让两侧命名<b>不可比</b>（跨语言 KB，或人为构造"标题与条目名都不同、只有别名相同"的语料）。</li>
+        <li><b>confound 2：slug 同名</b>。当新条目 slug 恰好等于旧页 slug（<code>concept/rag</code> 这种情况），reduce 会把它当"同一页的更新"，<b>与去重无关</b>——代码里也明确把"自身 slug"排除出候选（<code>wiki_ingest.go:2524-2528</code>：<i>"an identically-slugged existing page is a re-ingest/update, not a merge target"</i>）。</li>
+        <li><b>confound 3：脚本的自动判读不可靠</b>。初版脚本把 slug 里含 <code>retrieval</code> 的新页当成"RAG 孪生页"，其实那是"检索失败模式／检索质量"两个不同概念——已改成只报事实、结论人工下。又是一次"判据必须覆盖要断言的边界"。</li>
+      </ul>
+
+      <h3>8.3 复现资产清单</h3>
+      <ul>
+        <li>探针脚本：<code>experiments/weknora/probe_alias_recall.py</code></li>
+        <li>结果留档：<code>data/tmp/weknora-multisource/alias-recall-probe.json</code>（含页集合 diff、RAG 相关页快照、知识 id）</li>
+        <li>SQL：本文 §3 的两条查询（把 <code>knowledge_base_id</code> 换成目标库即可）</li>
+        <li>日志：<code>data/tmp/weknora-logs/weknora-20261009-104837.log</code>（12:13、12:15 两个窗口）</li>
+      </ul>
+
+      <h3>8.4 时间线</h3>
+      <table>
+        <thead><tr><th>时间</th><th>发生了什么</th></tr></thead>
+        <tbody>
+          <tr><td>2026-10-09 中午</td><td>读 §3.4 去重代码时发现"查询侧 name＋aliases、被比侧只有 title"，先按"设计缝隙"记入 0037 §3.4</td></tr>
+          <tr><td>12:12–12:14</td><td>第一次探针（Z1，带缩写）：未长出孪生页，<code>concept/rag</code> refs 1→2 —— 与预期相反</td></tr>
+          <tr><td>12:14–12:16</td><td>第二次探针（Z2，只写全称）：仍未长出孪生页，refs 2→3 —— 定位到"中文命名 ＋ 精确身份层"这个 confound</td></tr>
+          <tr><td>12:20 前后</td><td>改用 SQL 直证：别名里有一字不差的英文全称，而 live 谓词 0 行 ⇒ <b>代码级确认缺口</b>；写成本篇</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">记录创建：2026-10-09 · 状态：待提 issue（可与 0038 合并提交）· 上游：<a href="0037-llmwiki-weknora-setup.html">0037</a> §3.4；知识线背景见 <a href="0036-llmwiki-overview.html">0036</a></p>
+    </section>
+  </div>
+</body>
+</html>

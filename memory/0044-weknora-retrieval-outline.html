@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0044 · WeKnora 检索侧拆解 · 提纲（两条召回路：经典 RAG 与 Agentic RAG）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0044 · WeKnora 检索侧拆解 · 提纲</h1>
+      <p class="subtitle"><b>一句话</b>：这篇要拆的是 WeKnora 的<b>检索侧</b>——起因是拆编译（<a href="0037-llmwiki-weknora-setup.html">0037</a>／对外稿 <code>docs/publish/0043-llmwiki-compile-pipeline.md</code>）时发现：<b>编译产物（wiki 页面）根本不在检索池里</b>。而检索侧本身有两条并存的路子，默认那条还拿不到页面。</p>
+      <p class="subtitle"><b>预告的三条核心结论</b>：① <b>两套路子并存</b>——经典 RAG 管线（<code>KnowledgeQA</code>）与 Agentic RAG 引擎（<code>AgentQA</code>）；<b>默认是 RAG-only 的 <code>quick-answer</code></b>，wiki 一族工具只在 <code>smart-reasoning</code> 模式注册。② <b>知识侧</b>＝原始块的混合检索（向量 ＋ 关键词 → RRF → 重排 → 装配）。③ <b>三条"不参与"</b>——页面没进向量／关键词索引；目录只在 UI／接口层；<code>wiki_search</code> 是正则且<b>别名不参与</b>（而 UI 侧 <code>List</code> 用全文 ＋ 别名 ILIKE，属"半开"）。</p>
+      <p class="subtitle">状态：<span class="half">△ 提纲（等 0043 定稿后开写）</span> · 对象：<code>Tencent/WeKnora</code> tag <code>v0.8.2</code>（commit <code>3e8b0bf</code>）· 现场时间：2026-10-10 · 上游：<a href="0037-llmwiki-weknora-setup.html">0037</a>（逐阶段源码细读）· <a href="0036-llmwiki-overview.html">0036</a>（LLM-Wiki 总论：把"检索"列为三篇验证文之一）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 相关：<a href="0038-weknora-granularity-gap.html">0038</a>／<a href="0039-weknora-alias-recall-gap.html">0039</a>（两则缺陷实录，别名那条与本文第三节同源）</p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 style="margin-top:16px;">1. 为什么会有这一篇</h3>
+      <p>总论（<a href="0036-llmwiki-overview.html">0036</a>）把 LLM-Wiki 的验证拆成三篇，顺序是<b>编译 → 错误处理 → 检索</b>；0043 是编译篇。拆编译时撞见一个反直觉的事实：<b>页面编译出来了，但它不参与检索</b>（<code>search_knowledge</code> 只召回原始文档块）。于是"检索侧到底长什么样"必须单独拆——否则"编译得好不好"这件事的判据是悬空的。</p>
+      <p>这一篇的定位不是复现论文（论文无代码），而是回答一个选型问题：<b>今天把 WeKnora 接给 agent，检索上你到底拿到了什么、拿不到什么。</b></p>
+
+      <h3>2. 结论清单（已核实的部分）</h3>
+      <table>
+        <thead><tr><th>#</th><th>结论</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td>①</td><td><b>两套路子并存</b>：经典 RAG（插件管线）与 Agentic RAG（工具循环）</td><td>📄 <code>session_knowledge_qa.go</code>（<code>KnowledgeQA</code>）vs <code>session_agent_qa.go</code>（<code>AgentQA</code>）</td></tr>
+          <tr><td>②</td><td><b>默认是经典 RAG</b>：<code>quick-answer</code> 未配置时被自动填上，且只允许 <code>vector|keyword</code> 能力</td><td>📄 <code>custom_agent.go:105–106</code>；<code>agent/tools/capabilities.go:191/203</code></td></tr>
+          <tr><td>③</td><td><b>wiki 工具只在 <code>smart-reasoning</code> 注册</b>；代码注释直接把 quick-answer 称为 <i>"RAG-only … those can't ever retrieve a wiki page"</i></td><td>📄 <code>custom_agent.go:807–811</code></td></tr>
+          <tr><td>④</td><td><b>页面不在索引里</b>：<code>ChunkTypeWikiPage</code> 与 1.3× 加成插件都在，但没有"把页面写成 chunk"的创建路径，日志里 <code>wp-</code> 零出现</td><td>📄 全仓只有删除 <code>wp-&lt;pageID&gt;</code>；✅ 日志核对</td></tr>
+          <tr><td>⑤</td><td><b>目录不参与检索</b>：<code>category_path</code> 只在 <code>handler/wiki_page.go</code>／<code>types/wiki_page.go</code>；agent 没有"列目录"工具</td><td>📄 全仓 grep ＋ 工具清单</td></tr>
+          <tr><td>⑥</td><td><b>别名"半开"</b>：agent 侧 <code>wiki_search</code> 的 SQL 只匹配 title／slug／summary／content；UI 侧 <code>repo.List</code> 用 tsvector ＋ <code>aliases ILIKE</code></td><td>📄 <code>repository/wiki_page.go:1333</code> vs <code>:367–373</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>3. 时延这条：口径是端到端，剩下的是我们自己的实测</h3>
+      <p>总论 §6.3 记过一处反直觉：论文附录 G 的时延表里，LLM-Wiki 在 HotpotQA 上比稠密向量检索更快。这一篇有机会把它接上——我们有 <b>Langfuse 逐步追踪 ＋ 日志逐次 usage</b>，可以按"轮数／每轮 token／每段耗时"记账，检验"① 每轮调用极短／② 最后生成更短／③ 测量条件不同"这三种解释。</p>
+      <p><b>先把口径钉死（2026-10-10 追问后补）</b>：表 10 测的是<b>端到端每问时延（检索 ＋ 生成）</b>，不是"检索耗时"。📎 三处依据：§4.3 <i>"Efficiency is measured by average query latency"</i>；§4.4 <i>"Our evaluation compares <b>end-to-end</b> retrieval systems rather than equalizing every retrieval component"</i>；表 10 标题 <i>"Query latency in seconds per question"</i>。⇒ <b>闭卷那行有数字本来就该有</b>——闭卷没有检索，但仍有一次（很长的）生成；若这张表只测检索，闭卷应该是 0，而不是 24.7s。"闭卷有数"本身就是端到端口径的证据。</p>
+      <p><b>于是反常规的部分只剩一条</b>：端到端时间<b>由生成主导</b>，检索（向量检索也好、8.2 次工具调用也好）在总时延里占比有限；闭卷最慢是因为没有证据可依、只能靠参数知识写长答案（📎 §5.4 末段）。所以该问的不是"检索为什么没更快"，而是"① 一次生成占多少、② 多轮工具调用要到什么量级才把差距显出来"。这正是 P6 要做的拆分。</p>
+      <p><b>产品口径（2026-10-10 沛东定调）</b>：对用户来说<b>就是端到端</b>——<b>准确率相同时，端到端越短越好</b>。所以论文"不对齐各方法的查询期组件"（📎 §4.4 明说不做 equalizing）在产品口径下<b>不是缺陷，而是正确的比较方式</b>；拆开比"谁的检索更快"没有产品意义。真正需要单独交代的只有用户实打实要付的两样：<b>一次性编译成本</b>与<b>规模上限</b>（📎 Limitations 两条 —— <i>each source passage requires SelectPages and CompileWikiPages, making initial construction more expensive than chunk-and-embed approaches</i>；<i>as the Wiki grows to tens of thousands of pages, directory indices may become unwieldy and page selection may degrade</i>）。</p>
+      <p>📎 补齐论文表 10 的全部数（秒/题，HotpotQA ／ MuSiQue ／ 2Wiki）：None（闭卷）24.7／30.0／21.6；BM25 18.1／30.2／16.7；<b>Dense RAG 16.3／26.9／15.6</b>；RAPTOR 19.9／40.2／28.0；<b>GraphRAG 14.0／13.9／10.8</b>（最快，因为只做一次社区摘要查询）；LightRAG 41.4／51.3／39.7；HippoRAG 2 33.5／38.2／32.4；<b>LLM-Wiki 14.9／27.1／15.9</b>。要点有三：① LLM-Wiki 只在 HotpotQA 上明显快过 Dense（14.9 vs 16.3），MuSiQue 上 27.1 vs 26.9 是<b>打平</b>，不是"全面更快"；② <b>None 行比 Dense RAG 还慢</b>（24.7 vs 16.3），论文自己的解释是闭卷要靠参数知识做长生成（📎 §5.4 末段原话：<i>the model must spend more generation time relying on parametric knowledge</i>）——这条可以答总论里那个"不合逻辑"的疑问；③ LLM-Wiki 快的原因论文归给"预编译链接把运行期调用压下来"（📎 每问只读 2.5–3.9 页，对比 RAG 固定 5 段）。剩下的问号落在<b>我们这边</b>：WeKnora 的 Agentic 臂到底跑几轮、每轮多大，得实测。</p>
+      <h3>4. 验证用的原材料（已下载，规模待定）</h3>
+      <p>用论文同款公开基准 <b>MuSiQue</b>（原生 2/3/4 跳）：取 <code>musique_full_v1.0_dev</code> 的<b>可答子集、保持原始顺序</b>；语料 ＝ 所选题目的 context 段落并集，一段一条入库编译。段落很短（均值 118 token），所以"编译多少知识"实际等于"多少条小文档"——WeKnora 按条编译，固定开销主宰，这一档很可能是压测而不是日常。规模表见第二部分 §5。</p>
+      <p><b>待沛东拍板</b>：题量取多少（30 分层／100 原序／150 分层／500 论文口径）。倾向<b>先跑 20–30 段的 pilot 实测每篇 token 与墙钟</b>，再定最终题量——因为这个量级下"跑得完"比"样本大"更先成为硬约束。</p>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 提纲正文（现场细节）</h2>
+
+      <h3>0. 篇首怎么开</h3>
+      <ul>
+        <li>承接 0043 的结尾：<b>"编译产物不参与检索"</b>——由此引出"那检索侧到底是什么"；</li>
+        <li>给一张"两条路 + 三种不参与"的总图（本文的核心可视化）；</li>
+        <li>证据标记与 0043 一致：📄 源码 ／ ✅ 实测 ／ 📎 原文 ／ 🤔 推断。</li>
+      </ul>
+
+      <h3>1. 两套路子：经典 RAG 与 Agentic RAG</h3>
+      <table>
+        <thead><tr><th></th><th>经典 RAG</th><th>Agentic RAG</th></tr></thead>
+        <tbody>
+          <tr><td>代码路径</td><td><code>KnowledgeQA</code> ＋ <code>chat_pipeline</code> 插件链</td><td><code>AgentQA</code> ＋ <code>agent</code> 引擎（ReAct）</td></tr>
+          <tr><td>模式</td><td><code>quick-answer</code>（<b>默认</b>，RAG-only）</td><td><code>smart-reasoning</code>（工具循环）</td></tr>
+          <tr><td>流程</td><td>query 理解/扩展 → search → rerank → filter_top_k → merge/expand → 拼 message → 生成</td><td>LLM 多步调工具：<code>search_knowledge</code>／<code>read_document</code>／<code>wiki_*</code>／<code>web_*</code>／shell…</td></tr>
+          <tr><td>wiki 能力</td><td>页面拿不到（注释原话）</td><td>工具只在非 quick-answer 注册</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">要核实的细节：① 模式是"会话级/助手级"还是"请求级"？② <code>quick-answer</code> 到底注册了哪些工具（是否只有 <code>search_knowledge</code>）？③ 两条路各自的事件流（SSE）与前端表现差异。</p>
+
+      <h3>2. 知识侧：混合检索栈</h3>
+      <ul>
+        <li><b>两路并行</b>：<code>VectorRetrieverType</code>（语义）＋ <code>KeywordsRetrieverType</code>（关键词），默认都挂在同一引擎上（<code>types/tenant.go</code> 默认配对 Postgres）；</li>
+        <li><b>融合</b>：<code>fuseOrDeduplicate</code> → 双路走 <code>fuseWithRRF</code>（RRF，参数取租户 <code>RetrievalConfig</code>）；单路时去重 ＋ 分数归一（BM25 无界分压到 [0,1]）；</li>
+        <li><b>超取与截断</b>：检索池 ＝ <code>max(MatchCount×5, DefaultTopK) × KB 数</code>，封顶 <b>500</b>；融合后截到 <code>MatchCount</code>；</li>
+        <li><b>FAQ 型 KB</b> 有单独后处理（迭代放大 TopK）；多库/多 store 扇出 ＋ <code>EngineAwareNormalizer</code> 归一；</li>
+        <li><b>装配</b>：<code>processSearchResults</code>——去重、父子块、图片 OCR/Caption、邻块扩展；</li>
+        <li><b>重排</b>：<code>chat_pipeline/rerank.go</code>（chat 侧）与 <code>agent/tools/search_knowledge.go</code>（agent 侧）都要核"重排模型缺失时怎么办"；</li>
+        <li><b>一个空转的钩子</b>：<code>chat_pipeline/wiki_boost.go</code> 给 <code>wiki_page</code> 块 ×1.3——页面没进索引，所以它当前永远不生效。</li>
+      </ul>
+
+      <h3>3. wiki 侧：工具面</h3>
+      <table>
+        <thead><tr><th>工具</th><th>做什么</th><th>关键细节</th></tr></thead>
+        <tbody>
+          <tr><td><code>wiki_search</code></td><td>按 query 找页</td><td>PostgreSQL <b>大小写不敏感正则 <code>~*</code></b>，匹配 <b>title／slug／summary／content</b>；排序 <b>title 4 ＞ slug 3 ＞ summary 2 ＞ content 1</b>（同级用 <code>updated_at</code>）；limit ≤50；<b>别名不参与</b>（与工具描述不一致）</td></tr>
+          <tr><td><code>wiki_read_page</code></td><td>读页（可批量）</td><td>返回 <code>&lt;relationships&gt;</code>（<code>links_to</code>／<code>linked_from</code> ＋ 邻居摘要，≤20 条）、<code>&lt;sources&gt;</code>（来源文档）、正文与摘要 ⇒ "读页 → 看邻居 → 再读"这条手工跳转可行</td></tr>
+          <tr><td>写页一族</td><td><code>wiki_write_page</code>／<code>replace_text</code>／<code>rename_page</code>／<code>delete_page</code></td><td>agent 可维护页面（"自演化"的一半）；改动同样写版本历史</td></tr>
+          <tr><td>错误一族</td><td><code>wiki_flag_issue</code>／<code>read_issue</code>／<code>update_issue</code></td><td>与 lint 六类共用问题台账；<b>但不回灌编译提示词</b>（总论 §6.0 已指出缺"规则回灌"）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>4. 三条"不参与"（本文的重点）</h3>
+      <ul>
+        <li><b>页面不参与向量／关键词检索</b>：<code>search_knowledge</code> 召回的永远是原始块；要找页面只能 <code>wiki_search</code>（正则）或直接给 slug；</li>
+        <li><b>目录不参与</b>：<code>category_path</code> 只在接口／UI 层；不过要写准——<b><code>repo.List</code> 支持 <code>FolderID</code>／<code>CategoryDepth</code>／<code>CategoryPath</code> 过滤</b>（API/UI 可按目录列页），缺的是"agent 侧的按目录枚举工具"；</li>
+        <li><b>别名半开</b>：agent 侧不认（正则四字段），UI 侧认（tsvector ＋ <code>aliases ILIKE</code>）——与 <a href="0039-weknora-alias-recall-gap.html">0039</a> 的"去重召回不认别名"是同一类问题的不同侧面。</li>
+      </ul>
+
+      <h3>5. 对照实验设计：用 MuSiQue 跑"论文同口径"</h3>
+      <p><b>要验什么</b>：论文的三条结论都立在公开多跳基准上——① 编译 ＋ 遍历优于一次性检索；② 优势随推理深度放大；③ 时延不吃亏。我们验的是<b>趋势与相对关系</b>，不是复现绝对分数（论文没有代码）。选 MuSiQue 是因为它原生 2/3/4 跳分层、论文也用了它；HotpotQA 只有 2 跳，留作第二档。</p>
+      <p><b>数据现状（✅ 实测 2026-10-10）</b>：官方数据在 Google Drive，HuggingFace 上是镜像；本机可达 GitHub／PyPI，HF 与 Google 要走本地代理（127.0.0.1:7890）。已用 <code>experiments/weknora/download_musique.py</code> 从 <code>voidful/MuSiQue</code> 拉到 <code>data/tmp/musique/</code>：</p>
+      <ul>
+        <li><code>musique_full_v1.0_dev.jsonl</code>＝<b>4,834 行＝2,417 可答 ＋ 2,417 不可答</b>（成对出现；每题 20 段，带 <code>is_supporting</code> 与 <code>question_decomposition</code>）。所谓"不可答"是官方造的<b>对照对（contrasting pair）</b>：📎 MuSiQue 论文 §5 步骤 S8 —— 同一条多跳题，随机挑其中一个单跳子问题，<i>"make it unanswerable by ensuring the answer to that single-hop question doesn't appear in any of the paragraphs in context"</i>；一跳断了整题就不可答。⇒ <b>可答性是"问题 ＋ 给定段落"这对的属性，不是问题本身的属性</b>；因此问题文本相同、金答案也照旧记录着。✅ 实测：两版 context 平均重叠 13/20 段（中位 15），保留的支撑段是可答版支撑段的子集（常见少 1–2 段）；任务也随之变成"先判够不够答，够了再答"（论文原话：<i>predict whether the question is answerable, and predict the answer and support if it's answerable</i>）；</li>
+        <li><b>配对键是 <code>id</code>，不是行位置</b>：✅ 4,834 行 ＝ 2,417 个 id × 2，同 id 的两行必为一 true 一 false（问题文本、金答案都相同）；文件是打散的，成对两行平均相隔 1,363 行（中位 1,149，仅 1 对相邻）。另：按问题文本配对会出现 5 组"同一句问题被两个 id 共用"，所以配对以 id 为准。✅ <code>musique_ans_v1.0_dev.jsonl</code> 的 2,417 个 id 恰好等于 full 里 true 的那半（集合完全一致，独有 0）⇒ 官方把可答半单独发成了 MuSiQue-Ans；不可答半只存在于 full 里，"抽关键段 ＋ 补无关段"的结果就固化在它那一行的 <code>paragraphs</code> 字段（不是另有一个 U 文件，也不是运行期行为）。</li>
+        <li><code>musique_ans_v1.0_dev.jsonl</code>＝2,417 行，但<b>按跳数排过序</b>（前 1,252 行全是 2 跳）⇒ 拿"前 N 条"会退化成纯 2 跳；</li>
+        <li><b>⚠️ 不可答半只能当"限定语料"的探针</b>：不可答只<b>相对于它自己那 20 段</b>成立。而我们的语料是取<b>可答行</b>的段落建起来的，所以任何不可答实例被拿掉的那段证据，<b>本来就在语料里</b>（来自它自己那条可答孪生行）—— ✅ 实测：30 题里被删的支撑段 30/30 都能在语料中找到。⇒ 在这份共享语料下，那 2,417 条"不可答"会全部变回可答；要测拒答，必须把检索范围限定为该行自己的 20 段，否则测的是另一件事。</li>
+        <li><code>musique_full_v1.0_test.jsonl</code> <b>没有答案字段</b>（官方留榜）⇒ 不能用来打分。</li>
+      </ul>
+      <p>⇒ 取 <b>full dev 的可答子集、保持文件里的原始顺序</b>——这最接近论文那句 <i>"first 500 QA examples in the original dataset order"</i>，同时还能打分。⚠️ 论文全文没写用的是哪个 split（📎 连 dev／test 字样都没出现），这条差异要在文里挑明。</p>
+      <p><b>语料（论文同口径）</b>：语料 ＝ 所选题目的 context 段落<b>并集</b>，每段作为一个知识条目入库编译（📎 §4.1 原话：<i>the source corpus for each benchmark is the union of the context paragraphs associated with those 500 examples</i>）。MuSiQue 的段落很短：✅ 均值 118 token／段、中位 99、最长 530——一段基本就是一个 WeKnora chunk。</p>
+      <p><b>一份白送的评测料</b>：MuSiQue 不只给答案，还给了<b>证据标注</b>——<code>paragraphs[].is_supporting</code>（哪几段是本题证据）与 <code>question_decomposition[].paragraph_support_idx</code>（哪一跳由第几段支撑，✅ 可答行里 6,404 个子问题全部非空）。⇒ 除了论文那套 Answer F1／EM，我们还能算<b>证据召回</b>（检索有没有定位到金标支撑段、用了几步），这恰好是回答"编译产物到底帮没帮上忙"最直接的量。</p>
+      <table>
+        <thead><tr><th>题量</th><th>跳数分布（2/3/4）</th><th>段落并集＝知识条目数</th><th>语料 token</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>30（分层）</td><td>10 / 10 / 10</td><td>572</td><td>67k</td><td>pilot 候选</td></tr>
+          <tr><td>50（原始顺序）</td><td>31 / 10 / 9</td><td>972</td><td>106k</td><td></td></tr>
+          <tr><td>100（原始顺序）</td><td>60 / 25 / 15</td><td>1,794</td><td>199k</td><td></td></tr>
+          <tr><td>150（分层）</td><td>50 / 50 / 50</td><td>2,355</td><td>261k</td><td>"随深度放大"最好测</td></tr>
+          <tr><td>300（原始顺序）</td><td>168 / 82 / 50</td><td>4,547</td><td>498k</td><td></td></tr>
+          <tr><td>500（原始顺序）</td><td>285 / 130 / 85</td><td>6,799</td><td>739k</td><td>＝论文口径</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">口径：token 用 <code>cl100k_base</code> 计；去重按 <b>(标题, 正文)</b>——<b>不能只按标题</b>：MuSiQue 同一篇文章会被不同题取成不同片段（30 题里就有 36 个标题带多版正文，"Ashkenazi Jews" 一题范围内就出现 14 版），只按标题去重会静默丢掉 67 条（500 题时丢 912 条）。500 题时 9,997 个段落位 → <b>6,799</b> 个唯一条目。生成脚本 <code>experiments/weknora/prep_musique_corpus.py</code>（<code>--n</code> ＋ <code>--stratified</code>），产出 <code>questions.jsonl</code> ＋ <code>corpus/</code>（一段一文件，文件名＝标题，同名不同正文时加 <code>__N</code> 后缀）。</p>
+      <p><b>✅ 实测：30 题／572 段的编译代价（2026-10-10 跑完，新库 <code>MuSiQue · 30题分层 · 检索对照</code>，kb_id <code>e1874078…</code>）</b>：语料 299,356 字符／67.5k token；投喂 572 条用 3.9 秒（全部成功）；<b>编译 18.0 分钟</b>（纯 LLM 调用阶段 14.8 分钟，其余是 finalize ＋ 索引重建），产出 <b>4,094 页</b>（entity 2,820 ／ concept 701 ／ summary 572 ／ index 1）、23,393 条链接、29 个顶层目录；lint 报 8,168 条（0 error ／ 495 warning ／ 7,673 suggestion）。<b>消耗 13,975,641 token ／ 7,010 次 LLM 调用</b>（prompt 12.15M ＋ completion 1.82M，prompt 缓存命中 40.4%），其中 <code>wiki_page_modify</code> 一家就占 4,215 次／9.78M token（70%）。⇒ <b>每篇小文档 ≈ 24.4k token、产出 7.2 页；语料 token 被放大 207×</b>。<br>按这个单价外推：<b>100 题 ≈ 4,400 万 token／约 1 小时；500 题（论文口径）≈ 1.66 亿 token／约 3.6 小时；全部 2,417 题 ≈ 5.1 亿 token／约 11 小时</b>——而 500 题那档会把 wiki 推到 4～5 万页，正落在论文自己 Limitations 说的 <i>"as the Wiki grows to tens of thousands of pages, directory indices may become unwieldy and page selection may degrade"</i> 区间。⇒ 这既是"LLM-Wiki 编译不支持大规模语料"的实测（总论 §6.1／0043 §6），也是选题量的依据。<span class="muted">（旧锚点：2026-10-09 中英对照实验 3 篇 ≈25k 字符 → 763k token／143 次调用／8 分钟，约 254k token 每篇。）</span></p>
+      <p><b>必须写清的 confound</b>（否则结论会被高估）：我们的 Agentic 臂 ≠ 论文的 LLM-Wiki 臂——页面没进索引、wiki 工具只在 <code>smart-reasoning</code> 注册、<code>wiki_search</code> 是正则且不认别名。哪怕 Agentic 赢了，赢的也可能是"agent 循环 ＋ 原始块混合检索"，而不是编译产物的功劳。<b>这恰恰就是"部分实现能到什么水平"的答案本身</b>。</p>
+      <p><b>三臂与打分</b>：<code>quick-answer</code>（经典 RAG，默认）／<code>smart-reasoning</code>（工具循环）／（可选）纯 <code>semantic</code> 与纯 <code>keyword</code>。指标照论文：Answer F1 ＋ EM，并按 2/3/4 跳分层看趋势。<b>报表口径＝准确率与端到端时延并排</b>（列一张"F1 ／ 端到端秒数"的表，不单列检索耗时）；判据取 §3 的产品口径——<b>准确率相当就看谁端到端更短</b>。每轮用 Langfuse ＋ 日志 usage 记账（工具调用次数、每轮 token、端到端时延），顺带把 §3 那处"时延反直觉"接上。</p>
+
+      <h3>6. 探针清单（原设计，保留）</h3>
+      <table>
+        <thead><tr><th>#</th><th>探针</th><th>想回答什么</th></tr></thead>
+        <tbody>
+          <tr><td>P1</td><td>同一 query 跑 <code>hybrid</code>／<code>semantic</code>／<code>keyword</code>，比 top-k 与最终答案</td><td>三档模式各自的实际差别；mode fallback 的触发条件</td></tr>
+          <tr><td>P2</td><td>用页面上确有的词（title／别名／正文词）分别调 <code>wiki_search</code></td><td>正则召回的边界；<b>别名不参与</b>的端到端实证</td></tr>
+          <tr><td>P3</td><td>用 <code>search_knowledge</code> 搜一个只在页面里出现的句子</td><td>预期 0 命中——"页面不在索引"的实证</td></tr>
+          <tr><td>P4</td><td>同一问题交给 <code>quick-answer</code> 与会话 <code>smart-reasoning</code> 各跑一次</td><td>调用次数／耗时／答案差异；tools 是否真被用上</td></tr>
+          <tr><td>P5</td><td>按目录（API 的 <code>CategoryPath</code> 过滤）与 agent（无工具）各试一次</td><td>"目录只服务人"的实证</td></tr>
+          <tr><td>P6</td><td>逐轮记账（Langfuse ＋ 日志 usage）</td><td>总论 §6.3 那处时延反直觉的三选一解释</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7. 选型含义（准备给读者的三条）</h3>
+      <ol>
+        <li>要"给 agent 接一份可检索的知识"，今天拿到的是<b>原始块的混合检索</b>，不是"编译产物的检索"；</li>
+        <li>要"按主题／目录枚举与遍历"，得<b>自己补通道</b>（agent 工具或前端），现成只有人的 UI；</li>
+        <li>要"语义找页"，现成只有<b>正则 ＋ 人工给 slug</b>；想让页面进检索，得自己把页面写成 chunk（那条创建路径不存在）。</li>
+      </ol>
+
+      <h3>8. 待核清单（写之前必须落地的）</h3>
+      <ul>
+        <li><b>重排</b>：<code>rerank.go</code>／<code>search_knowledge</code> 里重排模型缺失时的降级行为；<code>agent_rerank_requirement_test.go</code> 说明了什么约束；</li>
+        <li><b>模式</b>：<code>quick-answer</code> 下到底注册了哪些工具（是否只有 <code>search_knowledge</code>）；<code>allowedTools</code> 怎么参与；</li>
+        <li><b>query 处理</b>：<code>query_understand</code>／<code>query_expansion</code> 各自做什么（有没有多轮改写、用不用历史）；</li>
+        <li><b>MMR 与 filter_top_k</b>：在插件链的哪一步，参数从哪来；</li>
+        <li><b>记忆／会话</b>：<code>memory_recall</code>／<code>merge_history</code> 与知识检索的关系（上下文怎么拼）；</li>
+        <li><b>图谱工具</b>：<code>query_knowledge_graph</code> 默认关闭时的行为与 Neo4j 依赖。</li>
+      </ul>
+
+      <h3>9. 发布定位与标题候选</h3>
+      <ul>
+        <li>面向谁：正在给知识库选型／给 agent 接知识的人；读过本系列 LLM-Wiki 篇的人；</li>
+        <li>标题候选：①《WeKnora 的检索侧：两套路子，和三种"不参与"》；②《编译出来的页面，检索侧根本不用它：拆 WeKnora 的检索》；③《经典 RAG 还是 Agentic RAG？WeKnora 的答案是"都要，但默认前者"》。</li>
+      </ul>
+
+      <h3>10. 复现资产（已有）</h3>
+      <ul>
+        <li>库：<code>A5 · How we contain Claude across products</code>、<code>P6+P7 · 多源页读感</code>（含 86 页 wiki）；</li>
+        <li><b>MuSiQue 语料</b>：<code>data/tmp/musique/</code>（full dev 59.4MB ＋ full test 55.6MB ＋ ans dev 30.4MB；形状见 <code>shape.json</code>）；切好的切片在 <code>data/tmp/musique/slice-*/</code>（<code>questions.jsonl</code> ＋ <code>corpus/</code> ＋ <code>manifest.json</code>）；</li>
+        <li>脚本目录：<code>experiments/weknora/</code>（含 <code>weknora_multisource.py</code>／<code>probe_*.py</code>／<code>analyze_multisource.py</code>；本轮新增 <code>download_musique.py</code>／<code>musique_shape.py</code>／<code>prep_musique_corpus.py</code>／<code>usage_report.py</code>）；</li>
+        <li>日志：<code>data/tmp/weknora-logs/</code>（逐次 usage，可做 token／时延记账）；</li>
+        <li>已有结论的落点：<b>0043 附录 A.5</b>（agent 侧到底怎么召回：两套工具、三条边界）＋ §6 第 5 条（目录那条）；0037 条目 90／91／95。</li>
+      </ul>
+
+      <p class="muted">记录创建：2026-10-10 · 状态：提纲（等 0043 定稿后开写）· 上游：<a href="0037-llmwiki-weknora-setup.html">0037</a>（源码细读全过程）· <a href="0036-llmwiki-overview.html">0036</a>（总论：三篇验证文的计划）· 线索来源：0043 里"页面不参与检索"这条结论在写稿时被追问出来（现已整段落进 0043 附录 A.5）。</p>
+    </section>
+  </div>
+</body>
+</html>

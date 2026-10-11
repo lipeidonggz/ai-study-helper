@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0036 · LLM-Wiki 总纲（学习线开篇）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0036 · LLM-Wiki 总纲</h1>
+      <p class="subtitle"><b>一分钟摘要</b>：LLM-Wiki 把知识库在编译期压成「页面＋链接」的 wiki、检索权交给 LLM。方向成立，但最基础的编译（全量／增量／删除）语焉不详，检索耗时反直觉——已定 WeKnora 作验证台。</p>
+      <p class="subtitle">状态：<span class="half">△ 进行中</span>——主干是一条<b>因果链</b>：<b>§1 为什么把检索自主权交给 LLM → §2 为什么先编译 → §3 编译的三个要求如何推出"Wiki" → §4 为什么纠错是必选</b>；<b>§5</b> 收与 GraphRAG 的对照，<b>§6</b> 是待验证清单——对着它的三个机制排：<b>知识编译（6.1，最含糊也最基础）／错误处理（6.2）／检索（6.3）</b>（实验设计待讨论）· 现场时间：<b>2026-09-29 / 09-30</b> · <span class="no">编号提醒</span>：memory 0036 是本篇，<b>对外稿 0036 是 prompt-tune 那篇</b></p>
+      <p class="subtitle">一手材料：<b>Karpathy gist</b> <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">gist.github.com/karpathy/442a6bf5…</a>（本地 <code>data/tmp/karpathy_llm_wiki.md</code>，76 行）· <b>论文</b> <a href="https://arxiv.org/abs/2605.25480">arXiv 2605.25480</a>（<a href="https://arxiv.org/html/2605.25480">HTML</a>／本地 <code>data/tmp/llmwiki_paper.txt</code>，932 行）· <code>nashsu/llm_wiki</code> README ＋ 文件树　｜　配套：<a href="0029-graphrag-llmwiki-reading-plan.html">0029 阅读清单</a> · <a href="0035-graphrag-assumptions-and-scope.html">0035 GraphRAG 假设与适用范围</a></p>
+      <p class="subtitle"><b>证据标记</b>：<span class="ok">✅ 实测</span>（本系列跑出来的数）· <span class="half">📄 源码</span>（graphrag 3.2.0）· 📎 原文／官方文档（论文、Karpathy gist、README）· <b>🤔 判断</b>（我的分析，凡未标者多为原文引用或事实陈述）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 style="margin-top:16px;">0. 先把两个对象钉死：论文（0.1）＋ Karpathy 原文（0.2）</h3>
+      <h4 style="margin:14px 0 4px;">0.1 论文</h4>
+      <table>
+        <thead><tr><th>项</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><b>标题</b></td><td><i>Retrieval as Reasoning: Self-Evolving Agent-Native Retrieval via LLM-Wiki</i></td></tr>
+          <tr><td><b>编号与时间</b></td><td>arXiv <a href="https://arxiv.org/abs/2605.25480">2605.25480</a>，2026-05-25；HTML 版：<a href="https://arxiv.org/html/2605.25480">arxiv.org/html/2605.25480</a></td></tr>
+          <tr><td><b>作者与单位</b></td><td>Haoliang Ming／Feifei Li／Xiaoqing Wu／Wenhui Que，<b>WeChat, Tencent Inc., Beijing</b>（同一组人还写了 AuthTrace，2605.25382）</td></tr>
+          <tr><td><b>它主张什么</b></td><td>把 RAG 从 <b>retrieval-as-lookup</b>（一次性按相似度取固定 top-k）改成 <b>retrieval-as-reasoning</b>（检索本身是推理过程：搜、读、沿链接走、判断证据够不够）。三条设计原则：<b>Compilability（可编译）/ Composability（可组合）/ Evolvability（可演化）</b></td></tr>
+          <tr><td><b>三个机制</b></td><td>① <b>Wiki 化编译</b>：把原始文档编译成"结构化 Wiki 页 ＋ 双向链接"（目录索引 ＋ 页面 ＋ 源档案）；② <b>组合式检索</b>：只给 <code>wiki_search</code> / <code>wiki_read</code> 两个工具，由 agent 组合"搜／读／跟随链接／判停"；③ <b>Error Book</b>：把编译期反复出现的结构/语义错误沉淀成约束，注入后续编译提示词，并驱动两层修复</td></tr>
+          <tr><td><b>三个研究问题</b></td><td>Q1 编译式知识组织能否超过扁平 RAG 与图增强检索？Q2 agent 主导的组合遍历如何利用 Wiki 结构？Q3 结构/语义编译错误能否被持续检测、修复并减少复发？</td></tr>
+          <tr><td><b>实验设置</b></td><td>HotpotQA / MuSiQue / 2WikiMultiHopQA（<b>各取前 500 例</b>；语料＝这些例子的上下文段落并集，非全 Wikipedia）＋ AuthTrace（2,099 题，来自五位中文散文作家，860 篇）</td></tr>
+          <tr><td><b>模型与判官</b></td><td>统一用 <b>GLM-5.1</b>（编译也用同一个）＋ <b>Qwen3-Embedding-8B</b>；AuthTrace 用 GPT-4o-mini 判官，另做 <b>240 条人工审计</b>（人机一致率 89.6%、κ=0.79）</td></tr>
+          <tr><td><b>结果声明</b></td><td>在三个多跳基准上<b>超过 HippoRAG 2 / LightRAG / GraphRAG 2.0–8.1 F1</b>；AuthTrace 整体最优，多文档结构化查询增益最大；消融显示 Wiki 结构、渐进遍历、Error Book 各有贡献</td></tr>
+          <tr><td><b>它与前代的关系</b></td><td>论文自认范式来自 <b>Karpathy（2026）的 <code>llm-wiki.md</code></b>：<i>"the LLM Wiki paradigm articulated by Karpathy (2026) … remains an abstract design pattern. <b>We operationalize this paradigm.</b>"</i></td></tr>
+          <tr><td><b>代码与发表状态</b></td><td><b>无代码</b>（全文 <code>open-source</code>／<code>code is available</code> 各 0 次，唯一 "github" 命中是 arXiv 页面按钮与 Karpathy gist 引用）；<b>发表状态未核</b>（arXiv 元信息/Semantic Scholar/DBLP 三处核查待做）</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="margin:14px 0 4px;">0.2 Karpathy 的 <code>llm-wiki.md</code>（gist）</h4>
+      <p><b>它是什么</b>：<b>不是论文，是一份"idea file"</b>——原话：<i>"This is an idea file, it is designed to be copy pasted to your own LLM Agent (e.g. OpenAI Codex, Claude Code, OpenCode / Pi, or etc.). Its goal is to communicate the high level idea, but your agent will build out the specifics in collaboration with you."</i></p>
+      <p><b>地址</b>：<a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">gist.github.com/karpathy/442a6bf555914893e9891c11519de94f</a>　<b>本地</b>：<code>data/tmp/karpathy_llm_wiki.md</code>（76 行）</p>
+      <div class="chain">
+        <b>核心主张（三句原文）</b>：<br>
+        ① <i>"Instead of just retrieving from raw documents at query time, the LLM <b>incrementally builds and maintains a persistent wiki</b> — a structured, interlinked collection of markdown files that sits between you and the raw sources."</i><br>
+        ② <i>"<b>the wiki is a persistent, compounding artifact.</b> The cross-references are already there. The contradictions have already been flagged. The synthesis already reflects everything you've read."</i><br>
+        ③ <i>"You never (or rarely) write the wiki yourself — the LLM writes and maintains all of it. … <b>Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase.</b>"</i>
+      </div>
+      <table>
+        <thead><tr><th>结构</th><th>内容（原文要点）</th></tr></thead>
+        <tbody>
+          <tr><td><b>三层架构</b></td><td><b>Raw sources</b>（不可变，"your source of truth"）／<b>The wiki</b>（LLM 全权拥有的 markdown 页：摘要、实体页、概念页、对比、概述、综合）／<b>The schema</b>（决定 wiki 怎么组织、有什么约定、按什么流程工作）</td></tr>
+          <tr><td><b>三个操作</b></td><td><b>Ingest</b>（读源 → 与你讨论要点 → 写摘要页 → 更新索引 → 更新相关实体/概念页 → 追加日志；<b>一个源可能触及 10–15 个页</b>）／<b>Query</b>（检索页 → 读 → 带引用综合；<b>好答案可以归档回 wiki</b>，让探索也复利）／<b>Lint</b>（定期体检：页间矛盾、被新源取代的过期断言、<b>无入链的孤儿页</b>、<b>被提到却没有自己页面的重要概念</b>、<b>缺失的交叉引用</b>、可由联网补上的数据缺口）</td></tr>
+          <tr><td><b>两个特殊文件</b></td><td><code>index.md</code>：内容目录（每页一条链接 ＋ 一行摘要），每次 ingest 更新，<b>回答时先读索引</b>；原话：<i>"works surprisingly well at moderate scale (~100 sources, ~hundreds of pages) and <b>avoids the need for embedding-based RAG infrastructure</b>"</i>。／<code>log.md</code>：时间序、append-only，条目带固定前缀即可用 <code>grep</code> 取最近几条</td></tr>
+          <tr><td><b>可选工具</b></td><td>规模大了要有搜索：推荐 <a href="https://github.com/tobi/qmd">qmd</a>（本地 markdown 搜索引擎，BM25＋向量混合＋LLM 重排，带 CLI 与 MCP server）</td></tr>
+          <tr><td><b>为什么有效</b></td><td>原话：<i>"The tedious part of maintaining a knowledge base is not the reading or the thinking — it's the bookkeeping. … <b>Humans abandon wikis because the maintenance burden grows faster than the value.</b> LLMs don't get bored, don't forget to update a cross-reference, and can touch 15 files in one pass."</i>　人的职责："curate sources, direct the analysis, ask good questions"</td></tr>
+          <tr><td><b>精神祖上</b></td><td><i>"related in spirit to Vannevar Bush's <b>Memex (1945)</b> — a personal, curated knowledge store with associative trails between documents… <b>The part he couldn't solve was who does the maintenance. The LLM handles that.</b>"</i></td></tr>
+          <tr><td><b>边界声明</b></td><td>原话：<i>"This document is <b>intentionally abstract</b>. It describes the idea, not a specific implementation. The exact directory structure, the schema conventions, the page formats, the tooling — all of that <b>will depend on your domain</b>, your preferences, and your LLM of choice. Everything mentioned above is optional and modular… <b>The document's only job is to communicate the pattern. Your LLM can figure out the rest.</b>"</i>　⇒ 它给的是<b>模式</b>，不是实现；论文＝把这个模式<b>操作化</b>，<code>nashsu/llm_wiki</code>＝把这个模式<b>工程化</b>。</td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>两点值得单独记</b>：① <b>"缺口可见性"在 Karpathy 这里是显式的 Lint 项</b>（孤儿页、缺页、缺交叉引用、数据缺口）——比论文更正面（论文只在 Layer 2 的修复清单里出现"missing pages"，没有面向使用者的缺口视图）；但它是<b>人触发的定期体检</b>，不是自动机制。② <b>规模前提不同</b>：Karpathy 说 <code>index.md</code> 在"~100 源 / 数百页"这个量级够用；而论文的 2WikiMHQA Wiki 是 <b>5,825 知识页 ＋ 6,840 源页</b>——已经远超"够用"区间，这大概正是论文必须补 Error Book 与两层校验的原因。</p>
+
+      <p class="muted"><b>本文的展开顺序</b>是一条因果链，不是对照表：<b>① 为什么要把检索自主权交给 LLM → ② 为什么先编译 → ③ 编译的三个要求如何推出"Wiki"这个形态 → ④ 为什么 Error Book 是必选</b>；与 GraphRAG 的对照集中放在 §5，作为这条推理的下游结论。一句话概括两者关系：<b>语义层同构、机制层不同构</b>。</p>
+
+      <h3>1. 为什么要把检索自主权交给 LLM</h3>
+      <p><b>驱动力来自一个观察：知识库上的问题五花八门，统一流程应付不了。</b>固定 top-k 检索 ＋ 一次生成，擅长"局部事实"（答案就在少数几段里）；但问题一旦是<b>全局的</b>（整份语料在讲什么）、<b>多跳的</b>（A → B → 答案）、<b>枚举的</b>（都有哪些）、<b>比较的</b>（两者异同），"先取固定几段、再一次性回答"就失灵——因为在读之前，系统根本不知道该看哪几段。</p>
+      <p><b>而 LLM 有推理能力</b>，可以承担"先看什么、下一步看什么、够了没有"这些判断。于是把自主权交给它：<b>检索不再是一次性的取数动作，而是一段由推理驱动的过程</b>——论文称之 retrieval-as-reasoning，并给了两条典型路线：<b>search-first</b>（从实体出发锚定）与 <b>browse-first</b>（开放式与枚举型：先看全景，再逐级下钻）。</p>
+      <div class="chain">
+        <b>论文自己的两句话，正好是这条推理的两端</b>：<br>
+        · <b>该做</b>——<i>"The bottleneck lies in <b>how knowledge is organized and exposed to the agent</b>, not merely in the retrieval algorithm."</i>（瓶颈在"知识怎么被组织、怎么暴露给 agent"）<br>
+        · <b>能做</b>——agent 已具备 ReAct 式的"推理 ＋ 行动"工具调用循环，可以把"搜索／阅读／跟随链接／判断够了没有"拆成原子动作再组合起来。
+      </div>
+      <p><b>反例就在旁边</b>：GraphRAG 的 <b>Global Search 默认检索行为</b>仍是确定性流程——取哪些社区报告由调用方交给它的 <code>community_level</code> 决定（CLI 默认 2，语义是 <code>level ≤ N</code>；只有传 <code>None</code> 才是全层不过滤），然后把这批报告扫一遍、map-reduce 出答案。也就是说，<b>"该看多细"这个判断被外包给了调用方</b>（这个参数是它唯一的出口），而不是交给 LLM。<span class="muted">另三种模式里，Basic／Local 同样是"先定死取数、再生成"；DRIFT 与 Dynamic 才释放了少量 LLM 判断（前者迭代生成后续查询，后者只判"某个社区要不要"）——完整对照见 §5。</span></p>
+
+      <h3>2. 为什么先编译：原始文本也能给自主权，编译只是更好</h3>
+      <p><b>先把话说实：不编译也能做自主检索。</b>把原文直接交给 agent、给它搜索与阅读的工具，它照样能多轮探索——已有的 agentic RAG 就是这么干的。所以<b>编译不是"能不能自主检索"的必要条件</b>，它换来的是三件增量：</p>
+      <ol>
+        <li><b>省掉"每次重新发现"</b>：原始文本是平的，每一次提问都要从头把散落的信息找出来、临时拼起来；编译把这些工作<b>一次性提前做完</b>。</li>
+        <li><b>提供原文里不存在的指针</b>：原文只有顺序，没有"这两段在讲同一件事"的显式提示；编译把关系与指针<b>物化</b>出来，遍历才有依托。</li>
+        <li><b>把成本前移、摊薄查询期</b>：论文的说法是 <i>"Front-loading organization to compile time"</i>；Karpathy 的说法是 <i>"the LLM is rediscovering knowledge from scratch on every question. There's no accumulation."</i>——编译之后，知识是<b>累积（compounding）</b>的，而不是每次重算。</li>
+      </ol>
+
+      <h3>3. 编译的三个要求 ⇒ 为什么落到"Wiki"这个形态</h3>
+      <h4 style="margin:14px 0 4px;">3.1 要求一：得能承载知识 —— 借 KG 的核心概念，不背它的形式包袱</h4>
+      <p>承载知识，目前已知较好的框架就是 KG 那一套：<b>实体 ＋ 关系</b>。但它很重——本体、类型系统、推导规则、一致性约束都要人定义和维护。<b>所以只借它的核心概念，不借它的形式约束。</b>它列举的那些页面（摘要、实体、概念、对比分析、概述、综合介绍），大体可归成三类：</p>
+      <table>
+        <thead><tr><th>语义类</th><th>LLM-Wiki 里的形态</th><th>GraphRAG 里的形态</th></tr></thead>
+        <tbody>
+          <tr><td><b>实体</b>（名词单位）</td><td>实体页（标题 ＋ aliases）</td><td>实体表（name ＋ type ＋ description）</td></tr>
+          <tr><td><b>关系</b>（谓词，含被 reify 的）</td><td><b>链接 ＋ 其后的关系说明</b>（<code>-- father of John V</code>）＋ <b>对比分析页</b> ＋ 实体页里的结构化陈述（Key Facts）</td><td>关系表（source → target ＋ description）</td></tr>
+          <tr><td><b>聚合体</b>（把一组内容压成一个单位）</td><td>摘要页、概述页、主题/综合介绍页</td><td><b>社区报告</b>（层级摘要）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>链接与关系不是两回事</b>：wikilink 是<b>可跟随的指针</b>，而页面 schema 要求它后面跟一句<b>关系说明</b>——附录 E 的原例就是 <code>- [[people/Ernest-I-Prince-of-Anhalt-Dessau]]</code> 紧跟 <code>-- father of John V</code>。所以<b>关系这一类在 wiki 里的承载 ＝"链接 ＋ 那句说明"（＋ 对比分析页）</b>。差别在<b>关系的"类型"以什么形式存在</b>：这里是<b>自然语言的自由说明</b>（没有受控词表、没有固定字段）——人读得懂、机器能查出"悬空链接"，但<b>不能按关系类型机检／过滤</b>（对照 GraphRAG：端点在关系表里可机读、可筛选，而 description 同样是自由文本）。</p>
+      <div class="chain">
+        <b>关键修正</b>：<b>"摘要/概述"不是"被 reify 的谓词"，而是<b>一元聚合</b></b>——它把一组内容压成一个可读单位，不对应任何具体关系。这个区分很要紧：<b>聚合体的粒度是"机制给的"，不是"语义给的"</b>（GraphRAG 侧实测：L2 社区 100% ≤10 实体，粒度来自 <code>max_cluster_size=10</code> 这个算法常数）。
+      </div>
+      <p><b>这个选择有一个前提：推断这一步已经由 LLM 承担了。</b>本体、类型系统、推导规则在传统 KG 里是<b>承重结构</b>——它们管的是"两个概念能不能这么连""能不能从已知事实推出新事实""数据里有没有自相矛盾"，没有它们，机器既推不动、也检不出。而在这里，这些判断由 LLM 直接在自然语言上完成（与 §1 的"LLM 有推理能力"是同一条）。形式层于是<b>不再是承重的，可以省</b>。所以"只借概念"不是图省事的简化，而是<b>把这一层的职责换了个承担者</b>：从形式系统换成了模型本身。</p>
+      <p><b>"只借概念"的代价要认</b>：没有本体与类型系统、没有推导规则、也没有全局一致性保证——<b>一致性得靠"编译期校验 ＋ 纠错机制"来兜</b>（这正引出 §4）。这条也是它与正统 KG（KAG 那一极）的分界线。</p>
+
+      <h4 style="margin:14px 0 4px;">3.2 要求二：得能支撑自主检索 —— 尤其"遍历"</h4>
+      <p>自主检索要能边走边看，就需要三样东西：<b>可寻址的单位</b>（能指名某个东西去看）、<b>显式的指针</b>（能从一个走到另一个）、<b>全景入口</b>（不知道从哪下手时先看目录）。这三样正好落在"<b>页面（标题即地址）＋ 双向链接（带关系说明）＋ 目录索引</b>"上：</p>
+      <table>
+        <thead><tr><th>检索期需要什么</th><th>组织上就得提供什么</th><th>出处</th></tr></thead>
+        <tbody>
+          <tr><td>已知实体的局部事实</td><td>可寻址的<b>实体页</b>（标题唯一 ＋ aliases 兜别名）</td><td>论文 §6（source-localized 问题 "may favor methods that retrieve the original article directly"）；Karpathy 的 entity pages</td></tr>
+          <tr><td>关系跟随 / 多跳桥接</td><td><b>显式链接</b>（页与页的双向 wikilink，成为可跟随的指针）</td><td>论文 §6 "relation following"；附录 E "bidirectional wikilinks expose explicit traversal paths"</td></tr>
+          <tr><td>证据枚举 / 跨文档聚合</td><td><b>主题页与聚合页</b>（把一组内容压成一个可列举、可综览的单位）</td><td>论文 §6 "evidence enumeration / cross-document aggregation"</td></tr>
+          <tr><td>开放式探索（不知道从哪下手）</td><td><b>目录层</b>（<code>index.md</code>／<code>_index.md</code>：先看全景，再逐级下钻）</td><td>Karpathy："When answering a query, the LLM reads the index first to find relevant pages, then drills into them."</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>结构上真正的区别：链接提供"任意关联"</b>——<b>跨目录、跨层级、任意两页都能连</b>，所以桥接／跨文档聚合这类需求靠链接走，而不是靠翻层级。<b>两条限定</b>：① 链接是 <b>LLM 生成 ＋ 校验</b>出来的，<b>完备性与正确性都没有保证</b>——dangling link 是它第一大错误类，占检测到的错误 <b>29.1–63.8%</b>；② wikilink 本身不带类型参数，<b>关系靠紧跟其后的自由文本说明</b>（<code>-- father of John V</code>）——所以可读、可跟随，但<b>不能按关系类型机检／过滤</b>（对照 GraphRAG 的边：端点在关系表里可机读、可筛选，description 同样是自由文本）。<br>
+        <span class="why">层级的出处与形态（📎 论文附录 E ＋ Karpathy）：<code>wiki/</code> 下 <b>6 个主题目录</b>（concepts／geography／history／media／organizations／people）＋ 根 <code>index.md</code>；每个目录各有 <code>_index.md</code> 并在内部按语义分组（如 <code>people/_index.md</code> 把 3,241 条分在 "German Nobility"、"Chinese Film Directors" 下），即"全局索引 → 主题目录 → 目录内分组 → 页面"；<b>但深度不受机制限制</b>（目录可继续嵌套、schema 由使用者定），论文这一实例是两三层。</span>
+      </div>
+
+      <h4 style="margin:14px 0 4px;">3.3 要求三：大规模编译必然用 LLM ⇒ 产物必须"人可读"（纠错所需 ＋ 知识库自身的定位）</h4>
+      <p>语料一大，"靠人写编译产物（分类、摘要、关联）"成本不可承受，<b>用 LLM 编译是必然选择</b>；而 LLM 会出错（§4 详述），所以<b>必须有人在环中检查</b>；要让人能检查，<b>产物就得是人能直接读的</b>——这是"人可读"的第一条理由（为了纠错）。</p>
+      <p><b>还有第二条理由，而它跟问答没关系：知识库的定位本身就包含"给人读"。</b>人会直接翻阅、检索、核对这份编译产物（wiki 这种形态存在的意义正在于此），而不是只把它当成问答管线里的一段中间数据——对组织级／个人知识库来说，<b>"能被人直接读懂、直接查"本身就是交付物的一部分</b>。所以"人可读"不只是为了让纠错流程跑得通而做的被动妥协，<b>它是一个独立的产品需求</b>；两条理由合起来，才说明它为什么是硬要求。</p>
+      <p>三个要求合起来是个交集：<b>机器可寻址、可遍历（要求二）∩ 人可以直接阅读（要求三）＝ 以页面 ＋ 链接为载体的文本</b>——也就是 Wiki。论文自己的措辞正是这个交集：<i>"human-readable <b>and</b> machine-traversable <b>substrate</b>"</i>。</p>
+      <p><b>但"人必须在环"≠"人逐条读"</b>——否则这个要求在大语料上立刻自相矛盾。它能成立，靠的是<b>把错误分流</b>：错误的第一大类是<b>结构类</b>（悬空链接、引用格式、索引不一致——占比见 §4），<b>这一层由程序确定性查出，也能自动修</b>；<b>留给人的是内容类</b>（无据断言、跨页矛盾），而内容类本就只能抽检。所以"人可读"这个要求，实际买到的是<b>可审查性（inspectability）</b>——人能随时打开任一页核对、能看懂程序报出的结构错误——而不是"人工逐条验收"。</p>
+      <div class="chain">
+        <b>为什么不是别的形态</b>：<br>
+        · 只有"遍历"这一条，会推出<b>图／三元组</b>（机器友好，人不好读）；<br>
+        · 只有"人可读 ＋ 人检查"这一条，会推出<b>普通文档</b>（人友好，但没有指针、不能遍历）；<br>
+        · <b>两条的交集才唯一指向"页面 ＋ 链接"</b>。（Karpathy 的说法很直白：<i>"Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase."</i>——wiki 是给人读、给机器跑的<b>同一份东西</b>。）
+      </div>
+
+      <h3>4. 因为用 LLM 编译，错误是必然的 ⇒ 纠错机制是必选</h3>
+      <p>LLM 写出来的页面不会天然自洽。<b>论文实测的错误分布，是这条推理最硬的证据</b>：七类系统性错误里，<b>悬空链接占检测到错误的 29.1–63.8%</b>、malformed references 占 <b>18.9–28.5%</b>——<b>结构类错误是第一大类</b>；此外还有内容类的：无据断言（unsupported facts）、跨页矛盾（cross-page contradictions）。</p>
+      <table>
+        <thead><tr><th>错误类别</th><th>典型形态</th><th>谁来查</th></tr></thead>
+        <tbody>
+          <tr><td><b>结构类</b></td><td>悬空链接、页面不完整、引用格式错、未见覆盖（unseen overwrites）、索引不一致</td><td><b>确定性校验（代码）</b></td></tr>
+          <tr><td><b>内容类</b></td><td>无据断言、跨页矛盾</td><td>与源对齐的 LLM 校验 ＋ 跨页一致性检查</td></tr>
+        </tbody>
+      </table>
+      <p><b>它的解法是 Error Book</b>：把"反复出现的错误"沉淀成<b>约束规则</b>，注入后续编译提示词，并驱动修复。五个阶段——<b>发现 → 归因 → 写成规则 → 注入编译提示词 → 定期复验并关闭</b>；落盘为 <code>error_book.yaml</code>，每条含现象／根因／约束规则／验证方式／状态（open／closed）。</p>
+      <p><b>修复分两层</b>：<b>代码层</b>——每个编译批次之后跑确定性修复（悬空链接、格式、索引不一致）；<b>LLM 层</b>——每若干篇触发一次，处理需要推理的问题（缺页、摘要不完整、无据断言、跨页矛盾）。定稿时再跑三轮"代码修复 ↔ LLM 修复"回环收敛。</p>
+      <h3>5. 与 GraphRAG 的对照（上面那条推理的下游结论）</h3>
+      <p><b>一句话</b>：两者<b>语义层同构、机制层不同构</b>——它用 KG 的"实体—关系"骨架来组织知识，但组织形态的依据是"<b>检索期需要什么</b>"，而不是"KG 的形式完备性"；机制上最要紧的差别则是"<b>可读的那一层，和可遍历的那一层，是不是同一层</b>"。而这条差别不是偶然：<b>根源是两者锚定的目标不同</b>（本节末尾展开）。</p>
+      <p><b>语义层（同构）</b>：两边都用"实体／关系／聚合"来装知识，区别只在形态（表见 §3.1）。<b>机制层（不同构）</b>：把两条线放到两个轴上——<b>人读</b>与<b>机器遍历</b>（这两个轴对应论文那句判据，📎 <i>"…whether the resulting knowledge base exposes explicit, traversable structure that an agent can search, read, and traverse"</i>）</p>
+      <table>
+        <thead><tr><th>线</th><th>产物</th><th>人读</th><th>机器遍历</th></tr></thead>
+        <tbody>
+          <tr><td><b>GraphRAG</b></td><td>图（实体 ＋ 关系）＋ 社区报告（层级摘要）</td><td class="half">△ <b>可读与可遍历不在同一层</b>：报告是文本、可读；<b>图那一层不天然给人读</b>（要另建可视化／导出）</td><td class="half">△ 能但受限：可沿<b>社区上下级</b>行走，也可沿<b>实体的关系邻域</b>寻址（local search 的"入口实体 → 邻域"就是这种遍历）；<b>但缺"页面级稳定寻址单位"，跨社区／跨源也没有任意关联的边</b></td></tr>
+          <tr><td><b>LLM-Wiki</b></td><td><b>页面 ＋ 链接 ＋ 索引</b></td><td class="ok">✅ 能（markdown 页天然可读）</td><td class="ok">✅ 能（页面可寻址 ＋ 链接可跟随 ＋ 索引可下钻）</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>所以分野不是"能不能遍历"，而是"可读的层与可遍历的层是不是同一层"</b>：<b>GraphRAG 两层分离</b>——报告可读但不可遍历，图可遍历（沿隶属与关系）但不天然给人读；<b>LLM-Wiki 合在同一层</b>：页面既是给人看的文本，又是可寻址、可跟随的单位。论文的措辞正是这个交集：<i>"human-readable <b>and</b> machine-traversable <b>substrate</b>"</i>。
+      </div>
+      <div class="chain">
+        <b>这条差别的根源：两者锚定的目标不同</b>。<br>
+        · <b>GraphRAG 锚定的是"把一份语料上的全局性问题答好"</b>——所以它要的产物天然是<b>跨文档的多粒度抽象</b>：社区层级就是给"把该层报告扫一遍、map-reduce 出答案"准备的。至于"哪些内容该算一个主题"，它交给了<b>图的结构</b>——层次 Leiden 在实体图上按边划分社区（无向划分，📄 源码核过），而不是让 LLM 去判主题。<b>这个目标在索引期就被押注进去了</b>：实体类型表、报告模板那一组提示词，正是"目标已知"这个前提的产物。<br>
+        · <b>LLM-Wiki 锚定的是"把检索主动权交给 LLM、面向事先不知道的问题"</b>——所以它要的产物必须是<b>可寻址、可跟随的单位</b>：页面 ＋ 链接是从这个目标直接推出来的；而目标本身以<b>可编辑的 schema</b> 形式留在外面，由人和 LLM 一起演化。<br>
+        <b>回到 §1</b>：这正好解释了为什么 GraphRAG 会把"该看多细"交给调用方——它的目标把粒度押在索引期的全局结构上，查询期只需选层；而 LLM-Wiki 把判断交给 LLM，因为它的前提就是"问题事先不知道"。
+      </div>
+      <div class="chain">
+        <b>一句话收口</b>：GraphRAG 把"该看多细"交给<b>用户</b>、把知识压成<b>一批跨文档的分层报告</b>；LLM-Wiki 把"该看多细"交给<b>LLM</b>、把知识摆成<b>可读又可遍历的页面</b>。可以说，前者回答"<b>目标已知时怎么省</b>"，后者回答"<b>目标未知时怎么找</b>"。
+      </div>
+
+      <h3>6. 待验证清单（回归主线：对着 LLM-Wiki 的三个机制看）</h3>
+      <p>§1–§5 是把它读通；§6 是读通之后<b>还不知道的部分</b>。三个机制的信息密度差得很远：<b>知识编译</b>是落地时最基础的一环，却也是论文与 Karpathy 讲得最含糊的一环；<b>错误处理（Error Book）</b>机制清楚，要验的相对少；<b>检索</b>给的数据最详细、机制也好理解，但有一处数字反直觉。下面按这个顺序排。</p>
+      <h4 style="margin:14px 0 4px;">6.0 实验平台：WeKnora（2026-09-30 定 · 📄 README ＋ 源码核过 · 决策链与代码盘点见 <a href="0037-llmwiki-weknora-setup.html">0037</a>）</h4>
+      <p><b>之所以选它：三种模式共用同一套知识管线</b>——RAG 问答／Agent／<b>Auto Wiki</b>（<code>Tencent/WeKnora</code>，Go，31.2k★，越 4.1k，v0.8.2 发布于 2026-09-24）——正好一条腿踩住下面三节要验的东西：</p>
+      <table>
+        <thead><tr><th>待验</th><th>WeKnora 里对应的能力（README 原文口径）</th></tr></thead>
+        <tbody>
+          <tr><td><b>6.1 知识编译</b></td><td><b>Auto Wiki</b>：把知识库文档里的 people／products／concepts <b>抽成带来源引用的页面</b>、按目录组织；知识图展示页面之间的关系；<b>页面可直接编辑，每次改动都能回滚</b>（revision diff）</td></tr>
+          <tr><td><b>6.1 增量／删除</b></td><td>同上的<b>编辑＋diff＋回滚</b>，加上知识库的目录树（folder tree）、chunk 编辑与修订、文档解析的<b>分阶段时间线</b></td></tr>
+          <tr><td><b>6.2 错误处理</b></td><td><b>有两条通路</b>：① <b>确定性体检 ＋ 自动修复</b>——<code>wiki_lint.go</code> 查 6 类（<code>broken_link</code>／<code>stale_ref</code>／<code>empty_content</code>／<code>orphan_page</code>／<code>missing_cross_ref</code>／<code>duplicate_slug</code>），带严重度、<b>能否自动修</b>与 <b>HealthScore（0–100）</b>；② <b>Agent 问题台账</b>——<code>flag_issue</code> 记 4 类内容问题（<code>mixed_entities</code>／<code>contradictory_facts</code>／<code>out_of_date</code>／<code>other</code>），状态 <code>pending → resolved/ignored</code>。<b>缺的是论文 Error Book 的签名动作</b>：把反复犯的错沉淀成规则、回灌下一轮编译</td></tr>
+          <tr><td><b>6.3 检索</b></td><td><b>Agent 模式＝ReAct agent</b> 在知识库与工具上跑多步（可选 steer／fork／rewind）；另有 hybrid search（关键词＋向量）＋ rerank ＋ parent-child chunking ＋ <b>GraphRAG（Neo4j）</b>，后者正好当对照臂</td></tr>
+          <tr><td><b>6.3 计时口径</b></td><td><b>Langfuse 追踪</b>每个 agent step 的推理、工具调用与 <b>token 用量</b>——论文时延表缺的四样里，"每方法输入输出 token 数"与"步骤构成"这两样在这里能自己补上</td></tr>
+        </tbody>
+      </table>
+      <p><b>📄 源码核过的两处关键</b>（2026-09-30，<code>D:\lida-data\vscode\WeKnora</code>，tag <code>v0.8.2</code> @ <code>3e8b0bf</code>）：<br>
+      · <b>纠错不是"只有人工兜底"</b>——<code>RunLint</code> 的六类检查里，有三类可自动修（<code>AutoFix</code>）：破链把 <code>[[slug]]</code> <b>降级成纯文本</b>（保留文字、拆掉链接，不补页）、空页<b>归档</b>（不删）、失效引用剥掉 source_ref——<b>若该页再无活源就直接删页</b>，注释写明理由："留下孤儿摘要页更糟，模型还会链它、<code>wiki_read_source_doc</code> 的下钻永远失败"。<br>
+      · <b>目录／视角是"批次级一次规划"</b>（<code>wiki_ingest_taxonomy.go</code>）：整批一次性规划分类，锚在已有目录上复用，更深的候选目录用<b>嵌入相似度 topK</b> 挑，且只补空缺（已有分类的页不再改）。代码注释直言这是在替换旧做法——<i>"per-page, parallel CATEGORY invention — which couldn't converge, worst of all on the founding batch when the KB has no folders to anchor on."</i>（每页各自发明分类，收敛不了；首次批次没有目录可锚时最惨）⇒ 这是继"<b>算法常数</b>"（GraphRAG）、"<b>人写的 schema</b>"（Karpathy）之后的<b>第三种视角形态</b>。</p>
+      <p class="muted"><b>三条要认的限制</b>：① <b>它不是论文的实现</b>（论文无代码），所以跑出来的结论属于"<b>WeKnora 的 wiki 模式</b>"，不是"论文方法"；② <b>错误处理缺的是"规则回灌"那一环</b>——自动体检与问题台账都有，但没有论文那套"把反复犯的错写成约束、注入下一轮编译"；③ 项目迭代很快（v0.8.0／v0.8.2 都在 2026-09），<b>实验必须锁版本号</b>，README 承诺的能力要按"📄 核过"抽查过再用。部署是 Docker Compose（PostgreSQL ＋ Redis，上 GraphRAG 另需 Neo4j），有完整 Web UI，模型侧支持 DeepSeek——<b>成本口径能和 GraphRAG 那条线对齐</b>。<br>
+      <b>备选记一笔</b>：<code>nashsu/llm_wiki</code>（20.1k★，TypeScript，桌面应用）更贴 Karpathy 的描述——两步 CoT ingest ＋ 增量缓存 ＋ Louvain 社区发现 ＋ **知识缺口**视图 ＋ rebuild index；但检索侧没有 agent 工具循环、也没有 Langfuse 这类可观测性 ⇒ <b>留作 6.1 的"编译实现对照"</b>，不做主台子。</p>
+      <p class="muted"><b>具体实验设计</b>（跑什么题、和谁对照、判据是什么）<b>待下一轮讨论</b>。</p>
+
+      <h4 style="margin:14px 0 4px;">6.1 知识编译 —— 最不清楚、也最基础</h4>
+      <p><b>为什么排第一</b>：这是把原始语料变成 wiki 的那一步，后面检索全靠它的产物；而两篇材料恰恰在这里最含糊——论文<b>没给编译提示词原文</b>、<b>没写 <code>SelectPages</code> 的选择机制</b>、<b>没有命名／合并规则</b>（这三条也是"论文对应的实现不存在"的直接原因）；Karpathy 那边则把这一层整个交给 schema，只说"和 LLM 一起演化"。要验的三件事，正好对应编译面临的三种输入变化：</p>
+      <ul>
+        <li><b>全量怎么编</b>——从 schema／目标出发的三步：<b>视角选择</b>（schema 定下什么该进 wiki）、<b>抽取</b>（页面与陈述从哪些源、以什么粒度产出）、<b>合并</b>（同一实体的别名、同一主题的多页：归并还是并存）。<br><span class="muted">两条概念判断挂在这里一起测：① §3.1 归纳的"实体／关系／聚合体"三类是否真的承载得住（＝"语义层同构"能不能用实验体现）；② 聚合体的粒度到底是机制给的还是语义给的——图侧量社区规模分布、wiki 侧量页面粒度分布，各量一次即可对照。</span></li>
+        <li><b>增量怎么处理</b>——追加新源后页面级更新是否真局部？目录／索引／命名冲突这些全局结构谁维护？改一次 schema 再追加，先量<b>新旧页面混存的比例</b>与<b>跨代链接的完整性</b>，再对同一批问题各问一次，看答案会不会自相矛盾。（论文 Limitations 自认 indices 会失控、<code>stale-fact</code> 是 future work）</li>
+        <li><b>删除怎么处理</b>——删掉一个源，量<b>悬空链接数、孤儿页数</b>，并检查答案里是否还在引用被删内容；同时要区分"<b>知识作废</b>"与"<b>来源撤回</b>"两种语义。<span class="why">判据现成：<code>RunLint</code> 直接给 <code>broken_link</code>／<code>orphan_page</code>／<code>stale_ref</code> 三类，而且 <code>stale_ref</code> 的自动修法已经内含一个取舍（剥引用；失去全部活源就删页）——<b>我们要验的正是这个取舍对不对</b>。</span></li>
+      </ul>
+      <p class="muted"><b>已知对照（📄 论文 Limitations ＋ ✅ GraphRAG 侧实测）</b>：GraphRAG 的增量是追加式（社区不重划、度数不重算）⇒ <b>结构分代</b>，同一份语料追加两轮后根节点数 <b>9 → ＋6 → 15</b>；删除则是"<b>删除被忽略</b>"（退出码 0、索引与删除前完全一致）⇒ 只剩全量重编译一条路。这两条正是"LLM-Wiki 逻辑上更好"的依据，但也<b>仅止于逻辑上</b>——它没有这些问题，是因为它没有全局算法，不是因为有谁验证过删除协议。</p>
+
+      <h4 style="margin:14px 0 4px;">6.2 错误处理（Error Book）—— 机制清楚，要验的少</h4>
+      <p>论文给了错误分布（悬空链接占检测错误的 <b>29.1–63.8%</b>、malformed refs <b>18.9–28.5%</b>）与五阶段流程（发现 → 归因 → 写成规则 → 注入编译提示词 → 定期复验并关闭），做法直白：<b>把反复犯的错写成约束，喂回下一轮编译</b>。所以它更像"要不要照做"，而不是"怎么做"。要留意的只有两点：<b>错误率是否随迭代收敛</b>，以及<b>这套规则换一份语料还管不管用</b>——规则是从本语料的错误里长出来的，跨域迁移没有先验理由。<b>另外，§6.0 那台子上只有这套机制的前两段</b>——自动发现（体检）与问题记录（issue 台账）都有，<b>"写成约束、回灌编译"这一段没有</b>；所以这一节能验的是"发现与记录够不够用"，不是"规则回灌灵不灵"。</p>
+
+      <h4 style="margin:14px 0 4px;">6.3 检索 —— 机制好懂，但有一处数据反直觉</h4>
+      <p><b>机制层面不难理解</b>：检索权交给 LLM，靠两个工具（<code>wiki_search</code> ／ <code>wiki_read</code>）加遍历，"下一步看什么"由模型自己决定；它依赖的就是 <b>LLM 的推理能力</b>——所以"效果好不好"与"模型强不强"是同一件事。论文在这一块的实验也最细（三个多跳基准各 500 例 ＋ 按跳数分层）。</p>
+      <p><b>但耗时这一项，按结构算它一定是慢的。</b>稠密向量检索是"一次检索（毫秒级）＋ 一次生成"；而 LLM-Wiki 走的是<b>串行推理循环</b>——工具调用预算 <code>T_max=15</code>（连续 3 次空搜索即停，且回答前至少得读一次页），而<b>每次工具调用前后都要过一次 LLM</b>，所以是十几轮串行推理。多出来的全是实打实的开销，而且<b>轮与轮之间有依赖，并行摊不掉</b>。所以看到附录 G Table 10 里它在 HotpotQA 上是 <b>14.9s</b>、快过稠密检索的 <b>16.3s</b>（MuSiQue 27.1 vs 26.9、2WikiMHQA 15.9 vs 15.6 反而略慢）时，<b>要解释的不是"它为什么慢"，而是"它凭什么能快到这个程度"</b>。</p>
+      <p>只有三种可能，而且都能验：<b>① 每轮调用极短</b>——一轮只读一页、只输出几十个 token，轮数多但每轮便宜；<b>② 最后那次生成比稠密检索短得多</b>——生成是自回归的，稠密检索要塞 5–10 个 chunk 原文，模型容易写得长；<b>③ 测量条件本来就不同</b>——同一个表里 <b>GraphRAG 是更强的旁证</b>：它是 map 上百份报告再 reduce，结构上比谁都贵，却在三个基准上都最快（<b>14.0／13.9／10.8</b>）⇒ "同等条件"这个前提本身就值得怀疑。这张表<b>口径缺四样</b>（端点定义／测量条件／每方法输入输出 token 数／失败样本处理，详见 §7.5），所以它现在的身份是<b>"待解释的数据"，不是证据</b>。要验：</p>
+      <ul>
+        <li><b>逐轮记账</b>：固定模型与并发，把<b>轮数 ＋ 每轮的输入／输出 token ＋ 各段耗时</b>都记下来——这是唯一能回答"时间到底花在哪"的口径（§7.5 已列三个候选驱动：输出长度、并行度、方法内部额外计算）。</li>
+        <li><b>"优势随跳数增长"</b>（附录 G 的 fine-grained analysis）换一份语料能否复现出同样的<b>趋势</b>（不求复现绝对分数）。</li>
+        <li><b>多路径 vs 单一路由键</b>：wiki 允许多条链接路径到达同一实体，推断是"召回更鲁棒、但枚举更难穷尽"，这条怎么测。</li>
+      </ul>
+      <p class="muted">另有一项事务性核查：<b>论文发表状态</b>——arXiv 元信息（<code>journal_ref</code>／<code>comment</code>）、Semantic Scholar（<code>venue</code>／<code>publicationTypes</code>）、DBLP 三处对一遍。</p>
+    </section>
+
+    <section class="card" id="scene">
+      <h2>第二部分 · 现场细节（2026-09-29 / 09-30）</h2>
+
+      <h3 style="margin-top:16px;">7.1 沛东的七条初步想法（原话要点）</h3>
+      <ol>
+        <li>两者都是"先编译后使用"，只从这点看与 GraphRAG 相同；在此框架下有相同点与不同点。</li>
+        <li>LLM-Wiki 没规定严格语义结构，但它列举的"摘要、实体、概念、对比分析、概述、综合介绍"大体可归为<b>实体、关系、主题</b>三类，即 GraphRAG 建模的三类；甚至可认为 GraphRAG 的编译过程（暂不考虑存储结构与细化定义）是 LLM-Wiki 的一种具体实现；<b>KG 的实体、关系仍是很好的基础</b>，所谓主题/对比分析/摘要/概述/综合介绍，本质上是<b>预先把一部分谓词 reify 并实体化</b>。</li>
+        <li>编译阶段的核心区别是<b>承载方式</b>：GraphRAG 是"图 ＋ 社区报告"（图承载实体＋关系，社区报告在层级上类似主题或综合介绍）；LLM-Wiki 是 Wiki 这种方式。</li>
+        <li>检索阶段是关键区别：<b>LLM-Wiki 把自主权完全交给 LLM</b>（只留极少 harness，如最大迭代次数）；<b>GraphRAG 自主权主要仍在确定性代码</b>，只在某些策略里释放局部决策权（如 DCS 判断某社区是否有利于检索）。</li>
+        <li>增加内容：GraphRAG 受制于 Leiden，基本无法低成本增量；LLM-Wiki 因为底层语义仍是 KG 那套、且不依赖 Leiden 这类全局算法，<b>逻辑上要好很多，不存在难以逾越的障碍</b>。</li>
+        <li>减少内容：GraphRAG 基本只有全量重编译一条路；LLM-Wiki 同样因为没有全局算法，<b>逻辑上可以较好支撑</b>——虽然 Karpathy 与那篇论文都没提到这一点。</li>
+        <li>编译必然带应用目标视角：<b>LLM-Wiki 解决得更好</b>——它有一个主层级目录结构，但通过链接实现了"语义不那么严格的图的关联关系"；在假设 LLM 足够智能的前提下，可以靠链接与"边推理边检索"召回足够信息。</li>
+      </ol>
+
+      <h3>7.2 当时对七条的回应（只记判断差异，结论以 §1–§6 为准）</h3>
+      <table>
+        <thead><tr><th>条目</th><th>当时的判断</th><th>留下来的差异（细节见主干）</th></tr></thead>
+        <tbody>
+          <tr><td>1 先编译后使用</td><td class="ok">同意</td><td>补一句代价结构：<b>编译期一次性成本换查询期便宜</b>（§2）。</td></tr>
+          <tr><td>2 三类语义 / "GraphRAG 是一种实现"</td><td class="half">方向对，措辞要改</td><td>三类应是"实体／<b>关系</b>／<b>聚合体</b>"（§3.1）；并强调<b>语义同构、机制不同构</b>（§5）。</td></tr>
+          <tr><td>3 承载方式不同</td><td class="ok">同意</td><td>拆成两轴：<b>粒度由谁定</b>（§3.1：算法常数 vs 人写的 schema）、<b>可校验性</b>（§4 结论）。</td></tr>
+          <tr><td>4 检索自主权</td><td class="ok">同意</td><td>补"<b>决策对象</b>不同"：一方释放的是"选材取舍"、另一方是"下一步做什么"（§1 反例 ＋ §5 根源段）。</td></tr>
+          <tr><td>5 增量</td><td class="half">大方向同意</td><td>两条限定：全局结构（目录/索引）仍需维护；它换来<b>命名与合并</b>的新问题（见 §6.1"增量"与"合并"两条）。</td></tr>
+          <tr><td>6 删除</td><td class="ok">同意（论文与 Karpathy 都没提）</td><td>补两点：<b>引用完整性</b>与<b>删除语义</b>（验证口径见 §6.1"删除"那条）。</td></tr>
+          <tr><td>7 目标视角</td><td class="half">基本同意</td><td>三条：目标没被消除而是换了位置——GraphRAG 押在索引期的提示词里、LLM-Wiki 放进可编辑的 schema（§5 根源段）；"LLM 足够智能"可用错误分布量化（§4）；<b>多路径 ⇒ 召回更鲁棒但枚举更难穷尽</b>（§6.3）。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7.3 关键引文（原文）</h3>
+      <pre>Karpathy, llm-wiki.md（gist：https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f ；本地 76 行）：
+
+"**The schema** — a document (e.g. CLAUDE.md for Claude Code or AGENTS.md for Codex)
+ that tells the LLM how the wiki is structured, what the conventions are, and what
+ workflows to follow when ingesting sources, answering questions, or maintaining the
+ wiki. This is the key configuration file — it's what makes the LLM a disciplined wiki
+ maintainer rather than a generic chatbot. You and the LLM co-evolve this over time as
+ you figure out what works for your domain."
+
+"This document is intentionally abstract. ... The exact directory structure, the schema
+ conventions, the page formats, the tooling — all of that will depend on your domain,
+ your preferences, and your LLM of choice."
+
+论文（2605.25480）：
+- 作者与单位：Haoliang Ming / Feifei Li / Xiaoqing Wu / Wenhui Que，**WeChat, Tencent Inc., Beijing**
+- 范式来源自认："the LLM Wiki paradigm articulated by Karpathy (2026) ... remains an
+  abstract design pattern. We operationalize this paradigm."
+- 附录 D：Algorithm 1 的七步（SelectPages → CompileWikiPages → StructuralValidate /
+  ContentValidate → UpdateErrorBook → ActiveConstraints → CodeAutoFix → ApplyUpdates，
+  外加 PeriodicFix → VerifyAndClose）
+- 附录 E：目录树（index.md / 主题目录 / _index.md / sources/{digests,articles}）＋
+  **页面固定 schema**（YAML frontmatter：type/created/updated/aliases/tags ＋ 一行摘要
+  ＋ Key Facts ＋ Related Pages（双向 wikilink）＋ Related Sources）
+- §4.4 参数：GLM-5.1（编译同款）＋ Qwen3-Embedding-8B；T_max=15、patience P=3、
+  SelectPages 最多 k=5 页、Error Book 每 10 批复验
+- Limitations："stale-fact handling" 与 directory 维护列为 future work
+
+nashsu/llm_wiki（个人项目，nash_su，西安；2026-04-08 建仓，比论文早约 6 周）：
+- "This project is based on Karpathy's LLM Wiki pattern ... **faithfully follows
+  Karpathy's design**"——**未引用该论文**
+- 结构：src/lib/{ingest-queue, ingest-cache, ingest-parse, ingest-commit-coordinator,
+  enrich-wikilinks}.ts ＋ wiki-graph；Rust 侧 types/wiki.rs、page_embedding.rs</pre>
+
+      <h3>7.4 材料与出处（全部本地可查）</h3>
+      <ul>
+        <li><code>data/tmp/karpathy_llm_wiki.md</code>——Karpathy gist 全文（76 行 / 11.9 KB）；原始地址 <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">gist.github.com/karpathy/442a6bf555914893e9891c11519de94f</a></li>
+        <li><code>data/tmp/llmwiki_paper.html</code> 与 <code>llmwiki_paper.txt</code>——论文全文（HTML 212 KB；文本 932 行，含附录 A–H）；原始地址 <a href="https://arxiv.org/abs/2605.25480">arxiv.org/abs/2605.25480</a>（<a href="https://arxiv.org/html/2605.25480">HTML 版</a>）</li>
+        <li><code>data/tmp/gh_readme_{nashsu_llm_wiki, Tencent_WeKnora, TencentCloud_TencentDB-Agent-Memory, AgriciDaniel_claude-obsidian}.md</code> 与 <code>gh_tree_*.json</code>——四个候选实现的 README 与文件树（<b>选台子的依据见 §6.0</b>；WeKnora README 核至 <b>v0.8.2</b>，仓库元信息 <code>data/tmp/gh_Tencent_WeKnora.json</code>：31,160★／4,164 fork／Go／push 于 2026-09-29）</li>
+        <li><code>data/tmp/gh_user_nashsu.json</code>——仓库主人资料（nash_su，前 OpenCSG 联合创始人）</li>
+      </ul>
+
+      <h3>7.5 时延表（附录 G Table 10）为什么"看着不合理"（2026-09-30）</h3>
+      <p>沛东在论文 §5 附近的效率分析里看到这张表，第一反应是"不合逻辑"：<b>稠密向量检索不是最快的，连完全不做外部检索的 None（闭卷）也不是最快的。</b>原文数据（秒/题）：</p>
+      <table>
+        <thead><tr><th>方法</th><th>HotpotQA</th><th>MuSiQue</th><th>2WikiMHQA</th></tr></thead>
+        <tbody>
+          <tr><td><b>None（闭卷）</b></td><td>24.7</td><td>30.0</td><td>21.6</td></tr>
+          <tr><td>BM25 RAG</td><td>18.1</td><td>30.2</td><td>16.7</td></tr>
+          <tr><td>Dense RAG</td><td>16.3</td><td>26.9</td><td>15.6</td></tr>
+          <tr><td>RAPTOR</td><td>19.9</td><td>40.2</td><td>28.0</td></tr>
+          <tr><td><b>GraphRAG</b></td><td><b>14.0</b></td><td><b>13.9</b></td><td><b>10.8</b></td></tr>
+          <tr><td>LightRAG</td><td>41.4</td><td>51.3</td><td>39.7</td></tr>
+          <tr><td>HippoRAG 2</td><td>33.5</td><td>38.2</td><td>32.4</td></tr>
+          <tr><td>LLM-Wiki</td><td>14.9</td><td>27.1</td><td>15.9</td></tr>
+        </tbody>
+      </table>
+      <p><b>我的判断：不是"不合逻辑"，而是"这张表没给能判断它的口径"。</b>端到端延迟在这种系统里通常由三件事主导，而不是"有没有外部检索"：</p>
+      <ol>
+        <li><b>输出 token 数</b>——生成本身是自回归的。<b>闭卷没有证据约束，模型倾向写得更长更泛</b>；只要它多写几十个 token 就会慢过检索版。GraphRAG 最快也能这么解释（它的最终输出是短汇总）。</li>
+        <li><b>并行度</b>——GraphRAG 的 map 阶段是<b>并行</b>的（<code>concurrent_requests</code>，默认 32），而 BM25／Dense 是"一次检索 ＋ 一次串行生成"。<b>"调用次数多"不等于"墙钟长"</b>。</li>
+        <li><b>方法内部的额外计算</b>——HippoRAG 2 那 33.5s 里大头很可能是 PPR／图运算，RAPTOR 的 28–40s 很可能是树检索里的多次 LLM 调用，LightRAG 41–51s 同理；这些都跟"有没有外检索"无关。</li>
+      </ol>
+      <div class="chain">
+        <b>真正的问题在于它没给什么</b>：全文关于这张表只有一句 <i>"Table 10: Query latency in seconds per question on three benchmarks."</i>＋ §4.4 的 <i>"we report latency in Table 10"</i>。缺 <b>① 端点定义（TTFT 还是总时长）② 测量条件（并发／顺序／重试／硬件或服务）③ 每方法输入与输出 token 数 ④ 失败样本怎么算</b>——全文 <code>A100</code>／<code>GPU</code>／<code>throughput</code>／<code>concurrency</code>／<code>output tokens</code>／<code>prompt tokens</code>／<code>answer length</code> <b>出现次数全是 0</b>。没有这四样，<b>这张表既不能被解释、也不能被复现</b>。<br>
+        而且它在这篇论文里是<b>加分项</b>（用来说明"LLM-Wiki 不比检索慢"），口径不严的方向恰好对它有利 ⇒ <b>不该当证据用</b>。<br>
+        还有一处措辞比数据宽：正文写 LLM-Wiki <i>"comparable to or faster than BM25 and Dense RAG"</i>，但按表看，<b>MuSiQue（27.1 vs 26.9）与 2Wiki（15.9 vs 15.6）上它其实略慢于 Dense RAG</b>。<br>
+        <b>可落地的检验</b>（成本极低）：固定同一模型与并发，同时记录 <b>输入 token ／ 输出 token ／ TTFT ／ 总时长</b>。<b>若闭卷的输出 token 明显更多，"闭卷更慢"立刻被解释</b>；若不成立，问题在测量条件（排队、顺序、重试）。
+      </div>
+
+      <p class="muted">记录创建：2026-09-29 · 更新：2026-09-30 —— ① 补 §0.2 Karpathy 原文摘要、§6 待验证清单、§7.5「时延表讨论」，按读者视角去掉重复段落并加证据标记；② <b>主干按"因果链"重排</b>（§1 自主权 → §2 为什么编译 → §3 三个要求 ⇒ Wiki → §4 纠错必选；对照降到 §5，空白与验证合到 §6）；③ 按沛东逐条意见收口：§1 反例精确到 <b>GraphRAG「Global Search 默认检索行为」</b>、§3.1 补"只借概念"的<b>前提</b>（推断已由 LLM 承担）、§3.3 补"知识库本身就是给人读的"这第二条理由、<b>§5 删掉八轴速查表</b>并补"<b>根源＝两者锚定的目标不同</b>"（丢掉的实测数字移入 §6.1）；④ <b>§6 重排为"对着三个机制"</b>（6.1 知识编译／6.2 Error Book／6.3 检索），去掉原"三份材料共同的空白"与 (a)(b)(c) 分法，时延表问题升格为 6.3 的正题；⑤ <b>§6.0 定下实验平台＝WeKnora</b>（Auto Wiki／Agent／hybrid＋GraphRAG 三种模式共用一套管线，Langfuse 可补时延表口径；限制：非论文实现、无 Error Book、须锁版本；备选 nashsu/llm_wiki 留作编译对照）；⑥ <b>删掉 §4 里那段与 GraphRAG 的对比</b>——放在"纠错必选"这节看不出它要解决什么问题；同层／异层那条已由 §5 承担（不是"能不能程序查"的问题：报告里的引用本身就是结构化的，实测 20 份报告 190 处 <code>[Data: Entities (…); Relationships (…)]</code>）；⑦ <b>§5 的表收窄成 GraphRAG／LLM-Wiki 两行</b>，并删掉"论文原表另外四条"的转写——<b>这是个人理解，不是论文翻译；没仔细对比过的不强写</b>；⑨ <b>对照源码核过 WeKnora 两处并改准 §6.0</b>——纠错不是"只有人工兜底"（<code>wiki_lint.go</code> 六类体检／三类自动修／HealthScore，另加 <code>flag_issue</code> 问题台账；<b>缺的是"规则回灌编译"</b>），目录视角是"批次级一次规划 ＋ 已有目录锚定 ＋ 嵌入 topK"；⑧ <b>§6.3 的"耗时反直觉"重写</b>——先把疑点本身说清（<b>按结构算它一定更慢</b>：串行推理循环，工具调用预算 <code>T_max=15</code>、连续 3 次空搜索即停、回答前至少读一次页，每次工具调用前后都要过一次 LLM），再列三种可能（<b>每轮极短／末次生成更短／测量条件不同</b>——同表 GraphRAG 更快是更强的旁证），并把验证口径改成"<b>逐轮记账</b>" · 状态：进行中（实验设计待讨论）</p>
+    </section>
+  </div>
+</body>
+</html>

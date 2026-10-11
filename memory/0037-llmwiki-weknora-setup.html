@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0037 · LLM-Wiki 验证 · 平台与准备（WeKnora）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .why { display: block; color: var(--muted); font-size: 0.93em; margin-top: 2px; }
+    .chain { background: var(--code-bg); border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 10px 0; font-size: 0.95em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .half { color: #9a6700; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0037 · LLM-Wiki 验证 · 平台与准备（WeKnora）</h1>
+      <p class="subtitle"><b>一分钟摘要</b>：验证台定成 <b>WeKnora 标准版（Docker Compose）</b>——不是 Lite、也不是桌面版（Releases 八个版本 assets 全 0，没有可下载产物）；源码核过两处关键：它的<b>纠错不是"只有人工兜底"</b>（六类体检＋三类自动修＋问题台账，缺"规则回灌编译"），<b>目录视角是"批次级一次规划"</b>（第三种形态）；记账不必依赖 Langfuse（<code>messages.usage</code> 本来就落库）。</p>
+      <p class="subtitle">性质：<b>验证线第一站</b>——只定"在哪测、拿什么测、怎么判"，<b>实测结果不在本篇</b>。承接 <a href="0036-llmwiki-overview.html">0036</a> §6.1（知识编译最含糊也最基础），也是对外稿 <code>docs/publish/0042-llmwiki-overview.md</code> 结尾承诺的"知识编译篇"的前置。</p>
+      <p class="subtitle">状态：<span class="half">△ 进行中</span>——平台已定、代码盘点 <b>3/7</b> 点、实验设计已列，<b>WeKnora 标准版已部署并跑通</b>（五件全绿，<code>http://localhost</code> 200）；下一步＝注册账号 ＋ 配模型（DeepSeek）。现场时间：<b>2026-09-30</b></p>
+      <p class="subtitle">一手材料：本地源码 <code>D:\lida-data\vscode\WeKnora</code>（tag <code>v0.8.2</code> @ <code>3e8b0bf</code>，96 MB／4,355 文件）· 仓库内文档 <code>website-docs/01-getting-started/02-installation.md</code> 与 <code>docs/LITE.md</code> · GitHub API 与 Docker Hub API（2026-09-30 查）</p>
+      <p class="subtitle"><b>证据标记</b>：<span class="ok">✅ 实测</span>（本机跑出来的）· <span class="half">📄 源码／文档</span>（读仓库与官方文档）· <b>🤔 判断</b>（我的分析）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+      <p class="muted">复习先读这一部分：平台为什么这么定、代码里已经核到什么、实验按什么跑。要复原现场（报错原文、镜像体积、时间线）跳到 <a href="#scene">第二部分 · 现场细节</a>。</p>
+
+      <h3 style="margin-top:16px;">0. 这篇要解决什么</h3>
+      <p>0036 把 LLM-Wiki 读通之后，§6 留下三组待验；其中 <b>6.1 知识编译最前提、也最含糊</b>——论文没给编译提示词、没写选页机制、没有命名合并规则。所以第一步不是马上跑实验，而是先回答三个前置问题：<b>在哪个平台上测？那个平台到底能测到什么？实验怎么设计才算能对账？</b></p>
+
+      <h3>1. 平台定案：WeKnora 标准版（Docker Compose），不是 Lite、也不是桌面版</h3>
+      <p><b>结论</b>：走 <b>Docker Compose 标准版</b>。理由是它把两件配套服务一起解决了——<b>Neo4j</b>（图对照臂）和 <b>Langfuse</b>（逐轮观测）都是 compose profile，一条命令就位。</p>
+
+      <p><b>决策链（四步，每步都有证据）</b>：</p>
+      <ol>
+        <li><b>先看它的 wiki 能力</b>：README 里 Auto Wiki 说"把文档里的 people／products／concepts 抽成带来源引用的页面、按目录组织，页面可编辑且可回滚"——正是 6.1 要的东西。</li>
+        <li><b>再看到底有几种装法</b>（📄 <code>website-docs/01-getting-started/02-installation.md</code>）：标准 Compose／开发模式／Helm／<b>Lite 单二进制</b>／<b>桌面应用</b>五种。文档里桌面应用那段带明确警告。</li>
+        <li><b>桌面版到底有没有包</b>：文档说"没有随 Release 提供安装包"；我去 GitHub 查了——<b>八个 Release（v0.6.1 → v0.8.2）assets 全是 0</b> ✅。所以<b>没有任何可下载的 Windows 产物</b>，"桌面版"这条到此为止。</li>
+        <li><b>那 Lite 呢</b>：Lite 是"单二进制 ＋ 浏览器 UI"（不是原生窗口），零外部依赖（SQLite FTS5 ＋ sqlite-vec ＋ 内存队列）。但它<b>没有现成包</b> ⇒ 要走这条路得自己编（Go 1.26 ＋ Windows 上的 CGO/gcc），比装 Docker 还费事。</li>
+      </ol>
+
+      <table>
+        <thead><tr><th>形态</th><th>入口</th><th>界面</th><th>配套服务</th><th>我们能不能直接用</th></tr></thead>
+        <tbody>
+          <tr><td><b>标准版</b>（选中）</td><td><code>docker compose up</code></td><td>浏览器</td><td>Neo4j／Langfuse 都是 profile</td><td class="ok">✅ 镜像齐（见下），一条命令起</td></tr>
+          <tr><td>Lite 单二进制</td><td><code>make build-lite</code></td><td>浏览器</td><td>无（Neo4j／Langfuse 要自己接）</td><td class="half">△ 要自己编（本机没 Go）；无现成包</td></tr>
+          <tr><td>桌面应用</td><td><code>cmd/desktop</code>（Wails v2）</td><td>原生窗口</td><td>无</td><td class="no">✗ <b>未发布</b>：Release 无产物，tag 触发被注释</td></tr>
+        </tbody>
+      </table>
+
+      <div class="chain">
+        <b>一条关键辨析（纠正我们自己的直觉）</b>：<b>Lite 并不是"缺能力"</b>——① 三个 wiki 服务在容器里<b>无条件注册</b>（<code>internal/container/container.go:281-283</code>：<code>NewWikiPageService</code>／<code>NewWikiIngestService</code>／<code>NewWikiLintService</code>），没有任何 edition 门控；② 部署能力清单里 Lite <b>只关了一件事</b>——<code>organizations</code>（多空间协作），理由写着 <code>not_supported_in_lite</code>；③ <b>Neo4j 与 Langfuse 都是"env 指向的外部服务"</b>（<code>NEO4J_ENABLE</code>／<code>NEO4J_URI</code>；tracing 是 OTel 客户端，"No-op when disabled"）——所以 Lite 也能接，只是要自己找齐。<br>
+        ⇒ <b>两条路的真实差别不是"功能有没有"，而是"外部服务谁提供"</b>。最终选 Docker，是因为它把 Neo4j＋Langfuse 一起打包解决了。
+      </div>
+
+      <p class="muted">镜像已核（Docker Hub，都带 <code>v0.8.2</code>）：<code>docreader</code> <b>1,507 MB</b>／<code>app</code> <b>521 MB</b>／<code>paradedb</code> <b>498 MB</b>／<code>ui</code> <b>31 MB</b>／<code>redis:7.0-alpine</code> 约 40 MB ⇒ 首次拉取<b>约 2.6 GB（压缩）</b>。⚠️ Docker Hub 的 API 能通不等于镜像层能高速下（那走 CDN），所以 Docker Desktop 里要配代理。</p>
+
+      <h4 style="margin:14px 0 4px;">1.1 部署落地（✅ 2026-09-30 当天完成）</h4>
+      <p>四件事都做完了，其中三件各踩了一个坑，都记下来：</p>
+      <table>
+        <thead><tr><th>事项</th><th>结果</th><th>踩到的坑</th></tr></thead>
+        <tbody>
+          <tr><td><b>装 Docker Desktop</b></td><td>用户级安装（<code>%LOCALAPPDATA%\Programs\DockerDesktop</code>），引擎 <b>29.8.1</b>；WSL 里 <code>docker-desktop</code> 发行版 Running</td><td>装完我这个会话的 PATH 还是旧的 ⇒ 拉取报 <code>docker-credential-desktop not found in %PATH%</code>；用户 PATH 里其实已经有了，新终端不受影响</td></tr>
+          <tr><td><b>代理：system proxy 行不行</b></td><td class="ok">✅ <b>行，实测通过</b>（不是推断）：<code>redis:7.0-alpine</code> 实拉成功，<b>25.4 s</b>；<code>docker info</code> 显示走 <code>http.docker.internal:3128</code>（Docker Desktop 把系统代理转成了自己的转发）</td><td>—</td></tr>
+          <tr><td><b>把数据盘从 C 挪到 D</b></td><td>设置键 <code>CustomWslDistroDir</code> → <code>D:\lida-data\DockerData\DockerDesktopWSL</code>；C 盘可用 <b>6.8 GB → 13.9 GB</b></td><td>起因是沛东提"别搞到 C 盘"——查下来 C 盘只剩 6.8 GB，而 Docker 数据盘默认就在 C；<b>搬完验证 redis 仍在</b>（说明是迁移、不是重拉）</td></tr>
+          <tr><td><b>拉镜像 ＋ 起服务</b></td><td>五件全部就位并跑通：<code>frontend</code>(80)／<code>app</code>(8080 healthy)／<code>docreader</code>(healthy)／<code>postgres</code>(healthy)／<code>redis</code></td><td>① 首次 <code>compose pull</code> 中途 <b>EOF</b>（paradedb 的 referrers 请求被掐断）⇒ 重试即好，已下载层保留；② 首次 <code>up -d</code> 时 app 还在健康检查的 <code>starting</code> 期就被判 <i>dependency failed</i>、frontend 没起 ⇒ 等 45 s 转 healthy 后再 <code>up -d</code> 即补齐</td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>体积实测</b>：解包后 <code>docreader</code> <b>5.69 GB</b>／<code>app</code> <b>2.43 GB</b>／<code>paradedb</code> <b>2.40 GB</b>／<code>ui</code> <b>118 MB</b>／<code>redis</code> 49 MB ⇒ 合计约 <b>10.7 GB</b>，数据盘 11.95 GB（<b>远大于 2.6 GB 的压缩体积</b>，所以"先搬盘再拉"这个顺序是对的）。<b>本轮未起</b>：<code>langfuse</code> profile（留到 6.3 检索实验）与 <code>neo4j</code>（对照臂）。</p>
+      <p class="muted"><b>.env 写了什么</b>（不记值）：<code>WEKNORA_VERSION=v0.8.2</code>（锁版本）· <code>DB_PASSWORD</code>／<code>REDIS_PASSWORD</code> 随机化 · <code>JWT_SECRET</code> <b>64 位</b>hex（<code>rand -hex 32</code> 等价）· <code>SYSTEM_AES_KEY</code> <b>32 位</b>hex（<code>rand -hex 16</code> 等价）· 其余用模板默认（<code>GIN_MODE=release</code>、<code>TZ=Asia/Shanghai</code>、<code>RETRIEVE_DRIVER=postgres</code>）。</p>
+
+      <h3>2. 代码盘点：已读 3 点（其余 4 点待读）</h3>
+
+      <h4 style="margin:14px 0 4px;">2.1 纠错：两条通路 ＋ 缺的那一环（修正 0036 §6.0）</h4>
+      <p>0036 §6.0 原来写的是"6.2 只能验人工兜底那半，<b>没有 Error Book</b>"——<b>错了</b>。源码里有两套东西：</p>
+      <table>
+        <thead><tr><th>通路</th><th>它管什么</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td><b>确定性体检 ＋ 自动修复</b></td><td>六类：<code>broken_link</code>／<code>stale_ref</code>／<code>empty_content</code>／<code>orphan_page</code>／<code>missing_cross_ref</code>／<code>duplicate_slug</code>；带严重度、能否自动修、<b>HealthScore（0–100）</b></td><td>📄 <code>wiki_lint.go</code>（类型定义 :14、<code>RunLint</code> :94、<code>AutoFix</code> :346）</td></tr>
+          <tr><td><b>Agent 问题台账</b></td><td>四类内容问题：<code>mixed_entities</code>／<code>contradictory_facts</code>／<code>out_of_date</code>／<code>other</code>，带 slug＋描述＋<b>可疑源 id</b>，状态 <code>pending → resolved/ignored</code></td><td>📄 <code>agent/tools/wiki_flag_issue.go</code>；<code>wiki_page.go:1355/1367/1372</code></td></tr>
+        </tbody>
+      </table>
+      <p><b>AutoFix 的三种做法值得单独记</b>（它暴露了取舍）：破链 → 把 <code>[[slug]]</code> <b>降级成纯文本</b>（保留文字、拆掉链接，不补页）；空页（&lt;50 字符）→ <b>归档</b>，不删；失效引用 → 剥掉那个 <code>source_ref</code>，<b>若该页再无活源就直接删页</b>——注释里写了理由：*"留下孤儿摘要页更糟，模型还会链它、<code>wiki_read_source_doc</code> 的下钻永远失败"*。</p>
+      <p><b>缺的那一环</b>：<b>把反复犯的错沉淀成约束、回灌下一轮编译</b>（论文 Error Book 的签名动作）。grep 过：编译路径 <code>wiki_ingest*.go</code> <b>不读</b> issue 表，提示词里也没有 issue 相关内容。</p>
+
+      <h4 id="sec-22" style="margin:14px 0 4px;">2.2 目录／视角："批次级一次规划"（第三种形态）</h4>
+      <p>📄 <code>wiki_ingest_taxonomy.go</code> 的 <code>planBatchTaxonomy</code>（:32）：整批页面<b>一次</b>规划分类（大批次分块），先取知识库<b>已有目录路径当锚</b>（<code>ListDistinctCategoryPaths</code>），更深的候选目录用<b>嵌入相似度 topK</b> 挑（<code>selectRelevantFolders</code> :149、<code>selectFoldersByVectors</code> :217），且<b>只补空缺</b>——已有分类的页不再改。</p>
+      <div class="chain">
+        代码注释直接交代了它替换掉的旧做法：<i>"per-page, parallel CATEGORY invention — which couldn't converge, worst of all on the founding batch when the KB has no folders to anchor on."</i>（每页各自发明分类，收敛不了；首次批次没有目录可锚时最惨）<br>
+        ⇒ 这正好呼应我们在 GraphRAG 那边踩过的"<b>视角不可复现</b>"问题。所以到目前为止，视角形态已有三种：<b>算法常数</b>（GraphRAG 的 <code>max_cluster_size</code>）、<b>人写的 schema</b>（Karpathy）、<b>批次规划 ＋ 已有目录锚定 ＋ 嵌入召回</b>（WeKnora）。
+      </div>
+
+      <h4 style="margin:14px 0 4px;">2.3 记账：不必依赖 Langfuse，它本来就落库</h4>
+      <p>📄 两处证据：<code>migrations/versioned/000085_message_usage.up.sql</code>（<code>ALTER TABLE messages ADD COLUMN usage JSONB</code>）与 <code>migrations/sqlite/000012_message_usage.up.sql</code>（注释：*"per-turn LLM token usage persisted with the assistant message"*）；<code>types/message.go:404</code> 的字段注释是 *"aggregated across every round of the turn"*，<code>types/chat.go</code> 里除 prompt／completion／total 还有 <b><code>CacheReadTokens</code></b>（能算缓存命中率）。</p>
+      <p>⇒ 对 6.3 那个"它凭什么比稠密检索不慢"的问题，<b>逐轮记账可以直接读库对账</b>，比看 Langfuse 界面更适合做统计（可导出、可跑脚本）；Langfuse 是补充视图，不是必需品。</p>
+
+      <h3>3. 实验设计（按 0036 §6.1 的三问排）</h3>
+      <table>
+        <thead><tr><th>轮次</th><th>动作</th><th>记什么（判据）</th></tr></thead>
+        <tbody>
+          <tr><td><b>一 · 看产物形状</b>（最小代价）</td><td>语料先用 <b>A5</b>（Anthropic 那篇，单文件 8.0k token）——与 GraphRAG 首轮看形状用的是同一份，<b>产物可对照</b>；建 wiki 型知识库 → 上传 → 等编译 → 导出 wiki</td><td>页面数 · 页面类型分布 · 每页长度（中位／P90）· 目录层数与每层条数 · 链接数与密度 · <b>悬空链接数（链接目标 ∖ 页面集合）</b> · 每源触及页数（对照 Karpathy 说的 10–15 页）· 有源引用的页占比 · token 与耗时。<br><b>只回答一句</b>：<b>粒度是谁定的？</b>（算法常数？配置？提示词？还是模型自由发挥）</td></tr>
+          <tr><td><b>二 · 视角选择</b></td><td>找到配置点，改一次"抽什么／怎么分目录"，同语料重编；<b>另外同配置再跑 2–3 遍</b>当抖动基线</td><td>页面集合差（新增／消失／改名）· 目录差 · 链接差。判据 ＝ <b>"随视角可控地变"还是"只有随机漂移"</b>（没有抖动基线就分不出这两者——这是 GraphRAG 那轮的教训）</td></tr>
+          <tr><td><b>三 · 增量 ＋ 删除</b>（合一轮）</td><td>加 1 篇同主题源 → 看 diff；再删 1 篇源 → 看善后</td><td><b>增量</b>：新增几页／改写几页／目录是否重排／链接是否更新 ⇒ 判"改动面与新增材料量成不成比例"（局部性）。<br><b>删除</b>：判据现成——直接读 <code>RunLint</code> 的 <code>broken_link</code>／<code>orphan_page</code>／<code>stale_ref</code>；<b>要验的是它那个取舍对不对</b>（剥引用；失去全部活源就删页），以及"知识作废 vs 来源撤回"能不能分开</td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>记录纪律</b>（沿用老规矩）：产物每轮导出留档（不然没法对账）· 每轮记 token 与耗时 · 语料用真名＋链接不用代号 · 每轮的原始输出与命令留档。</p>
+      <p><b>对第二轮的实验含义（重要）</b>：既然 granularity 是<b>详细度</b>旋钮，它测的就不是"领域适配"。所以拆成两组独立对照：</p>
+      <table>
+        <thead><tr><th>组</th><th>只动什么</th><th>看什么</th></tr></thead>
+        <tbody>
+          <tr><td><b>A 粒度敏感性</b></td><td><code>extraction_granularity</code> 三档（focused／standard／exhaustive）</td><td>候选数／页面数／压缩比是否<b>单调</b>变化；lint 噪声是否跟着涨</td></tr>
+          <tr><td><b>B 视角可控性</b></td><td>只改 <code>extraction_instructions</code>（给一个领域视角）</td><td>页面集合与目录是否<b>随视角可控地变</b>，还是只有抖动（必须配"同配置多跑几遍"的抖动基线）；<b>且改完必须触发重新解析</b></td></tr>
+        </tbody>
+      </table>
+      <p class="muted">B 组才是"领域押注"在 WeKnora 里的等价实验；A 组只是"同一视角下详细度的变化"。这也修正了我最初把两者混为一谈的想法。</p>
+
+      <h4 style="margin:14px 0 4px;">3.1 第一轮实测：A5 的产物形状（✅ 2026-10-07 完成）</h4>
+      <p><b>输入</b>：A5 原文（HTML）经<b>项目自己的抽取器</b>转成 Markdown —— 15 节、<b>28,956 字符</b>（≈7.2k token），与 GraphRAG 线记的 8.0k token 同源可比。经「手工知识」接口投喂（HTML 不在 WeKnora 接受的文件类型里，报 <code>unsupported file type</code>）。</p>
+      <table>
+        <thead><tr><th>指标</th><th>实测值</th><th>怎么读</th></tr></thead>
+        <tbody>
+          <tr><td><b>页面数</b></td><td><b>45</b>＝concept 25 ＋ entity 18 ＋ summary 1 ＋ <b>index 1</b></td><td>Karpathy 说"一个源可触及 10–15 页"——单篇就长出 45 页，<b>远超</b>；而且有独立的 <code>index</code> 页</td></tr>
+          <tr><td><b>页面长度</b></td><td>p50 <b>480</b> 字符 · p90 <b>2,318</b> · max 4,711 · 合计 44,629</td><td>p90 是 p50 的 <b>4.8 倍</b> ⇒ 粒度<b>不是常数</b>，由 LLM 自由发挥（对照 GraphRAG 是 <code>max_cluster_size</code> 这种算法常数）</td></tr>
+          <tr><td><b>压缩比</b></td><td><b>154%</b>（44,629 ÷ 28,956）<span class="muted">——口径与更多数据点见 §3.8 ①-补</span></td><td>⚠️ <b>比原文还长</b>——小语料上"编译"不是压缩而是膨胀，与 GraphRAG 那条线在小语料上的 126% 同向</td></tr>
+          <tr><td><b>链接</b></td><td><b>251 条边</b> / 45 节点 · <b>悬空边 0</b></td><td>对比论文的悬空链接占 29.1–63.8% ⇒ 这份产物结构是干净的（但见下"missing_cross_ref"）</td></tr>
+          <tr><td><b>目录</b></td><td><b>5 个一级目录</b>（产品／代理安全／技术／标准／组织）· 页面路径 3 层（如 <code>concept/代理安全/安全概念/纵深防御</code>）</td><td>单篇就自造出一棵 3 层树 ⇒ 与"批次级一次规划"的代码注释一致</td></tr>
+          <tr><td><b>语言</b></td><td><b>45/45 页是中文</b>（源文英文）</td><td>摘要、页面、索引页全中文——与 GraphRAG 线的默认报告语言一致，但<b>要记：语言是系统默认给的，不是我们指定的</b></td></tr>
+          <tr><td><b>源引用</b></td><td>44/45 页带 <code>source_refs</code>（p50＝1）</td><td>页面能回锚到源文档</td></tr>
+          <tr><td><b>耗时</b></td><td><b>88 秒</b>（14:01:28 入库 → 14:02:56 完成；45 页集中在最后 <b>18 秒</b>落库）</td><td>含解析＋中文摘要＋嵌入＋wiki 编译全流程</td></tr>
+          <tr><td><b>lint</b></td><td>health_score <b>100</b>；20 个问题＝<code>orphan_page</code> 8（warning）＋ <code>missing_cross_ref</code> 12（info）；<b>0 error、0 可自动修</b></td><td>第一次调用就把 6.2 的结论端出来了；但 health_score 满分与 8 个孤儿页<b>并存</b>，评分口径要看</td></tr>
+          <tr><td><b>问题台账</b></td><td>空（0 条）</td><td>那 20 个 lint 问题<b>不进</b> <code>wiki/issues</code>——两套机制是分开的（lint 自动体检 vs 人/Agent 报的问题）</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>两个必须记的对账问题</b>（都是"同一件事、不同字段给出不同答案"）：<br>
+        · <b>"孤儿页"三个数打架</b>：<code>stats.orphan_count = 0</code> ／ <code>lint.orphan_page = 8</code> ／ 图上入度为 0 的节点 = <b>9</b>。差的 1 个是 <code>index</code> 页（lint 代码里明确排除它）——所以 lint 与图<b>对得上</b>（lint ⊆ 图），而 <b>stats 那个 0 是错的（或口径完全不同）</b>。这正是我们那条"<b>对账优先于读数</b>"的又一个实例：同一个系统里，三个字段对同一件事给出三个答案。<br>
+        · <b>编译的 token 成本不落库</b>：DB 里带 token 列的表只有 <code>messages.usage</code>（聊天每轮）、<code>message_suggestion_sets</code>、<code>temporary_documents.token_count</code>；<b>wiki 编译的 LLM 调用不写 token 记账</b>。⇒ 要量编译成本，只能：开 <code>langfuse</code> profile 重跑 ／ 用平台的用量后台 ／ 开 <code>LLM_DEBUG_LOG</code> 自己数。
+      </div>
+      <p class="muted"><b>另外两条要留到后面轮的观察</b>：① <code>wiki_page_revisions</code> 现在<b>只有 1 条记录</b>（<code>edit_source=pipeline</code>）——首次编译并不逐页写修订，所以"增量改动了哪些页"能不能靠修订表对账，<b>还没验</b>；② 索引页只有 186 字符（"本索引页汇总 wiki 中的全部页面…"），真正的清单靠 <code>wiki/index</code> 接口按类型动态分组——<b>与 Karpathy 那个"每页一行链接"的 <code>index.md</code> 不是一回事</b>。</p>
+
+      <h4 id="sec-32" style="margin:14px 0 4px;">3.2 一次 ingest 到底发生了什么（📄 源码级，2026-10-08）</h4>
+      <p>沛东问"这些东西到底是怎么提取出来的"，于是把编译链路读了一遍。答案是 <b>Map/Reduce 两段 ＋ 八个提示词</b>；而且每一次 LLM 调用都带 <code>purpose=</code> 标签记在日志里，可以逐项对账。<span class="muted">表里每行末尾的"→"可跳到对应的细读章节（没写的会标"细读待做"）。</span></p>
+      <table>
+        <thead><tr><th>阶段</th><th>提示词 / 代码</th><th>它产出什么</th><th>A5 实测</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="4"><b>Map</b><br>（每篇文档）</td><td><code>WikiCandidateSlugPrompt</code><br><span class="muted">wiki_ingest_cite.go:97</span><br><span class="muted">→ <a href="#sec-33">§3.3 细读</a>｜<a href="#sec-76">§7.6 提示词原文</a>｜<a href="#sec-77">§7.7 切块与重建</a></span></td><td><b>轻量候选集</b>：<code>entities[]</code> ＋ <code>concepts[]</code>，每条带 <code>name</code>／<code>slug</code>（<code>entity/…</code>、<code>concept/…</code>）／<code>aliases</code>／<b><code>description</code>（一句话，进索引那一行）</b>／<code>details</code>（引用失败时的兜底）。带<b>粒度档位</b>与"复用旧 slug"的连续性规则</td><td>1 次<br>10,392 tok</td></tr>
+          <tr><td><code>WikiDeduplicationPrompt</code><br><span class="muted">wiki_ingest.go:2555</span><br><span class="muted">→ <a href="#sec-34">§3.4 细读</a></span></td><td>新条目 vs 已有页面：判<b>是不是同一个真实事物</b> ⇒ 合并</td><td class="ok">0 次<br><span class="muted">空库／同一批进多篇</span></td></tr>
+          <tr><td><code>WikiChunkCitationPrompt</code><br><span class="muted">wiki_ingest_cite.go:284</span><br><span class="muted">→ <a href="#sec-35">§3.5 细读</a>｜<a href="#sec-78">§7.8 提示词原文</a></span></td><td><b>给每个候选找"哪些原文块在讲它"</b>（分批跑）。代码注释写明用意：<i>"keeps per-slug 'facts' in their <b>verbatim form (the chunk text)</b> instead of asking the LLM to paraphrase"</i> ⇒ <b>页面正文的素材是原文块，不是 LLM 转述</b></td><td>3 次<br>16,267 tok</td></tr>
+          <tr><td><code>WikiSummaryPrompt</code><br><span class="muted">wiki_ingest_batch.go:1355</span><br><span class="muted">→ <a href="#sec-36">§3.6 细读</a>｜<a href="#sec-710">§7.10 提示词原文</a></span></td><td>该文档的 <b>summary 页</b>。注：<b>故意不传文件名/标题</b>（注释：扫描件叫 <code>MX5280.pdf</code> 这种名字会诱发幻觉摘要）</td><td>1 次<br>9,323 tok</td></tr>
+          <tr><td rowspan="4"><b>Reduce</b><br>（跨文档：规划／写页／收尾）</td><td><code>WikiTaxonomyPlanPrompt</code><br><span class="muted">wiki_ingest_taxonomy.go:83</span><br><span class="muted">→ <a href="#sec-37">§3.7 细读</a>｜<a href="#sec-22">§2.2 概览</a></span></td><td><b>目录规划</b>（批级、reduce 写页之前）：一次给整批条目分目录，只套用到还没有目录的页</td><td>1 次<br>3,417 tok</td></tr>
+          <tr><td><code>WikiPageModifySystemPrompt</code> 等<br><span class="muted">wiki_ingest.go:2692</span><br><span class="muted">→ <a href="#sec-38">§3.8 细读</a>（system／user／续写三个提示词原文都在那里）</span></td><td><b>为每个条目写／更新页面正文</b>（把新增并进去；被删文档的独有贡献要移除）</td><td class="no"><b>43 次</b><br><b>197,696 tok</b></td></tr>
+          <tr><td><code>linkifyContent</code><br><span class="muted">wiki_linkify.go:35</span><br><span class="muted">→ <a href="#sec-39">§3.9 细读</a>｜见本节下文"三个容易混淆的同名物"</span></td><td><b>确定性</b>注入 <code>[[slug|文字]]</code>（不是 LLM 干的）⇒ 链接图</td><td>0 tok</td></tr>
+          <tr><td><code>WikiIndexIntroPrompt</code><br><span class="muted">wiki_ingest.go:2262</span><br><span class="muted">→ <a href="#sec-39">§3.9 细读</a></span></td><td>索引页的引言</td><td>1 次<br>344 tok</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>"批"的口径（2026-10-09 核代码）</b>：<b>一个批次 ＝ 一次 ingest 触发所认领的文档集合，默认最多 5 篇</b>（<code>wikiMaxDocsPerBatch = 5</code>；剩下的留在 <code>task_pending_ops</code> 里由后续批次接手）。由此三件事要说清：<br>
+        · <b>① Map 阶段是"每篇文档各跑一遍"</b>（抽候选／去重／引用／summary），多篇之间<b>并发</b>（默认 10）；<br>
+        · <b>② Reduce 才跨文档</b>：按 slug 分组，同一批里多篇文档命中的同一个 slug 会合成一条链、一起喂给<b>一次</b>写页调用——<b>这就是"多源页"的来历</b>；<br>
+        · <b>③ 目录规划是批级的</b>：它拿的是<b>整批</b>（≤5 篇文档）的全部新条目，既不是一篇文档的条目，也不是全库。<br>
+        ⇒ 所以"空库投第一篇"与"空库投第一批"是两件事——但<b>差别不在"会不会有多源页"（两条路都会），而在"多源是怎么来的"</b>：<b>同批</b>＝两篇文档的 update 落同一个 slug，reduce <b>只写一次</b>页、两份素材一起喂 ⇒ <b>出生即多源</b>（P6＋P7 那批 4 页如此）；<b>分两批</b>＝第一篇先建出单源页，第二篇走"去重／复用 slug"命中已有页、再把 addition 并进去 ⇒ <b>单源页长成多源页</b>，代价是<b>整页被重写一次（version ＋1）</b>（探针实测：<code>concept/rag</code> 的 <code>source_refs</code> 1→2→3，每投一次重写一遍）。⇒ 终点一样，<b>成本与痕迹不一样</b>：同批是"一次合成"，分批是"反复重写"。<span class="muted">（2026-10-09 沛东指出原措辞"才有 4 个多源页"不成立——多源页不是同批专属。）</span><br>
+        ℹ️ <b>顺带一个"旋钮白给"的默认组合（2026-10-09 核；<span class="muted">沛东判定不影响功能效果 ⇒ 仅记录、不提 issue</span>）</b>：Map 的 errgroup 上限是 <code>IngestMapParallelOrDefault(10)</code>，但一批最多 5 篇、<b>每个 map 任务就是一篇文档</b> ⇒ <b>默认下这个 10 永不生效</b>，单批有效并发＝批大小（5）；而 errgroup 是<b>每批新建</b>的，所以"4 个并发批次"也不会把 10 叠成生效。<b>真正的 LLM 在飞峰值来自另一层</b>：<code>mapOneDocument</code> 里 <code>wg.Add(2)</code> 让<b>摘要 ∥ 引用匹配</b>两路并行 ⇒ 5 篇 × 2 ≈ 10 个调用。<b>Reduce 的 10 倒是常用</b>（按 slug 并发：P6＋P7 那批 87 个 slug／<code>reduce_par=10</code>）。⇒ 想让 Map 那个旋钮生效，得同时把 <code>IngestBatchSize</code> 提到 &gt;10（代码注释本来就是给 4 万文档级 KB"一起往上拧"用的）。<b>结论：只是默认值没对齐，功能与效果不受影响</b>（并发自然被批大小兜住）——<b>不提 issue</b>。<br>
+        <b>再往下一层：批大小贯穿 Map 与 Reduce（2026-10-09 核，沛东追问"5 篇只在 map 生效还是贯穿 reduce"）</b>——<code>slugUpdates</code> 是 <code>ProcessWikiIngest</code> 的<b>局部变量</b>（<code>wiki_ingest_batch.go:436</code>），只被<b>本批</b> ops 的 map 结果填充（撤回 <code>:509</code>／新增 <code>:550</code>）；map 收敛后（<code>eg.Wait() :579</code>）在<b>同一个函数</b>里做身份重映射（<code>:584</code>）、规划目录（<code>:591</code>），<b>reduce 遍历的就是这份本批的 <code>slugUpdates</code></b>（<code>:641</code>）。跨批的同一个 slug 只靠 per-slug 锁<b>串行化、不合并</b>（<code>:651-657</code>，注释原话 <i>"Serialize same-slug read-modify-write <b>across concurrent batches</b>"</i>）⇒ <b>同一个 slug 落在两个批次里就会被写两次，第二次是整页改写</b>（实测单价：新建 ≈3,538 token/次、同批合成 ≈4,860、改写已有页 ≈5,925）。<br>
+        <b>而"分批"是时间决定的，不是用户显式选的</b>：<code>wikiIngestDelay = 30s</code>（注释 <i>"Debounces rapid uploads"</i>）——文档入库后等 30 秒才触发批次任务，<b>窗口内的上传攒成一批</b>；<code>wikiFollowUpDelay = 5s</code> 是收尾批的轻去抖；<b>而 <code>wikiFinalizeDelay = 20s</code> 让 finalize 跨批合并</b>（同一 KB 的多批 ingest 合成<b>一次</b>索引重建）⇒ <b>只有"写页"是每批一次，链接注入与索引重建已经被摊薄</b>。实测印证：P6、P7 连续上传 ⇒ 同批（才有 4 个多源页）；隔 1.5 小时再传 A4 ⇒ 独立成批（+22 页、0 合并）。<br>
+        <b>⇒ 省成本的三层杠杆（顺序很重要）</b>：① <b>让会共享 slug 的文档落进同一个 30 秒窗口</b>（连续/批量上传，这是用户直接可控的一层，也最有效）→ ② <b>让窗口内的文档数 ≤ <code>IngestBatchSize</code></b>（否则被切批；所以"把 5 调大"的真实用途是"窗口里一次塞进 >5 篇同域文档时别被切掉"）→ ③ <code>IngestMapParallel ≥ 批大小</code>（默认 10）。反过来：<b>5 篇同域文档一次性连续上传，默认配置就已经把它们放进同一批了，不用调任何参数</b>。
+      </div>
+      <div class="chain">
+        <b>成本构成（A5 实测：51 次调用 / 239,912 token）</b>：<b><code>wiki_page_modify</code> 一个目的就吃掉 43 次调用、197,696 token ≈ 82%</b>——因为<b>每个条目都要一次 LLM 调用</b>（43 次 ↔ 25 concept ＋ 18 entity ＝ 界面上看到的"43 个知识"）。其余：chunk_citation 3 次 16,267 ／ candidate_slug 1 次 10,392 ／ summary 9,323 ／ taxonomy 3,417 ／ index_intro 344 ／ document_summary 2,473（后者属于 KB 的文档摘要，<b>不算 wiki</b>）。<br>
+        耗时：<code>wiki ingest stats: elapsed=49.288s pages(total=44)</code> ＋ <code>wiki finalize: elapsed=2.109s rows=45 affected_slugs=44 index_rebuilt=true</code>。
+      </div>
+      <p><b>层级目录怎么来的</b>（📎 <code>WikiTaxonomyPlanPrompt</code> 原文要点）：<b>一次给整批分配路径</b>——"an array of folder labels from broad to narrow (<b>at most 2 levels</b>)"；<b>复用已有目录要逐字相同</b>（不许造同义目录）；判据是"<b>这个条目本质上是什么</b>（图书馆里它永远住哪个书架）"，不是"它在这篇文章里扮演什么角色"；不许拿 item type（entity/concept）当目录名；每个 slug 必须出现<b>恰好一次</b>；标签语言跟随目标语言。代码侧（<code>wiki_ingest_taxonomy.go</code>）：批次级一次规划 ＋ 已有目录池锚定 ＋ <b>嵌入相似度 topK</b> 挑相关目录 ＋ 只补空缺——注释直说这是替换掉"per-page, parallel CATEGORY invention"（收敛不了）的旧做法。</p>
+      <p><b>三个容易混淆的"同名物"</b>：<br>
+      · <b>两个"摘要"</b>：<code>summary</code> 页（每篇文档一份，4,711 字符，<code>WikiSummaryPrompt</code>）／<code>index</code> 页的引言（186 字符，<code>WikiIndexIntroPrompt</code>）；而 KB 列表里"本文介绍…"那句画像走的是 <code>document_summary</code> 那一路，<b>不属于 wiki</b>。<br>
+      · <b>两个"图"</b>：界面里那个图谱 ＝ <b>wiki 页面链接图</b>（<code>linkifyContent</code> 的字符串匹配 ＋ 页面 outlinks/inlinks 汇总成 251 条边）；另一个是 <b>知识图谱</b>（Neo4j ＋ <code>graph_extraction.yaml</code> 抽实体关系），我们<b>没开</b>（<code>graph_enabled: false</code>）。⇒ <b>这条 wiki 管线里，"关系"不建模、只呈现</b>：页面之间只有"链／不链"，链接由<b>确定性字符串匹配</b>注入（候选＝本页已有 out-links ∪ 本批新写页标题；且<b>编辑器不能自造链接</b>——system 规则 6 只允许保留白名单内的链接、绝不 invent slug），表达的是"<b>正文里提到了</b>"，<b>没有类型、也没有语义方向</b>（存储上确有 out／in，但那是出现位置给的）；带类型的关系抽取属于另一条管线（Neo4j 图谱，默认关）。<span class="muted">（2026-10-09 补：这就是"只抽点、不抽边"的完整解释——不是遗漏，是这条管线的载体选择；另注：wiki 家族里 Semantic MediaWiki 那类实现是带类型属性的，所以"没有边"是这套实现的选择、不是 Wiki 的必然。）</span><br>
+      · <b>推论</b>：链接是"只对已存在的 slug 建链"的字符串注入 ⇒ <b>悬空链接结构上不可能出现</b>；这与论文"LLM 生成链接 → 悬空占 29.1–63.8% → 靠 Error Book 修"是<b>两条完全不同的路线</b>。</p>
+      <p class="muted"><b>一处更正（我上次说错了）</b>：§3.1 末我写过"编译的 token 成本不落库"，<b>不准确</b>——库里确实没有，但<b>日志里有逐次 usage</b>（<code>usage_log.go:19[LogUsage]</code>，带 <code>purpose=</code>、prompt/completion/cache 命中率），51 次调用可完整对账。结论改为：<b>编译成本可从容器日志对账，无需 Langfuse</b>（Langfuse 只是可视化）。⚠️ 但<b>日志易失</b>——容器一重启，之前的日志就没了（2026-10-08 实测：A5 那批 usage 已丢失）⇒ <b>跑实验前必须先让日志落盘</b>；用 §7.9 的会话脚本一键搞定（起引擎 ＋ 起服务 ＋ 快照 ＋ 跟随）。另：<code>WikiKnowledgeExtractPrompt</code>（旧的整篇抽取提示词）这次 <b>0 次调用</b>——实际生效的是 candidate ＋ citation 两段式。</p>
+
+            <h4 id="sec-33" style="margin:14px 0 4px;">3.3 阶段一细读：Pass 0 抽候选集（📄 源码级，2026-10-08）</h4>
+      <p><b>一句话</b>：这一步把<b>整篇文档</b>交给模型，问它"这份材料里有哪些值得单独建页的实体和概念"。A5 实测：<b>1 次调用</b>、prompt <b>7,179 token</b>、约 24 秒，产出 <b>43 个候选</b>——就是界面上那 43 个"知识"。提示词<b>原文与中译见 §7.6</b>；算法级细节（切块、去重叠）见 <b>§7.7</b>，这里只讲读者需要知道的。</p>
+
+      <p><b>① 它读到的"整篇文档"，是三步加工出来的——不是原文直出</b></p>
+      <ol>
+        <li><b>切块</b>（⚠️ <b>共用前置</b>：不只服务这一步，后面找引用、写正文用的都是这批块）：默认 512 字符／overlap 80／分隔符 <code>["\n\n","\n","。"]</code>；代码块、表格、公式、链接这类片段不许从中间切开。A5 被切成 <b>70 块</b>（p50＝431 字符、最长 827）：<b>短段落独立成块、不合并</b>，所以才会出现 42 字符的小块。</li>
+        <li><b>重建全文</b>：<b>不是把块拼起来就完事</b>——默认 overlap 会让同一段文字在相邻块里各出现一次，直接拼等于把重叠喂两遍。它用<b>文本级后缀匹配</b>去重叠：A5 朴素拼接 29,883 字符 → 重建 <b>28,953</b>（去掉 930）；我独立测得实际重叠 933 ⇒ <b>基本精确</b>。</li>
+        <li><b>两道闸</b>：超过 <code>32,768</code> 字符就<b>按字符硬截断</b>（<b>不看块边界</b>，可能切在词中间）——⚠️ 被截掉的后半段<b>永远不会产生候选</b>，但仍能作为证据块被引用；文本太少的整篇跳过（防"只剩图片标记时模型瞎编"）。</li>
+      </ol>
+
+      <p><b>② 一次调用里，模型看到三样东西 ＋ 一个可选追加块</b></p>
+      <table>
+        <thead><tr><th>输入</th><th>是什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>{{.Content}}</code></td><td>上面那份重建全文</td></tr>
+          <tr><td><code>{{.PreviousSlugs}}</code></td><td><b>这份文档上次产出过的 slug</b>（按 <code>source_refs</code> 反查得来），用来保持身份连续——见 ⑤</td></tr>
+          <tr><td><code>{{.Granularity}}</code> ＋ <code>{{.GranularityGuidance}}</code></td><td>粒度档位与对应指引（focused／standard／exhaustive）</td></tr>
+          <tr><td>业务指令（可选）</td><td>你在界面填的「Wiki 提取重点」：<b>渲染完成后追加</b>在提示词末尾，并配一句"不冲突才生效"压住系统规则</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>③ 它必须吐出什么</b>：两个数组 <code>entities</code>／<code>concepts</code>；每条一个<b>"身份包"</b>——<code>name</code>（名）／<code>slug</code>（地址）／<code>aliases</code>（别名，供后面生成链接与对齐身份）／<code>description</code>（<b>索引列表里那一行</b>）／<code>details</code>（引用失败时的兜底）。外加两条防幻觉（内容为空就返回空数组、不许从别处编造）与两条格式契约（语言跟随目标语言、JSON 字符串里不许有真实换行）。</p>
+
+      <p><b>④ 吐出来之后谁收拾</b>：先做<b>批内去重</b>（按 trigram 相似度从已有页面捞候选，再让模型判"是不是同一个真实事物"）；再由<b>代码兜底对齐身份</b>（即使模型没复用旧 slug，也按归一化后的名字改绑到已有 slug）；然后进入下一步——为每个候选找支撑它的原文块。</p>
+
+      <p><b>⑤ 这一步的三个"可调项／上下文"性质完全不同</b>（最容易混，单独摆开）</p>
+      <table>
+        <thead><tr><th>项</th><th>性质</th><th>注意</th></tr></thead>
+        <tbody>
+          <tr><td><b>粒度档位</b><br><code>extraction_granularity</code></td><td><b>详细度旋钮</b>：3–7 条（focused）／有独立段落或 2–3 句上下文（standard，默认）／所有具名技术概念（exhaustive）。判定标准本身跨域通用</td><td>往下走会<b>单调抬高</b>候选数、下游引用成本与索引噪声；⚠️ 但 exhaustive 的示例词清一色是技术词（libraries／databases／protocols、RAG／SSE／JWT）⇒ 它是"<b>通用框架 ＋ 技术语料味的默认值</b>"</td></tr>
+          <tr><td><b>业务指令</b><br><code>extraction_instructions</code>／<code>content_instructions</code></td><td><b>领域视角旋钮</b>：一段 ≤4000 字符的自由文本，追加到提示词末尾；<b>默认是空的</b>（我们跑 A5 时就是空＝纯系统模板）</td><td>⚠️ 界面写明"<b>修改后需重新解析才能影响已有内容</b>"——改完不触发重新解析，只会看到"毫无变化"</td></tr>
+          <tr><td><b><code>previous_slugs</code></b></td><td><b>身份账本</b>：这份文档上次产出过哪些实体/概念页</td><td>它撑起"同一实体跨文档更新不换 slug"；更关键的是让"<b>这次没再提到的条目</b>"成为可计算的 <b>stale 集合</b>（<code>old − new</code>）——<b>单源页直接删、多源页调 LLM 撤回其独有贡献</b>。没有它，增量会退化成"重造新页 ＋ 留下孤儿"</td></tr>
+        </tbody>
+      </table>
+
+      <div class="chain">
+        <b>和 GraphRAG 比，这一步真正不同的三点</b>：<br>
+        · <b>只抽"点"，不抽"边"</b>：这一步没有任何关系抽取（输出只有实体和概念）；"关系"在后面由 <code>linkifyContent</code> 做字符串匹配，<b>注入无类型链接</b>。对照 GraphRAG：实体 ＋ <b>关系（LLM 抽、带 description）</b>。而"链接后跟一句关系说明"其实是<b>论文</b>的 schema（附录 E）——这个实现里没有。<br>
+        · <b>它控制的是"详细度"，不是"领域"</b>：没有"域"、没有"实体类型表"、没有"评分口径"；页面字段里连重要度都没有（只有 depth／sort_order 这类结构字段）。领域只能靠那段自由文本指令塞。<br>
+        · <b>视角的落点不同</b>：GraphRAG 把视角压在上游（抽什么类型、什么算重要，索引期押注、不可逆）；WeKnora 放在下游（详细度／目录归类／文风，<b>改动只影响后续编译</b>）⇒ 这正是它<b>能增量更新而不用重建</b>的原因：领域假设足够薄。
+      </div>
+
+      <p class="muted"><b>顺带记两条待验</b>：① <code>WikiPage</code> 声明了 6 种 page_type（<code>summary/entity/concept/index/synthesis/comparison</code>），A5 只产出 4 种——<b><code>comparison</code>／<code>synthesis</code> 一次都没出现</b>，论文里那类"对比分析页"在实现里没落地；② <code>ChunkOverlap</code> 的迁移说明写着"库里存 0 的 KB 会在下次重建索引时吃到 80，旧向量与新向量不再逐位一致"——<b>我们这库存的就是 0</b>。</p>
+
+      <h4 id="sec-34" style="margin:14px 0 4px;">3.4 阶段二细读：去重与身份对齐（📄 源码级，2026-10-09）</h4>
+      <p><b>一句话</b>：Pass 0 抽完条目，紧接着要回答"库里是不是已经有同一条目的页"。判"同"分两层——<b>先确定性精确身份，再 LLM 语义判同</b>；命中就把 <code>item.Slug</code> <b>改写成已有页的 slug</b> ⇒ 这一轮是"并入已有页"，否则才是新建页。</p>
+
+      <p><b>① 它站在链路的哪一步</b></p>
+      <p>调用点在 <code>extractCandidateSlugs</code> 里：Pass 0 的 JSON 一解析完就调 <code>deduplicateExtractedBatch</code>（<code>wiki_ingest_cite.go:118</code>）——<b>早于引用匹配</b>。所以后面那一步看到的候选清单已经是"归并后"的身份，被合并掉的条目不再另起一页，而是直接往已有页上挂引用。</p>
+      <div class="chain">
+        完整次序（2026-10-09 核代码）：<b>Pass 0</b> → <b>去重／身份对齐</b> → <b>引用匹配</b>（∥ summary 页）→ 回填 <code>SourceChunks</code> → 构造 updates → 批级 <code>remapSlugUpdatesByIdentity</code> → <b>目录规划</b> → <b>reduce 逐 slug 写页</b> → linkify → finalize。
+      </div>
+
+      <p><b>② 第一层：确定性精确身份（不花 LLM）</b></p>
+      <ul>
+        <li><b>归一化标题完全相同 ⇒ 视为同一条目</b>：<code>normalizeWikiIdentityTitle</code> 只去空白 ＋ 折大小写，<b>保留标点</b>（注释举例："寓言"与"《寓言》"可能是概念与作品，必须可分）——目的是关掉模型格式漂移（<code>"Acme Corp"</code> vs <code>"acme  corp"</code>）。</li>
+        <li><b>同类优先，同类没有则跨类型复用</b>：<code>exactIdentityTarget</code> 先找同类型页；找不到就复用<b>跨类型同标题</b>页——因为模型的类型判断会漂（同一事物这次判 concept、下次判 entity，代码注释点名 issue #3526），复用已有页才不会长出"只差类型前缀"的孪生页。这就是官方文档说的"同名跨类型复用"。</li>
+        <li>这一层命中的条目标为 <code>authoritative</code> ⇒ <b>直接跳过下面的 LLM 判同</b>（<code>stabilizeExtractedIdentities :409-411</code>）。</li>
+      </ul>
+
+      <p><b>③ 第二层：trigram 预筛 ＋ LLM 判同</b></p>
+      <ul>
+        <li><b>预筛走 pg_trgm</b>：每个条目按"名称 ＋ 各别名"逐条调 <code>FindSimilarPages</code>，SQL 就是 <code>WHERE lower(title) % :q ORDER BY similarity(lower(title), :q) DESC LIMIT 5</code>（<code>repository/wiki_page.go:1074-1078</code>），走 <code>idx_wiki_pages_title_trgm</code>（GIN <code>gin_trgm_ops</code>，migration 000041）；命中的页按条目分别记进"它自己的候选集"（<code>itemCandidates</code>）。<br>⚠️ <b>但 SQL 的右边只有 <code>title</code></b>：查询串（新条目的 name／aliases）是"多面"的，<b>被比的对象（已有页）却只有标题</b>——已有页的 <code>aliases</code> 只是被 <code>SELECT</code> 出来给模型看的，<b>从不参与召回</b>；上面的"精确身份层"同理（<code>FindPagesByNormalizedTitles</code> 也是拿 <code>item.Name</code> 去比 <code>title</code>）。⇒ <b>别名通道只有一半：新条目侧的多面 → 已有页的单一标题。</b></li>
+        <li><b>阈值实测是 0.3</b>（本机 DB <code>SHOW pg_trgm.similarity_threshold</code> → 0.3，Postgres 默认值，代码里没改过）；<code>%</code> 就按它过滤。<b>刻度参考</b>：<code>similarity('acme corp','acme corporation') = 0.5</code>。<span class="no">仓库注释写的是"below 0.1 are dropped server-side"（<code>wiki_page.go:1046-1048</code>），与实测不符。</span></li>
+        <li>⚠️ <b>预筛是"词法"的，判同是"语义"的</b>：trigram 只认字面 3-gram 片段——提示词里那些"苹果公司 → Apple Inc."式的同义（字面相似度 0）<b>自己过不了这一关</b>，只能靠<b>"新条目侧某个 surface 恰好与某页标题字面相似"</b>这一条路——典型情况是抽取器把对译名写进了新条目的 <code>aliases</code>、而它正好等于已有页的标题（例：新条目 <code>Apple Inc.</code> 带 alias <code>苹果公司</code>，旧页标题就叫"苹果公司"）。<br>⇒ 反过来说：<b>提示词里那几类"RAG ↔ 全称""中英对译"的正确合并例子（字面相似度 0），在 live 路径里基本捞不到候选</b>——除非上述别名巧合成立；而"页有别名、新条目没有"这种方向（alias-to-name）在召回阶段<b>结构上不可能</b>。而召回不进来，后面的 per-item 校验（<code>dstSlug</code> 必须在该条目自己的候选集里）也不会放行。<b>这是这套设计的一处缝隙。</b></li>
+        <li><b>实测（2026-10-09，A5/P6+P7 真实数据）</b>：<code>concept/rag</code> 的 <code>aliases</code> 里就写着 <code>Retrieval-Augmented Generation</code>，而 live 谓词 <code>WHERE lower(title) % 'retrieval-augmented generation'</code> 在这两个库上<b>返回 0 行</b> ⇒ <b>别名在召回阶段确实不可见</b>（SQL 可复现）。<br>
+          ⚠️ <b>但两次端到端探针都没炸出孪生页</b>：本库的输出语言是中文，模型把英文探针文档也命名成"检索增强生成" ⇒ 与旧页标题<b>完全相同</b>，于是走"精确身份层"就地更新（<code>concept/rag</code> 的 <code>source_refs</code> 1→2→3、<code>version</code> 1→3；脚本 <code>probe_alias_recall.py</code>）。⇒ 这个缺口被"<b>命名一致 ＋ 精确身份层</b>"掩盖了；真会咬人的组合是<b>命名不一致且 slug 也不同</b>（跨语言、缩写/全称、模型换写法）。<b>定性：实现缺口（只影响召回／会漏合并，不会错合并）</b>——文档与旧实现都要求两侧别名参与，新实现只索引了 <code>title</code>。</li>
+        <li><b>另有一条已废弃的老路</b>（别拿它的常量当现行口径）：<code>selectDedupCandidatePages</code>——Go 侧字符 bigram Jaccard、<code>Jaccard ≥ 0.08</code> 保底、库内 ≤ 25 页直接全量喂（<code>dedupSmallCorpusBypass</code>）。它现在是"<b>只有测试在调用</b>"的死代码（<code>wiki_ingest.go:2397-2400</code> 注明 trigram 路 replaces the legacy "ListAllPages + Go-side surface-form Jaccard" path）。<span class="muted">教训同"判据必须标来源与边界"：读常量要连调用点一起看。</span></li>
+        <li><b>提示词只给"每个条目自己的候选短名单"</b>（per-item <code>&lt;candidates&gt;</code>）。注释讲了原因：把"全部新条目 × 全部候选"两张平铺列表塞进去，弱模型会把碰巧同框的两条无关 slug 配到一起；局部化之后，跨条目的错误配对在结构上就很难表达。</li>
+        <li><b>模型口径</b>：<i>related ≠ same</i>、宁可不合不可错合（原话：<i>"It is far better to have two separate pages for the same thing than to wrongly merge two different things."</i>）；名称／别名四向比对（名对名、名对别、别对名、别对别），但<b>共享缩写本身不算证据</b>。</li>
+        <li><b>程序侧兜底</b>：<code>dedupMergeRejectReason</code> 拒两类输出——目标不在<b>该条目自己的</b>候选集里（幻觉或串条目）、类型前缀不同（entity 不许并进 concept）；输出 <code>{"merges": {src: dst}}</code>，通过校验才改写 slug。</li>
+      </ul>
+      <p><b>提示词原文（<code>WikiDeduplicationPrompt</code>，<code>prompts_wiki.go:470</code>）：</b></p>
+      <pre>You are a strict deduplication system. You are given a list of newly extracted items. Each item carries its OWN short list of existing wiki pages that are surface-similar to it (its &lt;candidates&gt;). For each item, decide whether it refers to the **exact same** real-world entity or concept as ONE of its own candidates.
+
+&lt;items&gt;
+{{.Candidates}}
+&lt;/items&gt;
+
+&lt;instructions&gt;
+### How to read the input
+Each &lt;item&gt; is a newly extracted entity/concept. The &lt;candidates&gt; nested inside it are the ONLY existing pages you may merge that item into — they were pre-selected as similar to that specific item. A page listed under one item tells you NOTHING about any other item.
+
+### How to use names and aliases
+Each item and candidate page has a &lt;name&gt; and may include one or more &lt;alias&gt; values. Consider the primary name and all provided aliases on BOTH sides when deciding whether they refer to the same entity or concept.
+
+Compare name-to-name, name-to-alias, alias-to-name, and alias-to-alias. Do not reject a match solely because the primary names differ.
+
+Aliases are supporting evidence, NOT unique identifiers. A shared alias or acronym alone does not prove that two entries refer to the same thing. Do not treat related entities, related concepts, or broader/narrower concepts as aliases.
+
+### Hard constraints — a merge is only valid when ALL hold:
+- The target slug is one of the candidate &lt;page&gt; slugs listed **inside that same item**. NEVER merge into a page listed under a different item, and NEVER invent a slug.
+- The types are compatible: entities merge with entities, concepts merge with concepts. **Never merge an entity into a concept or vice versa.**
+
+### Merge criteria — ALL must be true:
+1. The new item and the candidate page refer to the **same real-world thing** (same person, same organization, same specific concept).
+2. Their names and/or provided aliases support a **name-variation match**, such as an abbreviation and its full form, a translation, a minor spelling difference, or an explicitly provided alternative name. The primary names do not need to match.
+3. The provided information does not indicate different identities, versions, or scopes. If a shared alias or acronym is ambiguous and the available information is insufficient to establish identity with high confidence, **do NOT merge**.
+
+### Examples of CORRECT merges:
+- "Acme Corp" → "Acme Corporation" (same company, abbreviation)
+- "RAG" → "Retrieval-Augmented Generation" (same concept, acronym)
+- "苹果公司" → "Apple Inc." (same entity, translation)
+- New item: name="IBM", no aliases. Candidate: name="International Business Machines", alias="IBM". Merge: the new name matches the candidate's explicitly provided acronym, and both refer to the same organization.
+- New item: name="Retrieval Augmented Generation", alias="RAG". Candidate: name="检索增强生成", alias="RAG". Merge: the names are translations of the same concept, supported by the shared alias.
+
+### Examples of INCORRECT merges — do NOT merge these:
+- New item: name="Alpha Research Center", alias="ARC". Candidate: name="Advanced Robotics Company", alias="ARC". Do NOT merge: the shared acronym does not establish that these are the same organization.
+- "Hunyuan Model" → "Qwen Model" (competing products in the same category are DIFFERENT entities, do not merge them)
+- "iPhone 15" → "Huawei Mate 60" (different specific instances in the same category)
+- "GPT-4" → "GPT-3.5" (different versions of a product are distinct entities)
+- "AI Safety" → "Content Review Mechanism" (related topics, but different concepts)
+- "Athlete Registration" → "Degree Verification" (both involve verification, but completely different domains)
+- "Competition Categories" → "Age Groups" (age groups are one aspect of categories, not the same concept)
+- "Performance Standard" → "Competition Rounds" (both relate to competitions, but are different concepts)
+- "Machine Learning" → "Neural Networks" (neural networks are a subset of ML, not the same concept)
+- "居民身份证 / Resident ID Card" → "工作居住证 / Work Residence Permit" (both are government-issued documents but completely different credentials)
+- "驾驶证 / Driver's License" → "行驶证 / Vehicle Registration" (both are car-related certificates but different documents)
+- "学位证 / Degree Certificate" → "毕业证 / Graduation Certificate" (both educational documents but distinct)
+
+### Key principle: **related ≠ same**. Two items sharing a few characters in their name, or belonging to the same domain / document family / industry, is NOT a reason to merge. **ABSOLUTELY DO NOT** merge different products, different companies, different versions, or different certificates/documents just because they belong to the same category. When in doubt, do NOT merge. It is far better to have two separate pages for the same thing than to wrongly merge two different things.
+
+Return a JSON object with a "merges" map. The key is the NEW item's slug, the value is the EXISTING page's slug that it should merge into. Only include items where you are highly confident they are the same thing.
+
+If no items match any existing pages, return: {"merges": {}}
+
+### JSON Formatting Rules
+- **CRITICAL**: Do NOT use literal newline characters inside JSON string values. If you need a newline in a string, you MUST use the escaped sequence \n.
+&lt;/instructions&gt;
+
+Output ONLY valid JSON. Example:
+{"merges": {"entity/acme-corporation": "entity/acme-corp", "concept/rag": "concept/retrieval-augmented-generation"}}</pre>
+
+      <p><b>中译：</b></p>
+      <pre>你是一个严格的去重系统。给你一批**新抽取的条目**，每个条目自带一小串"表面上与它相似的已有 wiki 页面"（即它自己的 &lt;candidates&gt;）。对每个条目，判断它是否与**它自己那串候选里的某一个**指向**同一个真实事物**（实体或概念）。
+
+&lt;items&gt;
+{{.Candidates}}
+&lt;/items&gt;
+
+&lt;instructions&gt;
+### 怎么读输入
+每个 &lt;item&gt; 是一条新抽出的实体／概念。嵌在它里面的 &lt;candidates&gt; 是**你唯一可以把该条目并进去的已有页面**——它们是针对**这一个**条目预筛出来的。挂在某条目下的页面，**不能说明任何其它条目的事**。
+
+### 名称与别名怎么用
+每个条目与候选页面都有 &lt;name&gt;，并可能带一个或多个 &lt;alias&gt;。判断两者是否同指时，要把**双方的主名与全部别名**都考虑进来。
+
+名对名、名对别、别对名、别对别都要比。**不要仅仅因为主名不同就否定匹配**。
+
+别名是**辅助证据，不是唯一标识**。共享一个别名或缩写，本身不足以证明两者同指。也不要把"相关实体／相关概念／更宽或更窄的概念"当成别名。
+
+### 硬性约束——只有全部满足，合并才有效：
+- 目标 slug 必须是**该条目自己**的候选 &lt;page&gt; 之一。**绝不允许**并入挂在别的条目下的页面，**绝不允许**编造 slug。
+- 类型必须相容：实体并入实体、概念并入概念。**绝不允许**把实体并进概念，反之亦然。
+
+### 合并判据——必须全部成立：
+1. 新条目与候选页指向**同一个真实事物**（同一个人、同一家组织、同一个具体概念）。
+2. 名称／别名支持**名称变体匹配**：缩写与全称、翻译、轻微拼写差异，或明确给出的别名。主名不必相同。
+3. 所给信息没有表明身份、版本或范围不同。若共享的别名或缩写本身有歧义、而信息又不足以高置信度确认同一性，**不要合并**。
+
+### 正确合并的例子：
+- "Acme Corp" → "Acme Corporation"（同一家公司，缩写）
+- "RAG" → "Retrieval-Augmented Generation"（同一个概念，缩写）
+- "苹果公司" → "Apple Inc."（同一实体，翻译）
+- 新条目 name="IBM" 无别名；候选 name="International Business Machines" alias="IBM"。可以合并：新条目的名字命中了候选明确给出的缩写，且两者指向同一组织。
+- 新条目 name="Retrieval Augmented Generation" alias="RAG"；候选 name="检索增强生成" alias="RAG"。可以合并：两者是同一概念的翻译，且共享别名支持这一判断。
+
+### 错误合并的例子——这些不要合并：
+- 新条目 name="Alpha Research Center" alias="ARC"；候选 name="Advanced Robotics Company" alias="ARC"。**不要合并**：共享缩写不能证明是同一家组织。
+- "Hunyuan Model" → "Qwen Model"（同品类的竞争产品是不同实体，不要合并）
+- "iPhone 15" → "Huawei Mate 60"（同品类的不同具体实例）
+- "GPT-4" → "GPT-3.5"（同一产品的不同版本是不同实体）
+- "AI Safety" → "Content Review Mechanism"（相关话题，但概念不同）
+- "Athlete Registration" → "Degree Verification"（都涉及"验证"，但领域完全不同）
+- "Competition Categories" → "Age Groups"（年龄组只是分类的一个侧面，不是同一个概念）
+- "Performance Standard" → "Competition Rounds"（都与比赛有关，但概念不同）
+- "Machine Learning" → "Neural Networks"（神经网络是机器学习的子集，不是同一概念）
+- "居民身份证" → "工作居住证"（都是政府发的证件，但是完全不同的证件）
+- "驾驶证" → "行驶证"（都与车有关，但是不同的证件）
+- "学位证" → "毕业证"（都是教育类文件，但相互不同）
+
+### 核心原则：**related ≠ same**（相关 ≠ 相同）。两条条目名字里有几个相同的字、或属于同一领域／同一批文档／同一行业，**都不是**合并的理由。**绝对不要**因为"属于同一品类"就把不同产品、不同公司、不同版本、不同证件合并到一起。拿不准时，**不要合并**：宁可让同一个事物有两个页面，也绝不要把两个不同的事物错并成一个。
+
+返回一个含 "merges" 映射的 JSON 对象。key 是**新条目**的 slug，value 是它应当并入的**已有页面** slug。只写你有高度把握是同一事物的条目。
+
+如果没有任何条目匹配到已有页面，返回：{"merges": {}}
+
+### JSON 格式规则
+- **关键**：JSON 字符串里不要出现真正的换行符。需要换行时必须用转义序列 \n。
+&lt;/instructions&gt;
+
+只输出合法 JSON。示例：
+{"merges": {"entity/acme-corporation": "entity/acme-corp", "concept/rag": "concept/retrieval-augmented-generation"}}</pre>
+
+      <p><b>④ 实测：只有"进库时库里已有页"才会花这次钱</b></p>
+      <ul>
+        <li><b>A5 首跑（空库）：没有 <code>wiki_deduplication</code> 这一项</b>——候选页为空就直接返回（§3.2 的成本清单里也没有它）。</li>
+        <li><b>P6＋P7（空库、同一批进两篇）：同样是 0 次</b>——两篇在同一个 map 阶段并发跑，而页面要等 reduce 才落库 ⇒ 那一刻库里仍然是空的（§3.10 的 102 次调用清单里没有它）。</li>
+        <li><b>A5 重解析（库里有 53 页）：1 次调用 / 1,566 token</b>（2026-10-08 20:18 日志）。</li>
+        <li>⇒ <b>这笔开销取决于"进库时库里已有多少相似页"，与本文档大小几乎无关</b>；触发条件是"预筛命中候选页"。</li>
+      </ul>
+
+      <p><b>⑤ 一个边角：引用阶段补的 slug 不过这一层</b></p>
+      <p>引用匹配自己发现的 <code>new_slugs</code> 走另一条路：<code>mergeCitationsIntoItems</code> 只按 slug 去重后 append，之后的 <code>reclaimExtractedIdentities</code> 只补"精确标题身份"那一层（<code>mergeTargets</code> 传 nil、不做语义合并）。⇒ <b>"引用阶段补 slug 不受粒度／视角控制"（见 0038 缺陷篇）与"补出来的 slug 不过语义去重"是同一通道上的两个口子。</b></p>
+
+      <p><b>⑥ 并发控制：两篇并发文档抽到"库里还没有的同一个 slug"会怎样？</b>（2026-10-09 补）</p>
+      <p>去重是<b>每篇文档各跑一遍、多篇并发</b>的（Map 阶段），所以这个场景真实存在。代码里有<b>三层</b>控制：</p>
+      <ol>
+        <li><b>身份认领（Redis，正是为这个场景设计的）</b>：key 是 <code>wiki:identity:{kbID}:{pageType}:{归一化标题}</code>，value 是认领到的 slug，<b>TTL 2 小时</b>；用一个 <b>GET-or-SET 的 Lua 脚本</b>原子地"已有的合法值获胜（并续 TTL）、否则写入提议值"（<code>authoritative=1</code> 时强制覆盖，用于精确命中已有页的场合）。注释把动机写得很直白：<i>"The existing per-slug lock cannot help when two models emit different slugs for the same title, because those reducers lock different keys. A short-lived identity claim makes both batches use the same slug before summaries and page updates are materialized."</i></li>
+        <li><b>批级再收敛</b>：map 全部结束后，<code>remapSlugUpdatesByIdentity</code> 按 (类型, 归一化标题) <b>再认领一遍并改写 slug</b>（注释：<i>"so concurrent romanizations of the same title collapse before taxonomy planning and Reduce lock by slug"</i>）——即使第 1 层里两个文档各自写了不同 slug，这一步也会把它们并到同一个 key。</li>
+        <li><b>per-slug 锁</b>：reduce 写页时 <code>withSlugLock</code>（<code>wiki:slug:{kbID}:{slug}</code>，TTL 5 分钟、最多等 2 分钟）保证同一页的读-改-写不丢更新。</li>
+      </ol>
+      <div class="chain">
+        ✅ <b>现成实证</b>：P6＋P7 是<b>两篇同批并发进空库</b>，而 <code>entity/hamel-husain</code>／<code>entity/shreya-shankar</code>／<code>concept/rag</code>／<code>concept/synthetic-data-generation</code> 这些"投喂前并不存在"的 slug，最终都是<b>一页 ＋ <code>source_refs = 2</code></b>（多源页）——正是"并发撞同一身份被收敛"的结果（否则应当看到成对孪生页）。<br>
+        ⚠️ <b>边界</b>：① 认领依赖 <b>Redis</b>（标准版）；Redis 不可用时报 warn 并退化成<b>批内本地认领</b>（<code>batchCtx.identityClaims</code> 的 <code>LoadOrStore</code>），跨批就只剩"批次串行"这个前提在兜底（Lite 模式批次是串行的）。② 认领 <b>TTL 2 小时</b>：超长批次的认领可能过期，但那通常发生在页面已落库之后，由 <code>attachExactIdentityPages</code>（DB 精确身份）兜住。③ <b>认领只认"同形标题"</b>（去空白 ＋ 折大小写、保留标点）——<b>中英对译、缩写这类"同一事物的不同叫法"不在这层保护里</b>，那要靠 trigram 召回（而它不看别名，见 0039）。
+      </div>
+
+      <h4 id="sec-35" style="margin:14px 0 4px;">3.5 阶段三细读：chunk 引用匹配（📄 源码级，2026-10-08）</h4>
+      <p><b>一句话</b>：Pass 0 决定"要建哪些页"，<b>这一步决定"每页的内容从哪几段原文来"</b>。A5 实测：70 块 → 分 <b>3 批</b> → <b>3 次调用</b>（并发上限 4）、合计 16,267 token。提示词<b>原文与中译见 §7.8</b>。</p>
+
+      <p><b>① 怎么分批</b>（📄 <code>splitChunksIntoCitationBatches</code>／<code>wiki_ingest_cite.go:151</code>）</p>
+      <ul>
+        <li>按 <code>maxRunesPerCitationBatch = 12000</code> <b>rune 预算</b>切批（注释：rune 数是 token 的快速近似）；批小到不超上下文与输出预算，大到"多数中短文档一批就够"。</li>
+        <li><b>只取文本块</b>：<code>ChunkType != text &amp;&amp; != ""</code> 的块（summary 块、图片块）<b>不参与引用</b>；按 <code>ChunkIndex</code> 保序。</li>
+        <li>单个块自己就超预算 → <b>独占一批</b>，注释写明用意：<i>"so we never silently drop content"</i>。</li>
+        <li>每块发一个<b>短句柄</b>（<code>c000</code>／<code>c001</code>…）代替 UUID，模型只吐句柄，代码再翻回真实 chunk ID。</li>
+      </ul>
+
+      <p><b>② 一次调用里，模型看到三块内容</b>（顺序是刻意的）</p>
+      <table>
+        <thead><tr><th>块</th><th>内容</th><th>为什么这个顺序</th></tr></thead>
+        <tbody>
+          <tr><td><code>&lt;instructions&gt;</code></td><td>任务规则（"实质性讨论"的定义、句柄用法、new_slugs 规则、JSON 规则）</td><td rowspan="2">代码注释：静态规则与<b>全量候选</b>放在前、本批的块放在后，这样<b>同一文档的后续批次能共享最长前缀</b>、不用重复计费</td></tr>
+          <tr><td><code>&lt;candidate_slugs&gt;</code></td><td><b>全量</b>候选清单（slug／type／name／aliases／description）——⚠️ 是整篇文档的候选，不是本批的</td></tr>
+          <tr><td><code>&lt;chunks&gt;</code></td><td><b>本批</b>的块：<code>&lt;c id="c003" index="12"&gt;…原文…&lt;/c&gt;</code></td><td>唯一逐批变化的部分</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>③ 它要吐出什么</b>：<code>citations</code>（<code>slug → [块句柄]</code>）＋ <code>new_slugs</code>（<b>次要任务</b>：本批里发现、而 Pass 0 漏掉的重要实体/概念，带 <code>source_chunks</code>）。判据是"<b>实质性讨论</b>"——注释原话：块里至少要给出<b>一条具体事实、属性、步骤、日期、数字、关系</b>或其他有用信息，<b>顺带提一句不算</b>。三条附带规则：一个块<b>可以</b>被多个候选同时引用；本批完全没讨论到的候选<b>不输出</b>（不许出现空数组）；块再长、再杂，只要能讨论到就照样引用。</p>
+
+      <p><b>④ 吐出来之后谁收拾</b></p>
+      <ol>
+        <li><b>句柄翻译</b>：<code>handles.Resolve(handle)</code> → 真实 chunk ID；<b>未知句柄丢弃并告警</b>（模型编出不存在的句柄时不会污染数据）。</li>
+        <li><b>跨批合并去重</b>：<code>slug → set(chunkID)</code>，最后<b>按 <code>ChunkIndex</code> 重排</b>回文档顺序（保证引用顺序稳定）。</li>
+        <li><code>new_slugs</code> 跨批聚合、去重后并入条目集（同一新条目在多批出现会合并成一条）。</li>
+        <li><b>回填 <code>SourceChunks</code></b> 到每个条目；<b>没被任何块引用的条目留空</b> ⇒ reduce 阶段<b>回退用 Pass 0 的 <code>description</code>/<code>details</code></b> 兜底（这就是 Pass 0 为什么要求模型顺手写 details 的原因）。</li>
+        <li>reduce 写页面时按块取<b>逐字原文</b>（<code>collectCitedChunkContent</code> 用 <code>\n\n</code> 拼接；取不到的块静默跳过）。</li>
+      </ol>
+
+      <p><b>⑤ 失败与边界</b>：单批 LLM 失败或 JSON 解析失败 → <b>只丢这一批</b>（打 warn、<b>不让兄弟批次失败</b>），代价是那批的引用缺失；并发上限 <code>maxCitationBatchConcurrency = 4</code>（注释：<i>"so a single long document can't saturate the synthesis model"</i>）；取块时会把图片的 OCR/caption <b>内联</b>（与全文重建同一套逻辑，防止图片多的文档退化成"照抄"或"整页丢掉"）。</p>
+
+      <div class="chain">
+        <b>这一步的定位：它是"引用式抽取"</b>——不让模型复述事实，而是让它<b>指认证据块</b>，正文素材＝那些块的原文。<br>
+        · 对照 GraphRAG：那边是 LLM <b>写报告</b>（转述 ＋ findings）；这边是 LLM <b>选证据</b>，事实性靠<b>结构</b>保证（页面正文取自被指认的原文），不靠事后判官。<br>
+        · 代价也随之而来：页面的素材粒度<b>被切块粒度锁住</b>（默认 ≤512 字符一块）——块切得碎，页面素材就碎；这也是 §7.7 说"切块参数是整条链路的物理粒度旋钮"的原因。<br>
+        · ✅ <b>引用关系是落库的</b>：<code>wiki_pages</code> 上有 <code>chunk_refs</code>（jsonb，页→块的 chunk UUID 数组），且随增删维护 ⇒ <b>"引用匹配准不准"可以直接从库里对账</b>，不必依赖易失的日志。<span class="no">（2026-10-09 更正：此前这里写"不落库、只能靠日志验"，是错的——见下面的"纠正与对账"。）</span>
+      </div>
+
+      <p><b>纠正与对账（2026-10-09）：页面↔块的引用其实落库了</b></p>
+      <ul>
+        <li><b>纠正</b>：<code>wiki_pages</code> 上有 <b><code>chunk_refs</code>（jsonb）</b>——就是"页 → 被引块"的 chunk UUID 数组。字段定义 <code>types/wiki_page.go:240-247</code>；写入 <code>repository/wiki_page.go:154/309</code>；增量<b>并集</b> <code>wiki_ingest_batch.go:2134</code>（<code>mergeChunkRefs</code>）；删文档时<b>剥离</b> <code>knowledge_delete.go:258</code>（<code>removeChunkRefs</code>）。<code>wiki_page.go:27</code> 的注释也点明：<i>"relationship lives in <b>WikiPage.ChunkRefs</b>, so these handles have no meaning"</i>——句柄只是临时外壳，真关系存在这里。</li>
+        <li><b>它是"设计出来的展示位"</b>：字段注释给了两个用途——<i>"surface the underlying evidence for a wiki page"</i>（块级证据清单）与 <i>"retract citations when a source document is deleted"</i>（删文档剥引用，<code>knowledge_delete.go:258</code>）。⇒ 不是遗留字段，只是前端没用它。</li>
+        <li><b>我当时为什么会写错</b>：查列名时用了 <code>Select-Object -First 20</code>，而 <code>wiki_pages</code> 按字母序排在截断线之后 ⇒ <b>把被截断的列表当成了完整列表</b>。这正是我们记过的那类失误（拿抽样/截断结果代替对账），也是"判据必须标来源与边界"的又一例。</li>
+        <li><b>对账结果</b>（A5 standard 库，脚本 <code>experiments/weknora/probe_chunk_refs.py</code>）：<b>54 页 / 52 页带引用</b>（1 页空数组、1 页 NULL）；<b>452 条引用</b>（含重复）⇒ 去重后 <b>133 个不同块</b>，该库 chunks 共 <b>142</b> ⇒ <b>覆盖率 93.7%</b>、<b>悬空引用 0</b>；每页引用数<b>中位 ≈ 2</b>（23 页正好 2 条），长尾到 <b>47</b>（<code>entity/claude-cowork</code> 47 ／ <code>concept/agent-containment</code> 44 ／ <code>entity/claude-code</code> 44 ／ <code>entity/claude</code> 44 ／ <code>concept/blast-radius</code> 22）。</li>
+        <li><b>顺带发现（第三轮要用）</b>：重解析<b>同时留下两代东西</b>——chunks <b>142 ＝ 71（10-07）＋ 71（10-08）</b>，旧批没被清；452 条引用里 <b>248 条指向第一代、204 条指向第二代</b>，而且 <b>52 页全部同时带两代引用</b> ⇒ <code>mergeChunkRefs</code> 的并集语义在重解析时<b>没有清旧代</b>。加上页数 45 → 54，整条线呈现"<b>重编译同时累积页、块、引用</b>"。</li>
+      </ul>
+
+      <p class="muted"><b>顺带两条（都影响实验方法）</b>：① 这一步的可观测字段在 <code>mapOneDocument</code> 的那行 stats 里——<code>candidates / chunks / batches / cited_chunks / uncited_slugs / new_slugs / updates / reparse_slugs / stale_slugs / pass0_fallback / elapsed</code>。<b>但日志易失</b>：Docker 容器一重启，之前的日志就没了（10-08 实测：A5 那批日志曾丢失）⇒ <b>跑实验前先用 §7.9 的会话脚本让日志落盘</b>。（不过引用质量现在<b>不必靠日志</b>了——<code>chunk_refs</code> 落库，可直接对账。）② "未被引用条目占比"（<code>uncited_slugs</code>）是个很好的质量指标——它衡量"Pass 0 抽出来、但正文里找不到证据"的比例。</p>
+
+      <p><b>实测：这一步到底补了什么（三次运行，同一份 A5）</b></p>
+      <table>
+        <thead><tr><th></th><th>standard·首跑<br><span class="muted">10-07</span></th><th><b>focused·首跑</b><br><span class="muted">10-08</span></th><th>standard·重跑<br><span class="muted">10-08</span></th></tr></thead>
+        <tbody>
+          <tr><td><b>Pass 0 抽出</b></td><td>34</td><td><b>6</b>（concept 2 ＋ entity 4）</td><td>43</td></tr>
+          <tr><td><b>引用阶段补 slug</b></td><td>+9</td><td><b>+14</b></td><td>+8</td></tr>
+          <tr><td>合并后候选</td><td>43</td><td><b>20</b></td><td>51</td></tr>
+          <tr><td>引用到的块</td><td>68／70</td><td>56／70</td><td>65／70</td></tr>
+          <tr><td>未引用条目</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>耗时</td><td>24.2 s</td><td><b>12.9 s</b></td><td>27.0 s</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>结论：补 slug 这条通道不受"粒度／领域"控制，是实现的遗漏</b>（沛东的直觉，实测坐实）。<br>
+        · <b>Pass 0 是听指令的</b>：focused 下它只抽 6 项——正好落在指引要求的"实体＋概念合计 3–7 条"；<br>
+        · <b>引用阶段不听</b>：focused 下反而补得<b>更多（+14）</b>，而且补的正是 focused 明令排除的那一类——次要主题（人在回路监督、审批疲劳）与实现细节（工具输出攻击面、持久记忆投毒、多智能体信任升级、智能体身份）；<br>
+        · <b>净效果被冲掉一半</b>：用户选了 focused，期望 7 个左右的页面，实际得到 <b>20</b> 页，其中 <b>70%（14/20）来自不听指令的那条通道</b>；页数只从 43 降到 20（−53%），而不是 −85%。<br>
+        · <b>代码侧也是这么写的</b>：<code>WikiConfig.ExtractionGranularity</code> 的注释自称 *"controls how many candidate slugs <b>Pass 0</b> extracts per document"*；引用阶段的模板数据只有 <code>{CandidateSlugs, ChunksXML, Language}</code> 三个键（§3.5②）。<br>
+        ⇒ <b>该缺陷已单独成篇</b>（<a href="0038-weknora-granularity-gap.html">0038</a>：含代码定位、复现步骤、可直接粘贴的英文 issue 草稿），待沛东有空提交上游。<br>⇒ <b>对第二轮的直接影响</b>：A 组（粒度敏感性）<b>必须同时记 <code>new_slugs</code></b>——只看"Pass 0 候选数"会得出"focused 很有效"的错结论；真正的口径是<b>合并后候选数 / 落库页数</b>。B 组同样受影响：给领域指令只改变 Pass 0 的抽取重点，<b>引用阶段仍会按自己的标准补条目</b>。
+      </div>
+      <p class="muted"><b>另一个方法学纠正</b>：不能用"重跑 vs 首跑"当抖动基线——重跑时 <code>&lt;previous_slugs&gt;</code> 里塞了 42 个既有 slug（<code>reparse_slugs=42</code>），而首跑写的是 <code>(none — this is a new document)</code>，**两次输入上下文不同**。测抖动基线要建<b>两个全新库</b>（或删库重灌）各跑一遍。</p>
+
+      <h4 id="sec-36" style="margin:14px 0 4px;">3.6 阶段四细读：summary 页（📄 源码级，2026-10-08）</h4>
+      <p><b>一句话</b>：这一步把整篇文档写成<b>一页摘要</b>——<b>每篇文档一页</b>，slug 是 <code>summary/&lt;文档ID&gt;</code>。A5 实测：<b>1 次调用</b>（prompt 6,978 ＋ completion 2,345 ＝ 9,323 token）、耗时 <b>10.9 s</b>、产物 <b>4,693 字符</b>。提示词<b>原文与中译见 §7.10</b>。</p>
+
+      <p><b>① 它在流水线里的位置：与引用匹配"并行"，不是串行的第三步</b></p>
+      <ul>
+        <li>代码注释原话：<i>"Summary and chunk classification are independent given Pass 0 output — run them in parallel."</i>——两条支路各起一个 goroutine，挂在同一个 <code>postprocess.wiki</code> span 下（A5 重跑实测：summary 10.9 s ／ classify 6.5 s ⇒ 并行墙钟 ≈ 10.9 s）。</li>
+        <li>⚠️ 由此带出一个结构性后果：<b>摘要写链接时，实体/概念页还没被写出来</b>（页面要到 reduce 阶段才生成）⇒ 摘要里的链接是"<b>预测出来的</b>"，这正是后面那套死链修补的根源（见 ④）。</li>
+      </ul>
+
+      <p><b>② 模型看到什么</b>（5 个键，📄 <code>wiki_ingest_batch.go:1355-1362</code>）</p>
+      <table>
+        <thead><tr><th>输入</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>{{.Content}}</code></td><td>与 Pass 0 同一份重建全文（A5：28,953 字符）</td></tr>
+          <tr><td><code>&lt;available_wiki_pages&gt;</code></td><td>候选清单渲染成 <code>- [[slug]] = 显示名 (Aliases: a, b)</code>（A5：43 条）</td></tr>
+          <tr><td><code>{{.Language}}</code></td><td>目标语言</td></tr>
+          <tr><td><b><code>CustomInstructions</code></b> ＋ scope <code>wiki_content</code></td><td>⚠️ <b>与引用那一步不同：摘要这一步带业务指令</b>——界面上「Wiki 内容生成要求」在这里生效</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">没有粒度指引——它不需要：一页就是一页，粒度由"文档边界"给定。</p>
+
+      <p><b>③ 它必须吐出什么</b>（📎 提示词的十条规则）</p>
+      <ul>
+        <li><b>第一行必须是</b> <code>SUMMARY: {一句话，15–40 词}</code>（这行进 wiki 索引），其后是 Markdown 摘要，结尾要有 <code>## Key Takeaways</code> 节；</li>
+        <li><b>链接规则</b>：凡提到清单里的名字或别名，<b>必须</b>写成 <code>[[slug|显示名]]</code>——不许用加粗替代、不许写裸 <code>[[slug]]</code>、不许自造 slug；</li>
+        <li><b>图片规则</b>：<code>&lt;images&gt;</code> 里的图按上下文插入，URL 当<b>不透明 token</b> 原样复现；</li>
+        <li>长度 500–1500 词、语言跟随；<b>空内容规则</b>——只回一句 <code>SUMMARY: No textual content was extractable from this document.</code>，不许编。</li>
+      </ul>
+
+      <p><b>④ 吐出来之后谁收拾</b></p>
+      <ol>
+        <li><code>splitSummaryLine</code>：切出 <code>SUMMARY:</code> 行与正文（<b>兼容全角 <code>SUMMARY：</code></b>；<b>没有前缀 → 整段当正文、摘要行回退成文档标题</b>）；正文空则正文＝整段，摘要行空则用 <code>docTitle</code> 兜底。</li>
+        <li>存成一页：slug <b><code>summary/&lt;slugify(文档ID)&gt;</code></b>、page_type <code>summary</code>。⚠️ <b>slug 故意用 UUID 不用文件名</b>——注释原话：<i>"Filename-based slugs like summary/mx5280-pdf expose the filename in cross-link contexts that downstream LLM prompts read; a UUID-based slug is uglier but hallucination-safe."</i>（与"摘要提示词不给文件名"是同一条防幻觉原则）</li>
+        <li>它还被当作<b>其它页面的共享上下文</b>：<code>DocSummary: docSummary</code> 会进 reduce 的 <code>&lt;shared_source_contexts&gt;</code>——即"摘要既是一页，也是别的页的写作背景"。</li>
+        <li><b>失败策略与引用步不同</b>：摘要调用失败 → <b>整篇文档 requeue 重试</b>（它是强制件）；而引用阶段是"单批失败只丢那批"。</li>
+        <li>专属善后 <code>sanitizeDeadSummaryLinks</code>（<b>纯文本替换、不调 LLM</b>）：把摘要里指向"写页失败"的 <code>[[slug]]</code> 尽量<b>就地治愈</b>（例如 <code>shang-hai-tower</code> → <code>shanghai-tower</code>），治不了才降成纯文本；范围只限本批的 <code>summary/&lt;uuid&gt;</code>，成本与批次规模成正比。</li>
+      </ol>
+
+      <div class="chain">
+        <b>与 GraphRAG 对照 ＋ 两个观察</b>：<br>
+        · GraphRAG 的社区报告是<b>跨文档、按社区压</b>的另一层抽象；WeKnora 的 summary 是<b>文档层</b>——<b>一份文档一页</b>，粒度由"<b>文档边界</b>"给定而不是语义给的（对应 0036 §3.1 那句"聚合体的粒度是机制给的"：这里是"文档给"）。<br>
+        · 它一物三用：<b>① 一页 wiki 页面</b>（含索引要用的 SUMMARY 行）· <b>② 索引行的来源</b> · <b>③ 其它页面的共享上下文</b>。<br>
+        · 代价是"并行换延迟"：摘要先写、页面后写 ⇒ 必然有一批链接是预测出来的，于是要有 <code>sanitizeDeadSummaryLinks</code> 这类事后修补——这也解释了为什么这套系统里<b>修链接的代码比生成链接的代码多</b>。
+      </div>
+
+      <p class="muted"><b>留到第二轮验的两点</b>：① 摘要这一步<b>吃 <code>ContentInstructions</code></b>（与引用步相反）⇒ 可以用它验证"改指令 → 内容风格变化"是否可观测；② <code>SUMMARY:</code> 行与 <code>## Key Takeaways</code> 的<b>稳定性</b>（temperature 0.3 下是否每次都吐、格式是否飘）——这是"契约遵守率"的便宜探针。</p>
+
+            <h4 id="sec-37" style="margin:14px 0 4px;">3.7 阶段五细读：目录规划 taxonomy（📄 源码级，2026-10-09）</h4>
+      <p><b>一句话</b>：给<b>整批</b>新条目<b>一次性</b>分配目录路径（最多 2 级），并<b>优先逐字复用已有目录标签</b>——不是"每页各自发明分类"。它跑在批级、<b>reduce 写页之前</b>（<code>wiki_ingest_batch.go:591-592</code>），产出先落成 <code>wiki_folders</code> 行，reduce 再按 slug 套用；<b>只套用给还没有目录的页</b>（人工摆过的不动）。</p>
+
+      <p><b>① 输入</b></p>
+      <ul>
+        <li><b>条目</b>：<code>collectTaxonomyItems(slugUpdates)</code> 取本批的 <b>entity／concept</b> slug（summary 与 retract-only 跳过），<b>按 slug 排序</b>保证分批边界稳定；每条只带 <code>slug ／ title ／ type ／ about</code>（＝Pass 0 的 <code>Description</code>，截 120 字符）。</li>
+        <li><b>已有目录池</b>：<code>ListDistinctCategoryPaths(kbID, 400)</code>（上限 <code>wikiTaxonomyFolderPoolMax=400</code>）。</li>
+      </ul>
+
+      <p><b>② 处理：先挑"给模型看的目录"，再让模型分配</b></p>
+      <ol>
+        <li><b>挑相关目录</b>（<code>selectRelevantFolders</code>）：目录数 ≤ <b>60</b>（<code>wikiTaxonomyFeedAllMaxFolders</code>）就<b>全量喂</b>——健康的目录树本来就不大，全喂复用召回最好且零嵌入成本；超过 60 才启动相似度预处理：<b>一级目录全部保留</b>当粗锚点，每个条目按 <b>嵌入余弦相似度取 top-3</b>（<code>wikiTaxonomyRelevantTopK</code>）深层目录。没有 embedding 模型、或嵌入调用失败 → 退化为"截断到 <b>150</b>"（<code>wikiTaxonomyPromptMaxPaths</code>）。</li>
+        <li><b>分批分配</b>：每次最多 <b>60</b> 个条目（<code>wikiTaxonomyPlanChunkSize</code>）；<b>前一批给出的目录会 feed-forward 进"已有目录"</b>，逼后续批次往同一棵树上靠。</li>
+        <li><b>清洗模型输出</b>（<code>CleanWikiCategoryPath</code>）：分隔符归一（<code>／</code>／<code>｜</code>／<code>|</code> → <code>/</code>）、剥掉包裹的引号括号、<b>丢掉 <code>entity</code>／<code>概念</code> 这类"类型名"标签</b>、段内去重、<b>深度硬上限 3</b>（<code>WikiCategoryMaxDepth</code>——提示词只要求 ≤2，存储层多留一层防御）。</li>
+      </ol>
+
+      <div class="chain">
+        <b>⚠️ "已有目录"到底怎么裁（本节最容易被读糊的一处，2026-10-09 补）</b><br>
+        ① <b>拉池就有上限</b>：<code>ListDistinctCategoryPaths(kbID, 400)</code> 实际是 <code>WHERE path &lt;&gt; '' ORDER BY path ASC LIMIT 400</code>——按物化路径的<b>字符串序</b>取前 400，<b>不是"一级优先"</b>。目录总数超过 400 时，靠后的<b>一级锚点也可能被截掉</b>。<br>
+        ② <b>目录数 ≤ 60：一点都不裁</b>——<code>selectRelevantFolders</code> 第一句就是 <code>if len(pool) &lt;= wikiTaxonomyFeedAllMaxFolders { return pool }</code>，整池注入。⇒ <b>我们两个库（P6＋P7 共 28 个目录／A5 约 30 个）走的都是这条，从没触发过裁剪</b>。<br>
+        ③ <b>超过 60 才裁，裁法是"一级全留 ＋ 每条目 top-3 深层"</b>：先把池拆成<b>一级目录</b>（去重后<b>全部保留</b>，当粗锚点）与<b>深层目录</b>（长度 ≥2）；再把每个深层目录的文本（<code>a / b</code>）和每个条目的文本（<code>title</code> ＋ <code>about</code> 截 120 字符）分别<b>嵌入</b>；对每个条目按<b>余弦相似度</b>排序取 <b>top-3</b>（<code>wikiTaxonomyRelevantTopK=3</code>），跨条目<b>求并集</b>（保持原始顺序，保证确定性）⇒ <code>selected = 一级目录 ＋ 并集</code> ⇒ 最后再 <code>capFolders(selected, 150)</code>。<br>
+        ⚠️ <b>降级路径与上面不一致</b>：没有 embedding 模型、或嵌入调用失败时，退化成 <code>capFolders(pool, 150)</code>——<b>直接截"原始池"的前 150 条（字符串序），没有"一级全留"保护</b>；而池本身又可能已被 400 截过。<b>⇒ 降级时锚点（尤其一级目录）可能被丢掉</b>，这是这段代码里一处不自洽的地方。<br>
+        📐 <b>注入形态不是平铺清单，是一棵缩进树</b>：<code>formatExistingTaxonomyForPrompt</code> 把路径列表建成树，子节点按名称排序，每层缩进 2 个空格，根不打印标签——所以提示词里看到的是<br>
+        <code>组织与人物</code><br>
+        <code>  人物</code><br>
+        <code>  平台与工具</code><br>
+        🔁 <b>而且"边规划边补"</b>：每批（≤60 条）算完后，这批新分配的路径会 <code>append</code> 回 <code>existing</code>，作为<b>下一批</b>的"已有目录"——所以第 2 批看到的是"原本已有 ＋ 第 1 批刚造的"，这正是分批也能收敛到同一棵树的关键。
+      </div>
+      <p><b>提示词原文</b>（<code>WikiTaxonomyPlanPrompt</code>，<code>prompts_wiki.go:10</code>）：</p>
+      <pre>You are organizing a wiki knowledge base into a navigation directory. Assign each item below to a directory path (category) so the whole set lands on ONE coherent tree.
+
+&lt;existing_folders&gt;
+{{.ExistingTaxonomy}}
+&lt;/existing_folders&gt;
+
+&lt;items&gt;
+{{.Items}}
+&lt;/items&gt;
+
+&lt;instructions&gt;
+For every item, output a category path: an array of folder labels from broad to narrow (at most 2 levels). The category classifies WHAT the item fundamentally IS (the stable library "shelf" it always sits on), never the role it plays in one document.
+
+How to choose a path for each item:
+1. If an existing folder in &lt;existing_folders&gt; fits, REUSE its EXACT label (character-for-character). Do NOT invent a synonym folder (e.g. do NOT create "春节习俗" when "春节 / 传统习俗" already fits).
+2. If NO existing folder fits, CREATE a new, broad, durable folder for it (e.g. an organization → "组织", a legal idea → "法律概念", a place → "地点"). The directory does not have to stay small — most items DO have a natural home, so coin a sensible top-level folder rather than leaving them unfiled. Group items of the SAME kind under the SAME new folder so the tree stays coherent.
+3. Only give an empty path [] when an item genuinely belongs to NO durable subject at all. This must be RARE. The absence of a matching existing folder is NOT a reason for []; create a folder instead.
+
+Other rules:
+- Group items of the SAME kind under the SAME folder at the SAME depth. Do not file one equivalent item a level deeper than its siblings (e.g. avoid "地点 / 地址 / Address1" next to "地点 / Address2" — pick one consistent depth for equivalent items).
+- Prefer a single broad top-level folder; add a second level only for a genuinely durable sub-domain shared by several items.
+- Do NOT use the item type ("entity"/"concept") as a folder. Do NOT put slashes inside a single label.
+- Every item slug in &lt;items&gt; MUST appear exactly once in the output.
+- Write ALL folder labels in {{.Language}}.
+
+### JSON Formatting Rules
+- Output ONLY valid JSON, no preamble.
+- Do NOT use literal newlines inside JSON string values.
+&lt;/instructions&gt;
+
+Output format:
+{
+  "assignments": [
+    {"slug": "entity/zhang-san", "path": ["人物"]},
+    {"slug": "concept/spring-festival", "path": ["节日", "传统节日"]}
+  ]
+}</pre>
+
+      <p><b>中译：</b></p>
+      <pre>你在把一个 wiki 知识库整理成一棵<b>导航目录树</b>。请给下面每个条目分配一条目录路径（分类），让整批条目落在<b>同一棵连贯的树</b>上。
+
+&lt;existing_folders&gt;
+{{.ExistingTaxonomy}}
+&lt;/existing_folders&gt;
+
+&lt;items&gt;
+{{.Items}}
+&lt;/items&gt;
+
+&lt;instructions&gt;
+对每个条目输出一条目录路径：一个<b>由宽到窄</b>的文件夹标签数组（<b>最多 2 级</b>）。分类要回答"<b>这个条目本质上是什么</b>"（它在图书馆里永远归哪个书架），而<b>不是</b>"它在这篇文章里扮演什么角色"。
+
+怎么给每个条目选路径：
+1. 如果 &lt;existing_folders&gt; 里有合适的文件夹，就<b>逐字复用它的标签</b>（一个字符都不要改）。**不要**造同义的新目录（例如已有"春节 / 传统习俗"时，不要再造一个"春节习俗"）。
+2. 如果没有任何已有目录合适，就为它<b>新建一个宽泛、耐用的目录</b>（例：一个组织 →"组织"；一个法律概念 →"法律概念"；一个地点 →"地点"）。目录不必保持很小——大多数条目都有天然归属，所以宁可造一个合理的顶层目录，也别让它无处可去。**同类条目放进同一个新目录**，树才连贯。
+3. 只有当某个条目<b>真的不属于任何持久主题</b>时，才给空路径 <code>[]</code>。这种情况必须**极少**。"没有匹配的已有目录"**不是**给 <code>[]</code> 的理由——去建一个目录。
+
+其它规则：
+- **同类条目放在同一个目录、同一层级**。不要把等价条目放得比它的同类深一层（例：不要把"地点 / 地址 / Address1"和"地点 / Address2"并列——等价条目选一个一致的层级）。
+- 优先只用一个宽泛的顶层目录；只有当某个二级子域<b>确实持久、且被多个条目共享</b>时才加第二层。
+- **不要**用条目类型（"entity"/"concept"）当目录名。单个标签里**不要**出现斜杠。
+- &lt;items&gt; 里每个条目的 slug 必须在输出里**恰好出现一次**。
+- 所有目录标签都用 {{.Language}} 写。
+
+### JSON 格式规则
+- 只输出合法 JSON，不要任何开场白。
+- JSON 字符串里不要出现真正的换行符。
+&lt;/instructions&gt;
+
+输出格式：
+{
+  "assignments": [
+    {"slug": "entity/zhang-san", "path": ["人物"]},
+    {"slug": "concept/spring-festival", "path": ["节日", "传统节日"]}
+  ]
+}</pre>
+
+      <p><b>③ 输出：从"路径"到"真目录"</b></p>
+      <ul>
+        <li><code>planBatchTaxonomy</code> 只回 <code>slug → 路径</code>；<code>resolvePlannedFolders</code> 再把路径<b>顺序</b>落成 <code>wiki_folders</code> 行（<code>FindOrCreateFolderPath</code>），带 <code>pathCache</code>（同一路径只解析一次）与<b>负缓存</b>（失败的路径不再逐 slug 重试），最后得到 <code>slug → folder_id</code>。</li>
+        <li><b>为什么建目录必须单线程先做</b>（注释原话）：reduce 是并发的，先在 reduce 之前把目录建好，reduce 只做"套用 id"，就不会出现两个 goroutine 抢建同一个目录。</li>
+        <li><b>只套用给还没有目录的页</b>：<code>page.FolderID == "" &amp;&amp; PlannedFolderID[slug]</code>——人工摆过的页永不被挪动。</li>
+        <li>规划或解析失败 → <b>那一批干脆不分配</b>（页面落在根），不是致命错误（<code>continue</code> + warn）。</li>
+      </ul>
+
+      <p><b>④ 工程细节</b></p>
+      <ul>
+        <li><b>空目录修剪</b>：finalize 对 retract 涉及到的目录跑 <code>PruneEmptyFolderChains</code>；但如果该 KB <b>还有未消化的 ingest 行</b>，就<b>推迟</b>——注释解释得很直白：<i>规划会先建目录、页面后写，看起来"空"的目录可能还属于在飞的批次</i>；被推迟的行留在 finalize 车道，等 ingest 排空后再删。</li>
+        <li><b>与"视角"的关系</b>：这就是 §2.2 记的<b>第三种视角形态</b>——批次级一次规划 ＋ 已有目录锚定 ＋ 嵌入 topK。注意它<b>不随用户问题切换</b>：一套目录服务所有问题。</li>
+      </ul>
+
+      <p><b>⑤ 实测（我们自己的两个库）</b></p>
+      <table>
+        <thead><tr><th>库</th><th>条目数 → 调用</th><th>目录结构</th><th>页面分布（最大的桶）</th></tr></thead>
+        <tbody>
+          <tr><td>A5 首跑（45 页）</td><td>43 → <b>1 次 / 3,417 token</b></td><td>一级 <b>5</b> 个：产品／代理安全／技术／标准／组织（＋二级若干）</td><td><code>代理安全/安全概念</code> <b>25 页</b></td></tr>
+          <tr><td>P6＋P7（86 页）</td><td>87 → <b>2 次 / 7,028 token</b></td><td>一级 <b>4</b> 个：组织与人物／评估工具／评估方法／评估概念，＋ <b>24</b> 个二级；<b>深度恰好 2</b>，没有超</td><td><code>组织与人物/平台与工具</code> <b>16 页</b>；根目录只剩 3 页（2 summary ＋ index）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">两个数字都对得上常数：<b>43 ≤ 60 ⇒ 1 次调用</b>；<b>87 &gt; 60 ⇒ 2 次调用</b>——<code>wikiTaxonomyPlanChunkSize=60</code> 的分批在真实数据上被验证了一次。</p>
+      <div class="chain">
+        ✅ <b>跨批"复用已有目录"确实生效</b>（顺手用探针验的）：P6＋P7 库里跑完约 1.5 小时后，我又投了两篇探针小文（Z1／Z2），新出的 <b>7 个概念页全部被塞进已有目录</b>（<code>评估方法/评估指标</code>、<code>评估概念/检索增强生成</code>、<code>评估概念/检索评估</code>…），<b>一级目录仍是 4 个、一个都没新增</b>。
+      </div>
+      <p class="muted">⚠️ 但也要说清它的边界：目录的收敛<b>只靠提示词要求"逐字复用已有标签"</b>，<b>没有程序侧的身份账本</b>（不像 slug 有 identity claim）。小批、同主题时很稳；跨很多批之后会不会长出"评估概念 vs 评测概念"这类同义一级目录，还没验——要验的话判据是"同一 KB 的一级目录里是否存在近义对"。</p>
+
+            <p><b>⑥ 局限与待验（🤔 判断，2026-10-09）</b></p>
+      <p><b>（a）嵌入粗筛靠不靠谱？——四个问题</b><span class="muted">（只在目录 &gt; 60 时生效；我们两个库从未触发，以下为代码推理，不是实测）</span></p>
+      <ol>
+        <li><b>硬 top-3、没有分数阈值</b>：<code>selectFoldersByVectors</code> 对每个条目只取余弦前 3、<b>不看绝对分</b>——真正的"家目录"排第 4 就静默消失。（对照：去重那一步有 <code>dedupCandidateScoreFloor</code> 兜底，<b>两处的严格度不一致</b>。）</li>
+        <li><b>per-item 信号在注入时被并集丢掉</b>：嵌入算的是"<b>每个条目各自的</b>最近 3 个"，但注入时求并集成<b>一棵全局树</b>——模型不知道"这几个是专门给第 7 条目的"。而<b>同一条链路的去重步恰恰用 per-item 短名单</b>，注释还写明理由：<i>"Presenting the model two flat lists (all new items × all candidates) invites cross-item mispairings"</i>。⇒ <b>同一个代码库里，两步的做法正好相反。</b></li>
+        <li><b>嵌入输入本身弱</b>：目录侧把路径拼成 <code>组织与人物 / 平台与工具</code>（不是自然语言），条目侧是 <code>title ＋ description 截 120 字</code>（短且可能很泛）。质量没人验过；而且<b>没有任何可观测字段</b>记录"注入了哪些目录／选中率"——<b>失败了看不见</b>，只会在几周后表现为目录漂移。</li>
+        <li><b>降级路径更弱</b>：无嵌入模型或嵌入调用失败 → 按路径<b>字符串序</b>截前 150（见上面那条 chain），<b>一级锚点也可能被切掉</b>。</li>
+      </ol>
+      <p class="muted">⇒ 结论：作为"省 token 的粗筛"方向没问题，但它现在承担的是"目录别漂移"的职责，实际只做到"大致相关"，且<b>可靠性无验证</b>。至少该补两样：一个<b>分数下限</b>、以及把 <b>per-item 最近邻</b>带进提示词（而不是合并成一棵树）。</p>
+
+      <p><b>（b）这些常数与注释＝设计者心里的规模假设（"化石"清单）</b></p>
+      <table>
+        <thead><tr><th>证据</th><th>它假设的规模</th></tr></thead>
+        <tbody>
+          <tr><td>目录池 <code>400</code> ／ 全量喂 <code>60</code> ／ 提示词上限 <code>150</code></td><td>一个"健康"的目录树 ≤ 60 个；超过就得靠粗筛，再多就截断 ⇒ <b>规划器可能看不全自己的目录树</b></td></tr>
+          <tr><td>每次规划 <code>60</code> 个条目</td><td>一批几十个新条目——史料上约等于<b>十到二十篇文档</b>的量级</td></tr>
+          <tr><td><code>maxContentForWiki = 32768</code> 字符（§3.3 ①）</td><td>单篇文档的<b>输入侧</b>上限</td></tr>
+          <tr><td>去重召回只比 <code>title</code>（见 0039）</td><td>跨批命名一漂就漏合并 ⇒ <b>页数单调累积</b>（重解析不幂等，A5 45→54 页）</td></tr>
+          <tr><td><code>injectCrossLinks</code> 注释原话</td><td><i>"At 4w-document scale … We <b>trade off some long-tail recall</b> (a brand new entity in this batch won't be linkified into pages from previous batches until they get re-edited), but <b>lint AutoFix is the right place for that</b>"</i> ⇒ <b>作者在 4 万文档量级上显式接受了"召回退化 + 事后修"</b></td></tr>
+        </tbody>
+      </table>
+
+      <div class="chain">
+        <b>（c）更准的表述：不是"有硬上限"，而是"全局结构的一致性只由 LLM ＋ 提示词维持"</b><br>
+        · 目录、页面身份、交叉链接这三样都是<b>全库共享的单一结构</b>，而它们的维护方式分别是"一次规划 ＋ 已有锚定"、"trigram 召回 ＋ LLM 判同"、"批内局部注入"——<b>没有一个全局算法在兜底</b>。<br>
+        · ⇒ 规模一大，不是"崩"，而是<b>退化成"结构漂移 ＋ lint 事后修 ＋ 人工整理"</b>（这三条兜底通道恰好都在产品层）。<br>
+        · <b>与 GraphRAG 恰成对照</b>：GraphRAG 把全局结构交给<b>算法</b>（Leiden 社区），代价是重（全量重编译、几乎不能增量），好处是"语料越大越压得动"；WeKnora 把结构交给 <b>LLM</b>、把增量做在局部，代价就是<b>规模上不去</b>。<br>
+        · ⇒ 对 <a href="0036-llmwiki-overview.html">0036</a> 那套判断的补充：<b>LLM-Wiki 的优势在检索侧</b>（LLM 自主、不需要预编译），<b>瓶颈在编译侧的全局结构</b>。要支持真正的大语料，就得把这个结构从"LLM 一次规划"换成"<b>可增量维护的算法结构</b>"——这正是 0036 §6 里"知识编译"那一格要回答的核心问题。
+      </div>
+
+<h4 id="sec-38" style="margin:14px 0 4px;">3.8 阶段六细读：reduce 写页（<code>WikiPageModify</code>，📄 源码级，2026-10-08）</h4>
+      <p><b>一句话</b>：把"<b>一个条目 ＋ 支撑它的原文块</b>"写成<b>这一页的正文</b>。它是整条流水线里<b>唯一真正写内容</b>的环节（A5 实测：<b>43 次调用、197,696 token，占整个编译的 82%</b>）。下面按<b>输入 → 处理 → 输出</b>讲业务功能，工程细节（并发、缓存、截断）放到最后 ④。</p>
+      <p class="muted">术语：下文把这一步的那次 LLM 调用叫"<b>编辑器</b>"——提示词给模型的角色就是 wiki editor（<code>WikiPageModifySystemPrompt</code> 首句：<i>"You are a wiki editor tasked with updating an existing wiki page."</i>）。代码里<b>没有</b>叫"编辑器"的模块，它就是"一页一次"的模板化调用（<code>internal/agent/prompts_wiki.go:321</code> system ＋ <code>:345</code> user 两个模板，落点是 <code>wiki_ingest_batch.go:2068</code> 的 <code>generateWithTemplate</code>）。<span class="muted">注意 "wiki editor" 这个角色名在好几个 wiki 提示词里都出现（summary、index 引言也这么开头），本文的"编辑器"<b>专指 page_modify 那一次</b>。</span></p>
+
+      <p><b>① 输入（两层：先看"谁进流程"，再看"编辑器面前摆着什么"）</b></p>
+
+      <p><b>（a）谁进流程</b>：待处理目标<b>不是全部页</b>，而是<b>本批次碰到的 slug 集合</b>（<code>slugUpdates</code> 的 key）：每篇文档 Map 出来的更新（新建或改写该页）＋ 删除类操作带来的撤回 ⇒ <b>没被本批碰到的页根本不进输入</b>，一次 ingest 不扫全库页表。<span class="muted">（reduce 之前还有一次身份归并 <code>remapSlugUpdatesByIdentity :584</code>，罗马化不同的同名 slug 会先并成一个。）</span></p>
+
+      <p><b>每个 slug 走一趟独立流程，一趟 ＝ 一次 LLM 调用</b>（<code>reduceSlugUpdates :1728</code>）；同一 slug <b>加锁串行</b>（<code>:653</code>，防两篇文档同时改写一页）；同批多篇文档命中同一 slug 时，更新合成一条链、一起喂给这一次调用（<code>contributors :1749-1783</code>）。特例：<b>summary 页不调编辑器</b>，直接整页覆写（<code>:1867-1886</code>）。</p>
+
+      <p><b>关键：判"要不要写这一页"用的是 slug 集合的成员关系，不是块</b>（<code>:1521-1585</code>）。旧页集合的来源是 <code>ListSlugsBySourceRef</code>（<code>wiki_ingest.go:2103</code>）＝"本文档此前产出过哪些页"：</p>
+      <table>
+        <thead><tr><th>情形（本文档新抽取 vs 旧页集合）</th><th>代码动作</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>新抽取<b>有</b> ＋ 旧页<b>有</b>（entity/concept）</td><td>自动补一个 <code>retract</code>（带本文档<b>上一次的摘要</b>）＋ 正常 addition</td><td>编辑器同时拿到 additions 与 retractions ⇒ <b>整页重写</b>（replace-not-append 语义）</td></tr>
+          <tr><td>新抽取<b>没有</b> ＋ 旧页<b>有</b></td><td><code>retractStale</code>（带<b>这次的正文</b>）</td><td>把本文档从该页 <code>source_refs</code> 里剥掉；单源页直接删</td></tr>
+          <tr><td>新抽取<b>有</b> ＋ 旧页<b>没有</b></td><td>只有 addition</td><td>建新页</td></tr>
+        </tbody>
+      </table>
+
+      <div class="chain">
+        ⚠️ <b>块（<code>SourceChunks</code>）全程不参与"要不要写"的判断</b>：它只做两件事——取逐字原文塞进 <code>&lt;new_information&gt;</code>（<code>:1945/1953</code>）、落库时并进 <code>chunk_refs</code>（<code>mergeChunkRefs :2134</code>）。代码里<b>没有任何"新旧块集合比对"</b>，而 <code>mergeChunkRefs</code> <b>只并、不删</b>（函数注释明说：retract-only 时"没法外科手术式地过滤 chunk refs"）⇒ <b>块的增删既不触发写、也不会被清掉</b>——这正是重解析后"两代 chunks ＋ 两代引用并存"的机制根因（见 §3.5 对账）。<br>
+        · <b>对称的一半</b>：只要 slug 被重新抽到，页就会被整页重写，<b>与块有没有变无关</b>（连"块没变"都不看）。
+      </div>
+
+      <p><b>（b）编辑器面前摆着什么</b></p>
+      <table>
+        <thead><tr><th>输入块</th><th>里面是什么</th><th>什么时候有</th></tr></thead>
+        <tbody>
+          <tr><td><code>&lt;shared_source_contexts&gt;</code></td><td>每篇来源文档的<b>画像</b>（渲染成 <code>&lt;document&gt;&lt;title&gt;标题&lt;/title&gt;&lt;context&gt;该文档的摘要&lt;/context&gt;&lt;/document&gt;</code>）。提示词里<b>明说它只是"框架、不是证据"</b></td><td>有新增时</td></tr>
+          <tr><td><code>&lt;new_information&gt;</code></td><td><b>逐字原文块</b>——citation 阶段指认的那些块的原文。每篇渲染成 <code>&lt;document&gt;&lt;title&gt;文档标题&lt;/title&gt;&lt;content&gt;**条目名**: 一句话描述 ＋ 引用块原文&lt;/content&gt;&lt;/document&gt;</code>；<b>该条目没有引用时，降级用 Pass 0 写的 <code>details</code></b></td><td>有新增时</td></tr>
+          <tr><td><code>&lt;existing_page_content&gt;</code></td><td>这一页<b>已有的正文</b>；首次创建时是占位符 <code>(New page)</code></td><td>总是</td></tr>
+          <tr><td><code>&lt;deleted_documents&gt;</code> ＋ <code>&lt;remaining_source_documents&gt;</code></td><td>被删文档的独有贡献 ／ 剥离后<b>还剩哪些来源</b>（用于"只删属于被删文档的部分"）</td><td>有撤回时</td></tr>
+          <tr><td><code>&lt;valid_wiki_links&gt;</code></td><td><b>允许出现的链接白名单</b>（以句柄形式给出）</td><td>有新增或撤回时</td></tr>
+          <tr><td>页面身份 ＋ 语言 ＋ 内容指令</td><td><code>slug／title／type／aliases</code>、<code>{{.Language}}</code>、以及用户填的 <code>ContentInstructions</code>（scope <code>wiki_content</code>）</td><td>总是</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>再叠一条规则（编辑器自身的调用门槛）</b>：<b>只有这一页"有新增"或"有撤回"时才会调用编辑器</b>（<code>len(additions) &gt; 0 || len(retracts) &gt; 0</code>）；两者都没有就<b>原样保留旧页</b>、不花这次调用。<br>⚠️ 但别把它读成"进列表的 slug 不一定被重写"——<b>重解析时它是必然被重写</b>：只要该 slug 被重新抽到，上面表里第一行就会替它补一个 retract，"有新增 ＋ 有撤回"同时成立。A5 重跑时 <code>reparse_slugs=42</code> 就是这个含义，也是"重编译不幂等"（页数 45 → 54）的机制。真正"进列表却不写"只剩两个例外：① 文档在 reduce 前被删，<code>filterLiveUpdates :1744</code> 把 addition 丢掉；② 页不存在且没有 addition（<code>:1821-1831</code>）。
+      </div>
+      <p><b>输入是怎么装进提示词的</b>（user 模板原文，3,119 字符；<code>{{if .HasAdditions}}</code> 这类是 Go 模板的条件块——只有对应情形才渲染那一段）：</p>
+      <pre>{{if .HasAdditions}}&lt;shared_source_contexts&gt;
+{{.SharedSourceContexts}}&lt;/shared_source_contexts&gt;
+{{end}}
+
+&lt;page_metadata&gt;
+  &lt;slug&gt;{{.PageSlug}}&lt;/slug&gt;
+  &lt;title&gt;{{.PageTitle}}&lt;/title&gt;
+  &lt;type&gt;{{.PageType}}&lt;/type&gt;{{if .PageAliases}}
+  &lt;aliases&gt;{{.PageAliases}}&lt;/aliases&gt;{{end}}
+&lt;/page_metadata&gt;
+
+This wiki page is specifically about **{{.PageTitle}}** (a {{.PageType}}). Every statement on the page MUST be directly about this exact {{.PageType}} — not about related, adjacent, or similarly-named things.
+
+&lt;existing_page_content&gt;
+{{.ExistingContent}}
+&lt;/existing_page_content&gt;
+
+{{if .HasAdditions}}
+&lt;new_information&gt;
+{{.NewContent}}
+&lt;/new_information&gt;
+
+The &lt;new_information&gt; block above is assembled from VERBATIM source chunks already cited as directly supporting this page. The preceding &lt;shared_source_contexts&gt; block is framing only, not evidence.
+{{end}}
+
+{{if .HasRetractions}}
+&lt;deleted_documents&gt;
+{{.DeletedContent}}
+&lt;/deleted_documents&gt;
+
+&lt;remaining_source_documents&gt;
+{{.RemainingSourcesContent}}
+&lt;/remaining_source_documents&gt;
+{{end}}
+
+&lt;valid_wiki_links&gt;
+{{.AvailableSlugs}}
+&lt;/valid_wiki_links&gt;
+
+&lt;instructions&gt;
+1. The FIRST line of your output MUST be: SUMMARY: {one sentence, 15-40 words, describing what this page is about after the update — for wiki index listing}
+{{if .HasRetractions}}
+2. REMOVE facts/claims that were ONLY sourced from the &lt;deleted_documents&gt; and are NOT present in any &lt;remaining_source_documents&gt; or &lt;new_information&gt;.
+{{end}}
+{{if .HasAdditions}}
+3. ADD and MERGE the facts from &lt;new_information&gt; into the page. You are a COMPILER, not a writer:
+   - **CRITICAL CONFLICT CHECK**: First verify that the &lt;new_information&gt; is actually about **{{.PageTitle}}** (as declared in &lt;page_metadata&gt;). If a piece of new info clearly belongs to a DIFFERENT but related thing (e.g., this page is about "Hunyuan Model" but the new info is about "Qwen3"; or this page is about "居民身份证" but the new info is about "工作居住证"), you MUST REJECT that part of the new information and DO NOT add it.
+   - If it is genuinely about {{.PageTitle}} and contradicts old content, prefer the newer information.
+{{end}}
+4. Preserve existing information that is still valid and still about {{.PageTitle}}.
+5. Keep [[slug|name]] wiki-link references ONLY if the slug appears in the &lt;valid_wiki_links&gt; list above. Remove any [[slug|name]] whose slug is NOT in that list. Do NOT invent new wiki-link slugs. The page's own slug ({{.PageSlug}}) MUST NOT appear as a [[...]] link inside its own content.
+6. Maintain the existing page structure and formatting style. Use "# {{.PageTitle}}" as the top-level heading if the page does not already have one. Do NOT introduce new heading levels beyond what the source or existing page justifies.
+{{if .HasRetractions}}
+7. If after removing deleted content the page becomes nearly empty and there is no new information to add, output just: "SUMMARY: (empty page)\n# {{.PageTitle}}\n\n*This page's primary source document was removed.*"
+{{end}}
+8. Write in {{.Language}}.
+&lt;/instructions&gt;
+
+Output the SUMMARY line first, then the updated Markdown content. Do not include any other preamble.</pre>
+
+      <p><b>①-补：素材的粒度与它带来的代价</b>（2026-10-08 补充）</p>
+      <p><b>进页面的素材就是"整个块"，逐字，且不做句级截取</b>。代码注释原文：<i>"collectCitedChunkContent materializes the <b>verbatim content</b> of every referenced chunk, concatenated in the order provided."</i>——citation 阶段产出的始终是 <code>slug → [chunk_id…]</code>，<b>从来没有 <code>slug → 某句/某段区间</code> 这种形式</b>；装配时把每个被引块的完整正文用 <code>\n\n</code> 拼起来，再放进 <code>&lt;new_information&gt;</code>。</p>
+      <div class="chain">
+        <b>块的排序口径（2026-10-09 核代码）</b><br>
+        · <b>同一篇文档内：严格按文档顺序</b>——① 分批前先按 <code>ChunkIndex</code> 排序（<code>splitChunksIntoCitationBatches :144-175</code>，注释 <i>"Chunk order (by ChunkIndex) is preserved"</i>）；② 批次并发跑，收尾时把顺序"重新压回文档顺序"（<code>classifyChunkCitations :342-357</code>，注释 <i>"order is re-imposed from chunk ChunkIndex at the end"</i>）；③ <code>collectCitedChunkContent</code> 按给定顺序拼接。<br>
+        · <b>文档之间：没有排序，本质不确定</b>——各篇的 update 由并发的 map 阶段"谁先算完谁先 append"汇进 <code>slugUpdates</code>（<code>wiki_ingest_batch.go:549-551</code>）；随后 <code>remapSlugUpdatesByIdentity</code> 又<b>遍历 Go map</b>（迭代顺序随机）洗一遍（<code>wiki_ingest_dedup.go:679-717</code>）；reduce 里直接按这个顺序拼 <code>&lt;document&gt;</code> 块。唯一做稳定化的是 <code>&lt;shared_source_contexts&gt;</code>（<code>sort.Strings(contextKeys)</code>）——而且那是为了命中前缀缓存，不是为了读感。<br>
+        · <b>每篇的块都以 Pass 0 的一句话 <code>description</code> 打头</b>（格式是 <code>**条目名**: 描述 ＋ 引用块原文</code>）⇒ 多源页 ＝ 两段"描述 ＋ 原文"，单源页 ＝ 描述 ＋ 自己那段原文——<b>这正是"摘要句 ＋ 原文块"重复的结构性来源</b>（§3.10 ④）：编辑器只被允许"轻度重排／去重"，并没有要求它把这两者合并。
+      </div>
+      <ul>
+        <li><b>证据粒度 ＝ chunk</b>：默认切块目标 512 字符（A5 实测 p50 431／max 827）。引用再细也细不过块——这是 §7.7 那句"切块参数是整条链路的物理粒度旋钮"的直接后果。</li>
+        <li><b>页面之间会重叠</b>：citation 提示词明确允许"一个块可以被多个候选同时引用"，所以<b>同一段原文可以出现在好几个页面上</b>——文档不是被切开分给各页，而是被"按块打多标签"再各自成页。</li>
+        <li><b>编辑器看不到出处</b>：块进提示词时<b>不带任何句柄</b>（<code>&lt;c id="c003"&gt;</code> 只是 citation 阶段的临时外壳），页面正文是自由 Markdown、不带任何锚点，而落库的引用只有<b>页级</b>映射（<code>chunk_refs</code>＝本页由哪些块编译而来；<code>source_refs</code>＝指向文档）⇒ <b>句级归因（"这句话出自哪个块"）做不到；能做到的上限是"块级证据清单"</b>。唯一例外：该条目完全没被引用时，降级用 Pass 0 写的 <code>details</code>（1–3 句）。</li>
+        <li class="ok">✅ <b>而"页 → 块"的块级证据其实是现成的，只是没渲染</b>（2026-10-09 更正此处"不可能"的说法）：<code>chunk_refs</code> 落库（<code>types/wiki_page.go:240-247</code>），字段注释直接写明用途是 <i>surface the underlying evidence for a wiki page</i>；<code>GetPage</code> 把 <code>types.WikiPage</code> 原样序列化返回（<code>internal/handler/wiki_page.go:416</code>，json tag <code>chunk_refs</code>），块又能按 id 取回（<code>GET /chunks/by-id/{id}</code>）⇒ <b>"页 → 块 → 块原文"这条链路是通的</b>。断点只在展示层：前端 <code>WikiPage</code> 类型里<b>没有声明 <code>chunk_refs</code></b>（<code>frontend/src/api/wiki/index.ts:12-39</code>），页面只渲染文档级 <code>source_refs</code>（<code>WikiBrowser.vue:1264</code>）。⇒ 准确说法是<b>"块级引用做得到、现在没做；做不到的是句级"</b>。</li>
+      </ul>
+      <div class="chain">
+        🤔 <b>一个上游没写出来的取舍：忠实性优先、可读性让步</b>（2026-10-09 判断）<br>
+        · <b>做法</b>：页面正文的素材＝被引用块的<b>逐字原文</b>（<code>collectCitedChunkContent</code>：<i>"verbatim content of every referenced chunk, concatenated in the order provided"</i>）；编辑器被要求做 <b>COMPILER 而不是 writer</b>，只获准"轻度重排／去重／拼接"，禁止为文风改写、扩写、发明过渡（<code>prompts_wiki.go:331</code>）。<br>
+        · <b>官方材料里找不到这个取舍的说明</b>：官网 wiki 文档对 Reduce 只写"严格接地、禁止幻觉、去重、禁止自链接"（<code>website-docs/03-features/14-wiki.md:217</code>）；架构文档、API FAQ 也没有一句谈行文代价。代码注释里唯一表露动机的是 citation 步那句 <i>"instead of asking the LLM to paraphrase"</i>（<code>prompts_wiki.go:251-254</code>）——它说的是<b>为什么不用转述</b>，不是<b>为什么可以牺牲行文</b>。<br>
+        · <b>于是"读得顺不顺"成了没人管的维度</b>：<code>wiki_lint</code> 六类体检（orphan_page／broken_link／stale_ref／missing_cross_ref／empty_content／duplicate_slug，<code>wiki_lint.go:16-23</code>）全是结构性的；管道里没有任何行文指标，唯一出口是产品层的人工编辑 ＋ 版本回滚。<br>
+        · <b>可预期的后果</b>：一页由多篇来源共同支撑时，每篇渲染成一个 <code>&lt;document&gt;</code> 块、按顺序拼进 <code>&lt;new_information&gt;</code>（<code>wiki_ingest_batch.go:1952-1984</code>）⇒ <b>跨源拼装处行文生硬是设计内的，不是 bug</b>；每次写入时那句"轻度重排／去重／拼接"是唯一的渐进改善通道。<span class="muted">（另一条同向的设计：system 规则 2 要求"不许过度结构化"，宁可扁平事实列表——它优化的是"可扫读"，不是"叙事流畅"。）</span><br>
+        · ✅ <b>忠实性还有第三条好处：它是"可靠增量"的前提</b>（2026-10-09 补，核代码成立）：页面正文是原文块的<b>近逐字复制</b> ⇒ "删掉某篇文档"这条操作可以退化成<b>文本级</b>判断（"这段是否只出现在被删文档里"），而不是语义判断。retract 提示词正是这么写的：<i>"REMOVE facts/claims that were ONLY sourced from the &lt;deleted_documents&gt; and are NOT present in any &lt;remaining_source_documents&gt; or &lt;new_information&gt;"</i>（<code>prompts_wiki.go:387</code>，user 模板 rule 2）；reparse 分支同样靠"把本文档<b>上一次的摘要</b>当旧版本信号"来实现 replace-not-append。<b>如果页面是语义化改写的，页↔源就只剩"意思相近"，这类删除/替换就无从可靠判定</b>。<br>
+        · ⚠️ <b>但这条好处只兑现到"文档级"</b>：① 页面正文不带任何块句柄（见上文"编辑器看不到出处"），块级追溯只剩页级并集 ⇒ "哪句话来自哪块"仍只能靠字符串弱匹配；② <code>chunk_refs</code> 只并不删（重解析后两代并存），块的增删既不触发也不清理。⇒ 准确说法是：<b>忠实性把增量更新的判据从"语义比对"降到"文本比对"，而 WeKnora 只把这条好处用到文档级，块级仍交给模型判断</b>。<br>
+        · ✅ <b>2026-10-09 已验</b>（§3.10，P6＋P7 两篇同域长文）：多源页 4/86，典型页 <code>concept/synthetic-data-generation</code>（P6 13 ＋ P7 15 块）<b>读得顺</b>；但 <code>entity/langsmith</code> 出现"摘要句 ＋ 原文块"重复 ⇒ 这条判断<b>方向成立、烈度有限</b>。
+      </div>
+      <p><b>于是"产物体积 ÷ 原文"必然偏大</b>（实测两个库，原文 28,956 字符）：</p>
+      <table>
+        <thead><tr><th>库</th><th>页数</th><th>全部产物</th><th>实体＋概念页</th><th>summary 页</th><th>index 页</th></tr></thead>
+        <tbody>
+          <tr><td>standard（含 10-08 重解析后）</td><td>54</td><td><b>49,213 = 170.0%</b></td><td>44,306 = 153.0%</td><td>4,704 = <b>16.2%</b></td><td>203</td></tr>
+          <tr><td>focused</td><td>22</td><td><b>33,859 = 116.9%</b></td><td>29,677 = <b>102.5%</b></td><td>4,029 = 13.9%</td><td>153</td></tr>
+        </tbody>
+      </table>
+      <div class="chain">
+        <b>为什么会 &gt;1，以及什么时候会 &lt;1</b><br>
+        · <b>三条膨胀因子</b>：① <b>块级多标签</b>——同一段原文进多页（设计允许的常态）；② <b>编辑器被禁止压缩</b>——system 里"你是 compiler 不是 writer／贴近逐字原文"，只允许 <i>lightly reorder / deduplicate / join</i>，压缩不是它的任务；<span class="ok">（2026-10-09 实测锚点，<b>本条成立</b>：<b>同语言</b>时编辑器几乎不压缩——中文源 → 中文页 out/in ＝ <b>0.90</b>、源文 12-gram 覆盖 <b>79.2%</b>（见 §3.11 的语言对照）。而"英文源 → 中文页"的 out/in 只有 0.34–0.38，<b>那个低比值主要是"英→中"的语言密度差，不是编辑器删减</b>——我上一版据此说"禁止压缩不成立"，已撤回。）</span>③ <b>每页固定开销</b>（标题、<code>SUMMARY:</code> 行、要点列表）。<br>
+        · 于是 <b>Σ(页) ≈ Σ(被引块) × 平均被引次数</b>；A5 的引用覆盖率是 <b>68/70 ≈ 97%</b>，光"均值 ≥ 1"就足以顶过 100%。<br>
+        · <b>什么时候会跌破 1</b>：文档本身高度重复（去重能大幅缩水）＋ 引用覆盖稀疏（很多块没人引）。⇒ <b>语料越"松"、引用越密，这个比值越大</b>；这与 GraphRAG 恰好相反（那边是"语料越大越压得动"，findings 有 10 条上限封顶）。
+      </div>
+      <div class="chain">
+        ⚠️ <b>口径警告：这个比值不能跟 GraphRAG 的 2.6% 比</b>。<br>
+        · GraphRAG 的 <b>2.3–2.6%</b> ＝ <b>根层摘要 ÷ 原文</b>（"用一层报告代表整份语料"）；<br>
+        · WeKnora 的 <b>170%</b> ＝ <b>全部页面 ÷ 原文</b>（把语料摊成一张可浏览的网页网络的<b>索引体积</b>）；<br>
+        · <b>同口径的对应物是 summary 页</b>：<b>16.2% vs 2.6%</b>——而这两个数差这么多也合理：GraphRAG 的 C0 是"整份语料一路压上来的根摘要"，WeKnora 的 summary 是"<b>每篇文档一页</b>"，天然是"按文档切的局部摘要"。<br>
+        · 更要紧的：<b>170% 对应的是索引期体积/存储成本，不是"回答一个问题要读多少材料"</b>（查询时 LLM 不会把所有页面读一遍）。⇒ 第三轮要量成本，该量的是"<b>回答一个问题需要读进上下文的 token</b>"。
+      </div>
+      <p class="muted"><b>顺带一个对第三轮有用的发现</b>：standard 库从首跑的 <b>45 页</b>涨到重解析后的 <b>54 页</b>（体积 154% → 170%）——<b>同一份文档重解析一次，页数 +9</b>（Pass 0 这次抽 43 个候选、上次 34，新条目又各自成页）。也就是说 <b>"重编译同一文档"并不幂等</b>：<code>reparse_slugs=42</code> 那套机制只保证<b>已有页不被改名</b>，不保证<b>不新增页</b>。</p>
+
+      <p><b>② 处理：编辑器被要求做什么</b></p>
+      <p>规则全在 <b>system 提示词</b>里（3,122 字符），可归纳成<b>三条硬约束 ＋ 三条合并规则</b>：</p>
+      <ul>
+        <li><b>写作上：编译器，不是创作者</b>——"贴近逐字原文"，可以轻度重排／去重／拼接，但<b>不得为文风改写、不得扩写、不得发明过渡句</b>；</li>
+        <li><b>结构上：不许过度结构化</b>——只在来源或旧页已用过标题时才加标题，宁可"一个顶层标题 ＋ 短段落 ＋ 扁平事实列表"；</li>
+        <li><b>措辞上：不许加辞令</b>——提示词<b>点名</b>了"旨在帮助／致力于／具有重要意义"（＋ 英文的 aims to provide／designed to），除非原文逐字出现；</li>
+        <li><b>锚定</b>：每条新增的事实／实体／数值都必须被所给原文块直接支持；<b>不许幻觉</b>；冲突时以较新的、有支持的信息为准；若冲突含糊，就只加一节"Contradictions / Updates"说明，<b>不覆盖旧内容</b>；</li>
+        <li><b>归属限定</b>：不要把简历／产品页／公告／第一人称陈述升格成行业级事实；</li>
+        <li><b>冲突检查（混实体防线）</b>：先确认新信息<b>讲的确实是这一页的条目</b>——提示词里给了两个<b>写死的中文例子</b>（页面讲"混元大模型"、新信息却在讲 Qwen3；页面讲"居民身份证"、新信息是"工作居住证"），要求<b>直接拒绝这部分新信息</b>。</li>
+      </ul>
+      <p><b>system 提示词原文：</b></p>
+      <pre>You are a wiki editor tasked with updating an existing wiki page. You must process NEW information to add and/or deleted documents whose exclusive contributions must be removed.
+
+### SOURCE GROUNDING & MERGE RULES (CRITICAL):
+1. **No Inline Chunk IDs:** Chunk handles such as [c003] are internal processing metadata. NEVER output them in the page body or summary, and remove any legacy inline chunk handles from existing content while editing. Source associations are stored separately by the system.
+2. **Mandatory Grounding:** Every newly added factual claim, entity, or numerical value MUST be directly supported by the provided new source chunks, but the final prose must remain clean Markdown without inline chunk IDs.
+3. **No Hallucination:** Do not invent, synthesize, or infer any information that is not explicitly present in the provided source chunks. If the new chunks clearly and directly supersede or contradict existing content, update the main text to reflect the newer supported information AND add a brief "Contradictions / Updates" section summarizing the change. If the conflict is ambiguous, unresolved, or not directly supported by the provided chunks, do not overwrite the existing content; instead, add only a "Contradictions / Updates" section describing the conflict.
+4. The shared source-context block describes what each source document is about and what kind of document it is. Use it only to calibrate scope, attribution, and tone. Never copy source-context wording into the page as factual evidence.
+5. Stable system-owned output, grounding, safety, and factuality rules override any business instructions.
+
+### EDITING AND OUTPUT RULES:
+1. You are a COMPILER, not a creative writer. Stay close to the verbatim source wording. You may lightly reorder, deduplicate, and join related sentences, but must not rephrase for style, expand short statements, or invent transitions.
+2. Do not over-structure. Introduce a section heading only if the source or existing page uses it. Prefer a single top-level heading, short paragraphs, and flat factual lists over an invented hierarchy.
+3. Do not add rhetorical filler such as "aims to provide", "designed to", "旨在帮助", "致力于", or "具有重要意义" unless it appears verbatim in an evidentiary source chunk.
+4. Keep self-reported claims scoped and attributed. Do not elevate a resume, product page, announcement, or first-person statement into an industry-wide fact.
+5. Preserve existing information that remains valid and on-topic. Maintain the existing page's structure and formatting style where possible.
+6. Keep a [[slug|name]] link only when its slug is present in the supplied valid-link list. Never invent a slug and never link a page to itself.
+7. Images may be included only from supplied new information. Treat each Markdown image URL as an opaque token and reproduce it exactly without altering, shortening, or normalizing it.
+8. The first output line must be "SUMMARY: {one sentence, 15-40 words}", followed immediately by clean Markdown page content.
+
+Output the SUMMARY line first, followed by the updated Markdown content, with no other preamble.</pre>
+      <p><b>system 提示词中译：</b></p>
+      <pre>你是一名 wiki 编辑，任务是更新一个已存在的 wiki 页面：把**新信息**并入，并／或把**被删文档的独有贡献**移除。
+
+### 来源锚定与合并规则（关键）：
+1. **正文里不许出现 chunk ID**：像 [c003] 这样的块句柄是内部处理元数据。**绝不要**把它们写进页面正文或摘要，并在编辑时把旧正文里遗留的内联块句柄去掉。来源关联由系统单独保存。
+2. **强制锚定**：每一条新增的事实性论断、实体或数值，**必须**被提供的新来源块直接支持；但最终行文必须是干净的 Markdown，不含内联块 ID。
+3. **不许幻觉**：不要凭空编造、合成或推断任何未明确出现在所给来源块中的信息。若新块明确且直接地取代或矛盾于旧内容，就更新正文以反映较新的、有支持的信息，**并**加一个简短的 "Contradictions / Updates" 小节概述该变化。若冲突含糊、未定或未被所给块直接支持，**不要**覆盖旧内容；只加一个 "Contradictions / Updates" 小节描述该冲突。
+4. 共享来源上下文块描述每篇来源文档讲什么、是什么类型的文档。它只用于校准范围、归属与语气。**绝不要**把来源上下文的措辞当作事实证据抄进页面。
+5. 系统自有的输出、锚定、安全与事实性规则，**优先于**任何业务指令。
+
+### 编辑与输出规则：
+1. 你是**编译器，不是创作者**。贴近逐字原文。可以轻度重排、去重、把相关句子接起来，但**不得**为文风改写、不得扩写短句、不得发明过渡句。
+2. **不要过度结构化**。只有当来源或既有页面已用某标题时才引入小节标题。宁可一个顶层标题 ＋ 短段落 ＋ 扁平的事实列表，也不要自造层级。
+3. 不要加"旨在帮助""致力于""具有重要意义""aims to provide""designed to"这类辞令，除非它在某条证据块里逐字出现。
+4. 自述性说法要保持限定与归属。不要把一份简历、产品页、公告或第一人称陈述升格成行业级事实。
+5. 保留仍然有效、仍在题内的既有信息。尽量维持既有页面的结构与格式风格。
+6. 只有当 slug 出现在所给的有效链接清单里时，才保留 [[slug|name]] 链接。**绝不自造 slug，也绝不让页面链到自己**。
+7. 图片只能来自所给的新信息。把每个 Markdown 图片 URL 当作不透明 token，原样复现，不得改动、缩短或规范化。
+8. 输出的第一行必须是 "SUMMARY: {一句话，15–40 词}"，紧接其后是干净的 Markdown 正文。
+
+先输出 SUMMARY 行，再输出更新后的 Markdown 正文，不要任何其他开场白。</pre>
+
+      <p><b>③ 输出：交出什么、怎么落库</b></p>
+      <ul>
+        <li><b>第一行必须是</b> <code>SUMMARY: {一句话，15–40 词}</code> → 落成这一页的 <code>summary</code> 字段（<b>就是 wiki 索引里那一行</b>）；</li>
+        <li>其余部分 ＝ <b>页面正文</b>（落成 <code>content</code>）；</li>
+        <li>正文里<b>只允许保留白名单内的</b> <code>[[slug|name]]</code>，不在清单里的一律删掉；<b>不许自造 slug，不许把页面链到自己</b>；</li>
+        <li><b>特例</b>：如果"删掉来源后这一页几乎空了、又没有新信息可加"，必须原样输出固定话术 <code>SUMMARY: (empty page)</code> ＋ 标题 ＋ 一行说明；</li>
+        <li><b>失败怎么办</b>：调用失败 → <b>保留旧页</b>、把这次 addition 标为失败（并触发摘要页的死链清理）；<b>不会写半页</b>（见 ④ 截断）。</li>
+      </ul>
+      <p class="muted"><b>顺带一条"页可以是一张网"的设计</b>：同一页能被多篇文档共同支撑——每次写入都会把该文档的 <code>source_ref</code> 追加进 <code>source_refs</code>、把条目别名并进 <code>aliases</code>。这也是"引用式"结构在页面层的体现：页的身份是条目，来源是后挂上去的。</p>
+
+      <p><b>④ 工程细节（按需，不影响上面的业务逻辑）</b></p>
+      <ul>
+        <li><b>并发</b>：按 <b>slug</b> 并行（<code>IngestReduceParallel</code>，默认 <b>10</b>），<b>同一 slug 加锁</b>（防两篇文档同时改写一页）；<b>一页可聚合多篇文档</b>，span 记 <code>contributors</code>；并发是两级的：峰值 ≈ <code>IngestMaxInflight × max(IngestMapParallel, IngestReduceParallel)</code>，再受 wiki worker pool 限制（本机日志：<code>asynq wiki-pool … concurrency=8</code>）。</li>
+        <li><b>两个"防抄错"机制</b>：① <b>slug 逃逸成 <code>ref-N</code> 句柄</b>——编辑器从不重打真实 slug，生成后再翻译回来（注释直说这是为了修 <code>summary/&lt;uuid&gt;</code> 这类高熵 slug 被抄成 404）；② 旧正文先进 <code>stripWikiInlineChunkCitations</code>，把 <code>[c003]</code> 这类内部标记剥掉，防模型抄进正文。</li>
+        <li><b>缓存</b>：<code>&lt;shared_source_contexts&gt;</code> 放最前 ⇒ 同源多页共享最长前缀、命中前缀缓存；43 个并发调用还配了 <code>BuildPromptCacheKey</code> 预热。</li>
+        <li><b>目录只补空缺</b>：批次规划出来的目录<b>只套用到 <code>FolderID</code> 为空的页</b>——人工摆放过的页保持不变（<b>人手动改的优先</b>）。</li>
+        <li><b>截断（completion 预算）</b>：见下面单独一段。</li>
+      </ul>
+      <p><b>"completion 预算"是什么、被截断了怎么办</b>：<b>completion 预算 ＝ 单次调用里"模型最多能生成多少 token"的上限</b>（就是 API 的 <code>max_tokens</code>／<code>max_completion_tokens</code>）——它<b>只约束输出、不约束输入</b>；一旦撞上上限，回复会被<b>从中间截断</b>，provider 用 <code>finish_reason=length</code> 表示（正常写完是 <code>stop</code>）。这里是 <code>wikiLLMMaxTokens = 32768</code>，所有走 wiki 模板的调用都用它。为什么显式设？注释说得很直白：<b>不设的话，OpenAI 兼容客户端会省略 <code>max_tokens</code>，DeepSeek 就用自己的默认 8192</b>，于是长抽取被截成非法 JSON（解析报 <code>unexpected end of JSON input</code>）、长页面被截成半页 ⇒ 调到 32768 才够用（上游 <b>#2604</b>）。<b>它是上限、不是目标</b>：短回复照样以 <code>finish_reason=stop</code> 提前结束，本身不多花钱。</p>
+      <p>撞上上限时的处理：<code>finish_reason ∈ {length, max_tokens, max_output_tokens}</code> → 追加<b>续写提示词</b>（最多 3 轮；表格一行行吐，每轮都有进展）→ <b>仍截断则这一页不写</b>——保留旧页、把该 addition 标为失败（注释：<i>"storing a half page is not [recoverable]"</i>）。续写机制为什么要存在，注释也交代了：编辑器拿到的是<b>整页</b>、交回的也必须是<b>整页</b>（<i>"the model's output is not a summary of the page, it IS the page"</i>），而长表格是一行行吐的——<b>曾经真出过事：源表 146 行，落库的页面只有 119 行，页面历史里看是普通的一次编辑，日志里也没有任何 "truncated" 字样</b>。</p>
+      <p><b>续写提示词原文：</b></p>
+      <pre>Your previous message was cut off because it reached the output length limit, so the page is incomplete.
+
+Continue the SAME message from exactly where it stopped:
+1. Do NOT repeat anything you already wrote — not the SUMMARY line, not the headings, not the rows, not the opening of the row you were in the middle of.
+2. Your reply is appended verbatim to what you already wrote. Its first characters must be exactly the characters that follow the last character of your previous message. If you stopped in the middle of a Markdown table row, finish that row first.
+3. Keep the same structure, formatting, ordering, and language as the part you already wrote.
+4. Output the continuation ONLY: no preamble, no apology, no explanation, no closing code fence.
+5. If the page was in fact already complete, reply with exactly: (complete)</pre>
+      <p class="muted">⚠️ 别把两个 32768 混了：<code>maxContentForWiki = 32768</code> 在<b>输入侧</b>、按<b>字符</b>截断（见 §3.3①）；<code>wikiLLMMaxTokens = 32768</code> 在<b>输出侧</b>、按 <b>token</b> 限制——两个数只是碰巧一样。</p>
+
+      <div class="chain">
+        <b>与 GraphRAG 对照：这里才是"LLM 写内容"的地方</b>（GraphRAG 是让 LLM 写社区报告），但写法被压得很死——上面那三条硬约束（compiler 不是 writer／不许过度结构化／不许加辞令）就是它的"反废话"闸门；而"冲突检查"那条防线是<b>提示词级的、没有程序校验</b>，这也解释了 §2.1 里 <code>mixed_entities</code> 为什么会作为一个独立 issue 类型存在。
+      </div>
+      <p class="muted">注：user 模板里那两个中文例子（"混元大模型／Qwen3"、"居民身份证／工作居住证"）是<b>上游写死在提示词里的</b>，不是我们的语料——做跨域复现时要知道这一点。</p>
+
+      <h4 id="sec-39" style="margin:14px 0 4px;">3.9 阶段七细读：链接注入与索引收尾（📄 源码级，2026-10-09）</h4>
+      <p><b>一句话</b>：reduce 写完页面之后，还有<b>三条纯收尾</b>——① <b>链接注入</b>（把正文里出现的其它页标题/别名包成 <code>[[slug|文字]]</code>，纯文本替换、不调 LLM）；② <b>死链清理</b>（指向已不存在的页的链接，能改指就改指、改不了降级成纯文本）；③ <b>索引页重建</b>（LLM 只写"引言"，清单是接口动态生成的）。三者都在同一批的 <b>finalize</b> 里跑。</p>
+
+      <p><b>① 链路位置与输入</b></p>
+      <p><code>ProcessWikiFinalize</code>（<code>wiki_ingest_batch.go:1000-1180</code>）先把本批 pending 行聚合出四样东西：<b>affectedSlugs</b>（本批写过或删过的页，去重）、<b>freshRefs</b>（本批写过的页的 <code>title</code>）、<b>changeDesc</b>（<code>&lt;document_added&gt;</code>／<code>&lt;document_removed&gt;</code> ＋ 标题 ＋ 摘要，<b>只带这一批的变化</b>）、<b>folderPruneIDs</b>（要修剪的目录）。然后依次跑死链清理 → 链接注入 → 目录修剪 → 索引重建 → 收尾。</p>
+
+      <p><b>② 链接注入：<code>injectCrossLinks</code> ＋ <code>linkifyContent</code></b></p>
+      <ul>
+        <li><b>候选来源（每个页面各算一份）</b>：① 该页<b>已有 out-links</b> 的标题（经 <code>SlugTitleMany</code> 解析，顺带过滤掉已归档/系统页）；② <b>本批新写的兄弟页</b>的 title（<code>freshRefs</code>）。排除自己。<br>⚠️ <b>候选的"字样"只有标题</b>：本批新写页取 <code>row.Title</code>，已有 out-links 也是解析成标题——<b>别名不参与</b>。别名只在<b>另一条维护路径</b>出现：<code>wikiPageService.InjectCrossLinks</code>（只被 agent 的写页／改名工具调用）用 <code>collectLinkRefs</code>＝全库 <code>title ＋ aliases</code> 当候选。<b>⇒ 别名的能力在这套系统里是"半开"的</b>（去重召回不认，摄取期链接也不认）。</li>
+        <li><b>注入规则</b>（<code>linkifyContent</code>／<code>computeForbiddenSpans</code>）：<br>
+          · 按 <b>matchText 长度降序</b>处理——长名优先，避免被自己的子串抢先；<br>
+          · 每个目标<b>只包第一处</b>合规命中；该 slug 在正文里已经链过就整条跳过；<br>
+          · <b>禁写区</b>（绝不改）：围栏代码块、行内代码、已有的 <code>[[…]]</code>、markdown 链接与图片、参考式链接定义、autolink；<br>
+          · <b>只有 ASCII 边缘才判词边界</b>（纯 CJK 没有空格概念，不判）；<br>
+          · <b>单个汉字不加链</b>（注释举例：会把"风沙""栏目""核心"这类词拆坏）；<br>
+          · 每注入一条就<b>平移并扩展 forbidden spans</b>，防止后续 ref 嵌进刚造出来的 <code>[[…]]</code> 里。</li>
+        <li><b>范围是被刻意限制的</b>（注释原话）：只重写"本批 affected 页"，候选只来自"已有 out-links ＋ 本批兄弟页"——<i>"a brand new entity in this batch won't be linkified into pages from previous batches until they get re-edited"</i>；理由是 4 万文档量级下这是 <b>O(batch) 查询 vs 拉 10 万+ 页</b>的差别，<b>长尾召回换成成本</b>，兜底交给 lint AutoFix（这条正是 §3.7 ⑥ 里那份"规模化石"之一）。</li>
+        <li><b>结构推论</b>：因为只对<b>已存在的 slug</b> 建链（候选来自已有页的 out-links 与本批真实写出的页），<b>悬空链接在结构上几乎不可能出现</b>——这也是 §3.2 那条"与论文两条路线"的由来（论文是 LLM 生成链接 + Error Book 修，悬空率 29.1–63.8%）。</li>
+      </ul>
+
+      <p><b>③ 死链清理：<code>cleanDeadLinks</code> → <code>stripDeadWikiLinks</code></b></p>
+      <ul>
+        <li><b>判活</b>：把该页 out-links 一次 <code>ExistsSlugs</code> 批量查活；没有死链就跳过。</li>
+        <li><b>两种处理</b>：① 若能把死 slug <b>解析到活 slug</b>（靠 display-text 反查标题、或连字符归一化相等，见 <code>resolveDeadSlug</code>）→ <b>改写链接</b>、保留显示文字；② 找不到相近的活页 → <b>降级成纯文本</b>（有显示文字就用文字，没有就把 slug 最后一段"人化"）。</li>
+        <li><b>落库不涨版本</b>：走 <code>UpdateAutoLinkedContent</code>——这是机器维护，不算"用户可见编辑"，所以刻意不动 <code>version</code>（与人工编辑区分开）。</li>
+        <li>⚠️ <b>但它的覆盖范围有洞</b>（2026-10-09 实测补，见 §3.11）：删除场景下，悬空链接恰恰出现在"<b>链接到被删页、但不引用被删文档</b>"的别的页上——这些页不在 <code>affectedSlugs</code> 里，所以清不到；而 <code>AutoFix</code> 只在 API 被调用时才跑。实测删掉一篇文档后，lint 的 <code>broken_link</code> 从 <b>0 条涨到 19 条</b>。🤔 修法不长：删除时用被删页的 <code>in_links</code> 反查，把这些页一并纳入清理范围。<br>
+        批内还有一次<b>提前修补</b>：<code>sanitizeDeadSummaryLinks</code>（<code>wiki_ingest.go:1611</code>）——摘要页是先写的、链接是"预测"出来的，所以 reduce 之后先按<b>本批真实写成的页</b>把摘要页里的死链摘掉（见 §3.5／§3.6）。</li>
+      </ul>
+
+      <p><b>④ 索引页重建：只有"引言"是 LLM 写的</b></p>
+      <ul>
+        <li><b>两条提示词分首次与增量</b>：首次 <code>WikiIndexIntroPrompt</code>（吃"最近 N 篇 summary"，并附 <i>"showing N of M"</i> 的诚实框架，<code>indexIntroSummaryCap = 200</code>）；增量 <code>WikiIndexIntroUpdatePrompt</code>（只吃"现有引言 ＋ 本批 changeDesc"，<b>故意不再传全量 summary</b>——注释原话：<i>"at 4w docs it would re-flood the context every batch"</i>）。</li>
+        <li><b>关键设计（容易误解的地方）</b>：索引页正文<b>只有标题 ＋ 2–3 句引言</b>；<b>真正的页面清单不落库</b>，而是由 <code>GET /wiki/index</code>（<code>GetIndexView</code>）按类型分组、游标分页<b>动态生成</b>（limit ≤ 200）。所以它<b>不是</b> Karpathy 那种"每页一行链接的 <code>index.md</code>"。</li>
+        <li>引言同时写进 <code>content</code> 与 <code>summary</code>（兼容旧读者）；写完做一次防御性裁剪——如果模型又吐出 <code>\n## </code> 目录段，就截掉。</li>
+        <li>没有合成模型 / 模型调用失败 → <b>跳过索引重建</b>（记 warn），但队列照常 drain（配置缺口，不算瞬时错误）。</li>
+      </ul>
+
+      <p><b>提示词原文（首次，<code>WikiIndexIntroPrompt</code>，<code>prompts_wiki.go:427</code>）：</b></p>
+      <pre>You are a wiki editor. Write a brief introduction for a wiki knowledge base index page.
+
+&lt;document_summaries&gt;
+{{.DocumentSummaries}}
+&lt;/document_summaries&gt;
+
+&lt;instructions&gt;
+1. Write a title line starting with "# " that reflects the knowledge domain.
+2. Follow with 2-3 sentences describing what this wiki covers, based on the document summaries above.
+3. Keep it concise — this is just the header section, the directory listing will be added separately below.
+4. Write in {{.Language}}.
+&lt;/instructions&gt;
+
+Output ONLY the title and introduction paragraph. Do NOT generate any directory listings or page links.</pre>
+      <p><b>提示词原文（增量，<code>WikiIndexIntroUpdatePrompt</code>，<code>prompts_wiki.go:443</code>）：</b></p>
+      <pre>You are a wiki editor. Update the introduction section of a wiki index page to reflect recent changes.
+
+&lt;current_introduction&gt;
+{{.ExistingIntro}}
+&lt;/current_introduction&gt;
+
+&lt;changes&gt;
+{{.ChangeDescription}}
+&lt;/changes&gt;
+
+&lt;document_summaries&gt;
+{{.DocumentSummaries}}
+&lt;/document_summaries&gt;
+
+&lt;instructions&gt;
+1. Update the introduction to accurately reflect the current state of the wiki.
+2. If documents were added, mention the new topics if they significantly change the wiki's scope.
+3. If documents were removed, remove references to those topics if they no longer apply.
+4. Keep the same tone, style, and title format as the existing introduction.
+5. Keep it concise — 1 title line + 2-3 sentences.
+6. Write in {{.Language}}.
+&lt;/instructions&gt;
+
+Output ONLY the updated title and introduction paragraph. Do NOT generate any directory listings or page links.</pre>
+      <p><b>中译（两条合并，差异只在"吃摘要"还是"吃变化"）：</b></p>
+      <pre>你是 wiki 编辑。为知识库索引页写一段简短引言（首次）／更新已有引言以反映最近变化（增量）。
+
+指令：
+1. 写一行以 "# " 开头的标题，反映知识领域。
+2. 用 2–3 句话说明这个 wiki 覆盖什么（依据所给文档摘要／现有引言 ＋ 本批变化）。
+3. 保持简短——这只是头部，目录清单会由系统另行添加。
+4. 用 {{.Language}} 写。
+增量版另有：加了文档就提新增主题（若显著改变范围）、删了文档就去掉相关提法、保持与现有引言同样的语气/风格/标题格式。
+
+只输出标题与引言段落，**不要**生成任何目录清单或页面链接。</pre>
+
+      <p><b>⑤ 实测（我们两个库）</b></p>
+      <ul>
+        <li>A5 首跑：<b>251 条链接、悬空 0</b>；索引页正文只有 <b>186 字符</b>（就是那段引言 ⇒ 印证"清单不落库"）。</li>
+        <li>P6＋P7 那批：<code>wiki ingest: injected cross-links in <b>77 pages</b></code>（86 页里 77 页被改写）；索引页随两篇文档增删从 <b>163 → 227 → 276 字符</b>（每次都是"引言被改写"，不是清单）。</li>
+        <li>lint 侧：P6＋P7 库 23 条问题里 <code>missing_cross_ref</code> 6 条、<code>orphan_page</code> 17 条——<b>没有一个 broken_link</b>，与"结构上不可能悬空"一致。</li>
+      </ul>
+
+      <p><b>⑥ 与 GraphRAG 的对照（一句话）</b>：这边把"链接/引用关系"做成<b>确定性的字符串注入 ＋ 结构体检</b>（不需要 LLM 生成链接，也就不需要 Error Book 去修链接）；代价是<b>覆盖率换成本</b>——旧批次的页面里不会自动长出指向新实体的链接，得等它被重新编辑或有 lint 兜底。</p>
+
+      <h4 id="sec-310" style="margin:14px 0 4px;">3.10 多源页实测：P6＋P7（✅ 2026-10-09）</h4>
+      <p><b>一句话</b>：为验证 §3.8 ①-补 那条"跨源拼装处行文生硬是设计内的"，在一个干净库里投两篇<b>同域长文</b>（Hamel 的 evals 两篇），看真正被两篇一起支撑的页长什么样。<b>结论：多源页确实存在、典型那页合得也不错；但"摘要句 ＋ 原文块"重复这类痕迹真的会出现</b>；另附一条判据教训——"读感"很难用自动判据抓。</p>
+
+      <p><b>① 先选语料：为什么是 P6＋P7</b></p>
+      <ul>
+        <li>把 15 篇 HTML 语料两两比对"共享实词"（脚本 <code>experiments/weknora/probe_pair_overlap.py</code>；已排除 agent／code／use 这类通用词）：<b>P6＋P7 ＝ 95</b>，而我们 GraphRAG 线的习惯配对 <b>A5＋O2 只有 17</b>、A4＋O2 只有 15。</li>
+        <li>⇒ <b>跨厂商的文章天然碎片化</b>（各家只讲自家产品：A5 全在讲 sandbox／egress／blast radius，O2 全在讲 Codex／harness，交集近 0）。做多源页实验必须按<b>同题不同源</b>挑，不能按"都写 agent"挑。</li>
+      </ul>
+
+      <p><b>② 运行规模与成本</b></p>
+      <table>
+        <thead><tr><th>项</th><th>值</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>库</td><td><code>P6+P7 · 多源页读感</code></td><td>新建干净库（<code>7c601025-5bc2-42b9-9cee-6b07c49cbadd</code>），<code>standard</code> 粒度，与 A5 首跑同档</td></tr>
+          <tr><td>语料</td><td>P6 24,681 ＋ P7 78,647 ＝ <b>103,328 字符</b></td><td>P6＝Hamel「Your AI Product Needs Evals」／P7＝「AI Evals FAQ」（手工 Markdown 接口投喂，一源一条知识）</td></tr>
+          <tr><td>切块</td><td>P6 65 ＋ P7 207 ＝ <b>272 块</b></td><td>用项目自己的抽取器转 Markdown 后由 WeKnora 切块</td></tr>
+          <tr><td>产物</td><td><b>86 页</b>（entity 34／concept 49／summary 2／index 1）</td><td>其中 <b>source_refs ≥ 2 的多源页 4 页</b></td></tr>
+          <tr><td>耗时</td><td>ingest <b>57.2 s</b> ＋ finalize <b>2.2 s</b></td><td>投喂到页面数稳定约 3 分钟（含轮询）；交叉链接注入改了 <b>77 页</b>；两段都取自日志 <code>elapsed=</code>（<code>wiki ingest stats</code> 57.169s ／ <code>wiki finalize</code> 2.175s）</td></tr>
+          <tr><td>成本</td><td><b>102 次调用 / 508,422 token</b></td><td><code>wiki_page_modify</code> 83 次／403,406 ＝ <b>79%</b>；chunk_citation 10／53,515；candidate_slug 2／20,148；summary 2／18,782；taxonomy 2／7,028</td></tr>
+          <tr><td>产物体积</td><td>73,440 ÷ 103,328 ＝ <b>71%</b></td><td>⚠️ 同一口径下 A5 单篇是 154%／170%——见 ⑤</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>③ 多源页只有 4/86，但典型那页合得不错</b></p>
+      <ul>
+        <li>4 页多源页（块构成用 <code>probe_multisource_chunks.py</code> 把 <code>chunk_refs</code> 还原到来源文档）：<code>concept/synthetic-data-generation</code>（P6 13 ＋ P7 15 ＝ 28 块）、<code>entity/hamel-husain</code>（4＋9）、<code>entity/shreya-shankar</code>（2＋6）、<code>entity/langsmith</code>（2＋2）。其余 81 页单源、1 页 index 无 refs。</li>
+        <li>读 <code>concept/synthetic-data-generation</code>（3,395 字符、7 个小节）：P6 的 Rechat／Zillow 实例与 P7 的"维度／元组／两步生成／合成数据不可靠场景"被编进同一页，还能看到编辑器主动写的桥接句（<i>"这与生成测试用例的练习几乎完全相同"</i>）⇒ <b>这页读起来是顺的</b>。</li>
+      </ul>
+
+      <p><b>④ 但痕迹也真的出现了：摘要句 ＋ 原文块重复（多源、单源都中招）</b></p>
+      <p><b>最刺眼的两例其实都是"单源小页"</b>（<code>source_refs ＝ 1</code>）⇒ 这个痕迹<b>不是多源专有</b>：单篇文档里"Pass 0 的 <code>description</code> ＋ 原文块"并列就会重复，而且页越短、重复占比越刺眼。</p>
+      <ul>
+        <li><code>entity/alex-strick-van-linschoten</code>（整页 195 字符，相似度 <b>0.538</b>，全场最高）：首行是"<i>Alex Strick van Linschoten 分析了不同可观测性供应商对 trace 与 span 定义之间的差异。</i>"，紧接的正文块又写"<i>不同可观测性供应商对 trace 与 span 的定义各不相同，Alex Strick van Linschoten 的分析指出了这些差异（截至 2025-07-02 ……）。</i>"——一句话说两遍，只换了语序。</li>
+        <li><code>concept/active-learning</code>（0.472）：首行"<i>主动学习是借自机器学习的采样技术，系统请求人工标注对下次更新最有用的数据点。</i>"，正文段又写"<i>在主动学习中，系统请求人工标注对其下次更新最有用的数据点。</i>"。</li>
+        <li><code>entity/hugo-browne-anderson</code>（0.406，整页 230 字符只有两段）：两段都在说"《Your AI Product Needs Evals》改编自与 Emil Sedgh 和 Hugo 在 Vanishing Gradients 播客的对话"。</li>
+      </ul>
+      <p>多源页里的对应例子是 <code>entity/langsmith</code>（2＋2 块）——第一段是 <code>description</code> 折进正文，第二段是原文块，同一件事用两种说法讲了两遍：</p>
+      <p>最清楚的一例是 <code>entity/langsmith</code>（多源，2＋2 块）——第一段是 Pass 0 的 <code>description</code> 折进正文，第二段是原文块，两段说的是同一件事：</p>
+      <div class="chain">
+        <i>"LangSmith 是 [[entity/rechat|Rechat]] 使用的 LLM [[concept/tracing|追踪日志]]工具，支持以人类可读方式查看[[concept/trace|追踪]]记录，并提供交互式提示词[[concept/debugging|调试]]环境（playground）用于迭代提示词。"</i><br>
+        <i>"记录 LLM 追踪日志的解决方案正在增多。Rechat 使用 LangSmith，它记录追踪日志并允许以人类可读的方式查看，同时提供交互式 playground 来迭代提示词。……"</i>
+      </div>
+      <ul>
+        <li><b>量化</b>（脚本 <code>analyze_multisource.py</code>，2-gram Jaccard）：83 个内容页里"首行摘要 vs 后续段落" ≥0.40 的 <b>3 页</b>、≥0.30 的 <b>6 页</b>（含两个多源页：langsmith 0.309／shreya-shankar 0.301）；<b>页内块级近重复 ≥0.55 只有 1 页</b>（<code>concept/unit-tests</code>）。</li>
+        <li>⚠️ <b>判据教训</b>：自动近重复只抓得到"字面很像"，抓不到"换个说法重说一遍"——langsmith 那页人一眼能看出在重复，阈值 0.55 却只报 1 页。⇒ <b>读感不能拿单一自动指标当判据</b>（又一次"判据必须标来源与边界"）。</li>
+      </ul>
+
+      <p><b>⑤ 顺带的两个数据点</b></p>
+      <ul>
+        <li><b>产物体积比掉到 1 以下</b>：73,440 ÷ 103,328 ＝ <b>71%</b>，而 A5 单篇是 154%（首跑）／170%（重解析后）。2026-10-09 更正（两版）：<b>原因不是"页数不随字符线性增长"这句复述</b>——两边覆盖率其实一样（96.3% vs 97%）。正确的分解是<b>三个乘数</b>：<code>产物 ÷ 源 ≈ 引用倍数 × 编辑器 out/in × 语言密度</code>。三个锚点（同一台机器、同一套流程、脚本 <code>probe_ratio.py</code>／<code>probe_zh_source.py</code>）：<br>
+        · <b>中文源 → 中文页</b>（《深入理解 AI Agent》第 9 章，24,933 字符）：引用倍数 2.06 × out/in <b>0.90</b> ⇒ 产物/源 <b>2.03</b>；<b>源文 12-gram 覆盖 79.2%</b>；<br>
+        · <b>英文源 → 中文页</b>（P6，24,681 字符，同一篇跑了两次）：引用倍数 2.36／2.44 × out/in <b>0.343／0.377</b> ⇒ 产物/源 0.862／0.978；<br>
+        · <b>英文源 → 中文页</b>（P6＋P7，103,328 字符）：引用倍数 1.97 × out/in 0.35 ⇒ 0.69（去掉我插的 <code>## 全路径</code> 标题行 9,713 字符后 0.78）。<br>
+        ⇒ <b>主导项是"语言密度"（英→中，≍0.4 倍）＋"每块被多少页引用"（1.97–3.14）；编辑器几乎不压缩（同语言 0.90）</b>。⚠️ 跨语言时字符数不可直接比，"产物/源"<b>不能当压缩率</b>。⇒ 两篇长文的索引体积反而更划算——与 GraphRAG"语料越大越压得动"同向。</li>
+        <li><b>lint 只剩结构性问题</b>：23 条（<code>orphan_page</code> 17 ＋ <code>missing_cross_ref</code> 6），<b>没有</b> broken_link／stale_ref／empty_content／duplicate_slug；再一次说明体检表里没有"行文"这一维。</li>
+      </ul>
+      <p class="muted">复现路径：<code>prep_multisource.py P6 P7</code> → <code>weknora_multisource.py create/manual/wait/dump/multi</code> → <code>probe_multisource_chunks.py</code> → <code>analyze_multisource.py</code>；原始产物在 <code>data/tmp/weknora-multisource/</code>（含 <code>multi-source-pages.md</code> 与 <code>analysis.json</code>）。</p>
+
+      <h4 id="sec-311" style="margin:14px 0 4px;">3.11 增量与删除实测（✅ 2026-10-09）</h4>
+      <p><b>一句话</b>：为对外稿（<code>docs/publish/0043</code>）取证，在 <code>P6+P7 · 多源页读感</code> 库里跑了两件事——<b>投一篇新文档看增量</b>、<b>删掉 P7 再重投看可逆性</b>。结论：<b>增量可用</b>（新文档＝一堆新页，合并不发生也正常）；<b>删除干净的是"整页消失"，页内剥离极保守；删 ＋ 重投不能复原</b>。脚本：<code>experiments/weknora/probe_incr_del.py</code>。</p>
+
+      <p><b>① 增量：13,855 字符 → 22 页，零合并</b></p>
+      <table>
+        <thead><tr><th>项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>语料／动作</td><td>投入 A4（Anthropic · Effective harnesses for long-running agents），13,855 字符</td></tr>
+          <tr><td>页数</td><td>95 → <b>117</b>（＋22：21 个内容页 ＋ 1 summary）</td></tr>
+          <tr><td>合并</td><td><b>0 个已有内容页被并入</b>（唯一被改的是索引页）</td></tr>
+          <tr><td>成本／耗时</td><td><b>29 次调用 / 98,773 token</b>（写页 21 次 74,294＝75%）；ingest <b>22.5 s</b></td></tr>
+          <tr><td>去重</td><td><b>跑了 1 次（1,480 token）但一个都没合上</b>（A4 与 evals 语料确实不同主题）</td></tr>
+          <tr><td>目录</td><td>新增 1 个一级目录（<code>项目与产品</code>），另有 <b>1 页落在根</b></td></tr>
+          <tr><td>lint</td><td><code>missing_cross_ref</code> 25 → 48（新页带来的"标题出现但未建链"）</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>② 删除：删掉 78,647 字符的 P7</b></p>
+      <table>
+        <thead><tr><th>项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>页数</td><td>117 → <b>70</b>（删掉 <b>47 页</b>：46 个内容页 ＋ 1 summary）</td></tr>
+          <tr><td>被改写</td><td><b>6 页</b>：5 个多源页被剥掉 P7 的 <code>source_ref</code> ＋ 索引页引言重写（<b>version 全部 ＋1</b>）</td></tr>
+          <tr><td>多源页正文</td><td>几乎不动：<code>synthetic-data-generation</code> 3,395→3,350（<b>−45</b>）／<code>rag</code> −92／<code>shreya-shankar</code> −276／<code>hamel-husain</code> −153／<code>langsmith</code> −57</td></tr>
+          <tr><td>那 −45 是什么</td><td>逐行对账＝<b>链接降级</b>（<code>[[concept/error-analysis|错误分析]]</code> → <code>错误分析</code>），<b>不是内容被删</b></td></tr>
+          <tr><td>lint</td><td><code>broken_link</code> <b>0 → 19</b>；<code>orphan_page</code> 23 → 8；<code>missing_cross_ref</code> 48 → 34</td></tr>
+          <tr><td>落库方式</td><td>被删的页是<b>软删除</b>（<code>deleted_at</code> 有值、<code>status</code> 仍是 published，行还在库里）</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>③ 复原测试：把 P7 重投回去</b></p>
+      <table>
+        <thead><tr><th>项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>页数</td><td>70 → <b>114</b>（删除前是 117 ⇒ <b>少 3 页</b>）</td></tr>
+          <tr><td>新建／更新</td><td>新建 44 页；7 页被更新（多源页重新挂上 ref、正文补回）</td></tr>
+          <tr><td>重合度</td><td>被删的 <b>47 个 slug 只有 27 个回来</b>；20 个没回来（<code>entity/arize</code>／<code>braintrust</code>／<code>hex</code>／<code>julius</code>／<code>teresa-torres</code>／<code>concept/transition-failure-matrix</code>…）</td></tr>
+          <tr><td>新增</td><td><b>16 个原来没有的 slug</b>（<code>entity/bertscore</code>／<code>rouge</code>／<code>concept/likert-scale</code>／<code>criteria-drift</code>…）</td></tr>
+          <tr><td>成本</td><td>62 次调用 / 361,915 token</td></tr>
+          <tr><td>lint</td><td><code>broken_link</code> 19 → <b>0</b>（目标页又存在了 ⇒ <b>悬空是被"填上"的，不是被清掉的</b>）</td></tr>
+          <tr><td>目录</td><td>29 个目录里 <b>11 个为空</b>（4 个一级父目录 ＋ <b>7 个二级空目录</b>）；<code>concept/error-analysis</code> 从 <code>评估方法/错误分析</code> <b>漂到</b> <code>评估方法/自动化评估</code>，留下空目录</td></tr>
+        </tbody>
+      </table>
+
+      <div class="chain">
+        <b>三个比数字更有意思的发现</b><br>
+        ① <b>"只删独有贡献"在实践中极保守</b>：那 5 个多源页各有一半左右的块来自 P7（<code>synthetic-data-generation</code> 15/28），但正文几乎原样保留 ⇒ <b>删文档时真正干净的是"整页消失"（单源页），不是"页内剥离"</b>。<br>
+        ② <b>删除会留下悬空链接，而且没人自动收拾</b>：19 条 <code>broken_link</code> 全指向被删页；原因是清理只扫"<b>引用被删文档的页</b>"（<code>cleanDeadLinks</code> 只遍历本批 affectedSlugs），而悬空链接挂在"<b>链接到被删页、但不引用它</b>"的别的页上；且 <code>AutoFix</code> 只在 API 被调用时执行，删除后不会自动跑。🤔 修法不长：删除时用被删页的 <code>in_links</code> 反查，把这些页一并纳入清理范围。<br>
+        ③ <b>删 ＋ 重投不能复原</b>：同一份文档、同一个库、同一个模型，被删的页只回来一半多、还多出 16 个新的；不是数据丢了，而是<b>每一次抽取／命名／归目录都是 LLM 的重新判断</b>——这套系统里没有"重放出同一棵树"的确定性。
+      </div>
+      <p class="muted">⚠️ 口径：被删页数以 API 视角（非归档）为准；数据库里是软删除。token 数取自容器日志逐次 usage（<code>purpose=</code>）。产物：<code>data/tmp/weknora-multisource/incr-a4.json</code>／<code>del-p7.json</code>／<code>incr-p7.json</code>。</p>
+
+      <p><b>④ 语言对照：为什么"产物只有源的 78%"（2026-10-09 定案）</b></p>
+      <ul>
+        <li><b>先钉住机制</b>：wiki 页面的语言由 <code>middleware/language.go</code> 三级决定——<code>WEKNORA_LANGUAGE</code>（部署级，本机为空）＞ 请求的 <code>Accept-Language</code> ＞ 硬编码 <code>zh-CN</code>；而 <b>batch／finalize 里用的是 worker 的 ctx</b>（<code>wiki_ingest_batch.go:344/1091</code> 的 <code>LanguageNameFromContext(ctx)</code>），所以<b>我上传时带 <code>Accept-Language: en-US</code> 也没用</b>——两库页面仍是中文（CJK 0.66–0.85）⇒ <b>本部署里英文语料恒被编译成中文页</b>。</li>
+        <li><b>同语言实验（决定性）</b>：投一篇中文源文（《深入理解 AI Agent》第 9 章，24,933 字符）→ 49 个内容页、Σcontent <b>50,662</b>、Σ素材 56,283 ⇒ <b>out/in ＝ 0.90</b>、产物/源 ＝ <b>2.03</b>，<b>源文 12-gram 覆盖率 79.2%</b>（同语言下这个指标才有意义）。</li>
+        <li><b>跨语言对照</b>：同一篇英文 P6（24,681 字符）两次编译 ⇒ out/in <b>0.343／0.377</b>；12-gram 覆盖率只剩 2–6%（因为页面是中文，英文串根本不会出现在里面）。</li>
+        <li>⇒ <b>结论</b>：78% 的主因是 <b>"英文源 → 中文页"的语言密度差（≈0.4 倍）</b>，其次是"每块被多少页引用"（1.97–3.14）；<b>编辑器几乎不压缩</b>（同语言 0.90）——我前两轮"编辑器在压缩"的结论<b>撤回</b>。⚠️ 跨语言的字符比不能当压缩率。</li>
+        <li><b>那 A5 为什么反而膨胀（154%）？</b>语言在两边是同一因子（都是英→中），比 A5 对 P6＋P7 时被约掉——拉开差距的是<b>引用倍数</b>：A5 是单篇长文，<b>条目/块 ＝ 43/70 ＝ 0.61</b>、<b>页/块 ＝ 0.64</b>、每页均引 3.9 块 ⇒ 引用倍数 <b>3.14</b>；P6＋P7 是两篇 272 块，<b>条目/块 ＝ 87/272 ＝ 0.32</b>、页/块 0.31、每页均引 6.1 块 ⇒ 引用倍数 <b>1.97</b>。⇒ <b>P6＋P7 每页引的块更多，但页/块比只有 A5 一半</b>（长文里几乎每段都服务多个主题；FAQ 里大量段落是重复问答，撑不出新页），乘出来复用倍数低 60%，压不过"英→中"的缩水。</li>
+        <li><b>⚠️ <code>out/in</code> 这个比值的口径要说清（别让它背锅）</b>：<code>in</code> 我算的是"该页 <code>chunk_refs</code> 里<b>存活块</b>的原文长度之和、按页去重"——<b>它全是块原文，不含任何非块内容</b>；而模型实际看到的素材<b>比这更多</b>（还有每篇的 <code>**条目名**: description</code> 前缀、<code>&lt;shared_source_contexts&gt;</code> 的文档画像、图片 chunk 的 OCR/caption 内联）。<b>但它有一个反向偏差</b>：<code>chunk_refs</code> 是<b>并集、只增不减</b>（<code>mergeChunkRefs</code>），所以被重写过的页会把"旧版本用过、当前正文里已经没有"的块继续算进 <code>in</code> ⇒ <b>in 偏大、out/in 偏小</b>。<br>⇒ 三个数不能混用：<b>单次写入 ＋ 同语言</b>（中文源 chapter9）<b>0.90</b>；<b>单次写入 ＋ 跨语言</b>（P6 两次）0.343／0.377；<b>多次重写 ＋ 跨语言</b>（A5 0.47／P6＋P7 0.35）。要测"编辑器真实保留率"，必须控制在<b>同语言 ＋ 只写一次</b>。</li>
+        <li><b>顺带的抖动样本</b>：同一篇 P6、同一配置、跑两次 ⇒ <b>33 页/21,278 字符 vs 41 页/24,142 字符</b>（页数 +24%、体积 +13.5%）——比"47 个 slug 只回来 27 个"更直观地量化了不确定性。</li>
+      </ul>
+      <p class="muted">脚本：<code>probe_ratio.py</code>（体积分解）、<code>probe_zh_source.py</code>（同语言锚点）、<code>probe_language_ab.py</code>（语言 A/B，证明请求头改不动页面语言）；产物：<code>language-ab.json</code>／<code>zh-source.json</code>。</p>
+
+      <h3 id="sec-4">4. 待办</h3>
+      <ul>
+        <li class="ok">✅ <b>装 Docker Desktop ＋ 部署 WeKnora</b>：已完成（见 §1.1）——数据盘已挪到 D、五件镜像就位、核心栈全绿、<code>http://localhost</code> 200。</li>
+        <li><b>下一步：注册账号 ＋ 配模型</b>——首次访问落到注册页（单二进制/标准版都要注册登录）；模型侧用 DeepSeek（对齐 GraphRAG 线的成本口径），embedding 待定（本地 Ollama 或云）。</li>
+        <li class="ok">✅ <b>账号 ＋ 模型 ＋ API key</b>：已完成——对话 <code>deepseek-flash</code>（注意 <code>deepseek-chat</code> 已是退役别名）、向量 <code>qwen3.7-text-embedding</code>（1024 维）；API key 落在 <code>D:\lida-data\vscode\WeKnora\.api-key</code>（脚本读它、不回显）。</li>
+        <li class="ok">✅ <b>第一轮：看产物形状</b>：完成（见 §3.1）——45 页 / 251 链接 / 悬空 0 / 压缩比 154% / 88 秒。</li>
+        <li class="ok">✅ <b>阶段三（chunk 引用匹配）细读</b>：完成（结论 §3.5、提示词原文与中译 §7.8）——关键收获：<b>引用式抽取</b>（模型指认证据块、正文素材＝原文）／候选清单<b>全量</b>进每批（为前缀缓存）／引用关系<b>落库在 <code>wiki_pages.chunk_refs</code></b>（2026-10-09 更正；<code>new_slugs</code> 才是纯中间产物）。</li>
+        <li class="ok">✅ <b>会话脚本</b>：<code>experiments/weknora/weknora_up.ps1</code> 写好并验证（起引擎／起服务／健康检查／日志快照＋跟随；写它连踩六个 Windows/PowerShell 坑，见 §7.9）。另修掉 <code>.env</code> 里 Langfuse 占位 key 导致的追踪重试噪音。</li>
+        <li class="ok">✅ <b>阶段四（summary 页）细读</b>：完成（结论 §3.6、提示词原文与中译 §7.10）——关键收获：<b>它与引用匹配并行跑</b>／<b>它吃 ContentInstructions（引用步不吃）</b>／一物三用（一页 ＋ 索引行来源 ＋ 其它页面的共享上下文）／slug 故意用 <code>summary/&lt;文档ID&gt;</code> 防幻觉／摘要失败 → 整篇 requeue（与引用步"只丢一批"不同）。</li>
+        <li class="ok">✅ <b>阶段五（目录规划 taxonomy）细读</b>：完成（结论＋提示词原文与中译都在 §3.7）——关键收获：<b>批级一次规划</b>（≤60 条目/次，超了分批且前批目录 feed-forward）／<b>已有目录锚定</b>（≤60 个目录全喂，超过才用嵌入 topK=3 挑，一级目录全留）／<b>顺序建目录再并发套用</b>（只套给 <code>FolderID</code> 为空的页）／<b>深度硬上限 3</b>（提示词要求 ≤2）／实测 43 条目＝1 次调用、87 条目＝2 次调用（正好验证 60）＋ 跨批复用生效（7 个新页全进已有目录）。</li>
+        <li class="ok">✅ <b>阶段六（reduce 写页）细读</b>：完成（结论＋三个提示词原文全在 §3.8）——关键收获：<b>唯一的"写内容"环节</b>（A5：43 次调用／197,696 token ＝ 82% 成本）／按 slug 并行 ＋ per-slug 锁／<b>slug 逃逸成 ref-N 句柄</b>（防 UUID slug 被抄成 404）／先剥 chunk 句柄／截断则续写 3 轮、仍截断就不写页／它<b>也吃 ContentInstructions</b>。</li>
+        <li class="ok">✅ <b>阶段二（去重与身份对齐）细读</b>：完成（结论 §3.4，含提示词原文＋中译）——关键收获：<b>它站在 Pass 0 之后、引用匹配之前</b>（所以引用拿到的是归并后的身份）／<b>两层判同</b>（确定性精确身份 → trigram ＋ LLM 语义判同）／<b>空库或同批进多篇＝0 次调用</b>。下一步＝<b>阶段五（目录规划 taxonomy，见下一条）</b>，再往后是阶段七（链接注入＋索引收尾，§3.9）。</li>
+        <li class="ok">✅ <b>阶段一（Pass 0）细读</b>：完成（结论 §3.3、提示词原文与中译 §7.6）——关键收获：<b>只抽点不抽边</b>／粒度是"详细度"而非"领域"／<code>previous_slugs</code> 是身份账本／视角靠自由文本指令注入且<b>默认空</b>。下一步＝<b>阶段二（去重与身份对齐）</b>。</li>
+        <li><b>第二轮：视角选择</b>——⚠️ §3.5 实测已证明<b>引用阶段补 slug 不受粒度/领域控制</b>，口径必须用<b>合并后候选数／落库页数</b>：<b>A 粒度敏感性</b>（只动 <code>extraction_granularity</code> 三档，同时记 <code>new_slugs</code>）／<b>B 视角可控性</b>（只动 <code>extraction_instructions</code>，<b>改完必须触发重新解析</b>，并跑 2–3 遍同配置当<b>抖动基线</b>）。</li>
+        <li><b>第三轮：增量＋删除</b>——先验 <code>wiki_page_revisions</code> 能不能当"改动面"的对账尺子（目前只有 1 条）；再删源看 <code>stale_ref</code> / 孤儿页怎么变；✅ <b>"多源页读感"已跑完（P6＋P7，见 §3.10）</b>：多源页 4/86，典型那页（<code>concept/synthetic-data-generation</code>，13＋15 块）合得顺；但 <code>entity/langsmith</code> 这类页出现"摘要句 ＋ 原文块"重复 ⇒ §3.8 ①-补 的判断<b>方向成立、烈度有限</b>。</li>
+        <li class="ok">✅ <b>第三轮（增量 ＋ 删除）实测完成（§3.11）</b>：<b>增量</b>——投 A4（13,855 字符）→ ＋22 页、0 合并、29 次调用 98,773 token、新增 1 个一级目录；<b>删除</b>——删 P7（78,647 字符）→ 117→70 页（删 47）、6 页被改写（多源页 version ＋1）、<code>broken_link</code> 0→19；<b>重投</b>——70→114 页（比原来少 3）、47 个被删 slug 只回来 27 个、新增 16 个、留 7 个空二级目录。⇒ <b>增量可用、删除可用，但两者都不幂等</b>；三个新发现（页内剥离极保守／悬空链接无人自动清／删+重投不可复原）已写进 §3.11，并成为对外稿 <code>docs/publish/0043</code> 的 §4／§5。</li>
+        <li><b>编译成本的口径要先定</b>——因为编译不落库：开 langfuse profile 重跑，还是开 <code>LLM_DEBUG_LOG</code> 自己数队列？（见 §3.1 末）</li>
+        <li class="ok">✅ <b>阶段七（链接注入 ＋ 索引收尾）细读</b>：完成（结论＋两条索引提示词原文都在 §3.9）——关键收获：<b>链接注入只对"已存在 slug"建链</b>（候选＝该页已有 out-links ＋ 本批兄弟页）⇒ 悬空链接结构上不可能；规则里有<b>长度降序、只包第一处、禁写区、ASCII 才判词边界、单字汉字不加链、注入后平移 spans</b>；<b>死链清理</b>能改指就改指、不能就降级纯文本，且走 <code>UpdateAutoLinkedContent</code> <b>不涨 version</b>；<b>索引页只有引言落库</b>（清单由 <code>/wiki/index</code> 动态生成），引言分"首次吃摘要／增量只吃本批变化"两条提示词。实测 A5 251 链接／悬空 0、P6＋P7 注入 77 页。⇒ <b>整条链路（§3.3–§3.9 七个阶段）读完。</b></li>
+        <li><b>读完剩下 4 点</b>：编译主流程（<code>wiki_ingest.go</code> 132 KB／<code>wiki_ingest_batch.go</code> 83 KB）· 引用锚定（<code>wiki_ingest_cite.go</code>）· 去重合并（<code>wiki_ingest_dedup.go</code>）· 链接生成（<code>wiki_linkify.go</code>）＋增量路径（<code>wiki_ingest_followup.go</code>）。</li>
+        <li><b>待定两件</b>：embedding 用本地还是云（Lite 默认 Ollama，标准版可配多种）；第一轮语料是否就用 A5 起手。</li>
+        <li><b>目录侧可测点 ①：&gt;60 目录时的复用率</b>（正式立项 2026-10-09）——造一个目录数 &gt;60 且含二级的库（目录可通过 <code>POST /knowledgebase/{kb}/wiki/folders</code> 预建），投一篇归属明确的短文（Z1／Z2 那种），看新页<b>落进已有目录的比例</b>（复用率）vs 新造目录。判据＝复用率；触发条件＝目录 &gt;60 使嵌入路径真正跑起来。</li>
+        <li><b>目录侧可测点 ②：降级路径会不会丢一级锚点</b>（正式立项 2026-10-09）——把 KB 的 embedding 模型摘掉（或让它调用失败）＋ 制造 &gt;60 目录，看注入是否退化成"字符串序截前 150"、一级目录是否被切掉。<b>判据＝注入集合里一级目录是否齐全</b>（需要临时加日志把注入集合打出来，因为现在没有这个可观测字段）。</li>
+      </ul>
+    </section>
+
+    <section class="card" id="scene">
+      <h2>第二部分 · 现场细节（2026-09-30 ／ 10-07 ／ 10-08）</h2>
+
+      <h3 style="margin-top:16px;">7.1 时间线</h3>
+      <table>
+        <thead><tr><th>时间</th><th>发生了什么</th></tr></thead>
+        <tbody>
+          <tr><td>11:53</td><td>对外稿 <code>0042-llmwiki-overview.md</code> 成稿（LLM-Wiki 总论，结尾承诺三篇验证文）</td></tr>
+          <tr><td>—</td><td>沛东问"第一个问题：WeKnora 的 Wiki 编译该怎么做" ⇒ 定下"克隆 → 读链路 → 部署 → 三轮实测"的顺序</td></tr>
+          <tr><td>14:55</td><td>克隆 <code>Tencent/WeKnora</code> 到 <code>D:\lida-data\vscode\WeKnora</code>（直连 github 失败两次，改走本机 Clash 代理 <code>127.0.0.1:7890</code> 成功）</td></tr>
+          <tr><td>14:57</td><td>读完两处关键，回头把 <a href="0036-llmwiki-overview.html">0036</a> §6.0 的"没有 Error Book"改准（并同步 0042 与 index）</td></tr>
+          <tr><td>—</td><td>沛东问"WeKnora 有 Lite 没有桌面版" ⇒ 查文档三形态、查 Releases、查镜像；辨析出"Lite 不缺能力，缺的是配套服务"</td></tr>
+          <tr><td>—</td><td>查 GitHub Releases（<b>八个版本 assets 全 0</b>）＋ Docker Hub（三个官方镜像都有 v0.8.2）⇒ 平台定案：标准版 Docker Compose</td></tr>
+        <tr><td>10-07</td><td>装 Docker Desktop（用户级安装）· system proxy <b>实测可用</b>（redis pull 25.4s）· <b>数据盘挪到 D</b>（C 盘 6.8→13.9 GB）· 拉镜像（解包约 10.7 GB）· <code>compose up -d</code> 五件全绿 · 写 <code>.env</code>（锁 <code>v0.8.2</code>＋生成密钥）</td></tr>
+        <tr><td>10-07</td><td>建 wiki 型知识库（<b>type=wiki 不会自动开 wiki，要显式设 <code>indexing_strategy.wiki_enabled</code></b>）· HTML 不被接受（<code>unsupported file type</code>）改走「手工 Markdown」· 上传 A5 → 编译 88 秒 → <b>第一轮实测</b>（§3.1）</td></tr>
+        <tr><td>10-08</td><td><b>源码级细读</b>：流水线总览与成本构成（§3.2）→ 阶段一 Pass 0（§3.3 ＋ 提示词原文中译 §7.6）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7.2 原始输出留档</h3>
+      <pre># 克隆（前两次直连失败，第三次走代理成功）
+$ git -c http.proxy=http://127.0.0.1:7890 clone --branch v0.8.2 --depth 1 \
+    https://github.com/Tencent/WeKnora.git D:\lida-data\vscode\WeKnora
+  ⇒ v0.8.2 / commit 3e8b0bf / 96 MB / 4,355 文件
+
+# GitHub Releases（api.github.com，走代理）
+v0.8.2 | published=2026-09-24 | assets=0
+v0.8.0 | published=2026-09-03 | assets=0
+v0.7.2 | published=2026-08-07 | assets=0
+v0.7.1 | published=2026-07-24 | assets=0
+v0.7.0 | published=2026-07-17 | assets=0
+v0.6.3 | published=2026-06-26 | assets=0
+v0.6.2 | published=2026-06-10 | assets=0
+v0.6.1 | published=2026-06-05 | assets=0
+
+# Docker Hub 镜像（full_size，压缩）
+wechatopenai/weknora-docreader:v0.8.2   1,507 MB
+wechatopenai/weknora-app:v0.8.2           521 MB
+paradedb/paradedb:v0.22.6-pg17            498 MB
+wechatopenai/weknora-ui:v0.8.2             31 MB
+redis:7.0-alpine                        约 40 MB
+  ⇒ 合计约 2.6 GB</pre>
+
+      <h3>7.3 本机环境事实 ✅</h3>
+      <ul>
+        <li><b>OS</b>：Windows 10 专业版 22H2（19045.0），<b>AMD64</b>；<b>63.4 GB 内存 / 12 逻辑核</b>（标准版要求 8GB 起步，余量充足）。</li>
+        <li><b>Docker</b>：<span class="no">未安装</span>（<code>docker</code> 命令不存在）——这是唯一的硬前提。</li>
+        <li><b>Go</b>：<span class="no">未安装</span>；<b>Node</b> v24.13.1／<b>npm</b> 11.12.1 已有（Lite 自编也还缺 Go 与 CGO 工具链）。</li>
+        <li><b>WSL</b>：已启用、默认版本 2，<b>但没有已安装的发行版</b>——不影响 Docker Desktop（它自带 docker-desktop 发行版）。</li>
+        <li><b>网络</b>：github 直连被重置/超时，<b>本机 Clash 在 <code>127.0.0.1:7890</code></b>；走它之后 git clone 与两个 API 都通。</li>
+        <li><b>磁盘</b>：D 盘剩余约 682 GB。</li>
+      </ul>
+
+      <h3>7.4 关键代码位置（都在 v0.8.2）</h3>
+      <table>
+        <thead><tr><th>要回答的问题</th><th>文件</th><th>位置／要点</th></tr></thead>
+        <tbody>
+          <tr><td>wiki 服务在不在（Lite 也生效）</td><td><code>internal/container/container.go</code></td><td>:281-283 三个 wiki 服务<b>无条件注册</b>，无 edition 门控</td></tr>
+          <tr><td>Lite 关掉了什么</td><td><code>internal/handler/deployment_capabilities.go</code></td><td>只关 <code>organizations</code>（<code>not_supported_in_lite</code>）；其余按路由/后端可用性判</td></tr>
+          <tr><td>体检与自动修</td><td><code>internal/application/service/wiki_lint.go</code></td><td>类型 :14 · <code>RunLint</code> :94 · <code>AutoFix</code> :346（三种修法）</td></tr>
+          <tr><td>问题台账</td><td><code>internal/agent/tools/wiki_flag_issue.go</code> ＋ <code>wiki_page.go</code></td><td>四类 issue_type；<code>CreateIssue</code> :1355／<code>ListIssues</code> :1367／<code>UpdateIssueStatus</code> :1372</td></tr>
+          <tr><td>目录／视角</td><td><code>wiki_ingest_taxonomy.go</code></td><td><code>planBatchTaxonomy</code> :32（含替换旧做法的注释）· <code>selectRelevantFolders</code> :149 · <code>selectFoldersByVectors</code> :217</td></tr>
+          <tr><td>Neo4j 是不是外接</td><td><code>container.go</code></td><td>:1722 <code>initNeo4jClient</code> 读 <code>NEO4J_ENABLE</code>／<code>NEO4J_URI</code>——纯外部服务</td></tr>
+          <tr><td>逐轮记账</td><td><code>migrations/…/000085_message_usage.up.sql</code>、<code>migrations/sqlite/000012</code>、<code>types/message.go:404</code></td><td><code>messages.usage</code> 存每轮 token（含 <code>CacheReadTokens</code>）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7.5 材料与出处</h3>
+      <ul>
+        <li>源码：<code>D:\lida-data\vscode\WeKnora</code>（<code>https://github.com/Tencent/WeKnora</code>，tag <code>v0.8.2</code>）</li>
+        <li>安装文档：<code>website-docs/01-getting-started/02-installation.md</code>（三形态总览、七节"桌面端"含未发布警告、Lite 运行时环境变量清单）</li>
+        <li>Lite 与标准版差异：<code>docs/LITE.md</code></li>
+        <li>镜像与发布：Docker Hub API、GitHub Releases API（2026-09-30 查；都经本机 Clash 代理）</li>
+        <li>上游总纲：<a href="0036-llmwiki-overview.html">0036 · LLM-Wiki 总纲</a> §6（三组待验）· 对外稿 <code>docs/publish/0042-llmwiki-overview.md</code></li>
+      </ul>
+
+      <h3 id="sec-76">7.6 阶段一提示词原文与中译（Pass 0，2026-10-08）</h3>
+      <p class="muted">来源：<code>internal/agent/prompts_wiki.go:172</code>（<code>WikiCandidateSlugPrompt</code>，4,853 字符／78 行）。下面的英文是<b>原文逐字</b>，中文是<b>译文</b>；占位符 <code>{{...}}</code>、标签名、JSON 字段名保持原样（它们是契约，不能翻）。HTML 里尖括号已转义。</p>
+      <p><b>原文</b></p>
+      <pre>You are a knowledge extraction system. Analyze the following document and list all significant entities AND key concepts as a lightweight candidate set. Another pass will later attach concrete supporting chunks to each item, so you do NOT need to write exhaustive per-item facts here.
+
+&lt;document&gt;
+&lt;content&gt;
+{{.Content}}
+&lt;/content&gt;
+&lt;/document&gt;
+
+&lt;previous_slugs&gt;
+{{.PreviousSlugs}}
+&lt;/previous_slugs&gt;
+
+&lt;instructions&gt;
+Return a JSON object with two arrays: "entities" and "concepts".
+**IMPORTANT: Write ALL names, descriptions, and details in {{.Language}}**.
+
+If the &lt;content&gt; block above is empty, contains only image references with no extracted text, or otherwise carries no substantive information, return {"entities": [], "concepts": []}. Do NOT invent entities or concepts from any other source.
+
+### Extraction Scope (Granularity: {{.Granularity}})
+{{.GranularityGuidance}}
+
+### Slug Continuity Rules
+If previous slugs are provided above, you MUST follow these rules:
+- If an entity or concept from the previous extraction still exists in the current document, **reuse its exact slug** from the previous list. Do NOT generate a new slug for the same thing.
+- If an entity or concept no longer appears in the document, **do NOT include it** in the output.
+- Only generate new slugs for entities/concepts that are genuinely new (not present in the previous list).
+- This ensures slug stability across document updates.
+
+### Entities (people, organizations, products, places, technologies, events, etc.)
+Each entity should have:
+- "name": The entity name in {{.Language}} (human-readable).
+- "slug": URL-friendly slug, format "entity/&lt;lowercase-hyphenated-name&gt;" (use romanized/pinyin form for non-Latin names). **Reuse previous slug if the entity was extracted before.**
+- "aliases": An array of strings representing names that refer to THE EXACT SAME entity. Only include: official abbreviations (e.g. "IBM" for "International Business Machines"), full/short name variants (e.g. "腾讯" for "腾讯控股有限公司"), translations, and well-known alternate names. Do NOT include parent categories, related products, generic terms, or broader concepts. Provide [] if none.
+- "description": **Index listing summary** — one sentence, 15-40 words, in {{.Language}}. Describes WHAT this entity IS and its role in the document. Must be self-contained. This will be displayed in the wiki index.
+- "details": A short 1-3 sentence fallback summary in {{.Language}}. This is ONLY used when chunk-level citation fails downstream, so it does NOT need to be exhaustive. Keep it under 300 characters.
+
+Apply the Extraction Scope rules above. Never promote trivially-mentioned names into entities.
+
+### Concepts (topics, themes, methodologies, theories, etc.)
+Each concept should have:
+- "name": The concept name in {{.Language}} (human-readable).
+- "slug": URL-friendly slug, format "concept/&lt;lowercase-hyphenated-name&gt;" (use romanized/pinyin form for non-Latin names). **Reuse previous slug if the concept was extracted before.**
+- "aliases": An array of strings representing names that refer to THE EXACT SAME concept. Only include: official abbreviations (e.g. "RAG" for "Retrieval-Augmented Generation"), full/short name variants, and well-known synonyms used interchangeably in the field. Do NOT include sub-topics, related techniques, broader categories, or implementation details. Provide [] if none.
+- "description": **Index listing summary** — one sentence, 15-40 words, in {{.Language}}. Defines WHAT this concept IS. Must be self-contained.
+- "details": A short 1-3 sentence fallback summary in {{.Language}}. Keep it under 300 characters.
+
+Apply the Extraction Scope rules above. Skip concepts that are merely name-dropped without discussion.
+
+### Deduplication Rules
+- If something is a specific named thing (person, company, product, place), put it ONLY in "entities".
+- If something is an abstract idea, methodology, or theory, put it ONLY in "concepts".
+- Never duplicate items across the two arrays.
+
+### JSON Formatting Rules
+- **CRITICAL**: Do NOT use literal newline characters inside JSON string values. If you need a newline in a string, you MUST use the escaped sequence \n.
+&lt;/instructions&gt;
+
+Output ONLY valid JSON. Example:
+{
+  "entities": [
+    {
+      "name": "Acme Corp",
+      "slug": "entity/acme-corp",
+      "aliases": ["Acme", "Acme Corporation"],
+      "description": "A technology company specializing in AI solutions.",
+      "details": "Founded in 2020, focuses on enterprise AI products."
+    }
+  ],
+  "concepts": [
+    {
+      "name": "Retrieval-Augmented Generation",
+      "slug": "concept/retrieval-augmented-generation",
+      "aliases": ["RAG"],
+      "description": "A technique that combines information retrieval with language model generation.",
+      "details": "Retrieves documents, then feeds them as context to an LLM."
+    }
+  ]
+}</pre>
+      <p><b>中译</b></p>
+      <pre>你是一个知识抽取系统。分析下列文档，把所有重要的「实体」和「关键概念」列成一个轻量的候选集。后续还有一遍处理会为每一条挂上具体的支撑块，所以这里不需要写详尽的逐条事实。
+
+&lt;document&gt;
+&lt;content&gt;
+{{.Content}}
+&lt;/content&gt;
+&lt;/document&gt;
+
+&lt;previous_slugs&gt;
+{{.PreviousSlugs}}
+&lt;/previous_slugs&gt;
+
+&lt;instructions&gt;
+返回一个 JSON 对象，含两个数组："entities" 与 "concepts"。
+**重要：所有名称、描述、明细都用 {{.Language}} 写。**
+
+如果上面的 &lt;content&gt; 块为空、只含图片引用而没有抽取出的文字、或除此之外不含实质信息，就返回 {"entities": [], "concepts": []}。绝不要从任何其他来源编造实体或概念。
+
+### 抽取范围（粒度档位：{{.Granularity}}）
+{{.GranularityGuidance}}
+
+### slug 连续性规则
+如果上面提供了 previous slugs，你必须遵守以下规则：
+- 若上一轮抽到的某个实体或概念在本文档中仍然存在，**必须复用它在旧列表里的那个 slug**，不要为同一个东西生成新 slug。
+- 若某个实体或概念已不在本文档中出现，**不要**把它输出。
+- 只为真正新增（旧列表里没有）的实体/概念生成新 slug。
+- 这样才能保证文档更新时 slug 的稳定性。
+
+### 实体（人物、组织、产品、地点、技术、事件等）
+每个实体应包含：
+- "name"：实体名，用 {{.Language}}（人类可读）。
+- "slug"：URL 友好的 slug，格式 "entity/&lt;小写-连字符-形式&gt;"（非拉丁名用其罗马化/拼音形式）。**若该实体此前抽到过，复用旧 slug。**
+- "aliases"：字符串数组，表示**指同一个实体**的其他叫法。只收：官方缩写（如 "IBM" 指 "International Business Machines"）、全称/简称变体（如 "腾讯" 指 "腾讯控股有限公司"）、译名、以及广为人知的别称。**不要**收上位类别、相关产品、泛化词、或更宽的概念。没有就给 []。
+- "description"：**索引列表用的摘要**——一句话，15–40 个词，用 {{.Language}}。说明这个实体**是什么**以及它在本文档中的角色。必须自足（不依赖上下文也能读懂）。这一条会显示在 wiki 索引里。
+- "details"：1–3 句的简短兜底摘要，用 {{.Language}}。**仅当**下游的块级引用失败时才会用到，所以不必详尽，控制在 300 字符以内。
+
+按上面的「抽取范围」规则执行。绝不把只是顺带提一句的名字升格为实体。
+
+### 概念（主题、议题、方法论、理论等）
+每个概念应包含：
+- "name"：概念名，用 {{.Language}}（人类可读）。
+- "slug"：URL 友好的 slug，格式 "concept/&lt;小写-连字符-形式&gt;"（非拉丁名用其罗马化/拼音形式）。**若该概念此前抽到过，复用旧 slug。**
+- "aliases"：字符串数组，表示**指同一个概念**的其他叫法。只收：官方缩写（如 "RAG" 指 "Retrieval-Augmented Generation"）、全称/简称变体、以及本领域内可互换使用的通用同义词。**不要**收子话题、相关技术、上位类别、或实现细节。没有就给 []。
+- "description"：**索引列表用的摘要**——一句话，15–40 个词，用 {{.Language}}。定义这个概念**是什么**。必须自足。
+- "details"：1–3 句的简短兜底摘要，用 {{.Language}}。控制在 300 字符以内。
+
+按上面的「抽取范围」规则执行。跳过只是被提了个名字、没有任何讨论的概念。
+
+### 去重规则
+- 若是具体的具名之物（人、公司、产品、地点），只放进 "entities"。
+- 若是抽象想法、方法论、理论，只放进 "concepts"。
+- 两个数组之间绝不重复同一条。
+
+### JSON 格式规则
+- **关键**：JSON 字符串值里不要出现真实换行字符；需要换行时必须用转义序列 \n。
+&lt;/instructions&gt;
+
+只输出合法 JSON。示例：
+{
+  "entities": [
+    {
+      "name": "Acme Corp",
+      "slug": "entity/acme-corp",
+      "aliases": ["Acme", "Acme Corporation"],
+      "description": "A technology company specializing in AI solutions.",
+      "details": "Founded in 2020, focuses on enterprise AI products."
+    }
+  ],
+  "concepts": [
+    {
+      "name": "Retrieval-Augmented Generation",
+      "slug": "concept/retrieval-augmented-generation",
+      "aliases": ["RAG"],
+      "description": "A technique that combines information retrieval with language model generation.",
+      "details": "Retrieves documents, then feeds them as context to an LLM."
+    }
+  ]
+}</pre>
+      <p><b>三档粒度指引（<code>{{.GranularityGuidance}}</code> 会被替换成下面三段之一；英文原文在 <code>prompts_wiki.go:539-583</code>，这里只留中译）</b></p>
+      <p class="muted"><b>focused —— 激进裁剪</b>：只抽本文档的「主要对象」——这篇文档根本上就是在讲的那几个。要包含：文档的主要对象（简历＝那个人和他的具名项目；公告＝发布方与被发布的事件/产品；产品页＝产品本身和厂商）；实体＋概念合计上限 <b>3–7 条</b>。要排除（即便被明确点名）：顺带提到的技术栈/库/框架（简历里写 "Spring Boot, MySQL, Redis" 就不要抽）；只是被引用到的泛化概念与方法论（microservices／async processing／stateless authentication／streaming response 这类实现细节）；只作为背景提到的地方/学校/组织（除非文档讲的就是那所学校）；任何"内容少到只能配一句话描述"的东西。<b>拿不准就别收。</b></p>
+      <p class="muted"><b>standard —— 均衡（默认）</b>：主要对象 ＋ 被<b>实质性讨论</b>的实体/概念（拥有独立段落、多条要点，或至少 <b>2–3 句</b>上下文）。要包含：主要对象；获得成块内容的次要实体/概念；当文档解释了主体<b>如何使用</b>某种具名方法/架构/技术时收这些具名项（而不只是提到名字）。要排除：只出现在逗号分隔技术清单里、没有任何进一步解释的项（"Tech stack: A, B, C, D" 一个都不抽，除非它们各自在别处还有段落）；只出现一次、括号里的引用、泛化的基础设施名词；贡献只够写一句短句的东西。<b>对边缘项拿不准时倾向排除。</b></p>
+      <p class="muted"><b>exhaustive —— 最大化召回</b>：抽出每一个具名实体和每一个可识别的概念，包括只被提到一次的技术/工具/标准/方法论——前提是它们具体且广为人知。要包含：所有主要与次要对象；所有具名技术、库、框架、数据库、服务、协议或标准；所有有通行名称的概念与方法论（RAG／microservices／async processing／SSE／JWT）。只排除：真正泛化的词（server／function／data）；只出现在 URL 路径或参考文献引注里的项。定位是"技术术语表"而非"精选叙事 wiki"时用这个模式。</p>
+
+      <h3 id="sec-77">7.7 阶段一的两个实现细节：切块与重建（2026-10-08）</h3>
+      <p class="muted">主干的 §3.3 只保留读者需要的结论；这里放算法级细节，供以后复现或写文章时引用。</p>
+
+      <p><b>(1) 切块：<code>internal/infrastructure/chunker/</code>（不是 docreader 切的）</b></p>
+      <ul>
+        <li><b>三段式</b>：<code>protectedSpans</code>（先标出受保护区域）→ <code>buildUnitsWithProtection</code>（按分隔符<b>递归</b>切成 unit；受保护片段作为原子 unit；整块超 <code>maxProtectedSize=7500</code> 才强制切）→ <code>mergeUnits</code>（把 unit 合并成 chunk，<b>overlap 只在这一步</b>）。</li>
+        <li><b>默认值</b>（唯一权威 <code>splitter.go:81-104</code>）：<code>ChunkSize=512</code> 字符（≈100–130 英文 token／≈300 中文 token）、<code>ChunkOverlap=80</code>、<code>Separators=["\n\n","\n","。"]</code>；<b><code>overlap &gt; chunkSize/2</code> 会被强制砍半</b>；设了 <code>TokenLimit</code> 就换算成字符预算、与 ChunkSize <b>取更小者</b>。</li>
+        <li><b>受保护片段</b>：LaTeX 块公式／Markdown 图片与链接／表格（含表头+分隔行、表行）／围栏代码块／行内代码。注释里记了个教训：以前这些正则不限长度，<b>OCR 残留的一个孤立 <code>[</code> 会把整段吞成一个"受保护块"，切分直接失效</b>，所以现在都限死单行与长度。</li>
+        <li><b>策略分层</b>：<code>auto</code>（profiler 选 heading／heuristic／legacy，逐层校验、失败往下退）／<code>heading</code>／<code>heuristic</code>／<code>recursive</code>（＝legacy 的别名）／<b>空值＝legacy</b>。⚠️ <code>strategy.go</code> 文件头注释写"empty 或 auto 走 profiler"，<b>与代码不符</b>（<code>resolveChainWithProfile</code> 里 <code>case StrategyLegacy, "":</code> → TierLegacy）；以代码为准。</li>
+        <li><b>overlap 是条件性的</b>（<code>computeOverlap</code>）：① 下一个 unit 快占满预算 → 缩小窗口；② <code>maxOverlap&lt;=0</code> → 不给；③ 窗口里找不到"语义边界"（<code>findSemanticOverlapBoundaryEndingAtOrAfter</code>，lookbehind＝4 即 <code>\r\n\r\n</code> 长度）→ 不给；④ 重叠为空／超预算／纯空白 → 不给。另外 <code>semanticOverlapWindow</code> <b>遇到零宽度的生成单元（补写表头）会切断</b>，不许跨越它取重叠。</li>
+        <li><b>表头跟踪</b>：跨块时给新块<b>补写表头</b>，但先查 <code>headerAlreadyPresent</code>（重复就不补）与 <code>headerColumnMismatch</code>（列不匹配就不补）；表结束时主动 flush，避免把下一张表并进"还带着上一张表头"的块。</li>
+        <li><b>A5 实测</b>：70 文本块 ＋ 1 summary 块；min 42／avg 427／<b>p50 431</b>／max 827（<code>&lt;100</code> 字符 3 块、<code>&gt;1000</code> 0 块）。<b>69 个接缝只有 15 个有重叠</b>（长度 29–78，不是恒定 80），另 54 个去掉首尾空白后仍无重叠 ⇒ 与"overlap 条件性"一致。</li>
+      </ul>
+
+      <p><b>(2) 重建：<code>MergeTextChunks</code> / <code>AppendWithOverlap</code>（<code>internal/searchutil/chunkmerge.go</code>）</b></p>
+      <ul>
+        <li>排序按 <code>StartAt</code>（并列按 <code>ChunkIndex</code>）——<b>位置是权威</b>，不是块序号；<code>StartAt &gt; mergedEnd</code>（有间隙）或 <code>EndAt==0</code>（位置缺失）→ 加 <code>gapSep</code> 直接拼、<b>不裁剪</b>；部分重叠 → <code>AppendWithOverlap</code>；<b>被上一段完全覆盖 → 跳过整块</b>。</li>
+        <li><code>AppendWithOverlap</code> 的常量与回退：<code>minOverlapRunes=12</code>（太短的后缀如表格分隔行容易误匹配，忽略）、搜索上限 <code>max(span*3, 400)</code>、<code>headSlack=max(span*2, 320)</code>（允许在下一段开头跳过"补写表头"这类合成文本）；<b>从长到短试，命中即接上；全都没命中 → 原样拼接</b>（宁可留重复，也不猜着删）。</li>
+        <li><code>positionOverlap&lt;=0</code> 时<b>直接拼、不进文本匹配</b>——注释讲明失败模式：那种情况下 <code>headSlack</code> 下限 320 会让"<b>同一句话在文档里多次出现</b>"被误判成补写表头，<b>把下一段开头整段误删，造成不可逆的内容丢失</b>。</li>
+        <li><b>为什么必须"按文本"而不是"按位置"</b>（注释里的两个真实坑）：历史上都按位置裁（<code>offset = len(content) - (EndAt - lastEndAt)</code>），隐含假设 <code>len(runes(Content)) == EndAt-StartAt</code>；但 ① 父子分块器给被拆开的表格<b>补写表头是零宽度的（start==end）</b>、② content 里可能保留 <b>HTML 实体</b>（<code>&amp;#34;</code>／<code>&amp;gt;</code>），两者都让 content 比位置区间长 ⇒ 拼接错位／丢字／重复。所以改成按文本匹配，<b>位置只用来估搜索窗口</b>。</li>
+        <li>另有一条"不猜"的路径 <code>AppendWithExactOverlap</code>：坐标可信时逐字符校验后精确裁。三条路径分工——<b>重建</b>用 <code>MergeTextChunks</code>；<b>聊天检索链路</b>用 <code>JoinChunkContent</code>（允许用户编辑 chunk，不依赖坐标）；<b>知识图谱合并</b>复用同一套。</li>
+        <li><b>A5 对账</b>：70 块朴素拼接 29,883 → 重建 <b>28,953</b>（去掉 <b>930</b>）；独立测得重叠总量 <b>933</b> ⇒ 去重生效且几乎精确。</li>
+      </ul>
+
+      <p class="muted"><b>为什么这两件事值得单记</b>：它们是 Pass 0 的<b>输入侧</b>，但同样决定了后续每一步看到什么——引用匹配用的是同一批 chunk，页面正文的素材也来自它们。换句话说，<b>切块参数（512／80／分隔符／strategy）是整条 wiki 链路的"物理粒度"旋钮</b>，和 §3.3⑤ 里那三个"逻辑旋钮"不是一回事。</p>
+
+      <h3 id="sec-78">7.8 阶段三提示词原文与中译（chunk 引用匹配，2026-10-08）</h3>
+      <p class="muted">来源：<code>internal/agent/prompts_wiki.go:260</code>（<code>WikiChunkCitationPrompt</code>，2,427 字符）。英文是<b>原文逐字</b>、中文是译文；占位符与 JSON 字段名保持原样。</p>
+      <p><b>原文</b></p>
+      <pre>You are a precise citation system. Your job is to scan a batch of document chunks and decide, for each candidate entity/concept below, which chunks substantively discuss it.
+
+&lt;instructions&gt;
+**IMPORTANT: Write ALL names, descriptions, and details in {{.Language}}**.
+
+### Primary task
+For each candidate slug (listed in &lt;candidate_slugs&gt; below), select the chunk IDs (from the &lt;chunks&gt; block below) that **substantively discuss** that entity/concept. "Substantively" means the chunk states at least one concrete fact, attribute, step, date, number, relationship, or other useful piece of information about the candidate — not a passing mention.
+
+- Only cite chunks that appear in the &lt;chunks&gt; block below.
+- Use the "id" attribute of each &lt;c&gt; element verbatim (e.g. "c003").
+- If a candidate is not meaningfully discussed in ANY chunk in this batch, omit it from the output (do not include empty arrays).
+- A chunk CAN be cited by multiple candidates if it genuinely discusses multiple of them.
+- If a chunk is overly long or mixes unrelated topics, still cite it for every candidate it discusses.
+
+### Secondary task: new slugs
+If this batch reveals a significant entity/concept that is **NOT** in &lt;candidate_slugs&gt;, you may add it under "new_slugs" so it gets incorporated. Only add genuinely new, substantively-discussed items. Do NOT rediscover items already listed in &lt;candidate_slugs&gt; — reuse their slug if they are already candidates.
+
+Each new slug must include:
+- "type": "entity" or "concept"
+- "name", "slug", "aliases", "description", "details" (same semantics as the candidate list)
+- "source_chunks": list of chunk IDs in the current batch that discuss it
+
+### JSON Formatting Rules
+- **CRITICAL**: Do NOT use literal newline characters inside JSON string values. If needed, use \n.
+- Output ONLY valid JSON, no preamble.
+&lt;/instructions&gt;
+
+Output format:
+{
+  "citations": {
+    "entity/xxx": ["c001", "c003"],
+    "concept/yyy": ["c002"]
+  },
+  "new_slugs": [
+    {
+      "type": "entity",
+      "name": "Example",
+      "slug": "entity/example",
+      "aliases": [],
+      "description": "...",
+      "details": "...",
+      "source_chunks": ["c005"]
+    }
+  ]
+}
+
+If nothing in this batch is cite-worthy, return: {"citations": {}, "new_slugs": []}
+
+&lt;candidate_slugs&gt;
+{{.CandidateSlugs}}
+&lt;/candidate_slugs&gt;
+
+&lt;chunks&gt;
+{{.ChunksXML}}
+&lt;/chunks&gt;
+
+Now apply the instructions above to the chunks and output ONLY the JSON.</pre>
+      <p><b>中译</b></p>
+      <pre>你是一个精确的引用系统。你的任务是扫描一批文档块，为下面每一个候选实体/概念判断：哪些块**实质性地讨论了它**。
+
+&lt;instructions&gt;
+**重要：所有名称、描述、明细都用 {{.Language}} 写。**
+
+### 主任务
+对每一个候选 slug（列在下面的 &lt;candidate_slugs&gt; 里），从 &lt;chunks&gt; 里挑出**实质性讨论**该实体/概念的块 ID。"实质性"的意思是：该块至少给出了一条关于这个候选的具体事实、属性、步骤、日期、数字、关系或其他有用信息——**只是顺带提到不算**。
+
+- 只能引用 &lt;chunks&gt; 块里出现过的块。
+- 逐字使用每个 &lt;c&gt; 元素的 "id" 属性（例如 "c003"）。
+- 若某个候选在**本批的任何块里都没有被有意义地讨论**，就**不要输出它**（不要给空数组）。
+- 如果一个块确实讨论了多个候选，它可以被多个候选同时引用。
+- 如果一个块过长或混杂了不相关主题，仍然要为它讨论到的每一个候选引用它。
+
+### 次要任务：新 slug
+若本批暴露出一个重要的实体/概念、而它**不在** &lt;candidate_slugs&gt; 里，你可以把它加到 "new_slugs" 里以便后续纳入。只加真正新的、被实质性讨论的条目。**不要**重新发现已经列在 &lt;candidate_slugs&gt; 里的条目——它们已是候选，复用其 slug。
+
+每个新 slug 必须包含：
+- "type"："entity" 或 "concept"
+- "name"、"slug"、"aliases"、"description"、"details"（语义同候选清单）
+- "source_chunks"：当前批中讨论它的块 ID 列表
+
+### JSON 格式规则
+- **关键**：JSON 字符串值里不要出现真实换行字符；需要时用 \n。
+- 只输出合法 JSON，不要任何开场白。
+&lt;/instructions&gt;
+
+输出格式：
+{
+  "citations": {
+    "entity/xxx": ["c001", "c003"],
+    "concept/yyy": ["c002"]
+  },
+  "new_slugs": [
+    {
+      "type": "entity",
+      "name": "Example",
+      "slug": "entity/example",
+      "aliases": [],
+      "description": "...",
+      "details": "...",
+      "source_chunks": ["c005"]
+    }
+  ]
+}
+
+若本批没有任何值得引用的内容，返回：{"citations": {}, "new_slugs": []}
+
+&lt;candidate_slugs&gt;
+{{.CandidateSlugs}}
+&lt;/candidate_slugs&gt;
+
+&lt;chunks&gt;
+{{.ChunksXML}}
+&lt;/chunks&gt;
+
+现在按上面的指令处理这些块，只输出 JSON。</pre>
+      <p class="muted"><b>拼给模型的实际形状</b>（以 A5 第一批为例）：占位符会被替换成——<code>{{.CandidateSlugs}}</code> 43 行（每行形如 <code>- slug: entity/claude, type: entity, name: "Claude", aliases="Claude 系列", description: …</code>，由 <code>renderCandidateSlugsXML</code> 渲染）；<code>{{.ChunksXML}}</code> 则是本批的 <code>&lt;c id="c000" index="0"&gt;…原文…&lt;/c&gt;</code> 序列（由 <code>renderChunksXML</code> 渲染）。</p>
+
+<h3>7.9 会话脚本：一键起环境 ＋ 日志落盘（<code>experiments/weknora/weknora_up.ps1</code>，2026-10-08）</h3>
+      <p><b>为什么写它</b>：Docker 引擎会自己退出（AutoStart 是关的），而 WeKnora 的逐次 LLM usage、批次统计只写在<b>容器日志</b>里、一重启就没。所以每次跑实验前用这个脚本把环境拉起并把日志持续落盘。</p>
+      <table>
+        <thead><tr><th>动作</th><th>做什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>-Action up</code>（默认）</td><td>① 起引擎（必要时 <code>docker desktop start</code> 并等就绪）② <code>compose up -d</code> ③ 等 <code>http://localhost:8080/health</code> 200 ④ <b>快照当前日志 ＋ 启动后台跟随</b>，然后打印日志路径与收工命令</td></tr>
+          <tr><td><code>-Action status</code></td><td>引擎版本／五个容器状态／app 健康／当前会话日志路径；不动任何东西</td></tr>
+          <tr><td><code>-Action snapshot</code></td><td>把当前容器日志<b>追加</b>到会话文件（实验跑完用这个收口）</td></tr>
+          <tr><td><code>-Action follow</code> / <code>-Action stop</code></td><td>只启动／只停掉后台跟随进程（不碰容器）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">日志落在 <code>data/tmp/weknora-logs/weknora-&lt;时间戳&gt;.log</code>（UTF-8），当前会话记在 <code>.current</code>，跟随进程 pid 记在 <code>&lt;日志&gt;.follow.pid</code>；<code>-Session 名字</code>可自定会话名。</p>
+      <div class="chain">
+        <b>写这个脚本连踩六个坑（都值得记，以后写 Windows 批处理会再遇到）</b>：<br>
+        ① <b><code>$ErrorActionPreference='Stop'</code> ＋ docker 把"Container X Running"写 stderr ＋ <code>2>&1</code></b> ⇒ 正常输出被当终止性错误，脚本当场断；改用 <code>Continue</code> ＋ 看 <code>$LASTEXITCODE</code>。<br>
+        ② <b>PowerShell 会吞掉短选项</b>：包装函数里 <code>docker compose up -d</code> 的 <code>-d</code> 被当"参数前缀"丢掉，实际执行成前台 <code>up</code>，于是<b>永久附着在流式输出上</b>（现象＝脚本卡死、docker-compose 进程在但几乎不吃 CPU）⇒ 改成显式数组 <code>Invoke-Docker @('compose',...,'up','-d')</code>。<br>
+        ③ <b>PS 5.1 的 <code>Invoke-WebRequest</code> 走系统代理</b>（本机是 Clash）⇒ 健康检查可能一直挂；改用 .NET <code>WebRequest</code> 并显式 <code>Proxy=$null</code>。<br>
+        ④ <b><code>Start-Process -RedirectStandardOutput</code> 会截断目标文件</b>，把刚写的快照冲掉 ⇒ 改成逐行 <code>Add-Content</code>。<br>
+        ⑤ <b><code>Start-Process cmd /c "… >> 文件"</code> 的引号会被拼坏</b>（进程起来就死、目标文件都不生成）⇒ 改成<b>生成一个小 helper <code>.ps1</code>、用 <code>-File</code> 启动</b>，彻底绕开引号拼接。<br>
+        ⑥ <b><code>*>></code> 默认写 UTF-16LE</b>（和前面的 UTF-8 快照混编码）、<b><code>logs -f</code> 默认先把整份历史倒一遍</b>（15 秒灌了 10 MB 重复）⇒ 改成 <code>Add-Content -Encoding UTF8</code> ＋ <code>--since &lt;UTC 时间戳&gt;</code> 只取新日志（修完 20 秒只长 461 字节）。
+      </div>
+      <p class="muted"><b>顺带修掉一个环境问题</b>：<code>.env</code> 里从模板抄来的 Langfuse 占位 key（<code>pk-lf-xxxxxxxx</code>／<code>sk-lf-xxxxxxxx</code>）会被当成<b>真实配置</b>——app 以为追踪已启用，反复往不存在的 <code>langfuse-web:3000</code> 重试导出（日志里刷 <code>dial tcp: lookup langfuse-web … no such host</code>）。已把两个 key 清空（等真开 <code>langfuse</code> profile、建好项目拿到真 key 再填）。</p>
+
+            <h3 id="sec-710">7.10 阶段四提示词原文与中译（summary 页，2026-10-08）</h3>
+      <p class="muted">来源：<code>internal/agent/prompts_wiki.go:60</code>（<code>WikiSummaryPrompt</code>，2,078 字符）。英文为原文逐字，中文为译文；占位符保留原样。</p>
+      <p><b>原文</b></p>
+      <pre>You are a wiki editor. Given the following document content, create a structured wiki summary page in Markdown format.
+
+&lt;document&gt;
+&lt;content&gt;
+{{.Content}}
+&lt;/content&gt;
+&lt;/document&gt;
+
+&lt;available_wiki_pages&gt;
+{{.ExtractedSlugs}}
+&lt;/available_wiki_pages&gt;
+
+&lt;instructions&gt;
+1. The FIRST line of your output MUST be: SUMMARY: {one sentence, 15-40 words, describing what this document is about — for wiki index listing}
+2. After the SUMMARY line, write a comprehensive summary of the document in Markdown format.
+3. Include the key facts, arguments, and conclusions.
+4. Use proper heading hierarchy (## for sections, ### for subsections).
+5. **Wiki-link rule**: The available_wiki_pages list above maps slugs to display names and their aliases (format: "[[slug]] = display name (Aliases: a, b)"). Whenever you mention a name or alias that matches a listed entry, you MUST write it as [[slug|display name]] (e.g. [[entity/zhong-guo|中国]]), NOT as bold (**name**) or bare [[slug]]. Use the EXACT slugs provided — do NOT invent new slugs.
+6. **Image rule**: If the document contains &lt;images&gt; tags with &lt;image&gt; elements, you SHOULD include the relevant images in your summary using the Markdown syntax: ![caption](url). Place the images where they are contextually relevant to the text. The URL inside ![caption](url) is an opaque token; reproduce it EXACTLY and VERBATIM, do not alter, shorten, or normalize it.
+7. At the end, include a "## Key Takeaways" section with bullet points.
+8. Write in {{.Language}}.
+9. Keep the summary concise but thorough (500-1500 words depending on document length).
+10. **Empty content rule**: If the &lt;content&gt; block above is empty, contains only image references with no extracted text, or otherwise carries no substantive information, output exactly: "SUMMARY: No textual content was extractable from this document." followed by a brief note explaining that the document could not be summarised. Do NOT invent a topic, do NOT guess from any other clue.
+&lt;/instructions&gt;
+
+Output the SUMMARY line first, then the Markdown content. Do not include any other preamble.</pre>
+      <p><b>中译</b></p>
+      <pre>你是一名 wiki 编辑。给定下面的文档内容，创建一页结构化、Markdown 格式的 wiki 摘要页。
+
+&lt;document&gt;
+&lt;content&gt;
+{{.Content}}
+&lt;/content&gt;
+&lt;/document&gt;
+
+&lt;available_wiki_pages&gt;
+{{.ExtractedSlugs}}
+&lt;/available_wiki_pages&gt;
+
+&lt;instructions&gt;
+1. 输出的**第一行必须**是：SUMMARY: {一句话，15–40 词，说明这篇文档讲的是什么——供 wiki 索引列表使用}
+2. 在 SUMMARY 行之后，用 Markdown 写出对本文档的完整摘要。
+3. 包含关键事实、论证与结论。
+4. 使用正确的标题层级（## 表示小节，### 表示子小节）。
+5. **Wiki 链接规则**：上面的 available_wiki_pages 列表把 slug 映射到显示名与别名（格式："[[slug]] = 显示名 (Aliases: a, b)"）。当你提到与列表中某一项匹配的名称或别名时，**必须**写成 [[slug|显示名]]（例如 [[entity/zhong-guo|中国]]），**不要**用加粗（**名称**）代替，也不要写裸 [[slug]]。使用提供的**精确** slug——不要自造新 slug。
+6. **图片规则**：若文档中含带 &lt;image&gt; 元素的 &lt;images&gt; 标签，你**应当**把相关图片按 Markdown 语法 ![caption](url) 放进摘要，并放在与正文上下文相关的位置。![caption](url) 里的 URL 是一个不透明 token；必须**逐字原样**复现，不得改写、缩短或规范化。
+7. 结尾要有一个 "## Key Takeaways" 小节，用要点列表。
+8. 用 {{.Language}} 书写。
+9. 摘要要简洁而完整（视文档长度，500–1500 词）。
+10. **空内容规则**：若上面的 &lt;content&gt; 块为空、只含图片引用而没有抽取出的文字、或除此之外不含实质信息，就**原样输出**："SUMMARY: No textual content was extractable from this document."，后面跟一句简短说明，交代该文档无法摘要。**不要**编造主题，**不要**从任何其他线索去猜。
+&lt;/instructions&gt;
+
+先输出 SUMMARY 行，再输出 Markdown 内容。不要任何其他开场白。</pre>
+      <p class="muted"><b>拼给模型的实际形状</b>（A5 实测）：<code>{{.Content}}</code> = 28,953 字符的重建全文；<code>{{.ExtractedSlugs}}</code> = 43 行，每行形如 <code>- [[entity/anthropic]] = Anthropic (Aliases: Anthropic PBC)</code>；<code>{{.Language}}</code> = <code>Chinese (Simplified)</code>；另在提示词末尾追加 &lt;wiki_content_business_instructions&gt; 块（若知识库填了内容生成要求）。</p>
+      <p class="muted">实测产出（span 原文）：<code>summary_line</code> = "Anthropic 分享其在 claude.ai、Claude Code 和 Claude Cowork 三个产品中通过环境隔离、模型层防御与外部内容管控来限制智能体爆炸半径的工程实践与经验教训。"；<code>chars</code> = 4,693；正文开头即 <code>## 概述</code>，且链接按规则写成 <code>[[entity/anthropic|Anthropic]]</code>、<code>[[concept/agent-containment|智能体隔离]]</code> 等——<b>提示词第 5 条被正确执行</b>。</p>
+
+<p class="muted">记录创建：2026-09-30 · 更新：2026-10-07／10-08／10-09 —— ① 平台定案 ＋ 部署跑通（§1.1）；② 第一轮实测：A5 产物形状（§3.1）；③ 源码级流水线总览与成本构成（§3.2，并更正"编译 token 不落库"的说法）；④ <b>阶段一（Pass 0）细读：结论 §3.3、提示词原文与中译 §7.6、切块与重建算法细节 §7.7</b>；⑤ <b>阶段三（chunk 引用匹配）细读：结论 §3.5、提示词原文与中译 §7.8</b>；⑥ 更正：<b>容器日志易失</b>，实验前必须落盘（§3.2 末）；⑦ <b>会话脚本 §7.9</b>（一键起环境＋日志落盘，含六个 Windows 坑与 Langfuse 占位 key 的修复）；⑧ <b>实测：引用阶段补 slug 不受粒度控制</b>（focused 下 Pass 0 只抽 6 项、引用阶段却补 14 项 ⇒ 20 页里 70% 来自不听指令的通道）——§3.5 末。；⑨ <b>阶段四（summary 页）细读</b>：结论 §3.6、提示词原文与中译 §7.10。；⑩ <b>阶段六（reduce 写页）细读：结论与三个提示词原文全部放在 §3.8</b>（按沛东要求，提示词不再下沉到现场细节）。；⑪ §3.8 <b>①-补</b>：把"素材＝整块、页间重叠"与其代价量化了（标准库 170%／focused 116.9%／summary 16.2%），并纠正了与 GraphRAG 2.6% 的口径混用；另记"重解析同一文档不幂等（45→54 页）"。；⑫ <b>2026-10-09 纠正：页↔块引用其实落库</b>（<code>wiki_pages.chunk_refs</code>）——对账得覆盖率 93.7%、悬空 0；并发现<b>重解析留下两代 chunks 与两代引用</b>（142 ＝ 71＋71；452 条引用跨两代；52 页全部双代）。状态：进行中——阶段一～四已读透；⑬ <b>2026-10-09 再更正：块级引用并非"不可能"</b>——<code>chunk_refs</code> 已落库、随 <code>GetPage</code> 返回、块可按 id 取回（<code>GET /chunks/by-id/{id}</code>），缺的只是前端渲染（<code>WikiPage</code> TS 类型未声明该字段）；真正做不到的是<b>句级</b>归因（正文无锚点）；⑭ <b>2026-10-09 §3.8 ① 重构</b>：把"输入"拆成两层——先"谁进流程"（输入＝本批碰到的 slug 集合，不是全部页；判"要不要写"用 slug 集合成员关系、不是块；块全程只做"取原文 ＋ 并集落库"），再"编辑器面前摆着什么"；并更正旧句"进列表的 slug 不一定被重写"（重解析时必然重写，<code>reparse_slugs=42</code>）。；⑮ <b>2026-10-09 记一条"未明说的取舍"</b>：页面正文素材＝逐字原文块 ＋ 编辑器只获准轻度重排／去重／拼接（忠实性优先、可读性让步）；官方文档与注释均未把它写成取舍，<code>wiki_lint</code> 六类体检也无一行文指标 ⇒ 跨源拼装的行文生硬是设计内的；已登记第三轮"多源页读感"验证。；⑯ <b>2026-10-09 多源页实测（§3.10）</b>：新库 <code>P6+P7 · 多源页读感</code>（103,328 字符／272 块／86 页／102 次调用 508,422 token）——多源页 4 页，典型页 <code>concept/synthetic-data-generation</code>（13＋15 块）读得顺，但 <code>entity/langsmith</code> 出现"摘要句＋原文块"重复；产物体积比 71%（&lt;1）；并记一条判据教训：自动近重复抓不到"换说法重说一遍"。；⑰ <b>2026-10-09 记"块的排序口径"</b>：同一篇内严格按 <code>ChunkIndex</code>（文档顺序），<b>文档之间无序</b>（并发 map ＋ <code>remapSlugUpdatesByIdentity</code> 遍历 map），且每篇素材都以 Pass 0 的 <code>description</code> 打头 ⇒ 这是"摘要句 ＋ 原文块"重复感的结构性来源（§3.8 ①-补 ＋ §3.10 ④）。；⑱ <b>2026-10-09 补"忠实性的第三条好处"</b>：正文是原文块的近逐字复制 ⇒ 删除/替换可退化成文本级判断（retract 提示词 <code>prompts_wiki.go:387</code>；reparse 靠"上一次摘要"当旧版本信号）——若页面是语义化改写，页↔源只剩"意思相近"，增量更新就无从可靠判定；但该好处只兑现到文档级（无块句柄、<code>chunk_refs</code> 只并不删）。；⑲ <b>2026-10-09 按"实际链路顺序"重排 §3</b>：新增 <b>§3.4 阶段二（去重与身份对齐）</b>（含提示词原文＋中译；去重其实在 Pass 0 之后、引用匹配之前，§3.2 表把它误放进 Reduce 组，已改回 Map＝4 行／Reduce＋收尾＝4 行）；原 §3.4→§3.5（引用）、§3.5→§3.6（summary）、§3.6→§3.8（写页）、§3.7→§3.10（多源页实测）；并给还没读的<b>§3.7（目录规划）／§3.9（链接注入＋索引收尾）</b>留了占位小节。；⑳ <b>2026-10-09 修正 §3.4 的"预筛"口径</b>：<code>Jaccard ≥ 0.08</code>／库内 ≤25 不筛，属于<b>已废弃的老路</b> <code>selectDedupCandidatePages</code>（只剩测试在调）；现行是 pg_trgm 的 <code>%</code>（阈值实测 <b>0.3</b>，仓库注释写的 0.1 不准）＋ <code>ORDER BY similarity DESC LIMIT 5</code>。另记一处设计缝隙：<b>预筛是词法的、判同是语义的</b>，"苹果公司 → Apple Inc."这类只能靠别名通道命中。；㉑ <b>2026-10-09 再抠 §3.4 预筛的方向性</b>：<code>FindSimilarPages</code> 的 WHERE 只有 <code>lower(title) % :q</code>——<b>查询侧是新条目的 name＋aliases，被比侧只有已有页的 title</b>，页的 <code>aliases</code> 只被 SELECT 给模型看、不参与召回（精确身份层同理）。⇒ "别名通道"只有单向的一半，"页有别名／新条目没写"这一方向结构上不可能；提示词里"RAG↔全称、中英对译"类合并例子在 live 路径基本捞不到候选。；㉒ <b>2026-10-09 实测印证 §3.4 的别名缺口</b>：<code>concept/rag</code> 的 aliases 含 <code>Retrieval-Augmented Generation</code>，而 live 谓词 <code>lower(title) % …</code> 返回 0 行 ⇒ 别名不参与召回（实现缺口，recall-only）；但两次端到端探针都被"中文命名一致 ＋ 精确身份层"兜住（<code>concept/rag</code> source_refs 1→2→3），未观测到孪生页。；㉓ <b>2026-10-09 阶段五（目录规划）细读完成（§3.7）</b>：批级一次规划（60 条/次分批 ＋ 前批 feed-forward）／已有目录锚定（≤60 全喂，超过才嵌入 topK=3，一级目录全留）／顺序建目录再并发套用／深度硬上限 3；实测 A5 43 条目＝1 次调用、P6＋P7 87 条目＝2 次调用（验证 <code>wikiTaxonomyPlanChunkSize=60</code>），并验到跨批复用生效（探针新增 7 个页全进已有目录、一级目录 0 新增）；同时记下边界——目录收敛只靠提示词"逐字复用"，没有程序侧账本。；㉔ <b>2026-10-09 补记"已有目录"的裁剪口径（§3.7）</b>：拉池＝<code>ORDER BY path ASC LIMIT 400</code>（字符串序，非一级优先）；<b>≤60 个目录完全不裁</b>（我们两个库都走这条：28／约 30 个）；&gt;60 才裁＝"一级全留 ＋ 每条目嵌入 top-3 深层 ∪"，上限 150；降级路径（无嵌入模型／嵌入失败）＝<code>capFolders(pool,150)</code> 直接截字符串序前 150，<b>与"一级全留"不自洽</b>；注入形态是缩进树；且每批新分配的目录会 feed-forward 给下一批。；㉕ <b>2026-10-09 §3.7 补"⑥ 局限与待验"</b>：嵌入粗筛四个问题（硬 top-3 无阈值／per-item 最近邻被并集丢掉、与去重步的 per-item 短名单相反／路径文本当嵌入输入且无可观测字段／降级路径更弱）；并列了规模假设"化石"清单（400-60-150-60、32k 文档截断、去重只看 title、官方 4w-document 注释）；结论落成一句——<b>不是硬上限，而是"全局结构的一致性只由 LLM ＋ 提示词维持"，规模一大退化为漂移 ＋ lint ＋ 人工整理</b>，与 GraphRAG（算法结构、越大越压得动、重且难增量）恰成对照；§4 登记两个可测点（&gt;60 目录复用率／降级路径丢一级锚点）。；㉖ <b>2026-10-09 阶段七（链接注入＋索引收尾）细读完成（§3.9）</b>：链接注入＝确定性字符串注入（长度降序／只包第一处／禁写区／ASCII 才判词边界／单字汉字不加链／注入后平移 forbidden spans），候选只来自"该页已有 out-links ＋ 本批兄弟页"（⇒ 悬空结构上不可能，代价是旧批次不回填）；死链清理可改指则改指、否则降级纯文本，且不涨 version；<b>索引页只落库"引言"</b>（清单由 <code>/wiki/index</code> 动态生成），首吃摘要／增量只吃本批变化（4w 文档时不重灌上下文）。实测 A5 251 链接／悬空 0、P6＋P7 注入 77/86 页。⇒ §3.3–§3.9 七个阶段全部读完。；㉗ <b>2026-10-09 增量与删除实测（§3.11）</b>：A4 增量（＋22 页／0 合并／29 次 98,773 token／新增 1 个一级目录）；删 P7（117→70 页／6 页改写／<code>broken_link</code> 0→19／多源页正文只 −45～−276 字符且差异主要是链接降级）；重投 P7（70→114 页／47 个被删 slug 只回来 27 个／新增 16 个／7 个空二级目录残留）。三个新发现：<b>页内剥离极保守／删除留悬空链接且无人自动清／删＋重投不可复原</b>。对外稿初稿已出：<code>docs/publish/0043-llmwiki-compile-pipeline.md</code>。；㉘ <b>2026-10-09 按对外稿复核补三条机制事实</b>：① <b>"批"的口径</b>——一个批次＝一次 ingest 认领的文档集合，<b>默认最多 5 篇</b>（<code>wikiMaxDocsPerBatch=5</code>），Map 每篇各跑、Reduce 才跨文档、目录规划拿整批条目（P6＋P7 是两篇同批进空库）；② <b>链接注入的字样只认标题</b>（<code>row.Title</code>／out-links 的 title），别名只在 agent 写页／改名那条维护路径（<code>wikiPageService.InjectCrossLinks</code> → <code>collectLinkRefs</code>＝title＋aliases）里参与；③ <b>"只抽点不抽边"是载体选择</b>——wiki 的"图"＝页面链接图（InLinks/OutLinks），带类型的关系抽取在另一条 Neo4j 管线（默认关），Wiki 载体本身没有"边"。另补：§3.9 死链清理的覆盖洞（删除留下的 19 条 broken_link 清不到，因它们不在 affectedSlugs 里）。；㉙ <b>2026-10-09 §3.4 补"并发控制三层"</b>：身份认领（Redis <code>wiki:identity:</code> ＋ GET-or-SET Lua、TTL 2h、注释明说"per-slug 锁救不了两个模型给同一标题不同 slug 的情况"）→ 批级 <code>remapSlugUpdatesByIdentity</code> 再收敛 → reduce 的 per-slug 锁；实证＝P6＋P7 两篇同批进空库时 4 个"投前不存在"的 slug 都收敛成一页＋两条 source_ref（多源页）；边界＝依赖 Redis（否则退批内本地认领）、TTL 2h、且只认"同形标题"（中英对译/缩写不在保护内）。；㉚ <b>2026-10-09 收紧"关系观"的表述（被沛东复核）</b>：① GraphRAG 的关系是"被写进图／摘要进报告／当上下文"，<b>它并没有"按谓词检索"的能力</b>（那属于 KAG／0031 那类"图当索引层"）；② "页面是一等公民"要限定成"<b>这条 wiki 管线</b>"（同一产品另有 Neo4j 图谱管线，默认关）；③ 链接不是"碰巧存在"，而是"<b>确定性字符串匹配 ＋ 有限候选集</b>（本页 out-links ∪ 本批新页标题）＋ <b>编辑器不能自造链接</b>"⇒ 表达的是"正文提到了"，不是"是什么关系"；④ "Wiki 载体没有边"改口为"<b>这套实现只有链接</b>"（Semantic MediaWiki 那类 wiki 是带类型属性的）。0043 §1.1 与 0037 §3.2 已同步。；㉛ <b>2026-10-09 复核"产物体积比"（被沛东追问 71% 怎么算的）</b>：① 口径更正——分母（我转出的 Markdown）含 <b>9,713 字符</b>是我插入的 <code>## 全路径</code> 标题行（P7 一项 8,306），去掉后 71% → <b>78%</b>；② 我原来的解释（"页数不随字符线性增长"）站不住——两边覆盖率一样（96.3% / 97%）；③ 正确分解：<code>产物 ÷ 源 ≈ 每块平均被引用次数 × 编辑器 out/in</code>，A5＝<b>3.14 × 0.47 = 1.47</b>、P6＋P7＝<b>1.97 × 0.35 = 0.69</b>（<code>probe_ratio.py</code>）⇒ 主导项是<b>页/块比</b>；④ 顺带推翻旧说："<b>编辑器被禁止压缩"不成立</b>（页面内容只有素材的 35–47%），是"编辑器删减"还是"<code>chunk_refs</code> 过量引用"暂无法区分。0043 §2 与 0037 §3.6／§3.10 已改。；㉜ <b>2026-10-09 "78%"定案（第三版，前两版都错）</b>：主因是<b>语言</b>——wiki 页面语言由 <code>WEKNORA_LANGUAGE</code>（空）＞<code>Accept-Language</code>＞<code>zh-CN</code> 决定，且 batch/finalize 用 worker ctx，所以我带 <code>en-US</code> 头也改不动（两库页面仍中文）；<b>同语言实测</b>（中文源第 9 章 24,933 字符 → 49 页）：out/in＝<b>0.90</b>、产物/源＝<b>2.03</b>、源 12-gram 覆盖 <b>79.2%</b> ⇒ <b>编辑器几乎不压缩</b>，"英→中"的 0.34–0.38 是语言密度差（≈0.4 倍）；我前两轮"编辑器在压缩／禁止压缩不成立"的结论<b>撤回</b>。副产品：同配置重复编译 P6 两次 ⇒ 33 页/21,278 字符 vs 41 页/24,142 字符。新增脚本 <code>probe_zh_source.py</code>；0037 新增 §3.11 ④；0043 §2 已同步。；㉝ <b>2026-10-09 补"A5 为何反而膨胀"</b>：语言因子在 A5 与 P6＋P7 之间相同（都是英→中）⇒ 差在<b>引用倍数</b>——A5 条目/块 0.61、页/块 0.64 ⇒ 倍数 3.14；P6＋P7 条目/块 0.32、页/块 0.31 ⇒ 倍数 1.97（虽然 P6＋P7 每页引的块更多：6.1 vs 3.9）。⇒ <b>预测产物/源要看三个乘数（语言 × 引用倍数 × 编辑器 out/in），不能只看语言或页数</b>。；㉞ <b>2026-10-09 补 <code>out/in</code> 的口径与偏差</b>：<code>in</code> ＝ 该页存活被引块的原文之和（<b>全是块原文</b>；真·提示词素材更大，还含 description 前缀／文档画像／图片 OCR 内联）；但因为 <code>chunk_refs</code> <b>只增不减（并集）</b>，多次重写过的页会把旧版本用过、当前正文已没有的块也算进去 ⇒ <b>in 偏大、out/in 偏小</b>。⇒ 三档不能混用：单次＋同语言 0.90／单次＋跨语言 0.34–0.38／多次重写＋跨语言 0.35–0.47。；㉟ <b>2026-10-09 对外稿 0043 补齐三处机制事实</b>（沛东过稿时发现没落进去）：① <b>输出语言是部署级参数</b>（<code>WEKNORA_LANGUAGE</code> ＞ <code>Accept-Language</code> ＞ <code>zh-CN</code>；batch 读 worker ctx ⇒ 请求头改不动），落在 §2 开头；② <b>temperature＝0.3、不设 seed、且写死不可配</b>，落在 §4.3；③ <b>身份认领三层并发收敛</b>（Redis GET-or-SET Lua ＋ 批级 remap ＋ per-slug 锁），落在 §1；另在 §5 第 4 条补了"目录侧嵌入粗筛硬取 top-3、无分数下限"。；㊱ <b>2026-10-09 核"批 5 / Map 并行 10"</b>：Map 的 errgroup 单元＝一篇文档（<code>wiki_ingest_batch.go:447</code>），批最多 5 篇 ⇒ <b>默认下 10 永不生效</b>，且 errgroup 每批新建（多批次不叠加）；真正的在飞峰值＝"5 篇 × 每篇两路（摘要 ∥ 引用，<code>wg.Add(2)</code>）≈ 10 个调用"；Reduce 的 10 常用（按 slug）。⇒ 记一处"旋钮白给的默认组合"（沛东判定不影响功能效果 ⇒ <b>不提 issue</b>），0043 §0 已按此改准。；㊲ <b>2026-10-09 改口"同批 vs 分两批"（沛东指出原措辞有误）</b>：<b>多源页不是同批专属</b>——同批是"出生即多源（一次合成）"，分两批是"单源页被后续文档追加成多源（整页重写、version ＋1）"；两条路终点相同，<b>差在成本与重写痕迹</b>。0043 §0 与 0037 §3.2 已同步。；㊳ <b>2026-10-09 补"批大小贯穿 Map＋Reduce"（沛东追问）</b>：<code>slugUpdates</code> 是 <code>ProcessWikiIngest</code> 局部变量、reduce 遍历的就是本批那份 ⇒ <b>同一 slug 跨批会被写两次（第二次整页改写）</b>，跨批只靠 per-slug 锁串行不合并；而"分批"由 <b>30 秒去抖窗口</b>（<code>wikiIngestDelay</code>）决定，<code>wikiFinalizeDelay = 20s</code> 让 finalize 跨批合并（⇒ 只有写页是每批一次，链接注入与索引重建已摊薄）。⇒ 省成本三层杠杆：<b>① 让共享 slug 的文档落同一窗口 → ② 窗口内文档数 ≤ IngestBatchSize → ③ mapParallel ≥ 批大小</b>；5 篇同域文档连续上传时默认配置已同批、无需调参。；㊴ <b>2026-10-09 把"投喂方式＝成本变量"写进对外稿</b>：0043 新增 <b>§3.4</b>（三档写页单价 3,538／4,860／5,925 token、30 秒去抖窗口、三层杠杆、省的量 ∝ 批内 slug 重叠率）＋ §6"可放心用的场景"加一条；结构速览同步。；㊵ <b>2026-10-09 0043 按"变更"主线整体重排</b>（沛东反馈"读下来懵、散，这篇到底要讲啥"）：§0 改为<b>结论先行</b>（主题句"能增能删但不幂等、会漂"＋三种变更表＋实测账单表＋七阶段背景表）；逐节补"⇒ 所以…性格是…"收束句；把实现与计量细节（批与并发、去抖窗口、输出语言、体积三乘数/out-in 口径）<b>下沉为新"附录 A"</b>，原附录改名"附录 B"；§2 收窄成"全量：起点长什么样"；§1 改题"它凭什么能改、也能删"。全文 38.9 KB，正文主线＝§0 结论 → §1 三根柱子 → §2 起点 → §3 增量 → §4 删除 → §5 代价 → §6 选型。<b>标题同日定稿：《能增、能删，但不幂等：拆开 WeKnora 的知识编译（全量／增量／删除）》</b>（沛东选，原来的"不只全量重编译"作废；index.html 那行也同步改了）。；㊶ <b>2026-10-09 0043 读者视角优化（第二轮）</b>：① <b>术语首现即定义</b>（§0 加"三个术语"框：slug／chunk／多源页；§2 加 lint 三类 broken_link／orphan_page／missing_cross_ref；§3.1 补 retract＝撤回／addition＝新增）；② <b>指针与编号修正</b>（三分支判据"见 §1"→"见 §3.1"；三种变更表不再用 ②⑥⑦ 指代阶段、直接写"去重步／写页步／收尾步"；§5 收尾"五条"→"六条"）；③ <b>给数字加参照与身份</b>（A5＝Anthropic 2.9 万字符长文；13,855≈半篇长文；78,647≈三篇长文；字符数参照"28,956 ≈ 一篇 5,000 词的英文长文"）；④ 附录 B 口径同步（"四份语料／四个库"→"五组语料／六个库"，补语言对照库与中文源库）。全文 40.2 KB。；㊷ <b>2026-10-09 0043 §0 阅读顺序定案（沛东问"读者该先看七阶段还是结论"）</b>：结论在最前（主题句一句），但"七阶段"必须在被引用之前出现 ⇒ §0 只留<b>一行"地形句"</b>（① 抽候选 → … → ⑦ 链接/索引收尾，链到附录），<b>完整七阶段表下沉为"附录 A.0 七个阶段速查"</b>；这样 §0 = 主题句 → 一行七阶段 → 术语框 → 三种变更表 → 实测代价表 → 收束句，从三张表瘦到两张表 ＋ 一行。；㊸ <b>2026-10-09 §0 语句去修辞（沛东："地形/性格这种词别这样搞"）</b>：删掉"它长什么样（地形）""它的性格可以先摊开"，改成"后面会反复用到这七个阶段，先列一遍""三种变更分别走到哪一步""实测代价"；§2／§3／§4 三处收束句也从"所以 X 的性格是…"改成"小结：…"；顺带修 §0 的"五条"→"六条"（与 §5 标题一致）。全篇已无"性格/地形/账单"这类修辞。；㊹ <b>2026-10-09 0043 代价口径两处修正（沛东指出）</b>：① 删除分支的"<b>逐句</b>判断"不严谨——提示词判据是 <code>facts/claims</code>（一条<b>事实/论断</b>），不是"句"，且编辑器是整页重写而不是逐句扫；已改成"按一条事实/论断（不是按块）"并补"实测删得很保守（§4.2）"；② 代价表补<b>源文 token</b>（取 Pass 0 那一次调用的实测 prompt：A5 ≈7.2k、A4 ≈4.1k、P7 ≈7.8k 但被 32,768 字符上限截断、P6 ≈6.5k、中文源 ≈13.9k 说明中文每字符 token 更高），并标明"调用次数＝一次 ingest 批次的<b>全部阶段</b>调用之和，不是只算写页"（A4：写页 21／引用 2／抽候选 1／summary 1／文档摘要 1／目录 1／去重 1／索引引言 1 ＝ 29 次 / 98,773 token）。顺带发现一笔自家账差：A5 逐项相加 51 次 vs 日志汇总 52 次（差 1 未对上，原始日志已丢），文中按 ≈51 记。；㊺ <b>2026-10-09 §1.1 挪进附录</b>（沛东："放这个位置很奇怪"）：正文 §1 不再带"点与边"这一节，整块移到附录 A.0 的七阶段表之后，编号改为 <b>A.0.1</b>；两处引用（A.0 表①行、⑦行）与 §5 第 6 条的"见 §1.1"同步改为"见附录 A.0.1"。正文骨架现在是：§0 结论 → §1 三根柱子 → §2 全量 → §3 增量 → §4 删除 → §5 局限 → §6 选型 → 附录 A（A.0 七阶段速查／A.0.1 点与边／A.1 批与并发／A.2 多源页／A.3 输出语言／A.4 体积三乘数）→ 附录 B。</p>
+<p class="muted"><b>㊻ 2026-10-09 0043 §2 表下注释瘦身（沛东问"这堆注释在这个章节有啥用？"＋"28,956 是单词数还是字母数？"）</b>：口径核实——28,956 是<b>字符数</b>（<code>prep_multisource.py</code> 算的 <code>len(md)</code>，含空格／换行／标点与 Markdown 记号），同一篇英文原文 <b>4,535 词</b>（空白切分；纯字母串 4,697），P6＋P7 的 103,328 字符＝16,301 词；三处处理——① "字符数参照"那条删掉，词数并进表格语料行（28,956 字符 ≈ 4,500 词／103,328 字符 ≈ 1.6 万词）；② "调用数与源文 token 口径"那条<b>劈两半</b>：本节表要用的"调用次数＝该批全部阶段之和、不是只算写页"留在 §2，而"源文 ≈ N token＝Pass 0 实测 prompt"＋两条坑（32,768 字符截断／A5 51 vs 52 笔账差）下沉到附录 B 口径声明；③ §2 开头"下面所有字符数都受输出语言影响"改准为"本节字符数都在源文侧，受语言影响的是页面字符数"。</p>
+
+<p class="muted"><b>㊼ 2026-10-09 核"512 字符"的口径（沛东问"这里面的字符也是这个定义吗？"）</b>：① 单位确认——<code>DefaultChunkSize=512</code> 是 <b>Unicode 码点（rune）</b>计数，切分与合并全程用 <code>utf8.RuneCountInString</code>（<code>splitter.go</code>），既不是字节也不是 token；代码注释自标 "512 chars: ~100–130 English tokens / ~300 Chinese tokens"。与我们统计的 28,956 是同一把尺子（Python <code>len()</code> 也是码点数；英文数据下还≈字节数）。② 但 512 是<b>目标预算，不是实测块长</b>：保护片段（代码块／表格／公式／行内代码／链接）不许从中间切开、<code>absoluteMaxSize=7500</code> 才硬切、overlap 与表格标题前缀都会推边界 ⇒ A5 实测 p50＝431、最长 827。③ 另有一条隐藏转换：若 KB 设了 <code>token_limit</code>，会按语言换算成字符预算（<code>CharsForTokenLimit</code>，留 10% 余量）并与 ChunkSize 取更小者；<b>我们 KB 的 <code>chunking_config</code> 是 0／0／null</b>（<code>data/tmp/weknora-multisource/kb-create.json</code>）⇒ 走默认 <b>512 字符／80 重叠</b>／分隔符 <code>["\n\n","\n","。"]</code>，没有 token 换算。④ 顺带一条：切块前会 <code>NormalizeLineEndings</code>（CRLF→LF），所以源侧字符数与切块侧可能差"换行符"的量（我们投喂时已是 LF，两边一致）。0043 §0 术语框已改准。</p>
+
+<p class="muted"><b>㊽ 2026-10-09 "预算"到底怎么理解（沛东追问"预算上限？"）</b>：<b>512 不是"不许超"的上限，而是两处决策用的软目标</b>——① <b>拆</b>：<code>splitBySeparators</code> 里"片段 &gt; 512 就换下一级分隔符继续拆"（<code>["\n\n","\n","。"]</code> 优先级）；② <b>合</b>：<code>mergeUnits</code> 里"当前块 ＋ 下一个单元 ＋ 表头前缀会超 512 就封口开新块"。<b>兜不住的两条例外</b>：单个不可再拆的单元会整块进入——保护片段（代码块／表格／公式／行内代码／链接，上限 <code>maxProtectedSize=7500</code>）走一条，或递归到最后一个分隔符后仍超长的整段走另一条；真正的硬顶是 <code>absoluteMaxSize=7500</code>（超了才按换行／空格强切）。<b>A5 的 827 已定位</b>：<code>data/tmp/weknora-multisource/A5.md</code> 按 <code>\n\n</code> 切出 101 段，最长一段恰为 <b>827 字符</b>（"As agents grow more capable, attack surfaces are constantly shifting…"，就是那一块），另有 16 段 &gt; 512；因为我们的 prep 脚本"一段一行"，段内既无换行也无"。"（英文里 <code>。</code> 不出现）⇒ 递归到最后一个分隔符仍超长，整段成块。附带一条对英文语料的实际含义：分隔符表里的 <code>。</code> 对英文等于无效，英文长段只能靠 <code>\n\n</code>／<code>\n</code> 断，颗粒度会退化成"按我转 Markdown 时的换行"。0043 §0 术语框已把"预算上限"改成"软预算 ＋ 硬顶 7500"。</p>
+
+<p class="muted"><b>㊾ 2026-10-09 修 0043 §2 表的两处"两列不同指标"（沛东指出"耗时部分两列数据指标不同，链接也是"）</b>：① <b>耗时</b>——原来 A5 写 "ingest 49.3 s ＋ finalize 2.1 s"、P6＋P7 只写 "ingest 57.2 s"（缺 finalize）⇒ 从日志补齐同一口径：A5 <code>wiki ingest stats elapsed=49.288s</code> ／ <code>wiki finalize elapsed=2.109s</code>（kb 8990fb05，2026-10-07T06:02:56／06:03:23）；P6＋P7 <code>elapsed=57.169s</code> ／ <code>2.175s</code>（kb 7c601025，2026-10-09T02:49:26／02:50:44，<code>pages(total=85)</code>）⇒ 两列都写成 "ingest ＋ finalize"。② <b>链接</b>——原来 A5 写 "251 条、悬空 0"、P6＋P7 写 "注入覆盖 77 页"（两个完全不同的指标）⇒ 统一成同一字段：<code>/wiki/stats</code> 的 <code>total_links</code>（A5 251／P6＋P7 362）＋ <code>/wiki/lint</code> 三类计数（A5 broken 0／orphan 8／missing 12；P6＋P7 broken 0／orphan 17／missing 6）；"注入覆盖 77 页"保留在 §2 附录 A.0.1（它本来就在那儿）。③ 附录 B 口径声明补一句耗时来源（两行 <code>elapsed=</code>，不含排队与轮询）。</p>
+
+<p class="muted"><b>㊿ 2026-10-09 删掉"51 vs 52 笔账差"并统一 A5 成本口径（沛东："这个不重要，反而成为干扰项"）</b>：去掉 0043 §2 表下注释与附录 B 口径声明里的"A5 逐项相加 51 次、日志汇总记 52 次（差 1 次没对上）"整段，只保留 Pass 0 的 32,768 字符截断那条坑。顺手把口径钉死：拿容器日志的 <code>[LLM Usage]</code> 行按"时间窗 ＋（时间戳,purpose,tokens）去重"统计（两份日志文件有重复行，<b>必须去重</b>，否则 P6＋P7 会算成 204 次／1,016,844）——<b>A5 全量 ＝ 51 次调用 / 239,912 token</b>（page_modify 43／197,696、chunk_citation 3／16,267、candidate_slug 1／10,392、summary 1／9,323、taxonomy 1／3,417、index_intro 1／344、document_summary 1／2,473），<b>P6＋P7 全量 ＝ 102 次 / 508,422 token</b>（与文中数字完全一致 ⇒ 统计方法得到验证）。⇒ 原来的 239,918 比逐项和多 6 token（一笔 6-token 的杂项混进了日志汇总）；0043 两处与 0037 §3.2 的"52 次／239,918"统一改成 <b>51 次／239,912</b>（§3.2 那处本来就自相矛盾：它列出的分项相加正是 239,912）。</p>
+
+<p class="muted"><b>51 2026-10-09 重写 0043 §3.1（沛东："这一页要不要重新写？现在这个判据并不惊讶"＋"表格里'它此前产出过的页'的它是谁？"）</b>：① 去掉"这是读完代码后最容易惊讶的一点"这个价值判断——集合成员判据本身确实不惊讶，真正值得写的是它的<b>成本含义</b>；改写为"判据＝两份集合的成员关系"＋<b>两个后果</b>：<b>重解析必然重写</b>（落在交集里的 slug 一律派发"撤回＋新增"⇒ 整页重写，文档一字未改也一样）、<b>写页次数只跟"命中几个 slug"有关、跟"改了多少字"无关</b>（接 §3.4 的三档单价）。标题也从"不是'块变了没'"改成"不是'内容变了没'"。② 修掉代词歧义：表头原写"本文档新抽取 vs 它此前产出过的页"，"它"没有先行词 ⇒ 改成"同一篇文档：这次新抽到的 slug vs. 上次产出过的页"；并把两份集合在正文里定义清楚——"上次产出过的页"＝库里 <code>source_refs</code> 含这篇文档的页（<code>mapOneDocument</code> 里 <code>oldPageSlugs := getExistingPageSlugsForKnowledge</code> → <code>ListSlugsBySourceRef</code>，<code>wiki_ingest.go:2103</code>）；"这次新抽到的"＝<code>mergeCitationsIntoItems</code> ＋ <code>reclaimExtractedIdentities</code> 之后重建的 <code>extractedPages/newSlugSet</code>（<code>wiki_ingest_batch.go:1397／1421／1552</code>）。③ 补一条此前漏说的例外：<code>summary/</code> 页不走撤回、每次整页覆盖（代码注释里的 case (c)）。①② 只动表述，③ 是新增事实。</p>
+
+<p class="muted"><b>52 2026-10-10 0043 结构重排：七阶段提到最前（沛东："把7个步骤放到最前面吧"）</b>：新增 <b>§1 先看流水线：七个阶段各自吃什么、吐什么</b>——把原附录 A.0 的表升成正文，并补三列口径（<b>谁在跑／输入／输出</b>），每行带提示词名；表下三条读表要点：① ①–④ 是"每篇文档各一份"（Map 里一篇文档只看得到自己，所以"这一页要不要重写"不可能在这一步定）、② ⑤–⑦ 是"批级一份"（Reduce 手里是<b>整批的 slug 列表</b>，同批多篇命中同一 slug 合成一条链 ⇒ 多源页的来历）、③ "批"＝一次 ingest 认领的文档集合、默认 ≤5 篇。原正文 §1–§6 整体后移为 §2–§7，全文 §N 引用与附录编号一次性重算（A.0.1→A.1、A.1→A.2、A.2→A.3、A.3→A.4、A.4→A.5），附录 A.0 表整块删除（内容已在 §1）；顺带修两处自指（"后面三节"→"§3–§5"、"第一节先给"→"这一节先给"）。<b>待办（等沛东说完再动）</b>：§4.1 还是旧说法"判据是集合成员关系"——按 10-10 的讨论，写页的真正输入是<b>批级 slug 列表</b>（<code>slugUpdates[u.Slug] = append(...)</code>，reduce 逐 slug 写页），而文档级的 <code>oldPageSlugs</code> 集合差只管<b>撤回</b>（retract／retractStale）；这一节要按批级视角重写，本轮先不动。</p>
+
+<p class="muted"><b>53 2026-10-10 §4.1 按"批级视角"重写（沛东："一并改了"）</b>：把原来的"判据是集合成员关系"换成三件事分开写——<b>① 写不写</b>：这个 slug 在不在<b>批级 slug 列表</b>里（<code>slugUpdates: slug → [update...]</code>；Map 阶段每篇文档对每个抽到的 slug <b>无条件</b> append 一条 addition，Reduce 遍历这张表逐 slug 处理，<code>wiki_ingest_batch.go:550／641／654</code>）；<b>② 写成什么样</b>：编辑器看到的旧正文 ＋ additions 素材块 ＋ 撤回指令；<b>③ 要不要发撤回</b>：<b>文档级</b>集合差（<code>oldPageSlugs</code>＝库里 <code>source_refs</code> 含这篇文档的页 vs <code>newSlugSet</code>），三情形表原样保留。后果由"两个"扩成"三个"：新增<b>批是局部变量</b>——同一个 slug 落在两个批次就会被写两次（第二次是整页改写）⇒ 投喂方式本身就是成本变量（接 §4.4）。§0"三种变更"表的增量行同步改成"写页步的输入是批级 slug 列表"。⇒ 至此，10-10 沛东指出的"它不是这篇文档上次产出的页"这条，落到文档里的正确形式是：<b>文档级集合差管撤回，批级 slug 列表管写页</b>。</p>
+
+<p class="muted"><b>54 2026-10-10 §2 柱子①补提示词原文（沛东："加了一个'并且要求 LLM 不要重写'，这里应该再把对应的提示词贴出来"）</b>：先重读最新 0043 再动手。贴了两处，都做了逐字核对（脚本比对 <code>internal/agent/prompts_wiki.go</code>）：① <b>"不要重写"</b>那句＝<code>WikiPageModifySystemPrompt</code> 的 EDITING AND OUTPUT RULES 第 1 条（<code>:331</code>）——"You are a COMPILER, not a creative writer. Stay close to the verbatim source wording…"；② 顺带给"拼进提示词的是完整原文"补出处：<code>WikiPageModifyUserPrompt</code>（<code>:367</code>）的 "The &lt;new_information&gt; block above is assembled from VERBATIM source chunks already cited as directly supporting this page."（该句后面还有一句"&lt;shared_source_contexts&gt; 只作框定、不作证据"，本文按句子边界截取、未引）；③ 给原本就有的 retract 判据补上前缀与出处（<code>WikiPageModifyUserPrompt</code> 第 2 条，<code>:387</code>），并把标签用反引号包住——原文是裸尖括号，直接贴会被 Markdown 当 HTML 标签吃掉。两处英文引用都补了"（大意：…）"中译；若不想要中译、保持"只贴英文原话"的统一风格，说一声我去掉。</p>
+
+<p class="muted"><b>55 2026-10-10 §2 柱子③重写 ＋ 加"分工表"（沛东："slug 是身份账本，跟可改、可删到底有什么关系？没想太明白"）</b>：① 把 ③ 从抽象标签改成直白因果——标题改为"slug 是身份账本 —— 让'新抽到的'落回原来那一页"；正文先讲"写页是按键覆盖"（reduce 拿的是 <code>slug → updates</code>，改哪一页由键决定），再讲身份不归一会长孪生页 ⇒ 增量退化成"堆页"，然后列身份归一的"三手"（Pass 0 喂 <code>previous_slugs</code>／去重层标题召回＋LLM 判同／确定性精确身份兜类型漂移）。② 补上失效面（这是 ③ 与"删"唯一的实质交点）：<b>重解析时模型换 slug ⇒ 旧 slug 落进 <code>old ∖ new</code> ⇒ <code>retractStale</code> ⇒ 单源页直接删</b>（<code>wiki_ingest.go:2124–2137</code> 注释：单源删、多源剥引用），同时新 slug 建新页 ⇒ 净效果"删一页＋建一页"，链接与 version 链都断。③ 新增三行"分工表"：①逐字原文块→<b>可删</b>；②引用落库→可删（定位）＋可改（剥块）；③身份账本→<b>可改</b>；并在 §2 开头那句加了括注"它们分工不同——哪根服务可改、哪根服务可删，见本节末那张表"。④ 末尾点出 ③ 的现成失效口子（去重召回只看标题、不认别名 ⇒ 中英同义在结构上必然长孪生页），指向 §6 第 6 条。⇒ 定案口径：<b>三根柱子不是"每根都撑两件事"，是可删（①②）／可改（③）的分工</b>。</p>
+
+<p class="muted"><b>56 2026-10-10 删掉 §2 末尾的"全文骨架"句（沛东："放在这里合适吗？"）</b>：不合适——那是<b>全文路线图</b>，而路线图已经在 §0 的 30 秒判断里给过（§1／§2／§6／§7 分工 ＋ 三个问题各自指向 §3／§4／§5）；放在 §2 末尾既重复，又像半路插进来的目录。改成一句<b>前向过渡</b>："⇒ 三根柱子备齐了。接下来三节，就是把它们放进三种库状态里跑一遍：全量（§3）→ 增量（§4）→ 删除（§5）。"（若要保留完整骨架，位置应在 §0，且要与那里的路线图合并，不能两处各一张。）</p>
+
+<p class="muted"><b>57 2026-10-10 §3 加"语料 token ＋ 倍数"，并揪出一处事实错（沛东："语料能把 token 数也加上吗？成本处把 token 消耗是语料 token 的多少倍也写上"）</b>：① 用 <code>data/tmp/graphrag-exp/.venv</code> 里的 <b>tiktoken <code>o200k_base</code></b>（离线可用）数源文：<b>A5 ＝ 5,701 token</b>（28,956 字符）、<b>P6 5,174 ＋ P7 15,257 ＝ 20,431</b>（103,328 字符）。② 倍数（编译消耗 ÷ 语料 token）：<b>A5 ＝ 239,912 ÷ 5,701 ≈ 42×</b>、<b>P6＋P7 ＝ 508,422 ÷ 20,431 ≈ 25×</b>，已写进成本行。③ 口径对账（写进 §3 注释与附录 B）：Pass 0 的 prompt ＝ 该文档 token ＋ <b>固定提示词开销</b>——A5 5,701＋1,478＝7,179（实测）、P6 5,174＋1,334＝6,508（实测）、P7 取前 32,768 字符＝6,436＋1,400＝7,836（实测）⇒ 三篇开销都落在 <b>1.3–1.5k</b>，说明 o200k 与模型分词器的差在几个百分点内。④ 另加一段解释两列倍数为何不同（**不是口径差**）：写页单价几乎一样（A5 197,696÷43 ≈ <b>4.6k／页</b>，P6＋P7 403,406÷83 ≈ <b>4.9k／页</b>），差的是"每千源文 token 建出多少页"（<b>7.5 页 vs 4.1 页</b>）。⑤ <b>顺手发现并修掉一处事实错</b>：附录 B 原写"78,647 字符的 P7 在抽候选那一步只看了前 3.3 万字符（引用与摘要阶段仍覆盖全文）"——<b>错</b>：<code>maxContentForWiki = 32768</code> 在 <code>mapOneDocument</code> 开头对 <code>content</code> 截断<b>一次</b>（<code>wiki_ingest_batch.go:1227</code>），抽候选与 summary <b>共用这份截断文本</b>，只有引用匹配用的是全部 <code>chunks</code>（真覆盖全文）；附录 B 与 §1 表 ④ 行（"整篇文档"→"截断到 32,768 字符的文档"）已改。</p>
+
+<p class="muted"><b>58 2026-10-10 §4.2／§5.2／§5.3 补"语料 token ＋ 倍数"，并把全文"源文 token"口径统一（沛东："补"）</b>：① 源文 token（tiktoken <code>o200k_base</code> 数投喂的 Markdown）：<b>A4 ＝ 2,714</b>（13,855 字符；脚本重生成一次，字符数一致）、<b>P7 ＝ 15,257</b>（78,647 字符）。倍数：A4 增量 <b>98,773 ÷ 2,714 ≈ 36×</b>、P7 重投 <b>361,915 ÷ 15,257 ≈ 24×</b>，都已写进对应表的成本行。② <b>删除那条账挖出一个新数</b>：删 P7 全流程只 <b>6 次调用 / 24,388 token ＝ 源文的 1.6 倍</b>（日志 07:52:41–07:53:11：5 个多源页各一次 <code>wiki_page_modify</code> ＋ 索引引言一次）——<b>47 个单源页是直接删库行、零 LLM</b>；已补进 §5.2 表与 §0 的删除行。③ <b>口径统一（顺手清掉一个隐患）</b>：§0 原来写的"源文 ≈ 7.2k／4.1k／7.8k token"其实是 <b>Pass 0 的 prompt token</b>（含固定提示词开销，且 P7 那份还被截断），与 §3 新加的"语料 token"是两套口径，并存必然打架 ⇒ 全文统一为"<b>源文 token ＝ o200k 数投喂的那份 Markdown</b>"，§0 三行改成 <b>5.7k／2.7k／15,257</b> 并把倍数一起写上；Pass 0 的关系改成"对账"写进附录 B（源文 token ＋ 1.3–1.5k 固定开销 ＝ 实测 prompt：A5 5,701→7,179、A4 2,714→4,085、P6 5,174→6,508、P7 截断 6,436→7,836）。④ §4.2／§5.2／§5.3 三张表都加了"语料"首行，结构对齐。</p>
+
+<p class="muted"><b>59 2026-10-10 §4 重排：把"新文档入库"（主场景）提到前面（沛东："增量其实有两种情况…现在的内容好像把第一种当主要场景了"）</b>：核实——原 §4.1 整节（文档级集合差的三情形表＋"重解析必然重写"）都是<b>情形 B（同一份文档再入库）</b>，而讲情形 A 的 4.2／4.3 排在它后面，标题却写"新文档进来"，确实把少数情形当了主场。改法（保住 4.1–4.4 编号，只挪内容）：① §4 开头新增"两种情形"对照表（**A 新文档入库＝主场景**／**B 同一份文档再入库＝重解析、重传**，各配"机制一句话"与实测出处）；② §4.1 收窄为<b>两种情形共用的机制</b>（批级 slug 列表；"三件事"表第三行标注"只有情形 B 才非空"），通用后果两条（写页次数 ∝ 命中 slug 数／批是局部变量）留在 4.1；③ §4.2 ＝ <b>情形 A（主场景）</b>：A4 干净新增表 ＋ 原 4.3 的"并入已有页"（探针实验、多源页读感）；④ §4.3 ＝ <b>情形 B</b>：文档级集合差三情形表 ＋ "重解析必然重写（45 → 54 页）"＋"重写比新建贵"＋指向 §5.3 的完整实测。引用同步：§0 那句"mapOneDocument 末尾…（见 §4.1）"→ <b>§4.3</b>；附录 A.5 副产品"§4.1／§5.3"→"<b>§4.3</b>／§5.3"；§0"三种变更"表的增量行改成 A／B 两半。§4.4（投喂成本）的引用位置未变。</p>
+
+<p class="muted"><b>60 2026-10-10 §4.1 补"撤回从哪来"（沛东："第一句只说产生 addition，第三步又有对撤回的处理——文件增量入库会产生撤回吗？"）</b>：答案是<b>不会</b>——情形 A（新文档入库）<code>oldPageSlugs</code> 为空，集合差这一半整段不执行，Map 只发 addition。撤回只有两条来源：① <b>情形 B 的文档级集合差</b>（同一份文档再入库：两边都有→补 retract；上次有这次没有→retractStale）；② <b>整篇文档被删</b>（不走 Map，按 <code>source_refs</code> 反查后入队 <code>WikiRetract</code>）。顺带核了 <code>remapSlugUpdatesByIdentity</code>（<code>wiki_ingest_dedup.go:679</code>）：它只重写 <code>u.Slug</code> 做身份收敛，<b>不会</b>产生撤回——所以情形 A 的重叠并入也仍是纯 addition。改法：§4.1 第一条补"如果这篇文档此前产出过页（情形 B），它还会顺手做一次集合差、补上撤回——新文档没有这一半"；第三条补"⇒ 撤回只有两个来源：①§4.3 ②§5.1，新文档这条路上不会出现撤回"。</p>
+
+<p class="muted"><b>61 2026-10-10 §4.1 补一条通用后果 ＋ §4.3 补"最后一次为准"的边界（沛东提"同一文档多次入库以最后一次为准"，并要求客观评估）</b>：评估后拆成两处——① "以最后一次为准"<b>不进 §4.1 的通用后果</b>（撤回只属情形 B，放"通用"位置自相矛盾），改放 §4.3 结论之后，并写成<b>打折版</b>：撤回的旧版本信号其实是这篇文档<b>上一版的 summary</b>（<code>SummaryContentByKnowledgeID</code>，注释原文 "the surviving summary page's content"，<code>wiki_ingest.go:1410</code>），不是"它当时写在这一页上的那些句子"；正文剥离实测偏保守（§5.2 那次是删除路径，走同一段 reduce 撤回逻辑）⇒ 可能<b>新旧并存</b>；素材层 <code>chunk_refs</code> 只并集不删（§6 第 5 条，142＝71＋71）⇒ 证据链两代并存；<b>真正硬的是页面集合层</b>——上次抽到、这次没抽到的 slug 走 <code>retractStale</code>（单源页直接删）⇒ 严格说法是"以最后一次的<b>抽取结果</b>为准"。② §4.1 通用后果由两条扩成三条，新增真通用的一条：<b>更新粒度是"页"不是"段"</b>（A 的并入与 B 的重写都是"旧正文 ＋ 新素材 → 吐一整页"，version ＋1，没有只改一段的路径）——它同时解释了 §4.4 的三档单价、version 号与删除留下的链接断口。</p>
+
+<p class="muted"><b>62 2026-10-10 去掉 §4.2 把"长出新一级目录"当代价的说法（沛东："长新目录本身就应该是要做的吧？并不能直接去掉这个处理"）</b>：同意——长新目录是<b>正确行为</b>，不是成本。核实：A4 那批的目录规划只看"本批新条目 ＋ 已有目录池"，库内原有 4 个一级目录（组织与人物／评估工具／评估方法／评估概念），A4 带来的产品工程类条目长出第 5 个（<code>项目与产品</code>）本身合理；把它去掉只会让新内容硬塞进不合适的目录。真正的风险移到"<b>归到哪个目录只靠提示词逐字复用、程序侧无账本</b>"——实测漂移发生在<b>重投</b>那次（<code>错误分析</code>：<code>评估方法/错误分析</code> → <code>评估方法/自动化评估</code>，见 §6 第 4 条），不是长新目录本身。改写后 §4.2 该段：先说"新文档＝一堆新页 ＋（有新主题时）一张新目录"，再单列"长新目录不是缺陷／风险在归目录无账本"。</p>
+
+<p class="muted"><b>63 2026-10-10 重写 §4.3"最后一次为准"那段（沛东："感觉没说清楚"）</b>：原写法先抛结论再连缀三个"但/更明显/才是硬的"，读者得同时端三层。改成<b>先问后答 ＋ 三层表</b>：开头先问"重解析时系统怎么知道页上哪句话是这篇文档旧版本写的？"→ 答"它并不真的知道"，手里只有这篇文档<b>上一版的 summary 页内容</b>（<code>SummaryContentByKnowledgeID</code>）；然后用表把三层硬度摊开——① <b>页面集合</b>：上次抽到这次没抽到的 slug 走 <code>retractStale</code>（剥来源、单源页直接删）⇒ 程序决定，<b>硬</b>；② <b>页面正文</b>：编辑器拿到"旧 summary ＋ 旧正文 ＋ 新素材"，判据只能靠 summary 猜 ⇒ 模型判断，<b>软</b>（§5.2 那次删除走同一段 reduce 撤回逻辑）；③ <b>证据引用</b>：<code>chunk_refs</code> 只并集不删（§6 第 5 条）⇒ <b>只增不减</b>。收尾一句定死："页面的'在不在'以最后一次的抽取结果为准（硬）；'写成什么'以最后一次为目标但不保证（软）；证据是累加。"</p>
+
+<p class="muted"><b>64 2026-10-10 §4.3 贴提示词原文，回答"是删旧并新还是按全量素材重写"（沛东："最好把提示词链接也给一下…写这个新页面的时候，是要求 LLM 删旧并新，而不是根据全量最新素材重新写的吗？"）</b>：答案＝<b>是"删旧并新"的增量编辑，不是按全量素材重写</b>。证据（都已逐字核对后贴进 §4.3）：① <code>WikiPageModifySystemPrompt</code>（<code>prompts_wiki.go:321</code>）"You are a wiki editor tasked with updating an existing wiki page…"；② 用户提示词第 2／3／4 条（<code>:387／:390／:394</code>）＝ REMOVE（只在被撤来源里出现的）／ADD and MERGE（并入 <code>&lt;new_information&gt;</code>）／Preserve existing information still valid；③ <code>&lt;existing_page_content&gt;</code> 永远在场（<code>:358</code>）；④ <code>&lt;new_information&gt;</code> 只装<b>这一批新引用的块原文</b>（<code>resolveCitedChunks</code>，<code>wiki_ingest_batch.go:1941–1953</code>）；⑤ 只有存在撤回时才出现 <code>&lt;deleted_documents&gt;</code>／<code>&lt;remaining_source_documents&gt;</code>，而"剩余来源"装的是<b>其他来源文档的 summary</b>（<code>:1907–1927</code> 走 <code>SummaryContentByKnowledgeID</code>），不是它们的块；⑥ 判断虽增量、<b>输出仍是整页</b>（SUMMARY 行 ＋ 整页 Markdown，version ＋1）。⇒ 推论（🤔）：其他来源的旧正文只能靠"Preserve"这条规则活着，编辑器并不重读它们的块——这正是"正文软替换／证据并集"的机制解释。英文引用一律不加内部加粗（保持原话），职责四点改为在引文前的引导句里点出。</p>
+
+<p class="muted"><b>65 2026-10-10 写进"更深的取舍：为什么不按素材重算"（沛东："这个算比较深的考虑了"）</b>：§4.3 末尾新增一段（标 🤔 推断）：<b>官方文档与注释没有正面解释过</b>为什么用增量而不是"按全部素材重写"。能证实的只有两点——官方把 Reduce 写成"按 slug 增量更新或合并"，注释动机集中在<b>规模</b>（<code>4w-document</code> 系列改造）与<b>失败隔离</b>（写页失败"现有页保持不变"，<code>wiki_ingest_batch.go:2101–2110</code>；素材缺失有 <code>(summary not available)</code>／退回 Details 兜底）。<b>成本被明确否掉</b>：差额上限＝<code>(1 − out/in) × 旧素材</code>，同语言≈10%、跨语言≈65%，是常数因子不是量级，且正文同样随页面增长（只有"页面被输出预算封顶而素材继续涨"才拉开，是封顶副产品）。<b>真正代价</b>：没有"从素材重算"的路 ⇒ 删除/纠错依赖软判据、<code>chunk_refs</code> 只并集（正文与证据脱节）、无自愈路径。⇔ 反过来"按剩余素材重写"能直接取消 retract 整套补丁，前置条件只有两条：素材随时可得且完整 ＋ 显式的"重建这一页"入口。收束句：<b>这条链路把正确性押在"每轮增量都不出错"，而不是"随时能从素材重算"</b>（§6 第 1、2 条是它的下游）。</p>
+
+<p class="muted"><b>66 2026-10-10 给"更深的取舍"补上"替代方案好在哪"与"删得保守是必然"（沛东："没有说明白为什么会有这个考虑…其实现在的设计，删得保守是必然的，LLM 根本没有足够信息判断一个正文块是否还有别的源块支撑"）</b>：把那一段重排成"好处 → 现行代价 → 证据 → 成本 → 前置条件"：① 新增开头一段<b>三条好处</b>（删除/替换变确定操作：重建时不送被删块即可；自愈：纠错、去重、正文与证据重新对齐；整套 retract 补丁可取消）；② 新增一段说清<b>"删得保守"是信息不足的必然</b>——删一句要答两个问题（这句是否来自被撤来源／还有没有别的来源撑着），而编辑器手里只有页面正文（<b>无句级锚点</b>、<code>chunk_refs</code> 只到页级）＋被删文档 summary＋其他来源的 <b>summary</b>（不是块）⇒ 没有证据可依，稳妥就是不删（实测 −45～−276 字符且主要是链接降级）；同一缺口的下游还有 <code>chunk_refs</code> 只并集、无自愈路径；③ 📄 能证实的（官方定义＋规模/失败隔离注释）与 🤔 成本否掉（常数因子）保持原样；④ 收尾前置条件两条不变。</p>
+
+<p class="muted"><b>67 2026-10-10 修 §4.4 的过期指针（沛东："'附录 A 讲过：批贯穿 Map 与 Reduce…'这句不对吧，已经到最前面去了吧？"）</b>：对——"批贯穿 Map 与 Reduce"这段内容在 10-10 重排时已经进了正文（§1 读表要点"⑤–⑦ 是批级一份"＋ §4.1"批是局部变量"），附录 A 只剩下 A.2"批、并发与去抖窗口"（讲批的定义／Map 并发／Reduce 跨文档／目录批级），里面<b>并没有</b>"跨批由 per-slug 锁串行、不合并"这句。已把 §4.4 那句的括注改成："（§1 那张表里的'⑤–⑦ 是批级一份'＋ §4.1 的'批是局部变量'：<code>slugUpdates</code> 只活在本批，跨批会被再写一次；跨批并发由 per-slug 锁串行，但不合并）"。同时全篇扫了一遍"附录 A.x"引用：A.1（点与边，§2／§6 各一处）、A.2（批，§1）、A.4（输出语言，§3）都解析正常；A.3／A.5 存在但暂无正文引用。</p>
+
+<p class="muted"><b>69 2026-10-10 压缩 §4.4 的"两个样本"句（沛东："这句有用吗？或者括号里的'才有那 4 个多源页'有用吗？"）</b>：判断——整句的<b>作用</b>是让"批＝时间窗口决定"这条不落空（后面的调参建议都建在它上面），但要保留的只有<b>与可观察结果挂钩的那一半</b>：P6＋P7 连着上传 ⇒ 同批 ⇒ <b>4 个"出生即多源"的页</b>（这是"窗口把两篇攒进一批"的直接后果）；而"A4 隔 1.5 小时 ⇒ 自成一批（＋22 页、0 合并）"是<b>纯复述</b>（§4.2 表里已有 ＋22／0 合并），而且"隔 1.5 小时当然是另一批"近乎不言自明，删。改后："我们的两批实验正好落在两边：P6＋P7 连着上传 ⇒ 同一批（那 4 个"出生即多源"的页就是这么来的）；A4 隔了 1.5 小时才投 ⇒ 自成一批。"</p>
+
+<p class="muted"><b>70 2026-10-10 把 §4.4 那句"finalize 去抖摊薄"从括号里提出来讲清（沛东："这里有点儿突兀，没看懂"）</b>：原句是 ⚠️ 段末尾一个长括号，读者不知道它在防什么。核了代码后改写为独立段落，并把"防什么"写明=<b>别把"分成两批会更贵"推广到所有阶段</b>：贵的主要是<b>写页</b>（同一 slug 每批再写一次）；其余按批重复的只剩<b>目录规划</b>（每批 1 次、~1.4% 可忽略）；<b>链接注入与索引重建在 finalize 里做</b>，而 finalize 有自己的 <b>20 秒</b>去抖（<code>wikiFinalizeDelay</code>，注释原话 "debounces the finalize trigger so multiple ingest batches within the window coalesce into a single index rebuild"）＋任务 <code>TaskID = wiki-finalize-&lt;kbID&gt;</code> 去重（撞上即合并）⇒ 跨批那部分已被摊薄，不是瓶颈。</p>
+
+<p class="muted"><b>71 2026-10-10 删掉 §4.4 的"口径说明"整段（沛东："这个口径说明，我觉得整个可以不要"）</b>：该段（写页才是每批重复／目录规划每批 1 次／finalize 20 秒去抖摊薄）整段删除。删除前确认它没有独占信息：<b>"finalize 跨批 20 秒去抖"</b>在 §1 表 ⑦ 行已写（"finalize（跨批 20 秒去抖）"）；<b>"目录规划是批级的"</b>在附录 A.2 已写。删掉后 §4.4 的落点是"⚠️ 省多少取决于批内 slug 重叠率 → ⇒ 小结（局部可预期、结构随时间累积）"，没有悬空引用。</p>
+
+<p class="muted"><b>72 2026-10-10 §5.1 给"知识条目"下定义（沛东："啥叫知识条目？"）</b>：在 WeKnora 的数据模型里，<b>knowledge＝知识库里的一条记录</b>——接口是 <code>/knowledge/{id}</code>，删除文档就是删这条 knowledge；它<b>可能是一篇上传的文件，也可能是"手工知识"（<code>/knowledge/manual</code>）直接录入的一段文本</b>，不一定有文件。我们四组语料（A5／A4／P6／P7）全是"手工知识"，所以"一条知识 = 一篇投进去的文章"。改法：① §0 两处"删掉某个知识条目"改成"从库里删掉一篇文档"（首现不用未定义术语，读者当下就懂）；② §5.1 链条前加一句定义："知识条目（knowledge）＝ 知识库里的一条记录……下文按场景也称它'文档'"。⇒ 术语分工定为：讲数据模型／删除操作时用"知识条目"，讲内容时用"文档"。</p>
+
+<p class="muted"><b>73 2026-10-10 更正"三种输入共用七阶段"的说法（沛东："删除的处理逻辑不是那七阶段啊？"）</b>：对——<b>删除根本不走 Map</b>。核代码（<code>wiki_ingest_batch.go:480–522</code>）：<code>WikiRetract</code> 分支直接 <code>slugSet[p.Slug]=…</code>（按 <code>ListPagesBySourceRef</code> 反查）后 <code>slugUpdates[slug] = append(..., SlugUpdate{Type:"retract", RetractDocContent: op.DocSummary})</code>，<b>不调 <code>mapOneDocument</code></b>；日志侧也对得上——P7 删除那批只有 6 次调用（5 × <code>wiki_page_modify</code> ＋ 1 × <code>wiki_index_intro</code>），<b>没有</b> candidate_slug／citation／summary／dedup／taxonomy。所以准确说法是：<b>三种输入共享的是后半段（⑥ 写页 ＋ ⑦ 收尾）；全量／增量走 ①–⑦；删除从"tombstone ＋ 反查 ＋ 撤回"直接进 ⑥</b>。已改四处：§0 一句话（改为"共享后半段＋删除不经过前五步"）、§0 三种变更表的删除行（加"不经过 ①–⑤"）、§1 开篇（区分七阶段谁走谁不走）、§1 结尾（"差别落在 ①–⑤，共同落点在 ⑥–⑦"）。</p>
+
+<p class="muted"><b>74 2026-10-10 把 §5.2 发现①的"为什么"补上（沛东："没有说明白为什么编辑器难以判断'哪句话只来自被删文档'"）</b>：原文只有结论"编辑器难以判断…于是基本不删"。补成与 §4.3 同一套机制：要删一句得答两个问题（①这句是否来自被删的？②它还有没有别的来源撑着？），而编辑器手里只有——① 页面正文（<b>无句级归属</b>，正文无锚点、<code>chunk_refs</code> 只到页级）；② <b>被删文档的 summary</b>（<code>&lt;deleted_documents&gt;</code> 装的是摘要，不是块原文）；③ <b>其他来源的 summary</b>（<code>&lt;remaining_source_documents&gt;</code> 同样只有摘要）。拿摘要匹配正文句子只能模糊猜，两个问题都答不准 ⇒ 最稳就是不删。结论句保留（"真正干净的是整页消失，不是页内剥离"），并指向 §4.3 那张三层硬度表。</p>
+
+<p class="muted"><b>75 2026-10-10 §6 重排：换成单一轴"会不会静默地咬人"（沛东："我觉得顺序不对，你再想想"）</b>：诊断——原顺序自称"按会不会咬人排"，但既不成立（去重缺口会静默裂页却排最后；页内剥离是"不主动犯错也会中"，比"不可逆"更咬人）也没说明轴（实际是"按场景聚集"：1–3 删除、4–5 增量、6 身份），且与正文顺序相反。改为单轴：<b>越靠前＝越静默、越不靠用户主动犯错；越靠后＝越看得见、越可人工收拾</b>。新序：<b>① 页内剥离极保守（删除）② 去重召回只比标题（身份）③ 删除没有重放路径（删除）④ 块级增量没兑现（增量）⑤ 目录会漂移（增量）⑥ 删除留悬空链接（删除）</b>；① 的正文补了一句"这是结构决定的"并指到 §4.3／§5.2。连带改 4 处引用：§2"见 §6 第 6 条"→第 2 条；§4.3 表格"§6 第 5 条"→第 4 条；§4.3 收束"§6 第 1、2 条"→第 1、3 条；附录 B"§6 的第 1／3／4 条"→第 3／5／6 条（实验名同步成"删除可逆性、目录收敛、悬空链接清理"）。查过 §7：它对 §6 只有散文引用、没有条目序号，不用改。</p>
+
+<p class="muted"><b>76 2026-10-10 重写 §6 第 4 条并给 §2 柱子②补上下文（沛东："块级增量没兑现…没太看懂，这个文章有什么地方写这个了吗？"）</b>：查过——<b>正文只在这一条讲过它</b>（加上 §4.3 表格里一句指针），§2 柱子②只正面说"引用是落库的、随增删维护"，<b>没有</b>说它只增不减 ⇒ 读者到这里没有任何铺垫，看不懂是必然。改两处：① §2 柱子②加一句限制："⚠️ 但'维护'只做到一半：<b>重解析不会清理旧引用</b>（<code>chunk_refs</code> 只并集、不删旧，见 §6 第 4 条）"；② §6 第 4 条改名"<b>块级引用只增不减（"块级增量"没兑现）</b>"，正文给出代码原样（<code>page.ChunkRefs = mergeChunkRefs(旧 refs, 本批 additions)</code>，<code>wiki_ingest_batch.go:2129–2134</code>；只有删除路径调 <code>removeChunkRefs</code>）＋两代怎么来的（重解析重切块 ⇒ 新 UUID，旧 refs 不删）＋实测（A5 重解析后 142 块＝两代各 71、52 页全部双代、452 条引用跨两代），并把原来那句含混的结论<b>拆成两个后果</b>：① refs 是"历次写入的并集"、不是"当前正文的证据清单"；② 就算它准确，也只是页级块清单，正文无锚点 ⇒ "哪句话来自哪块"不成立（指回 §4.3 三层表／§5.2）。</p>
+
+<p class="muted"><b>77 2026-10-10 §6 第 5 条拆成"固有 vs 可修"（沛东："重投目录不一致可以预料…真正可以修的漂移来自嵌入粗筛"）</b>：同意前半——目录分配是 LLM 判断（温度 0.3、无 seed），<b>人重排一遍也会变</b>，属固有属性，应写成选型前提而不是缺陷。但后半要修正一处事实：<b>"嵌入粗筛"不是我们实测那次漂移的成因</b>——<code>selectRelevantFolders</code> 只在 <code>len(pool) &gt; wikiTaxonomyFeedAllMaxFolders(60)</code> 时才启用（注释："A healthy navigation directory is small, so it is fed whole"），而我们两个库的目录数都 ≤ 30，粗筛根本没跑。实测到的那条<b>可修</b>成因是：<b>没有"slug → folder"历史账本</b>——已存在的页不会被动（套用规划时跳过 <code>FolderID != ""</code>，注释"manual edits are authoritative"），漂移发生在"页面被删后重建"（§5.3）那条路上。于是把第 5 条改成四层：固有（重投不一致）／可修①账本缺失／可修②空目录残留（<code>PruneEmptyFolderChains</code> 只跑 retract 涉及的目录链，实测留 11 个空目录）／可修③嵌入粗筛（硬 top-3 无分数下限、降级路径 <code>capFolders(pool,150)</code> 与"一级全留"不自洽）——并明确标注 ③ 是<b>读码发现的潜在风险、本次未触发</b>。</p>
+
+<p class="muted"><b>78 2026-10-10 §6 第 5 条补"更根本的一层：目录没有统一的抽象坐标"（沛东提"批级规划 ⇒ 同层抽象层级不一致，而且目录遍历是问答侧重要检索方式"）</b>：<b>结构问题成立且没被考虑</b>——目录规划是批级一次（≤5 篇），提示词第 10 行要的是"<b>这一批</b>的条目落在一棵自洽的树上"；批内确有层级规则（第 29 条"同类同深度"、第 30 条"优先一个宽顶层"），但<b>跨批零约束</b>（无全局重规划、无层级/轴校验、无账本）⇒ 第一批视野定顶层形状，后续批次各按当下抽象水准另造顶层。我们的库就是实例：<code>组织与人物</code>（实体类型轴）＋<code>评估工具</code>／<code>评估方法</code>／<code>评估概念</code>（领域子类轴）＋ A4 加的 <code>项目与产品</code>（项目轴）＝同层混三轴。<b>但"目录＝问答侧重要检索方式"要修正</b>：在 WeKnora 现状里目录<b>不是检索通道</b>——<code>category_path</code> 只出现在 <code>handler/wiki_page.go</code>／<code>types/wiki_page.go</code>（接口/UI 层）；agent 的索引概览是<b>按页面类型分组的前 20 条</b>，代码注释直接写 "any deeper exploration should go through wiki_search"（<code>agent/tools/wiki_tools.go:21–23</code>），且没有"列出某目录"的工具。⇒ 影响面写成条件句：现状只影响人/索引页的导航观感；<b>一旦按 LLM-Wiki 思路把目录当导航/枚举轴，它就升级为"枚举退化"</b>，而且比"漂移"更根本（漂移是换目录，混轴是从头没有统一坐标）。已把这一层作为 §6 第 5 条的第一个 bullet，排在"固有/可修①②③"之前。</p>
+
+<p class="muted"><b>79 2026-10-10 §6 拆成两条：目录"没有统一抽象坐标"独立成第 5 条（沛东："应该分两条啊"）</b>：原第 5 条（目录）拆为——<b>5. 目录没有统一的抽象坐标</b>（结构性：批级视野 ⇒ 同层混三轴；＋影响面条件句：现状不是检索通道、当导航／枚举轴用就升级为"枚举退化"）；<b>6. 目录会漂移，而且三处本来可以修</b>（固有：重投不一致；可修①账本缺失／②空目录残留／③嵌入粗筛偏脆）；原第 6 条（悬空链接）→ <b>7</b>。连带更新：§6 标题"六个"→"七个"、§0"列出六条"→"七条"、§6 收束"上面六条"→"七条"、附录 B"§6 的第 3／5／6 条"→"第 3／6／7 条"（实验名不变：删除可逆性／目录收敛／悬空链接清理）。<b>踩坑记录</b>：本轮两次 apply_patch 都失败，原因是文件里那句用的是 <b>ASCII 双引号</b>，而我按印刷体引号（U+201C/U+201D）去匹配——<b>匹配要按字节看，不能凭字面印象</b>；最后改用整串替换（Python 脚本，逐条打印命中数）完成。</p>
+
+<p class="muted"><b>80 2026-10-10 重写 §6 第 5 条：先说"Agent 到底怎么用 wiki 召回"（沛东："看的很懵…应该说一下 Agent 到底是如何使用 wiki 来做检索召回的"；并定"不加附录 A.6，附录太多了"）</b>：第 5 条改成四段——① <b>Agent 实际怎么用</b>：两套工具、两条路（知识侧 <code>search_knowledge</code> 搜<b>原始文档块</b>；wiki 侧 <code>wiki_search</code> 是<b>大小写不敏感 POSIX 正则</b>，匹配 <b>title／slug／aliases／summary／content</b>，返回 slug＋摘要，再用 <code>wiki_read_page</code> 读整页并顺页内链接跳）＋"全程不碰目录"（没有"列目录"工具；<code>wiki_read_page</code> 附带的索引概览是<b>按页面类型分组的前 20 条</b>；<code>category_path</code> 只在接口／UI 层）；② <b>顺带一个发现</b>：页面其实没进向量／关键词索引（<code>ChunkTypeWikiPage</code> 注释 ＋ <code>PluginWikiBoost</code> 1.3× 说明"意图在"，但全仓只有删除 <code>wp-&lt;pageID&gt;</code>、没有创建路径，日志 <code>wp-</code> 零出现）⇒ <code>search_knowledge</code> 永远召回不到页面，只能靠正则命中或直读；③ <b>"混轴"怎么来的</b>（批级视野 ＋ 跨批零约束 ＋ 我们库的三轴实例）——原第一段搬到这里；④ <b>结论分两段</b>（现状损害的是"人"的导航；只有当目录被当枚举／导航轴交给 agent 时才升级为"检索能力缺口"）。原"影响面要说准"那段已被替换。检索侧全景（两条通道 ＋ 目录位置）就落在这一条里，不再另开附录。</p>
+
+<p class="muted"><b>81 2026-10-10 §6"规模记账"段改成"常数 → 作用 → 退化链"（沛东："说得不够清楚"）</b>：原文只是一串数（400／60／150／60／32,768／不回填），读者不知道每个数约束什么。改成一张 6 行表（常数｜值｜它约束的是什么）＋ 一句结论：① 目录池上限 <code>wikiTaxonomyFolderPoolMax</code> ＝ <b>400</b>（DB 拉取候选上限，注释"只在目录树退化时才挡得住"）；② <code>wikiTaxonomyFeedAllMaxFolders</code> ＝ <b>60</b>（≤60 整池喂＝完美复用、零嵌入成本；>60 切"每条目余弦 top-3 近邻"的近似召回）；③ <code>wikiTaxonomyPromptMaxPaths</code> ＝ <b>150</b>（渲染进提示词的已有目录上限，超出 <code>capFolders</code> 截断）；④ <code>wikiTaxonomyPlanChunkSize</code> ＝ <b>60</b>（条目分批规划，<b>前一批分配的目录 feed-forward 给后一批</b>——跨批"收敛到一棵树"的唯一机制）；⑤ <code>maxContentForWiki</code> ＝ <b>32,768 字符</b>（抽候选与 summary 共用，超出的部分不产生新条目）；⑥ 交叉链接<b>不回填旧批次</b>（官方注释：4 万文档规模下 trade off long-tail recall → 交给 lint AutoFix）。结论句升级为<b>退化链</b>：精确复用 → 近似召回（>60 目录）→ 提示词截断（>150）→ 长尾不建链（交 lint 与人工）；"健康库"画像不变（几十~几百目录、几千页以内）。常数与注释出处：<code>wiki_ingest.go:1993–2016</code>。</p>
+
+<p class="muted"><b>82 2026-10-10 规模记账表补"环节"（沛东："'从库里拉来'这个，读者能看懂是哪个环节的吗？"）</b>：不能——原表只写"从库里拉来当'已有目录'的候选"，没交代是哪一步。把第三列从"它约束的是什么"改成"<b>环节与作用</b>"，每行前置环节：目录池 400 → <b>⑤ 目录规划</b>（从该库 <code>wiki_folders</code> 拉候选，一次 ≤400、按 path 字符串序而非一级优先）；≤60 整池喂 → ⑤；150 提示词上限 → ⑤；60 规划条目 → ⑤；32,768 字符 → <b>① 抽候选 ／ ④ summary</b>（两步共用同一份截断文本）；不回填旧批次 → <b>⑦ 链接注入</b>。⇒ 副产物：六行里<b>五行都属阶段 ⑤</b>，正好说明"目录类问题为什么集中在同一步"。</p>
+
+<p class="muted"><b>83 2026-10-10 §6 收尾句重写（沛东："'把上面七条收成一句'，我感觉不太准确"）</b>：原文"它给你的是<b>低成本地保持大致正确</b>，不是<b>可逆的一致结构</b>"有两处不准——① <b>"低成本"不在七条里</b>（七条讲的是保真/可逆/结构，成本是 §3 与 §7 的事，混进来等于换了话题）；② "大致正确 vs 一致结构"只覆盖了一部分（没覆盖身份、证据、悬空链接）。改为<b>按"三项不承诺"归组</b>并可与条目对账：<b>可逆</b>（第 3 条）／<b>精确</b>（第 1、2、4 条：删不干净、身份可能裂、证据只增）／<b>结构稳定</b>（第 5、6、7 条：目录混轴、会漂、脏链接要人清）；收尾接规模记账＝这份承诺的<b>适用区间</b>（几十～几百目录、几千页以内，越界逐级退化）。原句的"中间产物"定性保留。</p>
+
+<p class="muted"><b>84 2026-10-10 §7 按前文更新（沛东："第 7 节我感觉也要根据最新的前面的内容，更新一下"）</b>：六处改动——① "一份人可读、<b>agent 也可读</b>的中间产物（页面＋链接＋目录）"改成分开说：<b>人能按目录和链接翻；agent 只能按 slug 直读、或用 <code>wiki_search</code> 正则找页</b>（指向 §6 第 5 条），不再暗示 agent 会用目录；② 新增准入条："规模落在<b>几十～几百个目录、几千页以内</b>，且接受 >60 目录后复用走近似召回"（§6 规模记账）；③ 删除那条补"<b>不要求页面上的句子一定被抹掉</b>"（§5.2 页内剥离保守）；④ "可审计"补口径：<code>chunk_refs</code> 只增不减 ＋ <b>没有句级锚点</b> ⇒ "哪句话来自哪块"不可归因（§6 第 1、4 条）；⑤ 新增两条"不要依赖"——<b>"同一事物在库里唯一"</b>（去重召回不认别名 ⇒ 同义可能裂成两页，§6 第 2 条）与 <b>"agent 按目录／主题枚举与遍历"</b>（LLM-Wiki 那种用法；现状<b>没有这条通道</b>，要自己补，§6 第 5 条）；⑥ GraphRAG 分工段结尾补"<b>目录只服务人</b>"。每条都带回 §6 的条目号，便于反向对账。</p>
+
+<p class="muted"><b>85 2026-10-10 附录瘦身（沛东："你再看一下附录，是不是每个都有必要" → "来改一下"）</b>：逐节核对"正文引用 ＋ 独占内容"后的执行结果——① <b>删 A.3「同批进 vs 分两批进」</b>（正文 0 引用；内容已由 §1 读表要点"同批合成 ⇒ 多源页的来历" ＋ §4.2 并入段 ＋ §4.4"跨批再写一次更贵"覆盖），其对照压成 §4.2 里一句话："同批进 ⇒ 出生即多源；分两批进 ⇒ 单源页长成多源，代价是整页重写一次"；② <b>A.5「体积三乘数」大砍成 A.4「产物体积比不是常数」</b>（正文 0 引用；两张表全删），只留两个还承重的点：体积比 ≈ 引用倍数 × out/in × 语言密度（中文→中文 2.03／out-in 0.90／12-gram 79%；英文→中文 0.71–0.98／0.34–0.38；A5 154% ＝ 引用倍数 3.14 压过语言缩水）＋"页面素材＝逐字原文块在内容层面成立"（撑 §2 柱子①）；③ <b>A.2 削重复</b>：批的定义与"目录规划是批级"已进 §1 ⇒ 只留并发实况（errgroup 10 永远够不着／峰值 5 篇×2 路／reduce 10 常用），并补一句"去抖窗口见 §4.4"（原标题写了"去抖窗口"但那一节并不讲它）；④ 编号顺移 A.4→A.3、A.5→A.4，§3 的锚点 <code>#a4-输出语言…</code> 同步改为 <code>#a3-…</code>；顺带修掉输出语言节末尾的自指错（"它是 A.4 那个三乘数里的第一个乘数"——顺移后正好指对）。结果：附录从 5 节压到 4 节，全文净减 ≈1.6k 字符；留存理由——A.1 关系去哪了＋链接只认标题、A.2 并发、A.3 语言、A.4 体积锚点、附录 B 材料/口径，均有正文引用或独占内容。</p>
+
+<p class="muted"><b>86 2026-10-10 A.1 精简 ＋ 补"链接可读但不被检索用"（沛东："A.1 还是稍微啰嗦，也没讲明白现在的 WeKnora 检索并没使用链接能力" → "改一下"）</b>：A.1 从 1,567 字符压到 <b>847 字符</b>，并把缺的那句补上。四段结构：① <b>事实</b>——这条管道没有任何关系抽取，页间只有确定性注入的 `[[slug|文字]]`，不带类型；② <b>为什么</b>——载体选择（wiki 的"图"＝页面链接图，`GET /graph` 可查；带类型关系在另一条 Neo4j 管线，默认关），想表达"是什么关系"只能 reify 成页面或写进正文（GraphRAG 对照压成一句并指向 §7，删掉原来那两大段世界观论述）；③ <b>新增的关键一段</b>——"链接是<b>可读、不被检索用</b>的"：检索侧不碰它（页面没进索引，<code>search_knowledge</code> 只召回原始块，§6 第 5 条）／agent 找页靠 <code>wiki_search</code> 正则、链接不参与召回／链接唯一实际用途是 <code>wiki_read_page</code> 返回里的 <code>&lt;relationships&gt;</code>（<code>links_to</code>／<code>linked_from</code> ＋ 邻居摘要，上限 20 条）⇒ 手工跳转可行／目录也不在其中；④ <b>代价</b>——没有"按关系枚举／按谓词查"，跨源连接降级成"正文提到过"，链接图稀疏且单向生长（86 页／注入 77 页／17 个 orphan），并保留"链接注入只认标题、别名不参与"（§6 第 2 条引用）。<b>配套改 §7</b>：那句"agent 只能按 slug 直读或用 wiki_search"补成"读到页之后可以顺着返回里的 <code>&lt;relationships&gt;</code> 与页内链接继续跳——但链接不参与召回"。⇒ 全文再减 ~670 字符。</p>
+
+<p class="muted"><b>87 2026-10-10 开头"30 秒判断"与"适合谁读"补两条（沛东："看看开头是否需要调整" → "你改一下"）</b>：① <b>30 秒判断</b>补两点——三根柱子的<b>分工</b>（①②主要服务"可删"、③服务"可改"，指向 §2）与一条<b>反直觉结论</b>："这套编译产物目前<b>不参与检索</b>——页面没进向量／关键词索引，agent 靠 <code>wiki_search</code> 正则找页，目录只服务人"（指向 §6）；② <b>适合谁读</b>加一类人："想知道'编译出的页面能不能被 agent 直接检索'的人"。另外两处<b>陈旧清单已先修</b>：开头块与 §0 末句原来写"体积怎么算"（附录 A 里那两张表已删，只剩两个锚点）、"去抖窗口"（实际在 §4.4）⇒ 都改成"链接与关系的位置、批与并发、输出语言、体积锚点"，并把"去抖窗口在 §4.4"直接写进 §0 末句。核对过不动：标题、三个问题分节号、证据标记、术语框、三种变更表、实测代价表。</p>
+
+<p class="muted"><b>88 2026-10-10 导读加"对上一篇预期的收口"（沛东："系列文的上一篇 LLM-Wiki 总论说的这里要拆 WeKnora 来验证，但看起来 WeKnora 对论文方法的实现并不多"）</b>：在导读"回答三个问题"之后、证据标记之前插入一段（4 行）：总论把"拿真实实现对照论文三件东西（<b>Wiki 化编译</b>／<b>组合式检索</b>（<code>wiki_search</code>＋<code>wiki_read</code>）／<b>Error Book</b>）"留给了这一篇，且 §6.0 已声明"它不是论文的实现"；拆完落成三条对照——① <b>Wiki 化编译 ✅ 有且拆得最细，但产物不参与检索</b>（§6 第 5 条）；② <b>组合式检索 ⚠️ 工具名几乎一样</b>（<code>wiki_search</code>＋<code>wiki_read_page</code>），底下却不同：wiki 侧是"对页面字段正则匹配＋读页顺链接跳"，检索侧仍是"原始文档块混合检索"，不是论文那种"在 wiki 上推理检索"；③ <b>Error Book ⚠️ 有体检＋台账</b>（lint 六类／问题台账／部分自动修复），缺"把反复犯的错写成规则、回灌下一轮编译"（总论 §6.0 已指出）。收口句：<b>这一篇的定位不是"验证论文方法"，而是"拆一个把 Wiki 当产物的编译实现"</b>。顺带修一处口径：§3 注释原来写"lint 的三类计数"（易读成 lint 只有三类）⇒ 改成"lint 一共查 6 类，这里只报与链接／可达性相关的三类"（6 类名与 0042 §6.0 一致：broken_link／stale_ref／empty_content／orphan_page／missing_cross_ref／duplicate_slug）。</p>
+
+<p class="muted"><b>89 2026-10-10 "对上一篇预期的收口"从导读挪到 §0 末尾（沛东："放到开头好像不太对，是不是放到第 0 节更合适"）</b>：同意——导读恢复成四块（30 秒判断／适合谁读／回答三个问题／证据标记），那一段改成 §0 的<b>收尾</b>：去掉 blockquote 格式，写成正文的"一句话 ＋ 三条对照 ＋ 收口句"，位置在"三种变更不是三个功能"之后、附录指针（"实现细节…都在附录 A"）之前。理由：它讲的是<b>本文与系列的关系（定位）</b>，属于"结论先行"的一部分；放导读会把"结论"往后推，放 §0 末尾则与"一句话结论 → 三种变更 → 实测代价 → 三条对照"连成一条完整收束。内容未改（Wiki 化编译 ✅ 但不进检索／组合式检索 ⚠️ 名字对上底下不同／Error Book ⚠️ 有体检台账、缺规则回灌）。</p>
+
+<p class="muted"><b>90 2026-10-10 核"wiki 侧＝对页面字段做正则"这句话，揪出描述／实现不一致（沛东："是真的这样的吗？"）</b>：核了代码链 <code>wiki_search</code> → <code>wikiPageService.SearchPages</code> → <code>wikiPageRepository.Search</code>（<code>repository/wiki_page.go:1333</code>）：<b>基本属实</b>——WHERE 是 <code>title ~* ? OR content ~* ? OR summary ~* ? OR slug ~* ?</code>（PostgreSQL <b>大小写不敏感 POSIX 正则</b>）＋ <code>status != archived</code>，limit 默认 10／上限 50，并按命中位置排序（<b>title 4 ＞ slug 3 ＞ summary 2 ＞ content 1</b>，tie-break <code>updated_at</code>）。<b>但揪出一处不一致</b>：<code>wiki_search</code> 的工具描述写的是 "by title, slug, <b>alias</b>, summary and content"，而 SQL 里<b>没有 aliases</b>（别名只在返回里展示，不参与匹配）。另外发现<b>第二条页面搜索路径</b>：UI/接口层走 <code>repo.List</code>，用的是 <b>Postgres 全文（title＋content 的 tsvector）OR <code>aliases::text ILIKE</code></b>（<code>:367–373</code>）——也就是说 <b>别名在 UI 那侧认、在 agent 工具侧不认</b>，和 0039 记的"去重召回不认别名"是同一类问题的不同侧面。已改 0043 两处：§6 第 5 条与附录 A.1 的字段列表都改成 <b>title／slug／summary／content</b>，并在 §6 那条加注"⚠️ 工具描述写了 alias、实现里没有——描述与实现不一致"。⇒ 这条正好是"待写：拆 WeKnora 检索"那篇的第一个素材。</p>
+
+<p class="muted"><b>91 2026-10-10 核"检索侧是经典 RAG 还是 Agentic RAG"（沛东："wiki 侧是提供工具给 Agent 使用吧？检索侧整体流程到底是经典 RAG 还是 Agentic RAG？"）</b>：<b>两套并存，按会话/助手的模式走，而且默认是经典 RAG</b>——① 经典 RAG：<code>KnowledgeQA</code>（<code>session_knowledge_qa.go</code>）＋ <code>chat_pipeline</code> 插件链（query 理解/扩展 → search → rerank → filter_top_k → merge/expand → 拼 message → 生成），一次检索＋一次生成、无工具循环；对应 agent 模式 <code>quick-answer</code>，而它是<b>默认值</b>（<code>custom_agent.go:105-106</code> 未配置时自动填），且 <code>capabilities.go:191/203</code> 规定 quick-answer 只允许 <b>vector|keyword</b> 能力。② Agentic RAG：<code>AgentQA</code>（<code>session_agent_qa.go</code>）＋ <code>agent</code> 引擎（ReAct）＋工具集，对应 <code>smart-reasoning</code>。③ <b>关键限定</b>：wiki 一族工具（<code>wiki_search</code>／<code>wiki_read_page</code>／写页工具）<b>只在非 quick-answer 时注册</b>（<code>custom_agent.go:811</code>），而且代码注释直接把 quick-answer 称为 <b>"RAG-only"</b>——"those can't ever retrieve a wiki page"（<code>:807–810</code>）⇒ <b>默认状态下连 agent 都拿不到 wiki 页面</b>；"组合式检索"是 smart-reasoning 专属。④ 另一个细节：经典 RAG 管线里其实挂着 wiki 钩子（<code>chat_pipeline/wiki_boost.go</code> 给 <code>wiki_page</code> 块 ×1.3），但页面从没被写成 chunk ⇒ 这个钩子在当前数据上<b>永远空转</b>（"想吃 wiki 产物，供给线是断的"）。已把模式限定补进 0043 两处：§6 第 5 条（明写"只在 <code>smart-reasoning</code> 注册、默认 quick-answer 是 RAG-only"）与附录 A.1。⇒ 这四条正好是"拆 WeKnora 检索"那篇的骨架。</p>
+
+<p class="muted"><b>92 2026-10-10 新建 0044「WeKnora 检索侧拆解 · 提纲」（沛东："你可以搞一个 0044 的提纲"）</b>：<code>memory/0044-weknora-retrieval-outline.html</code>（10.9KB，沿用两分法）。<b>第一部分（思路 ＋ 结论）</b>：为什么有这篇（总纲 0036／发布版 0042 把验证拆成"编译→错误处理→检索"三篇；0043 拆编译时撞见"产物不参与检索"⇒ 判据悬空）＋ <b>六条已核实结论表</b>——① 两套并存（<code>KnowledgeQA</code> vs <code>AgentQA</code>）② 默认 <code>quick-answer</code>＝RAG-only、只允许 vector|keyword ③ wiki 工具只在 <code>smart-reasoning</code> 注册（注释原话 "those can't ever retrieve a wiki page"）④ 页面没进索引（<code>ChunkTypeWikiPage</code> 有类型与 1.3× 插件、无创建路径，日志 0 个 <code>wp-</code>）⑤ 目录只在 UI／接口层（agent 无"列目录"工具；但 API 的 <code>List</code> 支持 FolderID／CategoryDepth／CategoryPath 过滤）⑥ 别名"半开"（agent 侧正则四字段、UI 侧 tsvector＋aliases ILIKE）＋ 一条待验（论文时延反直觉的三种解释）。<b>第二部分（提纲正文）</b>：篇首怎么开／两条路对照表（含"模式是会话级还是请求级"等待核项）／知识侧混合检索栈（两路 → RRF → 重排 → 装配；池 5× 封顶 500；FAQ 迭代；<code>wiki_boost</code> 空转）／wiki 工具面表（<code>wiki_search</code> 的 rank 4/3/2/1、<code>wiki_read_page</code> 的 relationships＋sources、写页与 issue 一族）／三条"不参与"／<b>六个实测探针 P1–P6</b>／选型含义三条／待核清单六项／标题候选三条／复现资产。index.html 已加行（badge＝提纲）；两个 HTML 的标签配对与全部 href 已校验通过。</p>
+
+<p class="muted"><b>93 2026-10-10 §0"与上一篇的关联"改成"§6.1 的答案"，并核对 §6.1 三问（沛东："这篇其实对应总论 6.1 章节…检索那块只留个钩子指向下一篇；同时检查总论 6.1 的问题是不是都可以回答了"）</b>：① <b>改写</b>——收口段从"对三件东西的三条对照"改成"<b>本文＝总论 §6.1 的答案</b>"，把 §6.1 原列的三问逐条对上：<b>① 全量怎么编</b>（抽取/合并答得最实；<b>视角选择只答一半</b>——无 schema，等价物是粒度参数，且只管抽候选那一步：focused 下 20 页里 14 页来自不受控的通路）／<b>② 增量怎么处理</b>（真局部 ✅＋22 页 0 合并；全局结构 ✅ 目录批级＋无账本；<b>混存给了数</b>：P7 重投后 114 页里 63 页是上一代未变页，A4 是 94/117）／<b>③ 删除怎么处理</b>（broken_link 0→19、orphan 23→8、<b><code>stale_ref</code> 全程 0</b>、页内残留 −45～−276 字符）。② <b>检索压成钩子</b>：只说"编译产物目前不参与检索，见 §6 第 5 条"，不再下"组合式检索／Error Book"的对照结论；§6.2／§6.3 明确留给后两篇。③ <b>核对结论：§6.1 的问题不能"全答"</b>——没答上的三处是：<b>视角变更后再追加</b>（无 schema，也没改粒度做对照）、<b>问答侧的两问</b>（同一批问题各问一次是否自相矛盾／答案里是否还引用被删内容 ⇒ 要跑问答，留给检索篇）、<b>检索侧</b>（另篇）。④ 顺带把两个"我们已有但 0043 没写"的数补进正文：混存比例、<code>stale_ref</code>＝0（数据来自 <code>del-p7.json</code>／<code>incr-p7.json</code>／<code>incr-a4.json</code> 三份快照）。</p>
+
+<p class="muted"><b>94 2026-10-10 0043 全文通读，修 4 处硬错并列出 5 处待定（沛东："再通读一下全文，看还有没有要优化的点"）</b>：<b>已修</b>——① 附录标签错：§3 写"见附录 <b>A.4</b>"但锚点已是 <code>#a3-</code>（输出语言现为 A.3）⇒ 改 A.3；② <b>成本占比算错</b>：原文"引用匹配 10–16%、抽候选 ~8%、summary ~7%"与日志不符，按逐次 usage 重算为 <b>引用 7–11%、抽候选 ~4%、summary ~4%</b>（目录 1.4%、索引 0.1% 原就对；另补"文档摘要 ≈1%，不属于 wiki 流程"）；③ §4.2 里"目录漂移见 §6 第 4 条"⇒ <b>第 6 条</b>（§6 拆条后第 4 条是"块级引用只增不减"）；④ §3 小结"真正的问题从<b>下一篇</b>开始"歧义（会被读成"下一篇文章"）⇒ 改"从<b>第二篇文档</b>开始"。<b>待沛东定（本轮未动）</b>——ⓐ <b>§6 第 5 条的标题</b>已名不副实（内含"agent 怎么召回""页面没进索引""混轴来历"三件事），建议改成"目录没有统一的抽象坐标（附：agent 现在到底怎么召回）"，或把前两件挪去附录（会动 §7 引用）；ⓑ <b>L79"社区等与删除前逐字节相同"读不通</b>（疑为"索引（输出）"手误）——待确认原意；ⓒ <b>引号混用</b>（本轮新增文字用了中文弯引号，全文多为 ASCII 双引号）——要不要全篇统一；ⓓ §7"agent 只能正则找页或按 slug 直读"与另一条"可顺链接跳"有轻微张力，可补半句；ⓔ §0 收口段偏长（3 bullet ＋ 结论），倾向保留（它是对账表），要压可只留结论＋指向 §3–§5。其余抽查过：token／倍数／页数／lint 三类计数、§6 七条编号与全文引用、附录 A.1–A.4 与 B 的编号均自洽。</p>
+
+<p class="muted"><b>95 2026-10-10 按 ⓐ–ⓓ 执行（沛东：a 前两件挪附录；b "图、社区、社区报告等输出"；c 替换；d 按你说的改）</b>：<b>ⓐ 挪章节</b>——§6 第 5 条里"agent 实际怎么用 wiki 召回"与"页面没进索引"两条整段挪进新 <b>附录 A.5「agent 侧现在到底怎么召回（两套工具、三条边界）」</b>（顺带把边界标全：第一条＝全程不碰目录／第二条＝页面没进索引／第三条＝别名不参与 agent 侧正则），§6 第 5 条只留"混轴怎么来的 + 结论两段"，并在结论后补一句指路 + 锚点链接 <code>#a5-agent-侧现在到底怎么召回两套工具三条边界</code>；引用同步——§0 那个"检索钩子"、§7 两处、附录 A.1 两处全部改指 <b>附录 A.5</b>（A.1 保留"链接注入只认标题"的事实，§6 第 2 条仍引它）。<b>ⓑ 改口径</b>：§2 的"社区等与删除前逐字节相同"→"<b>图、社区、社区报告等输出</b>与删除前逐字节相同"（沛东原意：'索引'不好懂）。<b>ⓒ 引号统一</b>：全文 15 对中文弯引号 <code>“ ”</code> 全部替换为 ASCII <code>"</code>（现 0 残留），与全文其余写法一致。<b>ⓓ §7 消张力</b>：'不能依赖'那条补成"agent 只能正则找页、或按 slug 直读（读到页之后可以顺页内链接跳，但那只是<b>"读下去"</b>，不是一条召回通道——见附录 A.5）"。全文现 32,708 字符；A.1–A.5 + 附录 B 编号自洽。</p>
+
+<p class="muted"><b>97 2026-10-10 §0 去机制化：只留"结论 ＋ 术语 ＋ 入口 ＋ 代价 ＋ 系列位置"（沛东："这里同时包含了实现方法、实测代价以及总论中的位置，我觉得实现方法可以完全不讲"）</b>：认同诊断——§0 当时三样混装。<b>改动</b>：① <b>"最后交代…系列位置"那段</b>只留"位置（本文＝总论 §6.1 的答案）＋ 三行导航表（①全量→§3／②增量→§4／③删除→§5）＋ 没答上的三处（视角选择只答一半／视角变更后再追加没做／问答侧两问留下一篇）＋ 检索钩子（附录 A.5）"，原来那些实现细节（抽取＝§1 表①–④、去重三层、别名缺口、批级规划、无账本）与数字（混存、stale_ref、−45～−276）全部撤出。② <b>数字归位</b>：**混存 63/114 → §5.3 表的"新建 / 更新"行**（"63 页未变（上一代留下的页与新页并存）"）；**stale_ref 全程 0 → §5.2 的 lint 行**；页内残留 −45～−276 本来就在 §5.2，不必搬。③ <b>§0 前半同去机制</b>："一句话"只留结论（删 tombstone／按 source_refs 反查／批级表那串）；**原"三种变更分别走到哪一步"表 → 一句入口导航**（含增量 A/B 两情形与分节指针），机制细节交给 §1／§4／§5；删掉与"一句话"重复的"这三种变更不是三个功能"那句。④ 结果：§0 从 ≈3.0k 字符压到 <b>2,156</b>；全文 31,857（本轮 −851）。<b>留待沛东定</b>：§0 的"实测代价表"要不要也挪走（它是"代价"不是机制，我倾向留——读者 30 秒内最想知道的就是这个）。</p>
+
+<p class="muted"><b>98 2026-10-10 七阶段／术语／变更入口从 §0 挪进 §1（沛东："七个阶段、三个术语、变更入口这些，我觉得都可以挪到章节 1 去"）</b>：执行——① "先列一遍七个阶段"那一行、**三个术语框**（slug／chunk／多源页）、**变更入口**（含增量 A/B 两情形与分节指针）全部移入 §1，插在标题之后、原"三种模式共享后半段"那段之前；术语框之所以必须跟过来，是因为 §1 的表和读表要点第一处就用到 slug／块／多源页。② 变更入口并入 §1 的收束句（"⇒ 记住这张表再看后面。三种变更的入口是：全量＝…（§3）；增量＝…（§4）；删除＝…（§5）。它们的差别落在 ①–⑤，共同落点是 ⑥–⑦——…"），不再单独占一行。③ 顺带清两处自指与重复：挪过去的那句尾部原写"见 §1 那张表"（已经身在 §1）⇒ 删掉；§1 里"每一步谁在跑、吃什么、吐什么"不再出现两次。结果：**§0 从 2,156 → 1,644 字符**（现在只剩：一句话结论 → 实测代价表 → 一句话记住 → 系列位置表＋缺口 → 附录指针），§1 = 3,107；全文 31,811。⇒ 至此"实现方法"全部退出 §0。</p>
+
+    </section>
+  </div>
+</body>
+</html>
