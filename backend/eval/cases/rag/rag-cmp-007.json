@@ -50,8 +50,8 @@
       "core": [
         {
           "id": "o2-c1",
-          "text": "核心命题：Agent 工程的关键在模型外的外层系统设计——团队工作重心从写代码转向设计环境、表达意图、构建反馈回路（角色转变的概括表述）",
-          "probe": "覆盖须含：外层系统/环境设计为重的命题 + 设计环境 / 表达意图 / 构建反馈回路三要素概括；只写'人类掌舵'不够"
+          "text": "核心命题：Agent 工程的关键在模型外的外层系统设计——团队工作重心从写代码转向为 agent 设计环境、构建反馈回路（角色转变的概括表述）",
+          "probe": "覆盖须含：外层系统/环境设计为重的命题——关键在模型之外的外层系统（设计环境/脚手架/控制系统、构建反馈回路），而非依靠模型本身或人力监督。原文对三要素有两种表述：引言句 design environments / specify intent / build feedback loops，结论句 designing environments / feedback loops / control systems——二者任一举出即可，且不要求三要素齐全；仅写'人类掌舵，智能体执行'（Humans steer. Agents execute.）这类口号不算覆盖"
         },
         {
           "id": "o2-c2",
@@ -83,7 +83,7 @@
     "boundary_claims": [],
     "format_expected": "结构化：先分列两文各自对人的角色/职责的论述与保证机制（来源分明），再给同/异或关系判断并明确收口；依据标注清晰；不得以资料不完整替代结论",
     "judge_shape": "checklist",
-    "note": "切面探针（人的角色与治理机制）：core 复用 O2/A5 点表中对应主题的 probe；2026-09-07 草稿经沛东确认设计后落 JSON。",
+    "note": "切面探针（人的角色与治理机制）：core 复用 OpenAI《Harness engineering》／Anthropic《How we contain Claude》点表中对应主题的 probe；2026-09-07 草稿经沛东确认设计后落 JSON。",
     "annotated_at": "2026-09-07",
     "annotated_by": "local"
   },

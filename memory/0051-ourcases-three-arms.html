@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0051 · 拿我们自己的评测用例直连 WeKnora 三臂（A5 五条 ＋ cmp 七条）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    .warn { color: #9a6700; font-weight: 600; }
+    .tbl-wide { font-size: 0.85em; }
+    .tbl-wide td, .tbl-wide th { vertical-align: top; }
+    .q { background: var(--code-bg); border-left: 3px solid rgba(127,127,127,0.35); border-radius: 6px;
+         padding: 8px 12px; margin: 6px 0; line-height: 1.65; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0051 · 拿我们自己的评测用例直连 WeKnora 三臂</h1>
+      <p class="subtitle"><b>一句话</b>：把<b>我们自己的 RAG 评测用例</b>（有金标准的 19 条）直接喂给 WeKnora 的 wiki／smart／hybrid 三路检索，用我们那套"判 pass／判 fail"的口径对答案。第一批跑了 <b>A5 五条</b>（单源细节题，现成 A5 库）＋ <b>cmp 七条</b>（多源全景对比题，新迁一个四源库），共 <b>36 次调用</b>。</p>
+      <p class="subtitle">状态：三臂 × 7＋5 题已判（§3.5，<b>引用维度本轮不判</b>）→ cmp-002 逐条剖析（§3.6）→ 遗漏透明定位（§3.7）→ 输出预算对照（§3.7.3）→ 基础件变更与回归（§3.8）→ <b>模型 × 温度四组对照（§3.9）</b> → <b>基础件两笔改动＋28 条重判（§3.10）</b> → <b>LLM Wiki 能否替代图谱（§3.11，2026-10-15 新增）</b> · 现场时间：2026-10-14 15:00 – 2026-10-15 01:30 · 上游：<a href="0049-three-arms-implementation.html">0049</a>（三臂实现：三套预设＝同一个 ReAct 引擎）／<a href="0045-musique-retrieval-experiment.html">0045</a>／<a href="0046-three-arms-per-question.html">0046</a>（MuSiQue 三臂）／<a href="0028-rag-storage-architecture.html">0028</a>（检索架构主线）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 被测系统：<code>D:\lida-data\vscode\WeKnora</code>（本地 <code>v0.8.2</code>）· 用例来源：<code>backend/eval/cases/rag/</code></p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 style="margin-top:16px;">0. 起因与结论先放</h3>
+      <p><b>起因</b>：回到检索架构主线（0028）之后，沛东想换一个问法——<b>不自己实现，直接拿现成产品试我们的题</b>：把"我们搞不定的那几条"（cmp 家族，多源全景对比）交给 WeKnora 的 wiki／smart／hybrid 三路，用我们自己的金标准对一下，看它到什么水平。</p>
+      <p><b>判官最终结果（2026-10-14 补测，单轮）</b>：<b>36 条里 25 条 pass</b>（A5 十五条第 <b>15/15</b> 全过；cmp 二十一条 <b>10/21</b>，其中 wiki 2/7、smart 4/7、hybrid 4/7）。11 条 fail 的成因：<b>覆盖缺失 5 条</b>（cmp-002 smart、003 smart 因截断；cmp-004 三臂因选错文档对）、<b>遗漏透明未声明 4 条</b>（cmp-002 wiki／hybrid、003 hybrid、005 wiki）、<b>事实边界违反 4 条</b>（cmp-001 wiki、002 wiki、003 wiki、002 hybrid）、<b>格式 1 条</b>（cmp-003 smart，截断导致）。逐条依据见 §3.5。</p>
+      <p><b>结论（四条）</b>：</p>
+      <ol>
+        <li><b>A5 五条（单源细节／辨析）：15/15 内容与表达全过</b>——但这类题在我们的框架里属"记忆可解"，<b>区分度低</b>，测不出路线差异。</li>
+        <li><b>cmp 七条（多源全景）：初步 11/21 站得住</b>，失败集中在两处——<b>6 条静默截断</b>（说不完）与 <b>3 条选错文档对</b>（口语模糊题面在多源库里没法消歧）。</li>
+        <li><b>失败形态跟我们完全相反</b>：我们自己在 cmp 家族上红因几乎全在<b>引用红线</b>（覆盖反而绿）；WeKnora 这边覆盖普遍更强，输在<b>"说不完"和"选错对象"</b>。</li>
+        <li><b>最要命的一条是静默截断</b>：<code>is_completed=True</code> 却把答案停在句中、还带着没闭合的 <code>&lt;kb …/&gt;</code> 标签 ⇒ <b>答一半不告诉用户</b>，正撞我们"遗漏透明"红线。</li>
+      </ol>
+
+      <h3>1. 题面全清单（这批到底问了什么）</h3>
+      <p><b>A5 五条</b>（<code>backend/eval/cases/rag/rag-a5-*.json</code>，标签统一是 <code>范围=单点／素材=A5／套件=基础</code>）：</p>
+      <div class="q"><b>a5-001 · 细节问答</b>：Anthropic《How we contain Claude》认为防御 Agent 需要防守哪三个组件？<br>
+        <span class="muted">金标准要点：三个组件＝模型／运行环境／Agent 可触及的外部内容（含 MCP、第三方插件、网页搜索工具）；须列举；引用条款条件触发。</span></div>
+      <div class="q"><b>a5-002 · 细节问答</b>：Anthropic《How we contain Claude》里说 Claude Code auto mode 能拦截多少比例的过度行为？这个数字说明了什么？<br>
+        <span class="muted">金标准要点：约 83%；含义＝模型层不可能 100% 有效、不能单独依赖，需环境层兜底。</span></div>
+      <div class="q"><b>a5-003 · 辨析</b>：「与其监督 Agent 做了什么，不如监督它能做什么」——这是《How we contain Claude》的核心思路吗？<br>
+        <span class="muted">金标准要点：是；containment＝通过沙箱／VM／出口控制强制访问边界，环境层优先、模型层兜底。</span></div>
+      <div class="q"><b>a5-004 · 细节问答</b>：Anthropic《How we contain Claude》提到用户对权限弹窗的批准率是多少？为什么高批准率反而是问题？<br>
+        <span class="muted">金标准要点：约 93%；高批准率＝批准疲劳，弹窗越多越不细看，是转向 auto mode 的动机之一。</span></div>
+      <div class="q"><b>a5-005 · 辨析／区别对比</b>：《How we contain Claude》区分了哪两种对 Agent 的监督／遏制方式？各自的重点和典型手段是什么？<br>
+        <span class="muted">金标准要点：①人在环路监督"做什么"（逐次许可；auto mode 缓解批准疲劳）；②监督"能做什么"＝containment（沙箱／VM／出口控制）；两者互补。</span></div>
+
+      <p style="margin-top:14px;"><b>cmp 七条</b>（<code>rag-cmp-*.json</code>；<code>cmp-001～004、006、007</code> 依赖 <b>O2×A5</b>，<code>cmp-005</code> 依赖 <b>A1×O1</b>）：</p>
+      <div class="q"><b>cmp-001 · 批判认知（精确）</b>：OpenAI《Harness engineering》和 Anthropic《How we contain Claude》对 harness 的理解有什么异同？<br>
+        <span class="muted">金标准要点：先站住"两文处于术语未收敛窗口期"——A5 用 containment、通篇未以 harness engineering 命名；共同点＝都把关键放在模型之外的环境／约束设计；差异＝O2 偏工程效能与自主、A5 偏安全与爆炸半径封顶。</span></div>
+      <div class="q"><b>cmp-002 · 全景对比（精确，基准靶）</b>：请对 OpenAI《Harness engineering》与 Anthropic《How we contain Claude》两篇实践文章做全景式对比：两文各自的核心主张与代表性内容是什么？两者的异同与关系如何？请尽量覆盖两文各自有代表性的内容，并标注依据。<br>
+        <span class="muted">金标准要点（最严的一条）：<b>O2 侧核心主题四条全要</b>（①"关键在模型外的外层系统设计"②规则／品味机械编码进仓库 ③agent legibility＝为 agent 优化仓库、偏爱无聊技术 ④仓库知识即事实源）；<b>扩展主题至少 2 条</b>（⑤熵与垃圾回收 ⑥工程师角色重定义细节 ⑦自主层级细节 ⑧吞吐改变合并哲学 ⑨还在学什么）；<b>A5 侧核心四条全要</b>（①遏制哲学 ②爆炸半径 ③三层防御 ④三种隔离模式＋93%＋auto mode）；扩展至少 2 条（⑤读入信任 ⑥攻击面演进 ⑦翻车教训）；外加<b>遗漏透明</b>：没覆盖全扩展主题时必须点名 1 个未展开项。家族成员 cmp-003（半结构化）／cmp-004（口语模糊）共用这套 checklist。</span></div>
+      <div class="q"><b>cmp-003 · 同题（半结构化输入）</b>：对比 OpenAI《Harness engineering》和 Anthropic《How we contain Claude》这两篇文章：它们各自主要讲了什么？有哪些相同点和不同点？尽量覆盖两文有代表性的内容，并注明依据。<br>
+        <span class="muted">金标准要点：与 cmp-002 共用 checklist（浅拷贝），差别只在用户输入的精确度梯度。</span></div>
+      <div class="q"><b>cmp-004 · 同题（口语模糊输入）</b>：我最近看了两篇讲 agent 实践的文章，一篇是 OpenAI 的，一篇是 Anthropic 的，总感觉没消化透。你能帮我横向捋一捋：它们各自在讲什么、哪里像、哪里不像吗？最好讲讲对实际做 agent 有影响的地方，并标一下哪句话出自哪一篇。<br>
+        <span class="muted">金标准要点：同 cmp-002 checklist；<b>题面刻意不点文档名</b>，考的是"从库里的候选里选对那两篇（O2×A5）"。</span></div>
+      <div class="q"><b>cmp-005 · 同根因类探针（A1×O1）</b>：请对 Anthropic《Building Effective Agents》（2024-12）与 OpenAI《A Practical Guide to Building Agents》（2025-04）这两篇"如何构建 agent"的实践指南做全景式对比……<br>
+        <span class="muted">金标准要点：同构的全景 checklist（换文对）。<b>我们自己的红基线</b>：citation 19/20、answer_correct 8 pass/12 fail、format 全 pass ⇒ 定位为"跨文综合＋引用压力探针"。</span></div>
+      <div class="q"><b>cmp-006 · 切面（局限与展望）</b>：OpenAI《Harness engineering》和 Anthropic《How we contain Claude》各自承认了哪些还没解决的问题或局限？对下一步／未来有什么展望？请分别整理并标注依据。<br>
+        <span class="muted">金标准要点：两侧分别整理局限／未解问题与展望，来源分明、可溯源。<b>我们自己的红基线</b>：Run#136 answer_correct <b>20/20 全绿</b>，红因全在引用（12/20）。</span></div>
+      <div class="q"><b>cmp-007 · 切面（人的角色与治理）</b>：OpenAI《Harness engineering》和 Anthropic《How we contain Claude》这两篇文章里，agent 时代"人"的角色和职责分别被怎样重新定义？各自靠什么机制保证 agent 靠谱？请分别说明并标注依据。<br>
+        <span class="muted">金标准要点：两侧分别说明角色重定义与保障机制。<b>我们自己的红基线</b>：初版 query 缺文档指代导致检索跑偏（本例即由此而来），修正后 Run#137 answer_correct 17 pass，红因引用 7 ＋ pending 2。</span></div>
+
+      <h3>2. 实验设置</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>项</th><th>设置</th></tr></thead>
+        <tbody>
+          <tr><td>两条数据线</td><td><b>a5</b>：用<b>现成的 A5 单源库</b>（<code>8990fb05…</code>，54 页／314 链接）跑 5 条；<b>cmp</b>：新建四源库 <code>cmp · 跨源对照（O2×A5×A1×O1）</code>（<code>e7a7e5d1…</code>）跑 7 条</td></tr>
+          <tr><td>三臂（＝同一 ReAct 引擎的三套预设，见 0049）</td><td><b>wiki</b>＝<code>builtin-wiki-researcher</code>（<code>wiki_search／wiki_read_page／read_document</code>）；<b>smart</b>＝<code>builtin-smart-reasoning</code>（<code>search_knowledge／read_document／list_documents</code>）；<b>hybrid</b>＝预设 <code>hybrid-rag-wiki</code>（两套工具全给）</td></tr>
+          <tr><td>模型</td><td>作答与工具都是 <code>deepseek-flash</code> ＋ <code>qwen3-rerank</code>；<code>thinking=false</code>（与 0049 记录的实测配置一致 —— 推理这层是关的）</td></tr>
+          <tr><td>agent</td><td>自建三个（<code>exp-ourcases-wiki／smart／hybrid</code>）——内置 agent 的 <code>model_id</code> 为空，直接用会报 <code>chat model is not configured</code>（同 0045）</td></tr>
+          <tr><td>问答口径</td><td>每题一个<b>新会话</b>；<b>不注入</b>"只吐答案片段"（那是 MuSiQue 的口径），按产品式完整回答取；答案＝会话最后一条 assistant 消息，引用＝正文里的 <code>&lt;kb doc=… chunk_id=…/&gt;</code> 标签（<code>knowledge_references</code> 字段恒空，0045 时也是）</td></tr>
+          <tr><td>脚本与落盘</td><td><code>experiments/weknora/weknora_ourcases_eval.py</code>（三臂直连）／<code>weknora_cmp_kb.py</code>（四源库构建）；原始行：<code>data/tmp/weknora-ourcases/qa-a5-*.jsonl</code>、<code>qa-cmp-*.jsonl</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>3. 结果总表</h3>
+      <p><b>A5 五条（单源）</b>——"初判"按金标准的内容正确 ＋ 表达合适两条：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>用例</th><th>wiki</th><th>smart</th><th>hybrid</th></tr></thead>
+        <tbody>
+          <tr><td>a5-001 三个组件</td><td class="ok">✅ 5.8s／845 字</td><td class="ok">✅ 5.3s／1,117 字</td><td class="ok">✅ 4.6s／1,227 字</td></tr>
+          <tr><td>a5-002 auto mode 83%</td><td class="ok">✅ 7.0s／1,169 字</td><td class="ok">✅ 8.3s／3,018 字</td><td class="ok">✅ 6.9s／2,095 字</td></tr>
+          <tr><td>a5-003 监督"能做什么"</td><td class="ok">✅ 7.1s／1,192 字</td><td class="ok">✅ 7.2s／2,437 字</td><td class="ok">✅ 7.2s／1,945 字</td></tr>
+          <tr><td>a5-004 批准率 93%</td><td class="ok">✅ 7.0s／1,168 字</td><td class="ok">✅ 5.3s／1,680 字</td><td class="ok">✅ 5.6s／1,650 字</td></tr>
+          <tr><td>a5-005 两种遏制方式</td><td class="ok">✅ 9.6s／1,676 字</td><td class="ok">✅ 9.0s／4,083 字</td><td class="ok">✅ 8.4s／4,011 字</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">三臂的硬数字（83%／93%）全对、没有互相串；差异只在引用形态与深度：wiki 臂<b>五条全无 chunk 级引用</b>（只有 001／004 各挂了 4–5 个 wiki 页链接），smart／hybrid 每条 4–19 个 chunk 级 <code>&lt;kb&gt;</code> 标签。</p>
+
+      <p><b>cmp 七条（多源全景）</b>：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>用例</th><th>wiki</th><th>smart</th><th>hybrid</th></tr></thead>
+        <tbody>
+          <tr><td>cmp-001 harness 异同</td><td class="ok">✅ 15.3s／2,972 字<br><span class="muted">0 引用</span></td><td class="ok">✅ 22.6s／8,657 字</td><td class="ok">✅ 24.5s／8,281 字</td></tr>
+          <tr><td>cmp-002 全景基准</td><td class="ok">✅ 42.1s／12,003 字</td><td class="no">❌ 32.8s／16,964 字<br>截断</td><td class="warn">✅ 62.2s／10,238 字<br>依据说明外泄内部句柄</td></tr>
+          <tr><td>cmp-003 半结构化全景</td><td class="ok">✅ 20.8s／9,440 字</td><td class="no">❌ 73.3s／20,370 字<br>截断</td><td class="no">❌ 30.4s／19,885 字<br>截断</td></tr>
+          <tr><td>cmp-004 口语模糊全景</td><td class="no">❌ 24.5s／6,281 字<br>选错文档对</td><td class="no">❌ 27.5s／19,762 字<br>选错文档对</td><td class="no">❌ 26.7s／12,395 字<br>选错文档对</td></tr>
+          <tr><td>cmp-005 A1×O1 全景</td><td class="no">❌ 33.1s／25,838 字<br>截断</td><td class="no">❌ 32.6s／22,410 字<br>截断</td><td class="no">❌ 32.5s／22,743 字<br>截断</td></tr>
+          <tr><td>cmp-006 局限切面</td><td class="ok">✅ 26.8s／7,664 字</td><td class="ok">✅ 29.1s／11,125 字</td><td class="ok">✅ 29.0s／12,719 字</td></tr>
+          <tr><td>cmp-007 人的角色切面</td><td class="warn">⚠️ 18.2s／3,988 字<br>偏短待核</td><td class="ok">✅ 36.7s／12,813 字</td><td class="ok">✅ 35.2s／20,951 字</td></tr>
+        </tbody>
+      </table>
+      <p><b>合计</b>：36 次调用全部返回、无 <code>error</code>；a5 单题 4.6–9.6s，cmp 单题 15.3–73.3s（工具调用 6–42 次）。<b>cmp 初步 11/21 站得住、6 条截断、3 条选错文档对、1 条偏短待核。</b>—— 这是人工初筛；<b>判官口径下的最终结果是 10/21（见 §3.5）</b>，两者的差异本身就是一条教训。</p>
+
+      <h3>3.5 判官结果（我们自己的判官，content ＋ format 两维）</h3>
+      <p><b>怎么判的</b>：<code>experiments/weknora/judge_ourcases.py</code> —— <b>原样复用</b> <code>backend/eval/runner.py</code> 的 <code>judge_case</code>（判官提示词与聚合规则一行没改），把 36 条 WeKnora 答案当作"模型输出"喂进去（<code>CaseResult(output=…)</code>），每题每条判一次；判完写入 <code>data/tmp/weknora-ourcases/judge-ourcases.json</code>。<b>唯一的口径改动</b>：把 <code>citation_truth</code> 从本次 criteria 里摘掉（理由见下）。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>用例</th><th>wiki</th><th>smart</th><th>hybrid</th><th>失败主因</th></tr></thead>
+        <tbody>
+          <tr><td>cmp-001 harness 异同</td><td class="no">fail</td><td class="ok">pass</td><td class="ok">pass</td><td>wiki：说"两篇文章用的是同一个词"⇒ 触 b1（编造两文共享同一术语框架）</td></tr>
+          <tr><td>cmp-002 全景基准</td><td class="no">fail</td><td class="no">fail</td><td class="no">fail</td><td>wiki／hybrid：<b>遗漏透明未声明 ＋ 触 b1／b2</b>；smart：<b>A5 侧核心 a5-c1／a5-c3 未覆盖、A5 扩展 0</b>（截断）</td></tr>
+          <tr><td>cmp-003 半结构化全景</td><td class="no">fail</td><td class="no">fail</td><td class="no">fail</td><td>wiki：核心 8 项<b>全覆盖</b>、扩展 8 个、遗漏透明<b>已</b>声明 ⇒ <b>只栽在 b1／b2</b>；smart：o2-c3 未覆盖 ＋ format（截断）；hybrid：遗漏透明未声明</td></tr>
+          <tr><td>cmp-004 口语模糊全景</td><td class="no">fail</td><td class="no">fail</td><td class="no">fail</td><td>三臂<b>八个核心主题全未覆盖</b>——比的是 O1×A1，不是金标准的 O2×A5</td></tr>
+          <tr><td>cmp-005 A1×O1 全景</td><td class="no">fail</td><td class="ok">pass</td><td class="ok">pass</td><td>wiki：遗漏透明未声明（三臂都截断了，判官只对这一条扣分）</td></tr>
+          <tr><td>cmp-006 局限切面</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td>三臂"核心 3 项全覆盖"</td></tr>
+          <tr><td>cmp-007 人的角色切面</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td>三臂"核心 5 项全覆盖"</td></tr>
+        </tbody>
+      </table>
+      <p><b>三个读点</b>：</p>
+      <ol>
+        <li><b>"遗漏透明未声明"是这批最干净的一类失败</b>（4 条）：金标准要求"没覆盖全扩展主题时必须点名 1 个未展开项"，三臂<b>一条都没主动声明</b>——它们的答案普遍收在"需要的话我可以继续展开"这类客套上，不算披露。这条与我们 0028 的红线是同一个东西，说明<b>现成产品默认不做"遗漏透明"</b>。</li>
+        <li><b>wiki 臂 3 条栽在"事实边界"（b1／b2）</b>：它的表述反复出现"两篇文章用的是同一个词""两文共享同一底层洞见"这类<b>把两文说成共享同一框架</b>的归纳。机理上说得通——wiki 层会把两篇文档的概念<b>合进同一个 concept 页</b>（0050 已确认 wiki 是"入口网"、概念页跨源归集），从这种页面出发自然更容易得出"这是同一个方法论"的表述。而我们的金标准明确把这条列为 fail 情形（b1：A5 未以 harness engineering 命名；b2：'harness 涵盖两文'属后人归纳）。</li>
+        <li><b>判官尺度在这一条上不完全一致（需人工拍板）</b>：同样是归纳性表述，cmp-001 smart／hybrid 判 <b>pass</b>（"共同点：都把环境而非模型当主战场"），cmp-002 hybrid 判 <b>fail</b>（"两文构成同一智能体工程浪潮的两个侧面"）；而 cmp-003 wiki 在核心／扩展／透明度三项都达标的情况下，<b>只因 b1／b2 判 fail</b>。金标准对归纳的措辞是"允许（鼓励但不强制）……归纳性表述须与原文可确证内容一致"——"两文共享同一底层洞见"是否算"把归纳表述为两文明文主张"，<b>需要沛东定</b>（属判官口径范畴，AI 不自审自合入）。</li>
+      </ol>
+      <p><b>引用维度为什么本轮不判</b>：判官的引用真实性是"两阶段声明级核对"，它要我们自己的检索证据块（带 <code>[n]</code> 编号、与模型输出的 <code>[n]</code> 一一对应）；而 WeKnora 的答案用行内 <code>&lt;kb doc=… chunk_id=…/&gt;</code> 句柄、且流里只回"Knowledge search returned 10 result(s)"（<b>不含命中块正文</b>）⇒ 没有证据块可喂。若照原样调用，<code>evidence</code> 为空会被判成"未触发：本次无检索注入"——那是<b>假绿</b>，所以宁可摘掉不判。替代方案：抽答案里的 <code>chunk_id</code> 逐个回查 WeKnora，做<b>确定性存在性／归属核验</b>（不需要 LLM），列入待办。</p>
+
+      <h3>3.6 cmp-002 三臂失败逐条剖析（含边界判据 b1／b2）</h3>
+      <p><b>先说 b1／b2 是什么</b>——它们不是我们的口径，而是 <b>cmp-002 用例自己的"事实边界"判据</b>（写在 <code>rag-cmp-002.json</code> 的 <code>annotation.boundary_claims</code>）：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>id</th><th>金标准声明的事实</th><th>违反的样子（原文口径）</th></tr></thead>
+        <tbody>
+          <tr><td><b>b1</b></td><td>A5 以 <b>containment</b> 组织其主张，<b>未以 harness engineering 命名</b></td><td>声称 A5 明确使用／自称 harness engineering</td></tr>
+          <tr><td><b>b2</b></td><td>"<b>harness 涵盖两文主张</b>"属<b>后人归纳</b>、晚于两文，不是两文明文主张</td><td>把该归纳表述为两文自己提出的统一概念</td></tr>
+        </tbody>
+      </table>
+      <p><b>为什么要设这两条</b>：cmp-002 的考点之一就是"两文处在<b>术语未收敛窗口期</b>"——O2（2026-02《Harness engineering》）用它命名自己的工程实践；A5（2026-05《How we contain Claude》）讲的是 containment ／ 爆炸半径，<b>全文没有 harness engineering 这个词</b>。把两篇一起装进"Harness Engineering"这个框，会让用户误以为两文共享同一术语框架——这是<b>事实错误</b>，不是表达问题。</p>
+      <p><b>共同点先放</b>：三臂的 <code>format_appropriate</code> <b>全部 pass</b>（判官都夸"结构化、来源分明、有结论收口"）。差异全落在 <code>answer_correct</code> 的三个子项上：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>子项</th><th>wiki</th><th>smart</th><th>hybrid</th></tr></thead>
+        <tbody>
+          <tr><td>覆盖 core（8 项）</td><td class="ok">8/8</td><td class="no">6/8（缺 a5-c1、a5-c3）</td><td class="ok">8/8</td></tr>
+          <tr><td>覆盖 ext（每侧 ≥2）</td><td class="ok">O2 4/5、A5 3/3</td><td class="no">O2 5/5、<b>A5 0/3</b></td><td class="ok">O2 4/5、A5 3/3</td></tr>
+          <tr><td>遗漏透明</td><td class="no">not_covered（<code>declared=false</code>）</td><td class="no">not_covered</td><td class="no">not_covered</td></tr>
+          <tr><td>事实边界 b1／b2</td><td class="no">fail（3 处）</td><td class="ok">pass</td><td class="no">fail（6 处）</td></tr>
+          <tr><td>最终</td><td class="no">fail</td><td class="no">fail</td><td class="no">fail</td></tr>
+        </tbody>
+      </table>
+      <p><b>① wiki 臂：覆盖最好，栽在"统一框架 ＋ 不声明遗漏"。</b>判官给的边界违反原句（引用）：<code>这一方法论即 [[concept/harness-engineering|Harness Engineering]]。</code>／标题 <code># OpenAI《Harness Engineering》与 Anthropic《How we contain Claude》全景对比</code>／结论句 <code>因此更准确的关系是：Harness Engineering 回答"如何让智能体跑得快"，Containment 回答"如何让智能体跑得不出界"；成熟系统需要同时具备这两套纪律。</code>判官理由大意：<b>正文其实正确用 containment 描述了 A5，但通篇把 harness engineering 当成统摄两文的统一框架</b>。<span class="muted">机理上说得通：第一处引用就是顺着 wiki 概念页走的（<code>concept/harness-engineering</code>），而 wiki 层本来就按概念跨源归集（见 0050）——从这种页面出发，很容易得出"这是同一个方法论"的表述。</span></p>
+      <p><b>② smart 臂：栽在"没说完"，不是"说错"。</b>缺的 <code>a5-c1</code> ＝ 遏制哲学（监督"能做什么"而非"在做什么"＋环境边界优先）；<code>a5-c3</code> ＝ 三层防御框架（model／environment／external content）。直接原因是<b>截断</b>：落库正文 16,964 字符，结尾停在"但<b>任何概率性防御都有非零漏报率</b>"、还带着没闭合的 <code>&lt;kb …/&gt;</code>，A5 侧三条扩展主题全在截断之后。<b>它是三臂里唯一 boundary pass 的</b>——判官原话："标题中的 <code>Harness Engineering</code> 仅指 OpenAI 的 O2 一文，未把 harness 归纳表述为两文自己提出的统一概念。"</p>
+      <p><b>③ hybrid 臂：同 wiki，判罚更重。</b>覆盖与 wiki 齐平（core 8/8）；boundary 给了 6 处，其中 b2 两条是实质的——<code>两文构成同一智能体工程浪潮的两个侧面，互为补充而非对立</code>、<code>两者共享同一底层洞察：智能体的可靠性来自环境与结构，而非仅靠模型行为或人类注意力</code>；b1 四处集中在<b>对照表格</b>里，例如 <code>| 核心机制 | 脚手架/环境设计、仓库知识、反馈回路、合并哲学 | 沙箱/VM/出口控制、审批边界、信任边界 |</code>，以及"纪律不再体现在代码里，而体现在<b>脚手架（harness）</b>中"。透明度它写了说明，但用的是<code>说明：以上引用的行内编号为本轮检索到的知识片段句柄…</code>——按我们的口径<b>不算</b>披露（要点名具体未覆盖项）。</p>
+      <p><b>一句话总结</b>：cmp-002 上三条是<b>三种病</b>——wiki／hybrid ＝ "把两文装进一个框架" ＋ "不声明遗漏"（覆盖其实很好）；smart ＝ "没说完"（A5 两成整块缺失）。而"<b>不声明遗漏</b>"是三条<b>共同</b>的那一条，与我们自己历史上 198 次同类失败完全同型（见 §5）。</p>
+
+      <h3>3.7 什么时候需要"遗漏透明"？——"资源受限"的逐条判定（2026-10-14 讨论）</h3>
+      <p><b>起点</b>：沛东的问题——"如果一次就能给全 cmp-002 的 16 个主题，那当然最好；遗漏透明本质上是<b>资源受限下的补丁</b>。那到底是<u>什么</u>资源在受限？"</p>
+      <table class="tbl-wide">
+        <thead><tr><th>候选资源</th><th>本项目实测</th><th>是否真卡</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>上下文／注意力</b>（读不全）</td>
+            <td>库内体量远超单次可读入（A5 的 HTML 228 KB、O2 548 KB，两篇合计十万字量级）；Agent 从未"读全"，全靠 12–42 次工具调用挑着读。取材成本差异极大：<b>A 臂 wiki 用了 42 次工具（其中 <code>read_document</code> 32 次），B 臂 wiki 只用 12 次（读文档 4 次）</b></td>
+            <td class="no"><b>真卡</b>——"取哪些进来"的裁剪就是成本中心</td>
+          </tr>
+          <tr>
+            <td><b>输出预算</b>（说不完）</td>
+            <td>smart 两次硬证据：<b>16,964 字</b>（停在"任何概率性防御都有非零漏报率"）、<b>18,798 字</b>（停在"三产品对照表"标题后），都停在结构中间；但 wiki／hybrid 用 <b>5.5k–7.2k 净字</b>就把 16 个主题全覆盖了（wiki 在 covtableG 三次 16/16）</td>
+            <td class="warn"><b>臂相关</b>——长答臂钉死，中等答案不卡</td>
+          </tr>
+          <tr>
+            <td><b>用户阅读／消化带宽</b>（看不完）</td>
+            <td>一个 1.5 万字的"全覆盖"答案对<b>学习者</b>未必比"6 个要点 ＋ 我知道还有 X／Y 没展开"更好用；本项目定位是学习助手，"资料搬运"不是目标</td>
+            <td class="no"><b>真卡</b>——产品侧约束，且最容易被工程视角忽略</td>
+          </tr>
+          <tr>
+            <td><b>token 成本与延迟</b></td>
+            <td>多轮取材 ＋ 长答是数倍开销（0047／0048 实测"检索 vs 不检索"token 差 3–34 倍）</td>
+            <td class="muted">次要约束，不是决定因素</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><b>但更重要的重构是这一条</b>：遗漏透明<u>不是为预算打的补丁</u>——哪怕模型真的覆盖了全部 16 个主题（wiki 三次都做到了），<b>用户也无法自行核对它是否真覆盖全</b>。所以它的本质是：</p>
+      <p class="orig"><b>把"模型替用户做的裁剪决定"变成一份可核对的交付物。</b>——与本项目另一条红线（引用可回锚）同性质：<b>都是让用户能验证，而不是只能相信</b>。判官那两句"全覆盖时如实收口（不许编造遗漏）／没覆盖全则点名具体缺项"合起来就是一句话：<b>声明你的覆盖边界。</b></p>
+      <p><b>支撑数据：声明必须成为"必交产物"</b>（详见 §3.6 与本轮 A/B，原始行在 <code>data/tmp/weknora-ourcases/</code>）。把"契约"（写进系统提示词）与"输出槽"（写进提问的覆盖清单表）拆开后，<b>义务真正触发</b>那些格子里的合格声明率：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>条件</th><th>义务触发格</th><th>合格声明</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr><td>A：原预设（无契约、无槽）</td><td>3</td><td class="no">0/3</td><td>只写客套或无关提示</td></tr>
+          <tr><td>B：契约（无槽）</td><td>1</td><td class="no">0/1</td><td>唯一触发格被截断</td></tr>
+          <tr><td>cap3000：契约 ＋ <b>字数上限</b></td><td>5</td><td class="warn">2/5</td><td>字数上限 6 次<b>一次都没守住</b> ⇒ 限制长度不是机制</td></tr>
+          <tr><td>covtableG：<b>无契约</b> ＋ 通用槽</td><td>2</td><td class="no">0/2</td><td>两格都填"未覆盖：无"——槽位挡不住搪塞</td></tr>
+          <tr><td>slots6：契约 ＋ 清单表 ＋ 每侧 6 行</td><td>6</td><td class="ok"><b>5/6</b></td><td>结构 6/6 守住；行数上限压坏覆盖</td></tr>
+          <tr><td>covtable：契约 ＋ 清单表（不限行）</td><td>2</td><td class="warn">1/2</td><td>样本被中断，仅 4 次</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 结论：<b>契约 ＋ 显式输出槽必须配对</b>——槽位负责"必须交一份覆盖清单"，契约负责"不许用客套或'无'搪塞、有缺项必须点名具体项、且声明要与正文一致"。</p>
+      <p><b>判据表：什么时候需要遗漏透明</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>情形</th><th>需要吗</th><th>为什么</th></tr></thead>
+        <tbody>
+          <tr><td>覆盖型请求（全景／"都有哪些"／对比异同）</td><td class="ok"><b>需要</b></td><td>用户默认"你答的就是全部"，而裁剪状态他看不见</td></tr>
+          <tr><td>单点事实问答（问 83% 答 83%）</td><td>不需要</td><td>不存在"覆盖集合"这件事</td></tr>
+          <tr><td>用户自己划了子集（"只讲第三节"）</td><td>不需要</td><td>需求边界由用户给出</td></tr>
+          <tr><td>交付物本身是结构化穷举（表／清单覆盖所有字段）</td><td>基本不需要</td><td>结构本身就是声明</td></tr>
+        </tbody>
+      </table>
+      <p><b>产品含义</b>：不要以"一次给全 16 个主题"为目标——它同时顶上下文、顶注意力，还会带来更多越界风险（长答里"两文共享同一框架"这类归纳句明显更多，见 §3.6 的 b1／b2）。方向应是 <b>"结构化入口让用户自己导航到需要的部分" ＋ "每次回答声明覆盖边界"</b>：前者正是 wiki 那套"入口网"（index／概念页／实体页 ＋ 链接）真正值钱的地方（见 0050），后者就是本轮在验证的契约。</p>
+      <p class="muted">顺带记下一个可测的产品假设（留给以后）：如果约束主要是"用户注意力"，那么"<b>给 6 个要点 ＋ 精确导航入口</b>"的收益应高于"给全 16 个主题"。这是产品实验，不是判官实验。</p>
+
+      <p style="margin-top:14px;"><b>3.7.1 覆盖披露的产品形态（2026-10-14 决策）：否掉"独立覆盖清单表"</b></p>
+      <p><b>触发这次决策的是一次直读观感</b>：沛东看了清单表版的产出后判断——"这个答案很反人类，谁需要在前面看到一个覆盖声明？" 这句话否掉的不只是表格，而是<b>"独立声明"这个形式本身</b>：前置一段"覆盖清单／未覆盖"、后置一段"覆盖说明"，都不是人写东西的方式。</p>
+      <p><b>改成什么</b>：披露应当<b>嵌在列举里</b>——详述完主要几项之后，用一句话把没展开的项<b>具名带出来</b>。适用于所有"清单型／要一组的东西"的回答，只要因篇幅等原因没有逐项详述。<b>推荐提示词最终形态</b>（系统提示词级、不针对单题、不含任何题目名）：</p>
+      <pre>【列举要提全（覆盖型回答）】
+当用户的提问本质是要"一组／一整套"——都有哪些、全景对比、同异梳理——
+而你只详述了其中一部分时，请在详述完主要几项之后，用一句话把没展开的那些具名带出来，
+例如：「此外还有 A、B、C 三项，本文不逐条展开」。
+
+要求：
+- 具名到读者能认出来的粒度（主题／机制／做法），不要只写"还有一些其他内容"；
+- 只列你确实没展开的：不要编造，也不要已经写过却说没写；
+- 不要用"如需展开可继续""可进一步深入"这类客套代替具名；
+- 单点问答、用户已自行划定子集、或你已逐项写全时，不需要这一段。</pre>
+      <p><b>相对上一版的三处变化</b>：① 不前置独立声明，直接正常作答；② 不要求表格、不要求逐条标 覆盖／未覆盖；③ 披露的位置从"开头/结尾"移到"详述完主要几项之后"——顺带一个技术好处：挂在"列举"这个结构位置上，比挂在结尾更抗截断（之前 smart 两次被截断吃掉的正是结尾的收口与声明）。</p>
+      <p><b>与被否掉的两个做法合起来看</b>：字数上限（6 次一次没守住）与行数上限（压坏覆盖）都已被否；"只给槽位不给契约"（0/2，直接填"未覆盖：无"）也已否。本形态<b>不设任何长度限制</b>，只保留三条判据对齐的约束：<b>具名到可认粒度、不得编造、客套不算</b>。</p>
+      <p class="warn"><b>诚实标注</b>：这是<b>产品形态更正确</b>的版本，但"它能否稳定产出具名披露"仍未经实测——契约单独那版（0/1）失败的原因正是声明放在结尾被截断；本版把披露嵌进列举，理论上更稳。验证中（wiki 路径 × cmp-002 × 3 轮先行）。</p>
+
+      <p style="margin-top:14px;"><b>3.7.2 v2 契约实测（wiki × cmp-002 × 3 轮，2026-10-14）</b></p>
+      <p><b>怎么跑的</b>：新建 agent <code>exp-ourcases-covB2-wiki</code>（预设原文 ＋ 上面那段契约，2,346 字符；工具数与轮次同 A／B 臂），<b>提问不带任何槽</b>（不加清单表、不加字数/行数限制），只跑 wiki 路径 × cmp-002 × 3 轮。原始行 <code>data/tmp/weknora-ourcases/qa-cap-wiki-cov2-v2r{1,2,3}.jsonl</code>，判官记录 <code>judge-cov2.json</code>。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮</th><th>字数</th><th>时长</th><th>判官</th><th>core／ext 缺</th><th>透明度</th><th>边界</th><th>实际措辞</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>4,965</td><td>24.5s</td><td class="ok">pass</td><td>全／全</td><td>covered（<b>义务不适用</b>）</td><td>pass</td><td class="ok">有：「<b>覆盖说明</b>：…O2 侧未逐一展开的还有 Aardvark…、GPT-5 起步细节；A5 侧未逐一展开的还有多智能体信任升级、智能体身份…」</td></tr>
+          <tr><td>2</td><td>11,286</td><td>29.6s</td><td class="no">fail</td><td class="no">缺 o2-c3／全</td><td>covered（<b>义务不适用</b>）</td><td>pass</td><td>收尾是客套：「<b>如需其中任一项的深入对比，可以进一步展开</b>」＋顺带提"O1/A1 本次未纳入"</td></tr>
+          <tr><td>3</td><td>19,687</td><td>58.6s</td><td class="no">fail</td><td class="no">缺 o2-c1／缺 o2-e2、a5-e2</td><td class="no">not_covered</td><td>pass</td><td class="no"><b>没有披露</b>，且结尾停在句中（"…做检查的分类器"）——<b>又被截断</b></td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>读表说明</b>：「判官」列是<b>整题结论</b>（<code>case_verdict</code>，聚合答案正确性 ＋ 表达；本轮 format 三次全 pass 故未单列），<b>不是</b>透明度单列；「透明度」「边界」是其中两路读数，覆盖那一路以 core／ext 缺项列呈现。两个「covered（义务不适用）」表示扩展主题全覆盖 ⇒ 规则上不需声明（<b>不代表它做了声明</b>）；因此 run 2 的 fail 来自<b>覆盖缺核心主题</b>，与透明度无关，只有 run 3 是"覆盖 ＋ 透明度"双重失败。<br>
+      <b>「边界」列</b>＝用例自定义的<b>事实边界核对</b>（<code>boundary_claims</code>，管的是"<b>不该说的没说吗</b>"，与覆盖的"该说的说了吗"正好反向）：cmp-002 的两条是 <b>b1</b>（Anthropic《How we contain Claude》以 containment 组织其主张、未以 harness engineering 命名）与 <b>b2</b>（"harness 涵盖两文主张"属后人归纳，不是两文明文主张）。它由<b>独立一路判官</b>核（<code>_JUDGE_BOUNDARY_SYSTEM</code> ＋ <code>_build_boundary_prompt</code>），输出 <code>v=pass/fail/equivocal</code> ＋ 违规原句；<b>fail 会合并进 answer_correct ⇒ 一票否决</b>——覆盖满分也救不回来，这正是此前 wiki／hybrid"覆盖全绿却 fail"的原因（见 §3.8）。<b>它只在本用例配了才跑</b>：目前仅 <code>rag-cmp-002/003/004</code> 各配 2 条，cmp-001／006／007 等未配的用例不走这一路（其越界由 essence 判官在 answer_correct 里兜，如 cmp-001 那句"两篇文章用的是同一个词"）。本表三行边界全 pass ⇒ 三份答案都<b>没有</b>违反 b1／b2；它与透明度互不相干（run 3 即"透明度 not_covered，但边界 pass"）。</p>
+      <p><b>三个关键观察</b>：</p>
+      <ol>
+        <li><b>唯一那次披露出现在"义务本来就不适用"的 run 1</b>（它 16/16 全覆盖）；而且形式是<b>结尾式"覆盖说明"</b>，并非我们想要的"列举里自然带出"。⇒ 新形态<b>在真正需要它的场合一次都没出现</b>。</li>
+        <li><b>真正需要披露的 run 3 被截断</b>（19,687 字，停在句中）——又是输出预算吃掉收尾。与 §3.7 的结论一致：<b>凡是"收尾式"要求，长答最先牺牲它</b>。</li>
+        <li><b>run 2 踩了契约明文的禁忌</b>：它写的是"如需…可以进一步展开"（判官明文"客套不算"），而不是点名未覆盖项——<b>契约写清了，模型没遵守</b>。</li>
+      </ol>
+      <p><b>结论</b>：<b>软性自然语言契约在"义务触发"时 0/1（按"清单型未详尽即需披露"的更宽口径算 0/2）</b>，与"契约单独 0/1"完全一致；而显式槽位（表格）虽强（5/6），却"反人类"。⇒ 当前面对的是 <b>自然 ↔ 可触发</b> 的两难。</p>
+      <p class="warn"><b>顺带发现的规则缺口（待定）</b>：run 2 缺的是<b>核心主题</b>（o2-c3），但透明度义务只看<b>扩展主题</b> ⇒ 义务不触发、不声明也不算违规。<b>"核心主题缺失是否也应要求披露"目前是判据的空白</b>。</p>
+      <p><b>三条出路（倾向 A＋C）</b>：<b>A</b> 把要求改成"<b>固定句式但不表格</b>"——如"列举结束后必须有一句『未展开：X、Y、Z』；不得用『如需展开』代替"，可判且不反人类；<b>B</b> 接受"要靠结构"，回到硬性版但去表格；<b>C</b> 先治输出预算，否则任何收尾式要求都会被截断吃掉（run 3 即实证）。</p>
+
+      <h3>3.7.3 输出预算对照（4096 → 8192）＋ 失败点复核（wiki × cmp-002，各 3 轮）</h3>
+      <p><b>怎么跑的</b>：同一个 v2 契约 agent（<code>exp-ourcases-covB2-wiki</code>），只把 <code>max_completion_tokens</code> 从默认 <b>4096</b> 改成 <b>8192</b>（默认值出处：<code>types/agent.go:38</code> <code>DefaultSmartReasoningMaxCompletionTokens = 4096</code>；带沙箱 24576；clamp 逻辑见 <code>const.go:185-196</code>，我们 <code>MaxContextTokens</code> 未设=200k，clamp 不生效），各跑 3 轮。原始行 <code>qa-cap-wiki-cov2-v2r{1,2,3}.jsonl</code>／<code>qa-cap-wiki-cov2-cap8k-r{1,2,3}.jsonl</code>，判官记录 <code>judge-cov2.json</code>／<code>judge-cov2-cap8k.json</code>。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>预算</th><th>轮</th><th>取材路线（来自 agent_steps）</th><th>答案字符</th><th>out_tok（累计）</th><th>轮数</th><th>末轮截断</th><th>判官</th><th>透明度</th><th>边界</th><th>core／ext 缺</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3"><b>4096</b>（默认）</td><td>1</td><td>概念页为主（7 次读页／46 slug）</td><td>4,965</td><td>3,905</td><td>6</td><td>否</td><td class="ok">pass</td><td>covered（义务不适用）</td><td>pass</td><td>– / –</td></tr>
+          <tr><td>2</td><td>概念页＋原文块＋关键词（4 页／29 slug；4 分页；2 关键词）</td><td>11,286</td><td>4,426</td><td>7</td><td>否</td><td class="no">fail</td><td>covered（义务不适用）</td><td>pass</td><td>o2-c3 / –</td></tr>
+          <tr><td>3</td><td><b>原文块为主</b>（2 页／3 slug，无 concept；6 分页；2 关键词）</td><td>19,687</td><td>4,835</td><td>7</td><td class="no"><b>是</b></td><td class="no">fail</td><td class="no">not_covered</td><td>pass</td><td>o2-c1 / o2-e2, a5-e2</td></tr>
+          <tr><td rowspan="3"><b>8192</b></td><td>1</td><td><b>概念页＋关键词</b>（2 页／12 slug；0 分页）</td><td>5,301</td><td>3,508</td><td>5</td><td>否</td><td class="no">fail</td><td>covered（义务不适用）</td><td>pass</td><td>o2-c3, a5-c2 / –</td></tr>
+          <tr><td>2</td><td>概念页＋原文块（2 页／5 slug；6 分页）</td><td>34,495</td><td><b>8,859</b></td><td>6</td><td class="no"><b>是</b></td><td class="ok">pass</td><td>covered（义务不适用）</td><td>pass</td><td>– / –</td></tr>
+          <tr><td>3</td><td>概念页＋原文块（1 页／4 slug；5 分页）</td><td>25,486</td><td>5,239</td><td>6</td><td>否</td><td class="ok">pass</td><td>covered（义务不适用）</td><td>pass</td><td>– / –</td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>口径提醒</b>：<code>out_tok</code> 是服务端 <code>usage.completion_tokens</code>（<b>累计</b>，非单轮）；"答案字符"是我方统计的字符数；<b>WeKnora 日志里的 <code>answer=N chars</code> 实际是字节</b>（Go <code>len(string)</code>），三者的量纲不能互推。tag 占字符比例（0%／45%／66% 等）只在字符口径内可比。</p>
+      <p><b>失败点逐个复核</b>（判官判的缺项 vs 答案里的字面证据）：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮</th><th>被判缺</th><th>判官理由（摘要）</th><th>答案里的实际证据</th><th>复核结论</th></tr></thead>
+        <tbody>
+          <tr><td>4096 r2</td><td>o2-c3</td><td>有 Agent legibility 小节，但未提无聊技术/自实现替代不透明库</td><td>有整节「智能体可读性（Agent legibility）：把 UI、日志、指标暴露给 Codex，接入 CDP 截图/抓 DOM/驱动 UI」；<b>无</b>"无聊技术／自实现"</td><td class="warn">口径弹性（按 probe 站得住）</td></tr>
+          <tr><td>4096 r3</td><td>o2-c1</td><td>未点出外层系统/环境设计为重及设计环境、表达意图、构建反馈回路三要素</td><td>该组术语 <b>0 命中</b></td><td class="no">判对（真缺失）</td></tr>
+          <tr><td>4096 r3</td><td>o2-e2</td><td>仅概括角色重定义，未给任务分解／提示词驱动／评审交由 agent 等具体做法</td><td>只有 3 次 <code>prompt</code>，且都在"单条 prompt 端到端驱动"与"钓鱼用恶意 prompt"上；<code>拆成/评审/agent-to-agent</code> 全 0</td><td class="no">判对（真缺失）</td></tr>
+          <tr><td>4096 r3</td><td>a5-e2</td><td>未出现攻击面持续演进或 Looking ahead 的未来风险</td><td><code>Looking ahead／记忆投毒／智能体身份／行业</code> 全 0（答案在 A5 中段被截断）</td><td class="no">判对（真缺失）</td></tr>
+          <tr><td>8192 r1</td><td>o2-c3</td><td>同 4096 r2</td><td>有「应用可读性（Agent Legibility）」小节；无选型取向</td><td class="warn">口径弹性（同上）</td></tr>
+          <tr><td>8192 r1</td><td>a5-c2</td><td>仅出现"爆炸半径"一词，未展开 风险＝失败概率×潜在损害、随能力扩张、封顶 的思维链</td><td>"爆炸半径"只出现 1 次，在对比表"优化目标"格里当标签用；无风险模型</td><td class="no">判对（probe 明文"仅罗列一词不算"）</td></tr>
+        </tbody>
+      </table>
+      <p><b>素材到位核对（6 轮，2026-10-15 补）</b>：判据是"每轮<b>已读内容的并集</b>（读过的 wiki 页正文 ＋ 读到的原文块区间）与该点 probe 关键词的比对"——<b>不是</b>看"有没有读过某个概念页"。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>预算</th><th>轮</th><th>读 wiki 页</th><th>原文块覆盖（A5／O2）</th><th>判官</th><th>缺项</th><th>缺项的素材状态</th></tr></thead>
+        <tbody>
+          <tr><td>4096</td><td>1</td><td>46 页</td><td>0／0</td><td class="ok">pass</td><td>–</td><td>–</td></tr>
+          <tr><td>4096</td><td>2</td><td>29 页</td><td>26／26</td><td class="no">fail</td><td>o2-c3</td><td><b>素材到位</b>（该点关键句在已读的 O2 摘要页里；另读了 concept/agent-legibility）</td></tr>
+          <tr><td>4096</td><td>3</td><td>3 页</td><td><b>89／70</b></td><td class="no">fail</td><td>o2-c1、o2-e2、a5-e2</td><td><b>素材到位</b>（两篇原文已全量投喂）</td></tr>
+          <tr><td>8192</td><td>1</td><td>12 页</td><td>0／0</td><td class="no">fail</td><td>o2-c3、a5-c2</td><td><b>素材也到位</b>：o2-c3 原句在已读的 O2 摘要页（"智能体可读性是目标"／"'无聊'的技术…更易被智能体建模"／"让智能体重写部分功能比绕过不透明上游库更便宜，例如没有引入 <code>p-limit</code>"）；a5-c2 的"随能力扩张＋设限"在已读的 <code>concept/containment</code>（"随着智能体能力增强，其潜在爆炸半径也随之扩大。工程问题在于如何为其设限"）与 A5 摘要页；仅"风险＝失败概率×潜在损害"这半句可能只在未读的原文块里</td></tr>
+          <tr><td>8192</td><td>2</td><td>5 页</td><td><b>89／70</b></td><td class="ok">pass</td><td>–</td><td>–</td></tr>
+          <tr><td>8192</td><td>3</td><td>4 页</td><td><b>89／70</b></td><td class="ok">pass</td><td>–</td><td>–</td></tr>
+        </tbody>
+      </table>
+      <p class="no"><b>关键更正</b>：本表推翻了先前"8192 r1 属素材缺"的说法——那条用的是<b>近似判据</b>（"没读对应概念页 ⇒ 素材缺"）。把 r1 读过的 12 页正文抓下来逐词搜后才看清：它手里的材料足够写这两条。⇒ <b>6 轮的失败<b>全部</b>是"素材到位却漏写"（生成侧），没有一轮是素材缺。</b></p>
+      <p class="warn"><b>方法论一条（近似判据失效，2026-10-15）</b>：判断"素材是否到位"必须用"<b>已读内容的并集</b> × 探针关键词"，不能用"是否读过某个页面／文档"当代理——后者会漏掉"同一素材在别的页面里也有"的情况，本次就因此把一个"素材到位却没写"的样本误判成"素材缺"。规模再小也一样：<b>凡集合判断，先取并集再比对</b>。</p>
+      <p><b>结论（六条）</b></p>
+      <ol>
+        <li><b>抬高预算有收益，但不是解药</b>：pass 1/3 → 2/3；然而 <b>1/3 仍然撞顶</b>（8192 的 r2 写了 34,495 字符、<code>out_tok</code> 8,859 才被截），长度与 token 同步翻倍（中位 ~11k → ~25k 字符）。模型的行为是"有多少预算就写多少"，截断只是被推后。</li>
+        <li><b>"概念页成功／原文块失败"这个路线假设不成立</b>：8192 里"概念页那轮"fail、"概念页＋原文块"两轮 pass；6 轮合起来路线与成败无稳定对应。原因有二——路线是<b>模型自选</b>（结果变量，不是自变量），且 n=3。要做路线对照必须<b>强制工具白名单</b>。</li>
+        <li><b>判官没判错，抖动在生成侧</b>：4 个被判缺的点逐个字面复核都站得住（3 个真缺失、1 个口径弹性）。所以"不同轮漏不同的核心主题"是<b>答案覆盖本身的抖动</b>，不是判官噪声。</li>
+        <li><b>6 轮失败全部是"素材到位却漏写"</b>（2026-10-15 补核）：按"已读内容并集 × 探针关键词"核对，连 8192 r1 也拿到了 o2-c3／a5-c2 的关键句 ⇒ 失败原因在<b>写作覆盖率</b>，与"取没取到"无关。</li>
+        <li><b>8192 这 3 轮对"遗漏透明"这条线是零信息</b>：三轮扩展主题全覆盖 ⇒ 义务不触发 ⇒ 三个 <code>covered</code> 全是"自动满足"（<code>declared=None</code> 可证），不能用来判断契约是否有效。</li>
+        <li><b>待拍板口径</b>：<code>o2-c3</code> 里"把 UI／日志／指标暴露给 agent"算不算 legibility 目标的"具体取向"证据？算 ⇒ 那两轮应判 covered；不算 ⇒ 维持现状。两种都合理，但必须定，否则同一份答案会在这条上反复翻转。</li>
+      </ol>
+
+      <h3>3.8 基础件变更与回归（2026-10-14，沛东授权免复核）</h3>
+      <p><b>起因</b>：§3.6 里 wiki／hybrid 的边界判罚反复出现——判官把"关于 Anthropic《How we contain Claude》的约束"套到 OpenAI《Harness engineering》头上。查下去发现两件事：① 判官提示词里 <b>只有 <code>A5</code>／<code>O2</code> 这样的代号，没有任何文档标识表</b>（<code>_boundary_claims_block</code> 与 <code>_coverage_points_block</code> 都不注入图例，只有 format 那一路因为注入用户问题才带全名）；② 金标准自己在边界声明里裸用代号，本身就违反本项目"代号首现必定义"的纪律。</p>
+      <p><b>改了三处</b>（全部实测过 diff：15 个文件、25 行）：</p>
+      <ol>
+        <li><b>金标准去代号</b>：<code>boundary_claims</code>、<code>checklist_points</code> 的 <code>text</code>／<code>probe</code>、<code>golden_answer</code> 里的 <code>A5</code>／<code>O2</code> 一律换成全名（<code>Anthropic《How we contain Claude》</code>／<code>OpenAI《Harness engineering》</code>）。<b><code>id</code>（<code>o2-c1…</code>）与 <code>group</code>（<code>O2</code>／<code>A5</code>）保持不动</b>——它们是机器键（聚合、白盒审计、历史 run 对账、前端 coverage_points 都依赖），所以历史口径不受影响。</li>
+        <li><b>b2 显式允许跨文归纳</b>（金标准文本）：补上"允许并鼓励『两文互补／处于同一谱系』这类跨文归纳性表述，只要不把它说成两文自己提出的统一概念，也不把某文的主张安到另一文头上"——因为金标准原文本就写着"允许（鼓励但不强制）……归纳性表述须与原文可确证内容一致"，而判官此前把任何统合都当成越界。</li>
+        <li><b>boundary 判官加作用域与归纳条款</b>（<code>runner.py:975 _build_boundary_prompt</code>）：① 边界声明只约束其明示的对象——按正式标题称呼另一篇、或在标题／表头并列两文，不构成违反（张冠李戴仍按违反处理）；② 区分"跨文归纳"与"声称两文提出统一概念"。</li>
+      </ol>
+      <p><b>回归结果</b>（同一批 11 条答案，按 <code>(arm, 字数)</code> 精确配对）：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>对比</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>改名后（仅第 1 项）</td><td>hybrid 14,156：fail → <b>pass</b>（三类代号误判全消）；wiki 12,003 边界 fail → pass</td></tr>
+          <tr><td>再加 b2 放宽 ＋ 作用域（第 2、3 项）</td><td>wiki 4,940：fail → <b>pass</b>（被 b2 误判的"两文统合归纳"）；wiki 8,928 边界 fail → pass</td></tr>
+          <tr><td><b>最终边界判罚</b></td><td class="ok"><b>11/11 全部 pass</b>（改前有多条 fail）</td></tr>
+          <tr><td>最终整题</td><td class="warn">4 pass ／ 7 fail（与仅改名时同为 4／7——腾出来的失败位被另两类问题占了）</td></tr>
+        </tbody>
+      </table>
+      <p><b>剩余 fail 的两类主因，以及新暴露的一个问题</b>：</p>
+      <ol>
+        <li><b>真·遗漏透明未声明</b>（hybrid 18,999／19,660，稳定失败）：它们填"未覆盖：无"，而程序核算有缺项（<code>o2-e5</code>／<code>a5-e2</code>）——这是真问题，不是判官噪声。</li>
+        <li><b>覆盖面缺项</b>：wiki 11,310 缺 5 项、13,985 缺 <code>o2-c3</code>、8,928 缺 <code>o2-c1</code>、12,003 缺 <code>o2-e2</code>。</li>
+        <li class="warn"><b>新暴露：coverage 判官自己不稳</b>——同一份答案、温度 0，多次判会在"全覆盖"与"缺 1–2 个核心主题"之间跳（hybrid 14,156 的 pass 与 fail 就差在一条 <code>a5-c2</code>；wiki 11,310／12,003 的缺项集合每次都不同）。16 个样本里 verdict 级波动 2 个、缺项级波动更多。<b>修完边界后，这条已成为剩余 fail 的主要来源之一</b>，值得单独立项。</li>
+      </ol>
+      <p class="muted"><b>未做</b>：① <code>id</code>／<code>group</code> 未动（历史对账口径不变）；② 前端"人读版点表"未加图例（显示层润色，可后补）；③ 知识库文档标题仍是 <code>A5 · …html</code>／<code>O2 · …html</code>，所以<b>答案侧仍会带代号</b>——要去干净得改 KB 标题（只改名不重编译）。原始判官记录：<code>judge-codenamefix.json</code>（仅改名）、<code>judge-allowance.json</code>（＋b2 放宽）。</p>
+
+      <h3>3.9 模型 × 温度对照：四组同题（wiki × cmp-002，8192 预算，各 3 轮）</h3>
+      <p><b>为什么做</b>：§3.7.3 把输出预算钉在 8192 之后（本轮 12 条<b>无一撞顶</b>），剩下的最大变量就是<b>模型与温度</b>。此前 ourcases 的所有实验都用 <code>deepseek-flash</code> @ <code>temperature=0.7</code>（WeKnora 预设默认值，<code>agent/const.go:17 DefaultAgentTemperature = 0.7</code>），这次把 2×2 的四格补齐。</p>
+      <p><b>怎么跑的</b>：四组 agent 全部克隆自 <code>exp-ourcases-covB2-wiki</code>（wiki 预设原文 ＋ v2 覆盖契约；工具白名单 4 个：<code>wiki_search／wiki_read_page／read_document／wiki_flag_issue</code>；30 轮），<b>只改 <code>model_id</code> 与 <code>temperature</code></b>，四组统一 <code>max_completion_tokens = 8192</code>。模型 id：<code>deepseek-flash</code> ＝ <code>4b0ab03b…</code>、<code>deepseek-v4-pro</code> ＝ <code>ee081caf…</code>。温度 0 <b>确实传上去了</b>（<code>custom_agent.go:557</code> 只在 <code>Temperature &lt; 0</code> 时才回填 0.7；建完复查 agent 配置，<code>temperature</code> 确为 <code>0</code>）。答案行 <code>qa-cap-wiki-cov2{f7,f0,p7,p0}-r{1,2,3}.jsonl</code>；<b>12 条答案各判 6 遍</b>（<code>judge-cov2-4g-{a…f}.json</code>），前三组另有一批 3 遍（<code>judge-cov2-mt{,-b,-c}.json</code>）用于交叉核对。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>组</th><th>轮</th><th>答案字符</th><th>out_tok（累计）</th><th>工具轮</th><th>撞 8192</th><th>判官（6 判，P＝pass）</th><th>core 缺（6 判去重）</th><th>透明度</th><th>边界</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3"><b>flash ＋ t0.7</b></td><td>1</td><td>14,226</td><td>4,793</td><td>7</td><td>否</td><td class="ok"><b>PPPPPP</b></td><td>–</td><td>covered</td><td>pass</td></tr>
+          <tr><td>2</td><td>7,179</td><td>4,577</td><td>5</td><td>否</td><td class="no">FFFFFF</td><td>a5-c2（1 遍另含 o2-c3）</td><td>covered</td><td>pass</td></tr>
+          <tr><td>3</td><td>12,924</td><td>5,388</td><td>11</td><td>否</td><td class="no">FFFFFF</td><td>– ／ a5-c2</td><td class="no">not_covered</td><td>pass</td></tr>
+          <tr><td rowspan="3"><b>flash ＋ t0</b></td><td>1</td><td>32,354</td><td>7,848</td><td>6</td><td>否</td><td class="ok"><b>PPPPPP</b></td><td>–</td><td>covered</td><td>pass</td></tr>
+          <tr><td>2</td><td>32,666</td><td>7,766</td><td>6</td><td>否</td><td class="ok"><b>PPPPPP</b></td><td>–</td><td>covered</td><td>pass</td></tr>
+          <tr><td>3</td><td>12,552</td><td>4,147</td><td>7</td><td>否</td><td class="no">FFFFFF</td><td>o2-c1,o2-c3,a5-c1,a5-c2 ／ o2-c3,a5-c2</td><td>covered／not_covered</td><td>pass</td></tr>
+          <tr><td rowspan="3"><b>pro ＋ t0.7</b></td><td>1</td><td>4,353</td><td>2,701</td><td>3</td><td>否</td><td class="no">FFFFFF</td><td>– ／ a5-c2 ／ o2-c3,a5-c2</td><td class="no">not_covered</td><td>pass</td></tr>
+          <tr><td>2</td><td>7,120</td><td>3,145</td><td>4</td><td>否</td><td class="no">FFFFFF</td><td>– ／ o2-c3</td><td class="no">not_covered</td><td>pass</td></tr>
+          <tr><td>3</td><td>3,377</td><td>2,117</td><td>3</td><td>否</td><td class="no">FFFFFF</td><td>o2-c3,a5-c1 ／ o2-c3,a5-c1,a5-c2</td><td class="no">not_covered</td><td>pass</td></tr>
+          <tr><td rowspan="3"><b>pro ＋ t0</b></td><td>1</td><td>16,646</td><td>4,861</td><td>7</td><td>否</td><td class="warn">PFPFFP</td><td>– ／ o2-c3</td><td>covered（句内点名，判官认了）</td><td>pass</td></tr>
+          <tr><td>2</td><td>4,332</td><td>2,750</td><td>4</td><td>否</td><td class="no">FFFFFF</td><td>–</td><td class="no">not_covered</td><td>pass</td></tr>
+          <tr><td>3</td><td>6,539</td><td>2,994</td><td>4</td><td>否</td><td class="no">FFFFFF</td><td>a5-c2</td><td class="no">not_covered</td><td>pass</td></tr>
+        </tbody>
+      </table>
+      <table class="tbl-wide">
+        <thead><tr><th>组</th><th>判官通过（6 判 × 3 轮）</th><th>平均答案字符</th><th>主轴失败原因</th></tr></thead>
+        <tbody>
+          <tr><td>flash ＋ t0.7</td><td>6/18 ＝ 33%</td><td>11,443</td><td>r2 缺核心主题 <code>a5-c2</code>；r3 透明度未声明</td></tr>
+          <tr><td>flash ＋ t0</td><td class="ok"><b>12/18 ＝ 67%</b></td><td>25,857</td><td>只有 r3 一次缺 4 个核心主题</td></tr>
+          <tr><td>pro ＋ t0.7</td><td class="no"><b>0/18 ＝ 0%</b></td><td>4,950</td><td>3 轮全部"遗漏透明未声明"</td></tr>
+          <tr><td>pro ＋ t0</td><td class="warn">3/18 ＝ 17%</td><td>9,172</td><td>r2／r3 透明度未声明；r1 坐在判官分界线上</td></tr>
+        </tbody>
+      </table>
+      <p><b>五个观察</b>：</p>
+      <ul>
+        <li><b>12 条无一撞 8192</b>：<code>truncated</code> 标志全为 <code>None</code>、答案结尾都是完整句（对照 §3.7.3 里 8192 r2 的 <code>truncated=True</code>，该字段是有效判据）⇒ <b>截断不再是这组数据里的变量</b>，比 §3.7.3 干净。</li>
+        <li><b>组间差异的主轴是"写多长"，不是"谁更强"</b>：flash 平均 25,857／11,443 字，pro 平均 9,172／4,950 字，差 2.8–5.2 倍。<b>写得长 ⇒ core／ext 全覆盖 ⇒ 透明度义务不触发 ⇒ 判官自动绿</b>（flash 那两条 6/6 全 pass 的都是 <code>covered（义务不适用）</code>）。⇒ 这组 pass 率里含相当比例的"<b>用长度把义务绕过去</b>"，不等于"选择性覆盖做得好"。</li>
+        <li><b>pro ＋ t0.7 是唯一 0 通过的一组，失败形态高度一致</b>：三条透明度读数全是 <code>not_covered</code>，且证据句正好踩中契约明令禁止的两种形态——r1 写"知识库还收了《Building Effective Agents》，但本文严格限定在用户指定篇目"（<b>答非所问的声明</b>，用户没问这个），r3 写"如需可继续展开…"（契约明文"客套不算"）。⇒ <b>契约生效与否，跟模型在压缩倾向下的"听话程度"强相关</b>，这也回答了 §3.7.2 留下的两难。</li>
+        <li><b>温度方向一致：t0 好于 t0.7</b>（flash 67% vs 33%、pro 17% vs 0%）。<b>n=3，只当方向性信号</b>，但与"低温更利于遵守固定契约"的常识一致。</li>
+        <li><b>判官抖动这次量出来了（补 §3.8 第 3 条）</b>：12 条答案跨 6–9 遍判罚，<b>10 条完全一致</b>；只有 pro ＋ t0 的 r1（9 遍里 6 遍 pass）与 r3（9 遍里 2 遍 pass）翻转——<b>它那两次"pass"正坐在判官分界线上</b>。⇒ 轮级 pass 率可作参考，<b>"具体缺了哪几项"单遍不可信</b>。</li>
+      </ul>
+      <p class="muted"><b>口径提醒</b>：<code>out_tok</code> ＝ 服务端 <code>usage.completion_tokens</code>（<b>跨轮累计</b>，非单轮），"答案字符"＝我方统计，两者量纲不同、不可互推。"透明度 ＝ covered" 含两种情形——<b>义务不适用</b>（ext 全覆盖）与<b>义务已履行</b>（有具名声明），必须结合 "core／ext 缺" 列一起读。</p>
+
+      <h3>3.10 基础件两笔改动（o2-c1 放宽／a5-c2 降级）＋ 28 条重判（2026-10-15）</h3>
+      <p><b>改了什么</b>（都在 cmp-002／003／004；cmp-007 只吃到第一笔）：</p>
+      <ol>
+        <li><b><code>o2-c1</code> 放宽</b>：probe 从"须含三要素（设计环境／表达意图／构建反馈回路）"改为"<b>外层系统／环境设计为重</b>的命题为核心要件，三要素列为充分证据之一"，并显式写明原文有<b>引言句与结论句两种表述、任一即可</b>。依据：通读 O2 原文，<code>intent</code> 全文只出现 <b>3 次</b>（除引言那句外都是副词或无关用法），<b>全文没有一节讲"如何表达意图"</b>；而文章<b>自己的结论句</b>把第三项换成了 <code>control systems</code>（"designing environments, feedback loops, and control systems"）。旧 probe 惩罚的正是"忠实引用原文结论"的答案。</li>
+        <li><b><code>a5-c2</code> 降级</b>：从 core 移入 ext（加 <code>group=A5</code>），probe 同步收敛为"定义＋风险关系三点"（风险＝失败可能性×损害／后者随能力与访问扩张只增不减／不部署的代价使采用成为必然 ⇒ 问题是 cap 而非要不要），并写明"<b>不要求复述链条</b>；封顶手段由 a5-c1／a5-c4 承接"。依据：<code>blast radius</code> 全文 10 次，引言区 5 次、节内 5 次<b>全是顺带用词</b>，<b>没有任何一节以它为主题</b>；其实质内容只占引言约 550 字符 ⇒ 它是立论前提，不是被论证的主张。</li>
+      </ol>
+      <p class="warn"><b>连带效应（事先没预料到，但正好补上我们的缺口）</b>：<code>a5-c2</code> 进 ext 后，"只要有 ext 未覆盖就要披露"的<b>透明度义务触发面被撑开</b>——旧口径下 23 条里 <b>22 条 ext 全绿</b>（义务根本不触发，这条线一直零信息）；新口径里 28 条 × 3 遍中 <b>33/84 次义务实际触发，其中 30 次判 not_covered</b>。</p>
+      <p><b>28 条重判（v2 契约批次全量 × 3 遍）</b>：判罚级 <b>44/84 ＝ 52%</b>（旧口径同期 57/144 ＝ 40%，但遍数不等、只能粗看）。批级：flash+t0.7 6/9、flash+t0 6/9、pro+t0.7 0/9、pro+t0 2/9、4096 3/9、8192 7/9。<b>四条大翻转</b>：<code>cov2-v2r1</code> pass→0/3（<b>新增失败，三遍理由全是"遗漏透明未声明"</b>）、<code>cov2-v2r2</code> 0/1→3/3、<code>cov2f7-r2</code> 0/6→3/3（旧判缺 core a5-c2，新 probe 下改判覆盖）、<code>cov2f0-r4</code> 0/3→3/3。</p>
+      <p class="no"><b>新暴露的结构性问题：透明度"声明 vs 清单"粒度错配</b>——30 次 <code>not_covered</code> 里，<b>14 次是真没声明，16 次是"声明了、但点名对象不在程序清单里"</b>（<code>declared=true</code>、<code>matched_uncovered=[]</code>）。根因是两端口径不同层：判官提示词要求"点名<b>清单中的</b>未覆盖主题"（清单＝程序按<b>主题粒度</b>算的 ext 点），而 v2 契约允许的粒度是 topic／<b>mechanism</b>／practice，模型自然在<b>细节粒度</b>上声明（docs 目录树、providers 接口、Cowork 六机制、致谢条文）。样例：<code>cov2f0-r3</code> 列了 4 项未展开内容却判 not_covered——一个都不在清单里（清单只有 a5-c2）。</p>
+      <p><b>判官剩余问题三个（都已定位、未修）</b>：① <b>o2-c1 的新宽限没被吃进去</b>——<code>cov2f0-r7</code> 原文里明明有"环境/脚手架设计＋反馈回路""设计环境、反馈回路与控制系统"，2/3 遍仍判 not_covered；② <b>o2-c3 判官偏宽</b>——<code>r9</code>／<code>r11</code> 文本里没有 probe 要的"具体取向"（无聊技术／p-limit）却判 covered；③ <b>轮级抖动仍在</b>（28 条里 6 条 3 遍内分歧）。</p>
+
+      <h3>3.11 LLM Wiki 能否替代图谱：把原问题拆成两半（2026-10-15）</h3>
+      <p><b>原问题复述（出处 0028）</b>：沛东原话——"<b>向量检索必然要套 top-k，不论 k 是几，所以它只能解决点状问题，解不了线状、面状问题</b>"。配套口径：通道判据＝要"序"还是要"全"（用户能不能把"要哪些内容"说成<b>一个确定的条件</b>——能则走图按条件取齐，不能则走向量代挑）；图谱立项理由收敛到<b>枚举／跨源连接／关系查询</b>三件事；病征是"<b>不能保证该有的都有</b>"——我们自己那套在 cmp-002 上 385 次 attempt 约 18%。</p>
+      <p><b>本轮证据（都在 cmp-002 上，详见 §3.9／§3.10）</b>：</p>
+      <ul>
+        <li><b>支持"Wiki 够用"</b>：wiki 路线（flash+t0 ×13）核心主题只丢 2 轮；<code>concept/blast-radius</code>（1,718 字）一页把 A5 引言的三点命题收齐；四源库编译约 4 分钟／107 页／687 链接，不抽实体、不建边——<b>成本比图谱低一个量级，却拿到了"范围枚举"</b>。</li>
+        <li><b>边界四条</b>：① "取全"没保障（同库同题，r3 就是没取到——入口在搜索结果与已读页链接表里，它就是没点）；② <b>编译保真度会丢</b>（<code>concept/agent-legibility</code> 806 字里<b>没有</b>原文"无聊技术／p-limit"那半句）；③ "跨源连接"只做到概念归集，<b>没有"按条件取全"的原语</b>；④ <b>关系查询完全没覆盖</b>（Wiki 页里关系是叙事文本）。</li>
+      </ul>
+      <p><b>结论分两半</b>：<b>面状覆盖（范围可容纳）→ LLM Wiki 已基本够用</b>；<b>条件取全／关系 → Wiki 替代不了</b>。但后半句目前是<b>设计推导，不是实测</b>——因为这一类用例我们根本没有（见下）。</p>
+
+      <h4 style="margin:14px 0 6px;font-size:14.5px;">3.11.1 "条件取全"类用例缺位（待办已登记 AGENTS.md）</h4>
+      <p>19 条 rag 用例按 <code>范围</code> 只有三档（单点 12 ／全景 5 ／切面 2），<b>没有一条测"按一个确定条件把该有的取齐"</b>；"全景"类（cmp-001~005）落在"范围可容纳"那一档，全文直读就是真优解，逼不出"取齐"能力。候选题面<b>有 20 条</b>，躺在 <code>docs/graph-query-anchors.html</code> ④ 节（A–F 六组，A 组标题即"<b>完备枚举（向量只能给抽样）</b>"）——其中第 1 条（"两文各自承认了哪些局限"）≈ 现成的 cmp-006、第 3 条（"知识库里提到的 Agent 安全防护手段都有哪些，各自针对什么威胁"）就是当时细化的 Query3，<b>但一条都没进评测</b>。根因是<b>判据障碍</b>：对账需要"应有的全集"，图里成员清单可计算、Wiki／文本层只能人工给定金标准（对应 0028 补记二③：Wiki 是投影、完备性边界是"角度集合"不可枚举；图的不变量是"事实集合"、有界可建金标准）。</p>
+      <p><b>另外两条本轮查清的机制（对后续做检索层有用）</b>：</p>
+      <ol>
+        <li><b><code>wiki_read_page</code> 一次读多页、<u>不区分页类型</u></b>：整批共用一个输出预算（默认 24,000 runes），按各页体积做 max-min 公平分配，超了就把每页 body 裁成"<b>头 70% ＋ 尾 30%</b>"——<b>中间那段直接删</b>。实测：单读 O2 summary 7,854 字符（不裁）、两页 summary 16,8xx（不裁）、<b>两 summary＋两 concept ＝ 23,162（顶格被裁）</b>。整页被丢弃时会给"少传几个 slug"的可执行提示，但<b>正文被裁时只在页内插一句通用标记、不说删了哪一段</b>（<code>truncated_slugs</code> 只写进 <code>Data</code>、不进模型可见文本）——这就是模型"知道被截、不知道缺哪节"的直接原因。index 页是唯一有类型特判的（走 top-K 概览，反而不会撑爆预算）。</li>
+        <li><b>但截断不是 o2-c3 缺与不缺的变量</b>：13 轮里 6 轮的首次读页返回长度一模一样（23,162），覆盖／不覆盖各有。真正的变量是<b>取材路径</b>——覆盖的轮次要么"<b>按页翻原文</b>"（<code>read_document</code> 不带 query、用 limit 分页；r1／r2／r6／r7），要么"<b>按名字找概念页</b>"（r11 搜 agent legibility 并读该页）；<b>r3 是唯一两条都没走的</b>（10 次 read_document 全带多词 query、其中 4 次 0 命中），r10 只走了半条（读了概念页，但那页没编进"具体取向"）。</li>
+      </ol>
+
+      <h3>4. 三个发现</h3>
+      <p><b>① 静默截断（最要命）。</b>smart 的 cmp-002／003／005、hybrid 的 cmp-003／005、加上 cmp-005 的 wiki，共 <b>6/21</b> 在句中被打断：cmp-002 smart 落库正文 16,964 字符，结尾停在"但<b>任何概率性防御都有非零漏报率</b>"，还带着没闭合的 <code>&lt;kb …/&gt;</code> 标签，而消息 <code>is_completed=True</code>、无任何提示。对全景题而言这等于"讲一半、不声明"——<b>正撞我们"遗漏透明"红线</b>，而且它比"检索不到"更难被用户察觉。</p>
+      <p><b>② 口语模糊题面在多源库里会选错文档对。</b>cmp-004 只说"一篇 OpenAI 的、一篇 Anthropic 的"，库里 4 篇 ⇒ <b>4 种组合</b>；三臂<b>全部</b>选了 <code>O1《A Practical Guide to Building Agents》× A1《Building Effective Agents》</code>，而金标准锚定 <code>O2×A5</code>。三臂的答案本身结构完整、引用齐（smart 19,762 字、81 个 chunk 标签）——<b>错在对象，不在质量</b>。根因一半是我的库设计（为 cmp-005 把 A1／O1 放进了同一个库），一半是真实能力缺口：<b>没有消歧机制</b>。这条正接 0028 里"源点名的两条产品通道"那条待办。</p>
+      <p><b>③ 引用形态不稳定 ＋ 内部句柄外泄。</b>wiki 臂在 cmp-001／007 上<b>一个引用都不给</b>、在 cmp-002 上又给了 33 个 chunk 标签 ＋ 32 个 wiki 页链接——同一路线内形态漂移；<b>hybrid 的 cmp-002 干脆把内部脚手架写进了答案</b>："两文均属同一知识库 b1「cmp · 跨源对照」，该库另含 d1（OpenAI《A Practical Guide…》）与 d2（Anthropic《Building Effective Agents》）作为背景对照源"，还把 <code>concept/harness-engineering</code>、<code>entity/ryan-lopopolo</code> 这类页面 slug 列进"依据说明"。文档句柄／库名属内部标识，不该出现在用户可见的回答里。</p>
+
+      <h3>5. 跟我们自己的红基线对照（同题不同命）</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>用例</th><th>我们自己的红基线（case notes 口径）</th><th>WeKnora 三臂（判官口径，§3.5）</th></tr></thead>
+        <tbody>
+          <tr><td>cmp-002（基准靶）</td><td>覆盖为核心考点；判官冻结后以此题为主线调校</td><td class="no">三臂全 fail</td></tr>
+          <tr><td>cmp-005</td><td>citation 19/20、answer_correct <b>8 pass/12 fail</b>、format 全 pass</td><td>smart／hybrid <b>pass</b>；wiki fail（遗漏透明）</td></tr>
+          <tr><td>cmp-006</td><td>覆盖全绿 <b>20/20</b>，红因全在引用（12/20）</td><td class="ok">三臂全 pass（核心 3 项全覆盖）</td></tr>
+          <tr><td>cmp-007</td><td>覆盖基本绿 <b>17 pass</b>，红因引用 7 ＋ pending 2</td><td class="ok">三臂全 pass（核心 5 项全覆盖）</td></tr>
+        </tbody>
+      </table>
+      <p><b>一句话</b>：我们输在<b>引用</b>（覆盖能到、依据锚不住）；它输在<b>"说不完"与"选错对象"</b>（覆盖能力普遍更强，但收口与消歧是短板）。两边是不同层的病，不能互相替代。</p>
+      <p><b>补：我们自己这套在 cmp-002 上的全部历史</b>（只读 <code>backend/data/eval.db</code>，2026-10-14 对账）。cmp-002 出现在 <b>20 个 run</b> 里，合计 <b>385 次 attempt</b>：<b>pass 68 ／ fail 285 ／ pending 32</b>（成功率约 18%）。checklist 判官上线后（Run#114 起共 15 个 run）基本是 fail 主导：#114 pass 5/20、#117 pass 5、#120 pass 3、#122–#124 各 1，#125–#132 基本 0–1（#128／#129／#131／#132 整轮 20 条全 fail）。<code>answer_correct</code> 的失败原因（按 attempt 计数，一条可命中多条）：<b>遗漏透明未声明 198</b>、<b>a5-c3（三层防御框架）未覆盖 194</b>、<b>O2 侧扩展主题仅覆盖 1 个（要求 ≥2）175</b>、事实边界违反（b1）33。引用维度也长期红（#118 起频繁 fail，形态多为"归属正确但内容嫁接"，例：#132 判官指出"声明称 OS/基础设施级访问边界含 Seatbelt、gVisor、VM……但两文均未提及 VM"）。<b>⇒ cmp-002 我们从未稳定通过，头号失败原因正是"遗漏透明未声明"。</b></p>
+
+      <h3>6. 局限与口径（别把这批数字读重了）</h3>
+      <ul>
+        <li><b>§3 的"初判"只是初筛，以 §3.5 判官结果为准</b>：初判＝人工抽读 ＋ 关键词矩阵，关键词法在"遏制／containment""还在学／仍在学习什么"这类中英混排上会漏——事实证明确实漏了（我人工判 cmp-002 wiki 通过，判官按 b1／b2 判 fail）。<b>这正是判官的价值：AI 抽读会自我说服。</b></li>
+        <li><b>cmp-004 的不公平来自库设计</b>：四源库是为一网打尽 7 条题建的，对"不点名"的 cmp-004 天然不公；要论能力得挪回双文档库单测。</li>
+        <li><b>单轮，不判抖动</b>：要跟 0045 对齐得跑 3 轮。截断率（6/21）尤其需要复跑确认——它可能跟输出预算的随机性有关。</li>
+        <li><b>只测了三条预设，没测配置旋钮</b>：<code>thinking</code> 关着、<code>reflection</code> 是死字段、工具白名单也没动（见 0049）——这轮回答不了"开了推理会怎样"。</li>
+      </ul>
+
+      <h3>7. 待办（按性价比）</h3>
+      <ol>
+        <li class="ok">✅ <b>上判官（2026-10-14 完成）</b>：36 条判完，<b>25 pass／11 fail</b>，逐条依据见 §3.5；脚本 <code>judge_ourcases.py</code>，结果 <code>judge-ourcases.json</code>。</li>
+        <li><b>请沛东拍板"归纳性表述"的判罚尺度</b>：cmp-003 wiki 在三项全达标的情况下只因 b1／b2 判 fail，而 cmp-001 同性质的表述判 pass —— 判官口径属基础件，须人工复核（建议：把这 4 条 boundary 判罚逐条过，定"两文共享同一底层洞见"这类句子算不算违反）。</li>
+        <li><b>补引用维度的确定性核验</b>：抽答案里的 <code>chunk_id</code> 回查 WeKnora，核对"引用的块是否存在、是否真属于被点名的文档"——不需要 LLM，成本低，正好补上本轮不判的那一维。</li>
+        <li><b>修实验设计</b>：建双文档库（O2＋A5）单测 cmp-004 的消歧；顺带测"库里多一篇同域干扰文档"时三臂会不会跑偏（这正是私有知识库的常态）。</li>
+        <li><b>复跑 3 轮</b>：看截断率、长度、时延的抖动。</li>
+        <li><b>把"静默截断"记成一条对照项</b>：我们自己实现检索／生成层时，输出预算与"被截断要声明"应该是契约的一部分，而不是事后补丁。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节</h2>
+
+      <h3>8. 四源库的构建与耗时</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>步骤</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>建库</td><td><code>cmp · 跨源对照（O2×A5×A1×O1）</code> → <code>e7a7e5d1-d309-4685-af9b-9fd57d453549</code>；<code>wiki=true／vector=true／keyword=true／graph=false</code></td></tr>
+          <tr><td>上传四篇</td><td>A5（228 KB HTML）、O2（548 KB HTML）、A1（211 KB HTML）、O1（7.3 MB PDF，34 页）——<b>全部走 <code>/knowledge-bases/{id}/knowledge/file</code>，PDF 由 docreader 解析</b></td></tr>
+          <tr><td>编译完成</td><td>15:02 上传 → 15:06 起稳定：<b>107 页 / 687 链接</b>（concept 69、entity 33、summary 4、index 1），<b>约 4 分钟</b></td></tr>
+          <tr><td>对照参考</td><td>同一批里 A5 单源库是 54 页 / 314 链接；MuSiQue 库（572 篇一次性投喂）是 4,094 页 / 23,393 链接 —— 四源库规模属小库，编译成本可忽略</td></tr>
+        </tbody>
+      </table>
+
+      <h3>9. 逐题判读留痕（详读的几条）</h3>
+      <p><b>cmp-001（三臂都过）</b>：都自己先钉住了概念状态——wiki 说"两篇文章用的是同一个词，但指向的根本不是同一层东西：OpenAI 的 harness 是让智能体<u>做得成</u>事的生产力脚手架，Anthropic 的是让智能体<u>做不坏</u>事的安全边界"；hybrid 更明确"严格说只有 OpenAI 那篇把 harness engineering 当核心概念命名，Anthropic 那篇讲的 containment 是 harness 的子集"。共同点三臂都落在"环境优先于模型层"＋"约束要机械强制"＋"人审不可靠"；差异都落在"生产力 vs 安全"。wiki 臂末尾的"需要我把某一处展开吗"落在金标准允许的范围内。</p>
+      <p><b>cmp-002（基准）</b>：wiki 臂 12,003 字，O2 侧四条核心全在（外层系统／linter＋结构测试＋不变量／legibility 与 boring 技术／AGENTS.md 即事实源），扩展 ⑤熵与垃圾回收、⑦自主层级、⑧吞吐改变合并哲学 三条；A5 侧四条核心全在（遏制哲学／爆炸半径／三层防御／三种隔离模式＋93%＋auto mode），扩展 ⑤读入信任、⑥演进、⑦翻车教训 三条 —— <b>覆盖是这批里最好的</b>。hybrid 臂 10,238 字结构更紧凑（同/异分列 + 一句话总结），但"依据说明"一节把 <code>b1／d1–d4</code> 这类内部句柄写了进去。smart 臂在 A5 侧刚讲到"两条路线"就被截断。</p>
+      <p><b>cmp-004（三臂全错）</b>：wiki 臂开头即"A Practical Guide 讲落地手册、Building Effective Agents 讲架构选型"；smart 臂开头专门写了一段"先说明一下我读的是哪两篇——你知识库里的对应文件是 O1 和 A1"；hybrid 臂甚至列了一张"先对齐一下是哪两篇"的表。<b>三臂都在认真消歧，只是消歧结果与金标准不同</b>——它们选了"名字里带 Building Agents 的那一对"。</p>
+
+      <h3>10. 原始数据与复现</h3>
+      <ul>
+        <li>三臂直连：<code>python experiments/weknora/weknora_ourcases_eval.py ask --set a5|cmp --arm wiki|smart|hybrid</code>（另有 <code>agents</code>／<code>show</code> 子命令）</li>
+        <li>四源库：<code>python experiments/weknora/weknora_cmp_kb.py create|upload|wait|dump</code></li>
+        <li>原始行：<code>data/tmp/weknora-ourcases/qa-a5-*.jsonl</code>（15 行）、<code>qa-cmp-*.jsonl</code>（21 行）；每行含 <code>pred／refs／tool_calls／tool_events／elapsed_sec／events／completed／error</code> 与题面、金标准全文</li>
+        <li>初筛脚本（截断检测 ＋ 关键词覆盖矩阵）：<code>data/tmp/_cmp_probe.py</code></li>
+        <li>旁证：<code>concept/claude-code-auto-mode</code> 空页缺陷（a5-002 时 wiki 臂主动指出，我调 <code>/wiki/pages/{slug}</code> 核过——该页正文确实只有"*This page's primary source document was removed.*"一句）</li>
+      </ul>
+
+      <h3>11. 踩坑清单</h3>
+      <ol>
+        <li><b>上传 <code>fileName</code> 必须带扩展名</b>：服务端用这个名字判文件类型（<code>handler/knowledge.go</code> 用 <code>customFileName</code> 覆盖原始名），不带扩展名直接 <code>500 unsupported file type</code>（本轮四个文件全踩）。</li>
+        <li><b>内置 agent 不能直接用</b>：<code>model_id</code> 为空会报 <code>chat model is not configured</code>，必须自建并显式给 <code>model_id</code>／<code>rerank_model_id</code>（同 0045）。</li>
+        <li><b>题目决定的库边界</b>：为了 7 条题一网打尽建了四源库，代价是"不点名的题"失去唯一解——<b>库的候选集合是实验设计的一部分</b>，不是背景条件。这条本身值得记进方法论。</li>
+        <li><b>时长别和 MuSiQue 混着比</b>：MuSiQue 是短答案口径（要求只吐答案片段），本轮是产品式完整回答，时延与长度不可直接对照。</li>
+      </ol>
+    </section>
+  </div>
+</body>
+</html>

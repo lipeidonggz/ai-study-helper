@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0050 · WeKnora 知识图谱链路（抽取 → 存 → 查）的实现梳理</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+    .orig { background: var(--code-bg); border-left: 3px solid rgba(127,127,127,0.35); border-radius: 6px; padding: 8px 12px; margin: 8px 0; line-height: 1.65; }
+    .tbl-wide { font-size: 0.84em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0050 · WeKnora 知识图谱链路（抽取 → 存 → 查）的实现梳理</h1>
+      <p class="subtitle"><b>一句话</b>：WeKnora 里"块检索／wiki 页／知识图谱"是<b>三条相互独立的链路</b>；0049 把前两条的实现核完了，这篇补第三条——从 post-process 入队、逐 chunk 抽取、Neo4j 落库，到检索期的实体通道与 agent 工具。<b>结论：框架已看清，不值得现在深入</b>，但有三件具体的事值得做（见 §6）。</p>
+      <p class="subtitle">状态：<span class="muted">✅ 源码已核（只读）＋ ✅ <b>小库实测</b>（2026-10-14，§12：拿两篇真实文建"只开 graph"的库、查 Neo4j 对账）＋ ✅ <b>界面复核</b>（§13：两个"图谱"别混）· <b>注意</b>：我们主实验的 KB 没开 graph indexing，所以图谱在 0045–0048 的数据里一次都没参与</span> · 现场时间：2026-10-14 · 上游：<a href="0049-three-arms-implementation.html">0049</a>（三臂实现）／<code>docs/publish/0048-10 道多跳题里 8 道站不住…md</code>（对外补篇二）／0028–0029（我们自己的图谱立项讨论）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 被核仓库：<code>D:\lida-data\vscode\WeKnora</code>（本地锁定 <code>v0.8.2</code>）</p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 style="margin-top:16px;">0. 起因与结论先放</h3>
+      <p>知识图谱是 WeKnora 里第三条检索面（KB capability 里的 <code>graph</code>）。0049 已经确认：我们实验的三条路线里只有 <code>smart</code> 挂了 <code>query_knowledge_graph</code>，而 <b>KB 本身没开 graph indexing</b> ⇒ 图谱在 0045／0046／0047／0048 的全部数据里<b>从未被执行</b>。这篇把这条链读清楚，回答"值不值得深入研究"。</p>
+      <p><b>结论</b>：框架层面已经够清楚了，<b>不值得现在投入逐行研究</b>；理由三条（§6），以及三个更值得做的实验（§6）。最要命的一条是：<b>它在数据层就把"跨源连接"切掉了</b>（§3）。<br>后续两次复核又把结论推得更硬：<b>① 实测（§12）</b>——默认配置下它<b>连关系都抽不出来</b>（612 节点／0 边），而检索侧要求有边才当种子 ⇒ <b>图谱实际处于不可用状态</b>；<b>② 界面复核（§13）</b>——界面上那个好看的「图谱」是 <b>wiki 页面链接图</b>，真正的实体-关系图<b>没有任何可视化入口</b>。合起来一句话：<b>"真知识图谱"在 WeKnora 里还没做起来</b>。</p>
+
+      <h3>1. 两条实现，别混</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>实现</th><th>位置</th><th>做法</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>内存版</b> <code>graphBuilder</code></td>
+            <td><code>internal/application/service/graph.go</code></td>
+            <td>逐 chunk 抽实体 → 按批抽关系 → <b>PMI 算权重</b> → 算实体度数 → 建 chunk 图 → 生成 mermaid 可视化</td>
+            <td class="no">全仓<b>没有非测试调用者</b>（<code>BuildGraph</code> 只有接口与实现），<b>疑似遗留/未接线</b></td>
+          </tr>
+          <tr>
+            <td><b>Neo4j 版</b></td>
+            <td>抽取 <code>service/extract.go</code>／存 <code>repository/retriever/neo4j/repository.go</code>／查 <code>chat_pipeline/search_entity.go</code> ＋ 工具 <code>agent/tools/query_knowledge_graph.go</code></td>
+            <td>逐 chunk 抽实体与关系 → apoc merge 进 Neo4j → 检索期用实体做一跳邻域展开</td>
+            <td class="ok"><b>实际生效的就是这条</b></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2. 编译（抽取）过程</h3>
+      <ol>
+        <li><b>触发</b>：知识 post-process 阶段，<b>只有 <code>IndexingStrategy</code> 开了 graph indexing</b> 才走；<code>selectGraphChunks()</code> 先滤掉纯图片占位的块，然后<b>逐 chunk</b> 入队一个 <code>ChunkExtractTask</code>（<code>knowledge_post_process.go</code>，注释里还留意了 "graph with NEO4J…" 的计数槽）。</li>
+        <li><b>粒度与成本</b>：<b>每个 chunk 一次 LLM 调用</b>（<code>chat.Chat(..., purpose=<code>entity_extraction</code>)</code>）。源码注释原话：<i>"Each graph extract is per-chunk and runs one LLM call — <b>the most expensive enrichment fan-out in the pipeline</b>."</i><br>对照我们那份语料：572 段 → 1,408 块（其中 text 836）⇒ 光抽取就是<b>上千次调用</b>量级（可对照 wiki 全量编译的 7,010 次调用）。</li>
+        <li><b>提示词</b>：<code>config/prompt_templates/graph_extraction.yaml</code> 两个模板（实体／关系）＋ <b>每个 KB／文件可配的 <code>ExtractConfig</code></b>（Description／Tags／Examples／CustomInstructions，见 <code>extract.go:328</code>）。规则要点见 §7。</li>
+        <li><b>落库</b>：Neo4j ＋ apoc：节点 <code>apoc.merge.node(labels, {name, kg: knowledge_id})</code>，并 <code>SET node.chunks = union(node.chunks, row.chunks)</code>；关系 <code>apoc.merge.relationship(source, row.type, {}, attributes, target)</code>。labels ＝ namespace ＝ <code>[KB, Knowledge]</code>（原文见 §9）。</li>
+        <li><b>两个"丢东西"的点</b>：<span class="no">① 关系只剩类型</span>——结构体 <code>GraphRelation</code> 只有 <code>Node1/Node2/Type</code>，提示词要求的 <code>description</code> 与 <code>strength</code>（5–10 分级）<b>根本没被解析、也没进图</b>；<span class="no">② 关系类型没有白名单</span>——本该按 <code>Tags</code> 过滤的 <code>RemoveUnknownRelation()</code> 在调用点被<b>注释掉</b>了（<code>extract_entity.go:200</code> 附近）。</li>
+        <li><b>删除路径是接好的</b>：<code>DelGraph(namespace)</code> 出现在删文档／重处理／克隆移动／删 KB 等多条路径（这点比 wiki 那侧完整）。</li>
+      </ol>
+
+      <h3>3. 最要命的限制：图是"按文件切成子图"的</h3>
+      <p>节点 merge key 是 <code>{name, kg: knowledge_id}</code> ⇒ <b>同一个实体在不同文件里是两个不同节点，且文件之间没有边</b>。于是：</p>
+      <ul>
+        <li><b>"跨源连接"在数据层就不存在</b>：按 KB 查询时能"撞见"多个同名节点，但看不到跨文件的关系；</li>
+        <li>它能提供的实际是"<b>实体 → 该实体所在 chunk</b>"的<b>额外召回通道</b>。</li>
+      </ul>
+      <p class="muted">这一条直接决定了我们对它的定位：它<b>不是</b>"关系查询/跨源连接"的载体，而是"实体维度的召回扩容器"。</p>
+
+      <h3>4. 查询过程（两条用法）</h3>
+      <ol>
+        <li><b>检索流水线里的实体通道</b>：<code>search_parallel</code> 并行触发 <code>ENTITY_SEARCH</code> → <code>PluginSearchEntity</code> 用 query 抽出的实体调 <code>SearchNode</code>（namespace 可整 KB、也可单文件）→ 拿回 nodes ＋ relations → <b>再映射回 chunk</b>（用节点的 <code>chunks</code> 字段）。</li>
+        <li><b>agent 工具 <code>query_knowledge_graph</code></b>：描述是"探索实体之间如何关联（例：Docker 与 Kubernetes 的关系），返回<b>携带这些关系的 chunk</b>（带 <code>cN</code> 句柄）"。</li>
+        <li><b>Cypher 本身很"轻"</b>（<code>graphSearchCypher</code>）：名字 <b>子串匹配</b> ＋ 必须有边 → 排序是"<b>精确名优先 → 名字短优先 → 字典序</b>" → 取种子（≤<b>200</b>）→ 再取<b>一跳</b>邻域（≤<b>2000</b> 行）。⇒ <b>一跳、子串匹配、无谓词过滤、无权重排序</b>（原文见 §8）。</li>
+      </ol>
+
+      <h3>5. 成本形状</h3>
+      <p>逐 chunk 一次 LLM ⇒ 抽取成本大致是 <b>O(chunk 数)</b>；它跟 wiki 编译<b>互不依赖</b>（可以单独开），但同样属于"一次性重投入"。对照：wiki 全量编译 572 段 → 7,010 次调用／1,400 万 token（0045）；图谱这条量级相当甚至更高（每次都要吐 JSON 实体/关系，且没有 prompt 缓存友好的固定前缀设计）。</p>
+
+      <h3>6. 判断：不值得现在深入；但有三件值得做</h3>
+      <p><b>不值得深入的三条理由</b>：</p>
+      <ol>
+        <li><b>它先天拿不到我们最想要的那档能力</b>——跨源连接在数据层被 per-file 切图掐掉；枚举靠"名字子串匹配 ＋ 一跳邻域"；关系没有谓词/权重可用。研究它，看到的是"它能做到什么"，不是"成熟范式长什么样"。</li>
+        <li><b>对我们已有数据的直接影响是 0</b>：我们实验的 KB 没开 graph ⇒ 这条链一次都没跑（0049 §9.5）。</li>
+        <li><b>Neo4j 适配层的细节只影响性能/运维</b>（apoc 写法、索引、并发），不影响框架判断——逐行读性价比低。</li>
+      </ol>
+      <p><b>值得做的三件事（按性价比）</b>：</p>
+      <ol>
+        <li><b>开一个 graph 小 KB，跑同一批题</b>：看"实体通道"是加分还是噪声——正好接上已立项的"三档检索原语（块向量／主题标签／图谱）"待办。</li>
+        <li><b>专测跨文件同名实体</b>：同一实体散在 3–5 篇文档时，per-file 切图会漏掉什么——这是"跨源连接"能不能兑现的直接检验。</li>
+        <li><b>把它丢掉的三样列成对照项</b>（关系 description／strength、关系类型白名单）：若我们自己实现图谱，这三样是"便宜就能补"的差异点。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节</h2>
+
+      <h3>7. 抽取提示词（<code>config/prompt_templates/graph_extraction.yaml</code>，原文摘录）</h3>
+      <p><b>实体模板</b>（<code>default_extract_entities</code>）：</p>
+      <pre>## Task
+Extract all entities from the user-provided text that match the following entity types:
+EntityTypes: [Person, Organization, Location, Product, Event, Date, Work, Concept, Resource, Category, Operation]
+
+## Requirements
+2. Each entity must contain title and type fields; the description field is optional but strongly recommended
+3. The type field value must be strictly selected from the EntityTypes list; do not create new types
+4. If the entity type cannot be determined, do not force a classification; it is better to skip that entity
+7. If an entity is ambiguous, specify the reference in the description
+
+## CRITICAL: Language Rule
+- Extract entity titles exactly as they appear in the source text
+- Write descriptions in {{language}}</pre>
+      <p><b>关系模板</b>（<code>default_extract_relationships</code>）：</p>
+      <pre>## Task
+From the user-provided entity array, extract explicit relationships between entities …
+
+## Requirements
+1. Relationship extraction must be based on the provided text content; do not fabricate non-existent relationships
+3. Each relationship object must contain source, target, description, and strength fields
+
+## Relationship Extraction Rules
+- Only relationships explicitly present in the text should be extracted
+- Source entity and target entity must be entities already in the entity array
+- Relationship strength … 10: 直接创建/从属（作者与作品…）／9: 同一实体的不同表现（别名、旧名）／8: 紧密互相影响／7: 明确但间接／6: 间接关联／5: 同领域弱相关
+4. Check whether each relationship is bidirectional …
+
+## CRITICAL: Language Rule
+- Write relationship descriptions in {{language}}</pre>
+      <p class="muted">注意：模板要求了 <code>description</code> 与 <code>strength</code>，但数据结构和落库都只保留 <code>source/target/type</code>（§2.5）——<b>提示词与实现之间有缺口</b>。</p>
+
+      <h3>8. 查询 Cypher（<code>neo4j/repository.go</code> <code>graphSearchCypher</code>）</h3>
+      <pre>MATCH (n:` + labelExpr + `)
+WHERE ANY(nodeText IN $nodes WHERE n.name CONTAINS nodeText)
+  AND EXISTS { (n)--() }
+WITH n, CASE WHEN n.name IN $nodes THEN 0 ELSE 1 END AS seed_rank, size(n.name) AS name_len, n.name AS name
+ORDER BY seed_rank, name_len, name
+LIMIT $maxSeedNodes          // 200
+MATCH (n)-[r]-(m:` + labelExpr + `)
+WITH n, r, m, seed_rank, name_len, name
+ORDER BY seed_rank, name_len, name
+LIMIT $maxRows               // 2000
+RETURN n, r, m</pre>
+      <p class="muted">注释还解释了排序的用意：<i>"Ordering by name alone lets an entity whose name <b>is</b> the query fall outside the cap once the substring matches exceed it."</i> 以及"行数被截断时要<b>显式告警</b>，不要让人以为图里没有更多"。</p>
+
+      <h3>9. 落库 Cypher（<code>neo4j/repository.go</code> <code>addGraph</code>）</h3>
+      <pre>-- 节点
+UNWIND $data AS row
+CALL apoc.merge.node(row.labels, {name: row.name, kg: row.knowledge_id}, row.props, {}) YIELD node
+SET node.chunks = apoc.coll.union(node.chunks, row.chunks)
+
+-- 关系
+UNWIND $data AS row
+CALL apoc.merge.node(row.source_labels, {name: row.source, kg: row.knowledge_id}, {}, {}) YIELD node as source
+CALL apoc.merge.node(row.target_labels, {name: row.target, kg: row.knowledge_id}, {}, {}) YIELD node as target
+CALL apoc.merge.relationship(source, row.type, {}, row.attributes, target) YIELD rel</pre>
+      <p class="muted">merge key 里的 <code>kg: <b>knowledge_id</b></code> 就是"按文件切图"的根源；<code>row.attributes</code> 在关系侧实际没赋 value。</p>
+
+      <h3>10. 源码位置表</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>环节</th><th>位置</th></tr></thead>
+        <tbody>
+          <tr><td>入队（逐 chunk）</td><td><code>internal/application/service/knowledge_post_process.go</code>（<code>selectGraphChunks</code>／<code>NewChunkExtractTask</code>／<code>enqueued_graph</code>）</td></tr>
+          <tr><td>抽取执行</td><td><code>internal/application/service/extract.go</code>（<code>ExtractChunkPayload</code>／<code>NewExtractor(...).Extract(chunk.Content)</code>／<code>graphEngine.AddGraph</code>）</td></tr>
+          <tr><td>抽取器与解析</td><td><code>internal/application/service/chat_pipeline/extract_entity.go</code>（<code>Extractor.Extract</code>／<code>ParseGraph</code>／被注释的 <code>RemoveUnknownRelation</code>）</td></tr>
+          <tr><td>提示词</td><td><code>config/prompt_templates/graph_extraction.yaml</code>（<code>default_extract_entities</code>／<code>default_extract_relationships</code>）</td></tr>
+          <tr><td>数据结构</td><td><code>internal/types/graph.go</code>（<code>Entity</code>／<code>Relationship</code>／<code>GraphBuilder</code>）、<code>types/extract_graph.go</code>（<code>GraphNode</code>／<code>GraphRelation</code>／<code>NameSpace</code>）</td></tr>
+          <tr><td>落库／查询</td><td><code>internal/application/repository/retriever/neo4j/repository.go</code>（<code>AddGraph</code>／<code>DelGraph</code>／<code>SearchNode</code>／<code>graphSearchCypher</code>）</td></tr>
+          <tr><td>接口</td><td><code>internal/types/interfaces/retriever_graph.go</code>（<code>AddGraph</code>／<code>DelGraph</code>／<code>SearchNode</code>）</td></tr>
+          <tr><td>检索期实体通道</td><td><code>internal/application/service/chat_pipeline/search_entity.go</code>（<code>PluginSearchEntity</code>／<code>ENTITY_SEARCH</code>）、<code>chat_pipeline/search_parallel.go:140</code>（并行触发）</td></tr>
+          <tr><td>agent 工具</td><td><code>internal/agent/tools/query_knowledge_graph.go</code></td></tr>
+          <tr><td>删除路径</td><td><code>knowledge_delete.go</code>／<code>knowledge_process.go</code>／<code>knowledgebase.go</code>／<code>knowledge_clone_move.go</code> 均调 <code>DelGraph</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>11. 待核／待办</h3>
+      <ul>
+        <li><b>Query 侧"实体"从哪来</b>（谁给 <code>chatManage.Entity</code> 赋值、在什么意图下触发 <code>ENTITY_SEARCH</code>）——<b>未核</b>；这决定实体通道的触发率。</li>
+        <li><b>graph 与 wiki／块的关系</b>：三者在 post-process 里是并列子任务，是否有共享的 LLM 预算／并发闸门——<b>未核</b>。</li>
+        <li><b>开 graph 小 KB 跑同批题</b>（§6 第 1 件）——<b>小库已建、图谱已落库（§12）</b>；<b>但还没拿它跑题</b>——要回答"实体通道是加分还是噪声"必须跑题，这一条仍是待办。</li>
+        <li><b>跨文件同名实体专项</b>（§6 第 2 件）——<b>已做（§12）</b>：两篇文里的同名实体各存一份节点，跨文件边 0。</li>
+        <li><b>§12 两条发现的处置</b>：① <code>%s</code> 未替换（关系类型白名单为空时提示词残缺）——将来自己实现图谱时要避开的坑；② <b>环境还留着探针痕迹</b>——Neo4j 容器 <code>WeKnora-neo4j</code>、<code>WeKnora/.env</code> 里的 <code>NEO4J_ENABLE=true</code>（备份 <code>.env.bak-graph-probe</code>）、两个实验 KB（<code>exp-graph-perfile</code>／<code>exp-graph-tags</code>）——<b>待定：留作后续实验，还是一并清掉</b>。</li>
+      </ul>
+
+      <h3>12. 实测验证（2026-10-14，两篇真实文档）</h3>
+      <p><b>怎么测的</b>：拿两篇真实文章——<code>0042-llmwiki-overview</code>（12,952 字符；按 CRLF 计 13,183）／<code>0043-llmwiki-compile-pipeline</code>（31,791 字符；CRLF 计 32,258）——建了一个<b>只开 graph</b>（wiki 关、vector／keyword 开）的知识库，跑通后直接查 Neo4j。脚本：<code>experiments/weknora/graph_perfile_probe.py</code>（子命令 <code>create│enable│upload│wait│probe</code>）＋ A/B 脚本 <code>graph_tags_ab.py</code>；原始读数落在 <code>data/tmp/weknora-graph-perfile/</code>。<b>复现</b>：<code>python experiments/weknora/graph_verify_http.py</code>——它走 Neo4j 的 HTTP 端点（<code>127.0.0.1:7474</code>），<b>不需要 docker 提权</b>，全部是 MATCH/RETURN，一次跑完把读数写进 <code>data/tmp/weknora-graph-perfile/verify.json</code>（<code>graph_perfile_probe.py probe</code> 那版走 <code>docker exec cypher-shell</code>，需提权）。</p>
+      <p><b>环境前提（两个坑，踩过才知道）</b>：① <b>Neo4j 必须先起来</b>——compose 里有可选服务（<code>neo4j:2025.10.1</code>，profile <code>neo4j</code>，APOC 可用），且 app 的 <code>NEO4J_ENABLE=true</code> 才会建驱动（<code>container.go:initNeo4jClient</code>：不设就 "NOT SUPPORT RETRIEVE GRAPH"）。② <b>只设 <code>indexing_strategy.graph_enabled=true</code> 不够</b>：<code>IsGraphEnabled()</code> 要求<b>同时</b>有 <code>ExtractConfig.Enabled</code>；而<b>创建时不自动同步、只有更新（PUT）才同步</b>（<code>knowledgebase.go:560-565</code>）——建库时 <code>capabilities.graph</code> 还是 <code>false</code>、<code>extract_config</code> 还是 <code>null</code>（<code>data/tmp/weknora-graph-perfile/kb.json</code> 就是这份现场）。所以创建时要么带上 <code>extract_config</code>，要么事后 PUT 一次 <code>config.indexing_strategy.graph_enabled=true</code>。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>文档（knowledge）</th><th>ExtractConfig</th><th>节点</th><th>关系</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>0043 知识编译</td><td><code>{enabled:true}</code>（无 tags）</td><td>428</td><td class="no"><b>0</b></td><td rowspan="2">图里<b>全是孤立节点</b>；Neo4j 里 0 条边</td></tr>
+          <tr><td>0042 总论</td><td><code>{enabled:true}</code>（无 tags）</td><td>184</td><td class="no"><b>0</b></td></tr>
+          <tr><td>0042 总论（A/B 库）</td><td><code>{enabled:true, tags:["Author","Alias"], +示例}</code></td><td>250</td><td class="ok"><b>24</b></td><td><b>同一篇文、只差 tags，关系从 0 变 24</b></td></tr>
+        </tbody>
+      </table>
+      <p><b>读数一：per-file 切图确认。</b>三份数据的跨文件边 = <b>0</b>；同名实体 <code>GraphRAG</code>／<code>LLM-Wiki</code>／<code>WeKnora</code>／<code>编译</code>／<code>页面</code>／<code>本文</code>／<code>§6</code> 等<b>各存在 3 个节点</b>（正好对应 3 个 knowledge）⇒ <b>同一实体在每个文件里各建一份，节点之间毫无连接</b>；检索侧即便按 KB 查，也只能"撞见"多个同名节点，看不到跨文件关系。<span class="muted">对账口径：<code>e1baf379-…</code>=0043／<code>a7569376-…</code>=0042／<code>04749615-…</code>=0042·A-B（来自 <code>GET /api/v1/knowledge-bases/{id}/knowledge</code> 与 <code>verify.json</code>）。</span></p>
+      <p><b>读数二（比原判断更狠）：默认配置下这张图是"死的"。</b>不配 <code>ExtractConfig.Tags</code> 时，<b>一条关系都抽不出来</b>（612 节点、0 边）；而检索侧的 Cypher 有一句 <code>AND EXISTS { (n)--() }</code> ⇒ <b>实体通道恒返回空</b>。根因在提示词渲染（<code>chat_pipeline/extract_entity.go</code> <code>QAPromptGenerator.System()</code>）：模板字符串里的 <code>"Allowed relationship types are: %s."</code> <b>只在 Tags 非空时才做 <code>%s</code> 替换</b>，Tags 为空时原样保留；同时 <code>Examples</code> 只要 <code>len&gt;0</code> 就会渲染——从 API 建库时它是个<b>空示例</b>。⇒ 模型拿到的是"允许的关系类型 = <code>%s</code>"＋一个空例子，于是<b>只吐实体、不吐关系</b>。（另：<code>config.yaml</code> 里全局 <code>extract_graph</code> 自带的 <code>tags: [Author, Alias]</code> 与示例<b>在这一路径上被 KB 的空 ExtractConfig 覆盖掉了</b>。）</p>
+      <p><b>⇒ 对 §6 判断的加强</b>：原来我们说"不值得深入"是因为<b>跨源连接在数据层被切掉</b>；现在实测又加一条——<b>默认配置下连源内关系都不产出，图谱能力实际处于不可用状态</b>（除非使用者自己配 tags 与示例）。这意味着：把它当"第三条检索通道"来评估时，<b>必须先把 ExtractConfig 配对</b>，否则测到的是"一个空通道"。</p>
+      <p><b>读数三（口径提醒）</b>：同一篇 <code>0042</code> 在两次抽取里分别得到 <b>184</b> 与 <b>250</b> 个节点，差值来源<b>未定</b>——可能是 tags／示例改变了提示词，也可能只是 LLM 抽取自身的抖动（<code>Temperature 0.3</code>）。所以<b>节点数这类量级指标只当参考、别当判据</b>；本轮真正站得住的读数只有两条：<b>跨文件边恒为 0</b>（结构约束，与模型无关）与<b>关系 0 → 24</b>（方向性差异足够大）。第二次复核（同日，只读 Cypher 重跑）确认：全库 862 节点 ＝ 428 ＋ 250 ＋ 184，24 条边<b>全部落在配了 tags 的那个库里</b>，边类型只有 <code>Alias</code>(18)／<code>Author</code>(6)，跨文件边 <b>0</b>。</p>
+      <p><b>本轮核过的源码点（供复核）</b>：① <code>chat_pipeline/extract_entity.go:247-274</code> <code>System()</code>——<code>len(Tags)==0</code> 时<b>不做 Sprintf</b>，<code>%s</code> 原样留在提示词里；<code>Examples</code> 只要 <code>len&gt;0</code> 就渲染。② <code>service/extract.go:342-353</code>——<code>Examples</code> 是<b>写死的单元素切片</b>（内容取 KB 的 <code>ExtractConfig.Text/Nodes/Relations</code>），默认配置下就必然是一个空示例；<code>formatExtraction(nil,nil)</code> 产出空 <code>[]</code>、<b>不报错</b>。③ <code>config/config.yaml:53-93</code>——全局 <code>extract_graph</code> 自带 <code>tags: [Author, Alias]</code> 与 Romeo 示例，但在这条路径上<b>被 KB 侧的空 <code>ExtractConfig</code> 覆盖</b>。④ <code>neo4j/repository.go:275</code> <code>AND EXISTS { (n)--() }</code>——<b>没有边的实体连种子都当不上</b>（这也解释了为什么"612 节点 / 0 边"等价于"实体通道恒空"）。⑤ <code>extract_entity.go:170-180</code>——抽取调用<b>显式 <code>Thinking: false</code></b>（与 0049 §7.3 那张四格矩阵的"模型推理"一栏是一致的：抽取这层也没开推理）。</p>
+      <h3>13. 界面上的两个"图谱"别混（2026-10-14 界面复核）</h3>
+      <p><b>起因</b>：在界面上看探针库 <code>exp-graph-*</code>，卡片下方有绿色"知识图谱"图标，点进去却<b>看不到任何图</b>；而 MuSiQue 库没有那个图标，点进去反而能看到一张很漂亮的力导向图。查完发现——<b>这是两个同名不同物的东西</b>。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>界面元素</th><th>判定条件</th><th>到底是什么</th><th>有可视化吗</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>知识库卡片下方的绿色图标（tooltip 写"知识图谱"）</td>
+            <td><code>kb.extract_config?.enabled</code></td>
+            <td><b>Neo4j 实体-关系图</b>——就是本文 §1–§12 讨论的那条链</td>
+            <td class="no"><b>没有</b>：它只在检索期（<code>ENTITY_SEARCH</code>）与 agent 工具 <code>query_knowledge_graph</code> 里被用到</td>
+          </tr>
+          <tr>
+            <td>知识库内的「文档 / Wiki / 图谱」面包屑里的「图谱」</td>
+            <td><code>indexing_strategy.wiki_enabled</code>（<code>isWiki</code>）</td>
+            <td><b>Wiki 页面链接图</b>：数据来自 <code>/api/v1/knowledgebase/{id}/wiki/graph</code>，节点是 wiki 页、边是 wikilink</td>
+            <td class="ok"><b>有</b>：<code>WikiBrowser</code> 的 <code>view="graph"</code> 渲染力导向图</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><b>源码位置</b>：卡片 badge 在 <code>frontend/src/views/knowledge/KnowledgeBaseList.vue:229-234</code>（另一份列表结构同码，见 <code>:306-311</code>）＝ <code>v-if="kb.extract_config?.enabled"</code> ＋ <code>&lt;t-icon name="relation"&gt;</code>；面包屑那组 tab 是 <code>KnowledgeBase.vue:2260-2281</code>（整组 <code>v-if="isWiki"</code>），点开走 <code>:2313-2314</code> 的 <code>&lt;WikiBrowser :view="activeKbTab === 'graph' ? 'graph' : 'browser'"&gt;</code>；<code>isWiki</code> 定义在 <code>KnowledgeBase.vue:93</code>。</p>
+      <p><b>作者自己写过免责声明</b>（前端 i18n 里同一件事讲了两遍，说明这个混淆很常见）：<code>zh-CN.ts:4314</code> 的 tab tooltip——<i>"Wiki 页面之间的引用关系图（即页面链接图谱），与「知识库设置 → 知识图谱」中基于 LLM 抽取的实体-关系图谱不是同一个概念"</i>；<code>zh-CN.ts:4363</code> 的空态文案、<code>zh-CN.ts:5202</code> 的图谱配置页描述同义。</p>
+      <p><b>实测对账</b>：<code>exp-graph-tags</code>／<code>exp-graph-perfile</code> 调 <code>/wiki/graph</code> → <b>400 <code>error code: 1000, Wiki feature is not enabled for this knowledge base</code></b>（两库 <code>wiki_enabled=false</code>，所以连那个 tab 都不渲染）；MuSiQue 库 <code>/wiki/stats</code> → <code>total_pages: 4094</code>（entity 2820／concept 701／summary 572／index 1）、<code>total_links: 23393</code>，<code>/wiki/graph?mode=overview</code> 默认只返回<b>连接度最高的 500 个页面</b>（前端注释明说是防止几万页把浏览器拖死）——界面上那个"全库 500"就是这个上限。图例里的 摘要／实体／概念／综合／对比 五种颜色＝wiki 页类型，与 0049 的页类型实测一致。</p>
+      <p><b>⇒ 结论（呼应 §6／§12）</b>：① 界面上之前看到的"知识图谱很漂亮"，其实是 <b>wiki 页面链接图</b>，<b>对 Neo4j 这条链没有任何证据意义</b>；② 真正的实体-关系图<b>在界面上没有任何可视化入口</b>，只在检索期生效，而按 §12 的实测，默认配置下它还是空的 ⇒ <b>"真知识图谱"在这套产品里还没做起来</b>：没可视化、默认也没有可用产出，定位上更像"给检索加的一条弱通道"，而不是一个能独立交付价值的能力。</p>
+      <p class="muted">附：这也是为什么"把 WeKnora 当图谱范本来学"要谨慎——它展现给你的图谱能力（界面、演示）与实际实现的图谱能力（Neo4j 那条链）差着一截。</p>
+    </section>
+  </div>
+</body>
+</html>

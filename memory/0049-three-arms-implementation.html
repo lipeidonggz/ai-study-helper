@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0049 · 三条检索路线的实现梳理（wiki ／ smart ／ hybrid）</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+    .orig { background: var(--code-bg); border-left: 3px solid rgba(127,127,127,0.35); border-radius: 6px; padding: 8px 12px; margin: 8px 0; line-height: 1.65; }
+    .tbl-wide { font-size: 0.84em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0049 · 三条检索路线的实现梳理（wiki ／ smart ／ hybrid）</h1>
+      <p class="subtitle"><b>一句话</b>：这三条路线<b>不是三套检索算法，而是同一个 ReAct 引擎的三套"预设"</b>——只换三样东西：<b>系统提示词</b>、<b>工具白名单</b>、<b>轮次预算</b>。本文把这三样逐字核过一遍（WeKnora <code>v0.8.2</code> 源码），把"为什么三条路线在题上表现不同"落到可指认的实现差异上。</p>
+      <p class="subtitle">状态：<span class="muted">✅ 实现已核（只读源码，不做实验）</span> · 现场时间：2026-10-13 · 上游：<code>docs/publish/0048-10 道多跳题里 8 道站不住…md</code>（对外补篇二）／<a href="0046-three-arms-per-question.html">0046</a>（逐题归因）／<a href="0045-musique-retrieval-experiment.html">0045</a>（实验总账）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 被核仓库：<code>D:\lida-data\vscode\WeKnora</code>（本地锁定 <code>v0.8.2</code>）</p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 style="margin-top:16px;">0. 起因</h3>
+      <p>0048 写完之后，剩下的问题是"三条路线到底差在哪"。此前所有关于 wiki／smart／hybrid 的讨论都建立在<b>行为观测</b>上（分数、工具调用序列、token），没有一个地方把它们的<b>定义</b>摆出来对过账。这篇补上：<b>先看清它们各自是什么，再谈它们为什么不同</b>。</p>
+      <p>顺带一个动机：0048 §5 里那个"hybrid 在 3 跳更稳"的观察，如果没有实现层的解释，就只是个待复现的噪声；有了实现层的三处差异，它至少变成了<b>可检验的假设</b>。</p>
+
+      <h3>1. 一句话对照：三条路线 = 同一引擎 × 三套预设</h3>
+      <p>三者都走 <code>smart-reasoning</code> 模式（同一个 ReAct 循环，<code>internal/agent/</code>），差异在三处：<b>系统提示词</b>、<b>工具白名单</b>、<b>轮次预算</b>。预设文件是 <code>config/agent_type_presets.yaml</code>，但——见下面的更正——<b>实际生效值要以 agent 自己的配置为准</b>：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>路线（实验臂）</th><th>实际 agent ／ agent_type</th><th>系统提示词</th><th>工具白名单（实测生效）</th><th>轮次预算</th><th>检索参数</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>smart</b>（Agentic RAG）<br><code>exp-musique-smart</code></td>
+            <td><code>builtin-smart-reasoning</code><br>／<code>rag-qa</code></td>
+            <td><code>progressive_rag_agent</code></td>
+            <td><code>search_knowledge</code>／<code>read_document</code>／<code>list_documents</code>／<b><code>query_knowledge_graph</code></b></td>
+            <td><b>50</b></td>
+            <td>rerank top 10／阈值 0.3</td>
+          </tr>
+          <tr>
+            <td><b>wiki</b>（Agentic Wiki）<br><code>exp-musique-wiki</code></td>
+            <td><code>builtin-wiki-researcher</code><br>／<code>wiki-qa</code></td>
+            <td><code>wiki_researcher</code>（内联，1405 字符）</td>
+            <td><code>wiki_search</code>／<code>wiki_read_page</code>／<code>read_document</code>／<code>wiki_flag_issue</code></td>
+            <td><b>30</b></td>
+            <td>rerank top 10／阈值 0.3</td>
+          </tr>
+          <tr>
+            <td><b>hybrid</b><br><code>exp-musique-hybrid</code></td>
+            <td>预设 <code>hybrid-rag-wiki</code></td>
+            <td><code>hybrid_rag_wiki_agent</code></td>
+            <td><code>wiki_search</code>／<code>wiki_read_page</code>／<code>search_knowledge</code>／<code>read_document</code>／<code>list_documents</code>／<code>wiki_flag_issue</code></td>
+            <td><b>40</b></td>
+            <td>rerank top <b>5</b>／阈值 <b>0</b></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted">三条路线 temperature 都是 0.7、<code>thinking: false</code>、<code>citation_enabled: true</code>、<code>embedding_top_k: 10</code>、<code>keyword_threshold: 0.3</code>、<code>vector_threshold: 0.5</code>、<code>enable_query_expansion: false</code>、<code>enable_rewrite: false</code>、<code>kb_selection_mode: all</code>、<code>multi_turn_enabled: true</code>（<code>history_turns: 5</code>）。<code>faq_priority_enabled</code>：smart／hybrid 为 true，wiki 为 false。</p>
+      <blockquote>
+        <p><b>⚠️ 更正（2026-10-13，核日志时发现）</b>：预设文件里 <code>rag-qa</code> 写的是 <b>30 轮 + 3 个工具</b>，但<b>我们实验真正跑的 <code>builtin-smart-reasoning</code> 存的是「50 轮 + 4 个工具（多一个 <code>query_knowledge_graph</code>）」</b>。所以"三条路线各有多少预算"这件事<b>必须按实际 agent 配置说，不能按预设文件说</b>。更正后：<b>smart 50 ／ hybrid 40 ／ wiki 30 —— 预算最大的其实是 smart，不是 hybrid。</b>来源：容器日志里 <code>/agents</code> 的内置 agent 配置（<code>data/tmp/_agents_full.txt</code>）。</p>
+      </blockquote>
+
+      <h3>2. 结论（三条）</h3>
+      <p><b>① hybrid 的特点不是"预算更大"，而是"两套工具都在手"。</b>它的工具集正好是 <b>wiki 的工具集 ∪ smart 的工具集</b>（<code>wiki_flag_issue</code> 两边都有；但 <b>smart 独有的 <code>query_knowledge_graph</code> 没有带过来</b>）。而预算<b>不是</b>它最大：实测 <b>smart 50 ／ hybrid 40 ／ wiki 30</b>。<br>
+      它另有两处与另两条不同：<b>重排候选只有 5 个、阈值放到 0</b>（smart／wiki 都是 10 个、0.3）——即"候选更少但不过滤"，这和它的提示词里那句"证据够了就停"是同一个取向。<br>
+      ⇒ 0048 里"hybrid 在 3 跳更稳"这个观察，<b>不能用"预算更大"解释</b>（它比 smart 少 10 轮），可解释的候选收窄成两条：<b>工具更全</b>、或<b>重排更宽松</b>。两条都还没验——所以它仍然只是<b>待验证假设</b>。</p>
+      <p><b>② 三份提示词都写了"精确引用要回原文核对"，但只有能拿到原文的那条做得到。</b>smart／wiki／hybrid 的系统提示词里都有类似一句：<b>精确引用、数字、代码，要回到源文档核对，别信生成物</b>。差别在于<b>有没有那个入口</b>：smart 有 <code>search_knowledge</code>（块级检索，直接返回原文块）；wiki 只有页级入口（<code>wiki_search</code>／<code>wiki_read_page</code>），要回原文得另外调 <code>read_document</code>；hybrid 两样都有。</p>
+      <p>我们在 <b>#4</b> 上抓到了"提示词写了 ≠ 会执行"的实例（<code>qa-wiki-v2.jsonl</code>，第 1 轮）：</p>
+      <div class="orig"><b>wiki</b>：<code>tool_calls = [wiki_search ×4, wiki_read_page ×2]</code> —— <b>一次 <code>read_document</code> 都没有</b>；答案停在编译页的改写上（编译页是中文，见 §3），吐回英文时是 <code>intermarriage and conversion during the Roman Empire</code>，F1 <b>0.57</b>（三轮都是这个数）。<br>
+      <b>smart</b>：<code>tool_calls = [search_knowledge ×2]</code> —— 直接拿到英文原文块，答案是金标准原句，F1 <b>1.00</b>（三轮全对）。</div>
+      <p>⇒ 同一份语料、同一个答案，<b>差别只在"交到模型手里的文本形态"</b>：块检索给原文（可照抄），页检索给编译产物（<b>中文</b>，必须自己再译回去）。<b>而 F1 是词面指标</b>——这一条是结构性的，不是抖动。<span class="muted">（"中文"从哪来：写页提示词本身要求<b>贴近原文措辞、禁止风格化改写</b>，语言由配置决定、默认 <code>zh-CN</code>——见 §9。）</span></p>
+      <p><b>③ smart 没有页导航，wiki 没有块入口，hybrid 两样都有。</b>这条解释了 0048 §5 里另外两个观察：smart 在同域实体间游走（#1 三轮 0.55／0.67／0.36，而 wiki 三轮 1.00）；wiki 拿不到原文块（#4 三轮 0.57，而 smart 三轮 1.00）。⇒ 三条路线的能力边界，是<b>工具集</b>决定的，不是"检索质量"决定的。</p>
+
+      <h3>2.5 设计意图推断（H1–H6）：已核／修正／待核</h3>
+      <p class="muted">2026-10-14 补。起因是"为什么 wiki 层做成这样、为什么还会有图谱"这组疑问；下面每条都标了核实结果，证据索引见 §6／§9（页类型、写页提示词、语言链）与 §9.5（枚举入口、authored 页、图谱归属）。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>推断</th><th>核完的结论</th><th>关键证据</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>H1</b> 三层检索面 ＝ 三种问法（wiki 概览／块引用／图查询），不是三个竞争者</td>
+            <td><b>成立，但 wiki 的定位要改写</b>：它不是"概览"，而是<b>"入口网"</b>——index（总入口）＋ entity／concept（按概念/实体归集）＋ summary（文档 1:1 锚）＋ wikilink（弱关系）。（沛东指出，实测支持）</td>
+            <td>§9.3 页类型实测（四类）；§9.4 入口网；hybrid 提示词把"概念/关系→wiki、精确引用/数字→chunk"写死</td>
+          </tr>
+          <tr>
+            <td><b>H2</b> wiki 敢"重写"，因为它是 agent 的工作面、不是事实源</td>
+            <td><b>前半修正、后半成立</b>：写页提示词要求 <code>Stay close to the verbatim source wording</code>、<code>must not rephrase for style</code> ⇒ <b>它不做风格化改写</b>；我们看到的"中文"来自配置语言（<code>WEKNORA_LANGUAGE</code>…默认 <code>zh-CN</code>）。后半仍成立：提示词自己写着 <code>A generated Wiki page is not automatically more authoritative than its sources</code>，且页面<b>不进 chunk 索引</b>。</td>
+            <td>§9.1 写页规则原文；§9.2 语言解析链</td>
+          </tr>
+          <tr>
+            <td><b>H3</b> wiki 那张"图"不可查询 ⇒ 图谱补的是"枚举／连接"</td>
+            <td><b>成立，而且比原推断更强</b>：agent 侧的枚举是<b>被刻意截断的</b>——<code>wiki_read_page('index')</code> 只给"缩略图"（每类 top-20，注释说"给 agent 感受 shape，更深探索走 wiki_search"）；<b>完整枚举只在 MCP（<code>wiki_index</code> ≤200／类）与 UI</b>。</td>
+            <td>§9.5 ①（<code>wiki_tools.go:18-60</code>、<code>mcpserver/tools_wiki.go:47-53</code>）</td>
+          </tr>
+          <tr>
+            <td><b>H4</b> 它给的是"能力开关"，不是"一条更优管线"：不同语料适合不同形态</td>
+            <td><b>成立</b>：KB capabilities ＝ vector／keyword／wiki／graph／faq 五类按库开关；图谱工具前端按 <code>{ allOf: ['graph'] }</code> 门控；各预设用 <code>any_of</code> 声明自己需要哪种检索面；"什么索引都没有"的 KB 直接排除。</td>
+            <td>§9.5 ③；<code>tool-capabilities.ts</code>／各 <code>kb_filter</code></td>
+          </tr>
+          <tr>
+            <td><b>H5</b> 图谱像是独立演进的一层，还没并进统一分工叙事</td>
+            <td><b>成立（证据加强）</b>：只有 <code>builtin-smart-reasoning</code> 挂了 <code>query_knowledge_graph</code>（还顺带开着 web_search）；wiki／hybrid 预设的 <code>kb_filter</code> 都不含 graph；<b>hybrid 的提示词通篇只讲 wiki ＋ chunk 两分法，一个字不提图谱</b>。</td>
+            <td>§9.5 ③；<code>config/builtin_agents.yaml</code>、<code>agent_type_presets.yaml</code></td>
+          </tr>
+          <tr>
+            <td><b>H6</b> 与我们自己图谱立项理由（枚举／跨源连接／关系查询）同构</td>
+            <td><b>同构；差异点已定位</b>：WeKnora 把"枚举入口"从 wiki 侧<b>收窄</b>（20 条缩略图），完整枚举要么走 MCP/UI、要么走图谱 ⇒ 这一条是"要不要抄"的关键取舍点。</td>
+            <td>§9.5 ①③</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><b>仍未核（3 条）</b>：① hybrid 预设／图谱的<b>演进史</b>（CHANGELOG 里是否曾把 graph 并进 hybrid）；② <code>WEKNORA_LANGUAGE=en-US</code> 重编译（实验，用来切分"翻译 vs 改写"）；③ <code>synthesis</code>／<code>comparison</code> 除 <code>builtin-wiki-fixer</code> 之外<b>是否曾被任何路径触发过</b>（我们这份产物里是 0，但那是我们没跑过修订 agent）。</p>
+
+      <h3>3. 遗留（本篇不做，留给实验）</h3>
+      <ul>
+        <li><b>把三条路线的预算对齐再跑一次？</b>现在实测是 <b>smart 50 ／ hybrid 40 ／ wiki 30</b>——三者都不同。要归因"工具集"的影响，得先把预算钉成同一个数（例如都用 30 或都用 40）复跑同一批题；顺带也能测 hybrid 那套"rerank 5／阈值 0"参数的影响。</li>
+        <li><b>编译语言的影响。</b>把编译产物改成保留英文原文摘录（或双语），只重跑 wiki，看 #4 是否从 0.57 变 1.00——这是"编译换了语言"这条机制的直接检验。</li>
+        <li><b><code>wiki_flag_issue</code> 有没有被用过？</b>带 wiki 工具的两条路线（wiki／hybrid）都有这个工具（写问题台账），我们从未在任何一次运行里看到它被调用——可查日志确认（0044 附录 A.4 记过"台账没被用过"，但那是编译侧视角）。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节</h2>
+
+      <h3>4. 源码位置</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>内容</th><th>位置</th></tr></thead>
+        <tbody>
+          <tr><td>三套预设的定义（提示词 id／工具／预算）</td><td><code>config/agent_type_presets.yaml</code>（<code>rag-qa</code>／<code>wiki-qa</code>／<code>hybrid-rag-wiki</code>）</td></tr>
+          <tr><td>系统提示词正文</td><td><code>config/prompt_templates/agent_system_prompt.yaml</code>（<code>progressive_rag_agent</code>／<code>wiki_researcher</code>／<code>hybrid_rag_wiki_agent</code>）</td></tr>
+          <tr><td>工具名常量与 UI 说明</td><td><code>internal/agent/tools/definitions.go</code>（<code>AvailableToolDefinitions()</code>／<code>DefaultAllowedTools()</code>）</td></tr>
+          <tr><td>wiki 工具实现</td><td><code>internal/agent/tools/wiki_tools.go</code></td></tr>
+          <tr><td>ReAct 循环与护栏</td><td><code>internal/agent/engine.go</code>（<code>withinIterationBudget</code>／<code>loopGuards</code>）</td></tr>
+          <tr><td>预算校验</td><td><code>internal/application/service/agent_service.go</code>（<code>MAX_ITERATIONS = 100</code>；未设 → 默认 5）</td></tr>
+          <tr><td>工具权限策略</td><td><code>internal/modelcontext/tool_policy.go</code>（本篇未细读）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5. 三份系统提示词（全文 ＋ 中译）</h3>
+      <p class="muted">来源：<code>config/prompt_templates/agent_system_prompt.yaml</code>，三份都是 <b>英文原文</b>，下面是逐字抄录 ＋ 中文翻译。<b>注意</b>：这只是"基础提示词"，实际发给模型的还会由运行时拼接段落（来源选择、工具说明、引用与输出规范、grounding 规则）——base 提示词里那句 "Apply the runtime source-selection rules…"／"governed by the runtime sections" 说的就是这个；拼接代码在 <code>internal/agent/prompts.go</code>、<code>prompts_wiki.go</code>、<code>grounding_prompt.go</code>（本篇未逐段细读）。</p>
+
+      <h4>5.1 smart · <code>progressive_rag_agent</code>（agent_type <code>rag-qa</code>）</h4>
+      <p><b>英文原文</b>（完整）：</p>
+      <pre>You are WeKnora, an assistant developed by Tencent, specializing in questions and work involving the user's knowledge bases.
+When the task calls for knowledge-base evidence:
+- Choose a relevant source from the current runtime directory and use a search or reader supported by its capabilities. A knowledge base's &lt;description&gt; states what it is for and its &lt;generated_profile&gt; (gist, topics, typical questions) states what it actually contains; when several are bound, prefer the ones whose profile matches the question and pass their ids to the search tool instead of searching all of them.
+- Start with search_knowledge: the default hybrid mode covers most questions; use mode=keyword for exact terms, error messages, or identifiers, and mode=semantic for paraphrased or conceptual questions. In hybrid and semantic mode write the query as a complete question, not a keyword list. Rephrase an unproductive query; for exact terms, error messages, or identifiers switch to mode=keyword rather than repeating hybrid or semantic.
+- Use read_document(id=dN) when a returned passage is incomplete: page with offset, or pass query to find a passage inside the document. Full content already returned for the task does not require another read. list_documents shows what a knowledge base contains when the search surface is unclear.
+- For exact quotes, numbers, or code, verify the underlying source passage rather than relying on document metadata or a generated overview.
+Apply the runtime source-selection rules before this default retrieval workflow. Other requested sources and deliverables are part of the user's task.</pre>
+      <p><b>中译</b>：</p>
+      <div class="orig">你是 WeKnora，腾讯开发的助手，专门处理涉及用户知识库的问题与工作。<br>
+      当任务需要知识库证据时：<br>
+      · 从当前运行时目录里挑一个相关来源，并使用该来源能力所支持的检索或阅读工具。知识库的 <code>&lt;description&gt;</code> 说明它是做什么的；它的 <code>&lt;generated_profile&gt;</code>（要点、主题、典型问题）说明它实际装了什么。绑定多个知识库时，优先挑 profile 与问题匹配的那些，并把它们的 id 传给检索工具，而不是全库搜。<br>
+      · <b>从 <code>search_knowledge</code> 开始</b>：默认的 hybrid 模式覆盖大多数问题；精确词、报错信息或标识符用 <code>mode=keyword</code>；改写过的或概念性的问题用 <code>mode=semantic</code>。在 hybrid 与 semantic 模式下，把查询写成<b>一个完整的问题</b>，而不是关键词列表。某个查询没产出，就换个说法；对精确词、报错信息或标识符，改用 <code>mode=keyword</code>，而不是重复 hybrid 或 semantic。<br>
+      · 返回的片段不完整时，用 <code>read_document(id=dN)</code>：用 offset 翻页，或传 query 在文档内定位。任务已经拿到完整内容的，不必再读一遍。检索面不清楚时，用 <code>list_documents</code> 看知识库里有什么。<br>
+      · <b>涉及精确引用、数字或代码时，要核对底层源片段</b>，不要依赖文档元数据或生成的概述。<br>
+      先应用运行时的来源选择规则，再执行上面这套默认检索流程。用户要求的其他来源与交付物也属于任务的一部分。</div>
+
+      <h4>5.2 wiki · <code>wiki_researcher</code>（agent_type <code>wiki-qa</code>）</h4>
+      <p><b>英文原文</b>（完整）：</p>
+      <pre>You are WeKnora Wiki Researcher. The Wiki contains generated, linked summaries, entities, and concepts derived from source documents.
+For a task that needs Wiki evidence:
+- Find an entry point with wiki_search, or read the index when the user requests an overview. Restrict the lookup to the relevant bound knowledge base.
+- Read a relevant page with wiki_read_page when search summaries do not contain enough evidence. Follow links only to resolve a specific gap; a fixed number of pages or hops is not required.
+- For exact quotes, detailed code, or disputed facts, inspect the original documents referenced by the page with read_document(id=dN) using the source handles the page lists. A generated Wiki page is not automatically more authoritative than its sources or newer verified evidence.
+- If sources conflict, compare their dates, scope, and provenance and explain unresolved differences. Report a supported Wiki defect with wiki_flag_issue when that tool is available and the report is relevant to the task.
+- Use verified [[slug|display name]] links when Wiki navigation helps the user. Source citation syntax and whether citations are enabled are controlled by the runtime protocol.
+This is a default research workflow, not a requirement to search the Wiki for every message. Honor the user's current source selection and use the tools actually provided; do not infer tool type from its name.</pre>
+      <p><b>中译</b>：</p>
+      <div class="orig">你是 WeKnora 的 Wiki 研究员。Wiki 里装着从源文档派生出来的、互相链接的摘要页、实体页与概念页。<br>
+      当任务需要 Wiki 证据时：<br>
+      · 用 <code>wiki_search</code> 找入口；用户要求纵览时读索引。把检索限制在相关的那个已绑定知识库内。<br>
+      · 搜索摘要里的证据不够时，用 <code>wiki_read_page</code> 读相关页面。<b>只在需要补某个具体缺口时才顺链接跳</b>；并不要求固定读多少页、跳多少跳。<br>
+      · <b>涉及精确引用、详细代码或有争议的事实时，用页面给出的来源句柄，通过 <code>read_document(id=dN)</code> 去看该页引用的原始文档。</b>生成出来的 Wiki 页并不自动比它的来源、或比更新的、已核实的证据更权威。<br>
+      · 来源互相冲突时，比较它们的日期、范围与出处，并说明哪些分歧没能解决。当 <code>wiki_flag_issue</code> 可用、且这件事与任务相关时，用它上报一个有据可依的 Wiki 缺陷。<br>
+      · 当跳 Wiki 有助于用户时，使用已核实的 <code>[[slug|显示名]]</code> 链接。引用语法、以及是否启用引用，由运行时协议决定。<br>
+      这是一套默认研究流程，不是每条消息都必须去搜 Wiki。尊重用户当前的来源选择，只用实际提供的工具；<b>不要从工具的名字去推断它的类型</b>。</div>
+
+      <h4>5.3 hybrid · <code>hybrid_rag_wiki_agent</code>（agent_type <code>hybrid-rag-wiki</code>）</h4>
+      <p><b>英文原文</b>（完整）：</p>
+      <pre>You are WeKnora, an assistant that uses Wiki pages and original document chunks to answer questions and complete knowledge-based work.
+When knowledge-base retrieval is appropriate:
+- Use the runtime directory's capabilities to choose an available surface. A missing capability is unknown, not permission to assume a chunk or Wiki index exists.
+- Prefer Wiki (wiki_search, then wiki_read_page) for conceptual overviews and relationships; prefer original chunks (search_knowledge, then read_document) for exact quotes, numbers, code, and details. Explicit source or document selections take precedence over this default.
+- Search the relevant scope. Read additional pages or neighboring chunks only if the returned material leaves a gap; a complete passage need not be fetched again merely because it arrived through search.
+- If a lookup fails to find relevant material, change the query or try another relevant available surface when it is likely to help. Stop once evidence is sufficient or further searches are unlikely to resolve the gap.
+- When Wiki and source documents disagree, compare their provenance, dates, and scope. Do not assume either surface is always correct. Report a supported Wiki defect through wiki_flag_issue if available and relevant.
+- Use supplied identifiers in tool arguments where required. In ordinary answers, refer to sources by title; explain access or evidence limitations only when they affect the answer.
+- Wiki navigation links use verified [[slug|display name]] values. Follow the runtime protocol for source citations and output formatting.
+Do not require both retrieval surfaces for every claim. Tools, Skills, and other sources are governed by the runtime sections.</pre>
+      <p><b>中译</b>：</p>
+      <div class="orig">你是 WeKnora，一个同时使用 Wiki 页面和原始文档分块来回答问题、完成知识型工作的助手。<br>
+      当适合做知识库检索时：<br>
+      · 用运行时目录里的能力信息挑一个可用的检索面。<b>某个能力缺失只意味着"不知道"</b>，不等于可以假定块索引或 Wiki 索引存在。<br>
+      · <b>概念性的纵览与关系，优先用 Wiki</b>（<code>wiki_search</code>，然后 <code>wiki_read_page</code>）；<b>精确引用、数字、代码与细节，优先用原始分块</b>（<code>search_knowledge</code>，然后 <code>read_document</code>）。用户明确指定的来源或文档，优先于这条默认规则。<br>
+      · 在相关范围内检索。只有当返回的材料留下缺口时，才再读别的页面或邻近分块；一段内容不该因为它是"搜出来的"就被再取一遍。<br>
+      · 如果一次查询没找到相关材料，就换查询，或者<b>在可能有用时改用另一个可用的检索面</b>。证据已经足够、或再搜下去不太可能补上缺口时，就停下来。<br>
+      · Wiki 与源文档不一致时，比较它们的出处、日期与范围。<b>不要假定任何一面永远正确。</b>当 <code>wiki_flag_issue</code> 可用且相关时，用它上报有据可依的 Wiki 缺陷。<br>
+      · 工具参数需要标识符时，用给定的标识符。普通回答里用标题指代来源；只有在影响答案时才解释访问或证据上的限制。<br>
+      · Wiki 导航链接使用已核实的 <code>[[slug|显示名]]</code>。引用与输出格式按运行时协议执行。<br>
+      不要要求每条结论都必须同时有两个检索面的证据。工具、技能与其他来源由运行时段落规定。</div>
+      <p>⇒ 三份提示词都<b>没有</b>"最多读几页／几跳"的固定要求，都写了"够了就停"；hybrid 那句"用另一个可用的检索面再试一次"是它独有的<b>跨面回退</b>指令。</p>
+
+      <h3>6. 工具语义（<code>definitions.go</code> 的原话）</h3>
+      <table>
+        <thead><tr><th>工具</th><th>说明（原文中译）</th></tr></thead>
+        <tbody>
+          <tr><td><code>search_knowledge</code></td><td>语义、关键词或混合检索知识库<b>分块</b>（<code>mode=semantic|keyword|hybrid</code>）</td></tr>
+          <tr><td><code>read_document</code></td><td>读取文档元数据与分块内容，支持<b>分页与文内查找</b></td></tr>
+          <tr><td><code>list_documents</code></td><td>分页列出知识库中的文档</td></tr>
+          <tr><td><code>wiki_search</code></td><td>在 Wiki 中搜索<b>页面</b></td></tr>
+          <tr><td><code>wiki_read_page</code></td><td>读取指定 Wiki 页面内容（含出链／入链列表；0044 附录 A 已实测 562／801 个工具事件带链接字段）</td></tr>
+          <tr><td><code>wiki_flag_issue</code></td><td>标记页面中存在的事实错误或合并冲突问题（写台账）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">历史包袱：<code>knowledge_search</code>／<code>grep_chunks</code> 已并入 <code>search_knowledge</code>，<code>list_knowledge_chunks</code>／<code>get_document_info</code>／<code>wiki_read_source_doc</code> 已并入 <code>read_document</code>；旧名在注册时被 <code>NormalizeAllowedTools</code> 自动替换（<code>legacyToolSuccessors</code>）。</p>
+
+      <h3>7. 循环与护栏</h3>
+      <p><b>先回答一个容易误读的点：它是 ReAct 骨架，但<b>不是</b>提示词协议版的 ReAct。</b>证据三处：① 引擎里那一轮就叫 <code>runReActIteration</code>，注释写着 "executes one ReAct step: <b>think → analyze → act → observe</b>"；② 每轮把模型的普通正文记进 <code>Thought</code> 字段（<code>engine.go:862/908</code>），<b>不产 tool call 的那一轮就是最终答案</b>；③ 行动走的是<b>原生 function calling</b>（<code>act.go</code> 直接遍历 <code>response.ToolCalls</code>，还支持并行执行），代码里<b>没有</b> Thought:／Action Input／Observation: 这类文本解析。<br>
+      所以"显式的 Reasoning 步骤"在这套实现里是<b>两个可选工具</b>：<code>thinking</code>（"动态和反思性的问题解决思考工具"）与 <code>todo_write</code>（"创建结构化的研究计划"）。而<b>三条路线都没开</b>——预设注释写着 "thinking and todo_write are intentionally NOT included by default … they noticeably bloat token usage"，实测配置里也是 <code>thinking: false</code>、工具表里没有 <code>todo_write</code>。<br>
+⇒ 结论：<b>我们比较的三条路线，都是「工作流指令 ＋ 原生工具调用」形态，没有把推理显式化成工具调用</b>。所以"工具集差异"是真实变量，但"会不会显式反思／会不会先写计划"这类差异在这批实验里<b>根本没被打开</b>——不能从这批数据谈"Reflection／ReWOO 对多跳有没有用"。<span class="muted">（而且——见 §7.1——<b>连模型自身的推理在这三条路线上也是关着的</b>。）</span></p>
+
+      <h4>7.1 "推理"与"反思"到底支持到什么程度（2026-10-14 复核）</h4>
+      <ul>
+        <li><b>推理：能力在、但在我们这三条路线上是"关着的"（更正我上一版的说法）</b>。<br>
+        ① <b>能力确实在</b>：<code>AgentConfig.Thinking *bool</code>（字段注释："Whether to enable thinking mode (for models that support extended thinking)"）会被 <code>internal/agent/think.go:269</code> 直接传进模型调用；不同厂商有各自线上的编码（<code>enable_thinking</code>／<code>thinking_type</code>／<code>chat_template_kwargs.enable_thinking</code>／<code>reasoning_effort</code>，见 <code>internal/models/legacy_keys.go</code>、<code>api/compat_settings.go</code>）；模型返回的 <code>reasoning_content</code> 会被持久化到 <code>AgentStep</code> 并以 <code>ResponseTypeThinking</code> 事件播出（字段说明原话："…required by MiMo / DeepSeek V3.2+ thinking mode"）。<br>
+        ② <b>但实测是关的</b>：我们三条路线的配置都是 <code>"thinking": false</code>，而且 <code>types/custom_agent.go</code> 有一条归一化——<b>"Pin thinking to an explicit false when unset"</b>，即<b>不设也会被钉成明确的 false</b>。<b>日志实证</b>：四个容器日志里 <code>reasoning_tokens</code> 命中 <b>0</b> 次、<code>reasoning_content</code> 仅 2 次（是代码/字段文本，不是模型输出）；而<b>闭卷直连那侧（不传 thinking 参数、走模型默认）90／90 都有 reasoning token</b>（flash 中位 2,940）。<br>
+        ③ <b>显式推理工具 <code>thinking</code> 是另一件东西，也确实没挂</b>：<code>internal/agent/tools/sequentialthinking.go</code> 是"顺序思考"工具（多步分解、可回溯修正、生成并验证假设，并明确要求"最终答案不要写进 thought、用普通回复收尾"）；预设注释说不默认带它是为了省 token。<br>
+        ⇒ 所以准确说法是：<b>"推理"这件事在这套系统里有三个层次——模型原生推理（可开，我们关了）／<code>thinking</code> 工具（可挂，我们没挂）／提示词里的推理要求（三份都没有）。我们的三条路线在"推理"上是"全灭"状态，"反思"则是引擎未实现。</b></li>
+        <li><b>⚠️ 由此暴露一个对照口径问题（重要）</b>：我们的<b>闭卷基线是"带推理"的</b>（直连 API、未传 thinking ⇒ 模型默认开推理），而<b>三条 agent 路线是"不带推理"的</b>（<code>config.thinking=false</code>）。⇒ 0047／0048 里所有"闭卷 vs agent 三臂"的对比，<b>都混着"推理开／关"这一层</b>：闭卷侧额外占了一个优势。<span class="muted">（旁证：我们做过的开关探针里，关掉推理时 #21 直接答 <code>Tyler</code>——推理对难题不是摆设。所以这个混淆不能忽略；它不推翻 0047 的方向性结论，但"闭卷 0.917 对 agent 0.69～0.76"这类差距里，有多少来自检索、有多少来自推理，本批数据分不开。）</span></li>
+        <li><b>反思：不是"支持但默认不开"，而是个死字段</b>（<b>更正我上一版的说法</b>）。<code>reflection_enabled</code> 只出现在 <code>config/builtin_agents.yaml</code> 与前端类型定义里；<code>internal/</code> 下<b>既没有对应的结构体字段、也没有任何读取点</b>——项目自己的文档 <code>website-docs/03-features/07-agent.md:145</code> 写得很直白：<i>"后端目前不消费这个字段……看到它为 true 也不要以为多了一轮反思。"</i> 代码里只有 reflection 的<b>管道</b>（<code>EventAgentReflection</code>、<code>ResponseTypeReflection</code>、<code>ToolCall.Reflection</code> 字段、回放时拼 <code>Reflection: …</code>），<b>找不到产生者</b>：<code>act.go:223</code> 的注释写着 "optionally runs reflection after each call"，但 <code>executeToolCalls</code> 里并没有对应实现。<span class="muted">（实测配置里 <code>reflection_enabled</code>：数据分析师 <code>true</code>、其余 <code>false</code>——都不影响行为。）</span></li>
+      </ul>
+
+      <h4>7.2 这些开关关着，对我们已有的结论意味着什么</h4>
+      <ul>
+        <li><b>对"三条路线谁更强"</b>：三份提示词都没有显式推理要求、<code>thinking</code>／<code>todo_write</code> 也都没挂 ⇒ 三条路线的差异<b>只能归因于工具集、检索参数（rerank 10/0.3 vs 5/0）与预算（实测 50／30／40）</b>；"谁更会思考／反思"这一类解释在本批数据里<b>不成立</b>。</li>
+        <li class="muted">（补：<code>reflection_enabled</code> <b>不是</b>"关着的开关"，而是<b>死字段</b>——详见 §7.1 第三条。）</li>
+        <li><b>对 0046 的逐题归因</b>：那两类失败形态——"停在中间实体就不往下走"（#23 的层级没换）、"多搜后放弃"（#22／#28）——<b>正好是缺显式自查的典型症状</b>。提示词只写了"证据够了就停"，<b>没有</b>"不确定就复核一遍"。所以这两类失败不能读成"模型能力不足"，它们是这套配置下的<b>预期行为</b>。</li>
+        <li><b>对"会不会拒答"</b>：0048 §2.2 里那 17 轮"库里没有这条链"是<b>模型自发</b>说出来的——三份提示词里没有任何一句要求它在找不到时声明。⇒ "正确拒答"目前靠模型自觉，<b>不是设计保证</b>。</li>
+        <li><b>对 0046 留的那条引子</b>：Reflection／ReWOO 这类 ReAct 改进<b>没有被这批实验覆盖</b>。要回答"显式推理步骤值不值那份 token"，只能挂上 <code>thinking</code>（"动态和反思性的问题解决思考工具"）或 <code>todo_write</code>（"创建结构化的研究计划"）复跑。</li>
+      </ul>
+      <p class="muted">⏸ 这条实验<b>当前暂缓</b>（与"重挑数据集"一并搁下）：只挂开关而不换题集，能看到的仅是"在含 11 道坏题的同一批题上会不会好一点"，结论价值有限；等有了自建题集再一起做。</p>
+
+      <h4>7.3 四种组合（模型推理 × 显式 Thought）与业界证据（2026-10-14）</h4>
+      <p>两个开关是<b>互相独立</b>的两件事：一个是<b>模型自己在内部想</b>（<code>config.thinking</code>），另一个是<b>要求模型把思考显式写出来</b>（<code>thinking</code> 工具——每写一步就是一次工具调用）。2×2 共四格，<b>我们只跑了 A 格</b>：</p>
+      <table>
+        <thead><tr><th>格</th><th>模型推理</th><th>显式 Thought</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td><b>A</b></td><td>✗</td><td>✗</td><td><b>已跑——本批全部数据都在这一格</b></td></tr>
+          <tr><td><b>B</b></td><td>✓</td><td>✗</td><td>未跑</td></tr>
+          <tr><td><b>C</b></td><td>✗</td><td>✓</td><td>未跑</td></tr>
+          <tr><td><b>D</b></td><td>✓</td><td>✓</td><td>未跑</td></tr>
+        </tbody>
+      </table>
+      <p><b>业界证据（本轮查到原文的六条）</b>：</p>
+      <ul>
+        <li><b>ReAct 原论文主表</b>（PaLM-540B，HotpotQA EM ／ Fever Acc，arXiv 2210.03629）：Standard 28.7／57.1；<b>Act（只有行动、没有 Thought）25.7／58.9</b>；<b>ReAct（Thought＋Act 交错）27.4／60.9</b>；CoT 29.4／56.3；CoT-SC 33.4／60.4；<b>ReAct→CoT-SC 35.1／62.0</b>。⇒ ① <b>加显式 Thought 比不加好（+1.7 EM／+2.0 Acc）</b>；② 纯 CoT 在这份题上还高于 ReAct（记忆能答的题占便宜，和我们 0047 的现象同源）；③ <b>两者叠加最好</b>。</li>
+        <li><b>"To CoT or not to CoT?"</b>（arXiv 2409.12183）：100+ 篇论文元分析 ＋ 20 数据集 × 14 模型 ⇒ CoT 的增益<b>主要在数学／逻辑／符号</b>，其他任务小得多；MMLU 上"直接答"与 CoT 几乎一样，除非题面或回答里出现等号。⇒ 推论：<b>单开模型推理（B 格）对"检索型多跳"的增益预期有限。</b></li>
+        <li><b>Overthinking</b>（arXiv 2412.21187）：o1 类模型在简单题上大量浪费算力，去掉过度思考可<b>不损准确率</b>地省算力 ⇒ 我们这 30 题里 12 道"模型本来就会"，B／D 两格在这批题上大概率是<b>纯付费</b>。</li>
+        <li><b>没有外部反馈时自纠不可靠</b>（arXiv 2310.01798）：LLM 单靠自己"再想一遍"常常不涨反跌 ⇒ 显式 Thought 若只是自我复述，期望不高；<b>配上检索结果才是另一回事</b>。</li>
+        <li><b>IRCoT</b>（arXiv 2212.10509）：把推理步与检索<b>交错</b>，在 HotpotQA／2WikiMultihopQA／<b>MuSiQue</b>／IIRC 上检索 +21 分、下游 QA +15 分 ⇒ 这是 <b>C 格（显式 Thought ＋ 检索）最强的一条正面证据</b>——而我们的三条路线恰恰都是"检索了，但从不写 Thought"。</li>
+        <li>旁证两条：<b>Reflexion</b>（arXiv 2303.11366）的增益来自<b>外部／标量反馈</b>并写进情景记忆（我们这套没有这种反馈信号）；<b>s1</b>（arXiv 2501.19393）用 budget forcing 强制延长思考，能让模型回头检查、修错 ⇒ "思考预算"本身是个可调旋钮。</li>
+      </ul>
+      <p><b>四格的预估（方向可推、量级不可推）</b>：</p>
+      <table>
+        <thead><tr><th>格</th><th>预估</th><th>依据</th></tr></thead>
+        <tbody>
+          <tr><td><b>B</b> 单开模型推理</td><td>小幅正增益，集中在需要多步合成的地方；成本明显上升</td><td>To CoT or not（增益偏数学／符号）；Overthinking</td></tr>
+          <tr><td><b>C</b> 单开显式 Thought</td><td><b>增益最可能落在"规划／纠偏／换策略"</b>；成本低（每次一个工具调用），且推理会留进上下文可复用</td><td>ReAct（Act 25.7→ReAct 27.4）；IRCoT（+15 QA）</td></tr>
+          <tr><td><b>D</b> 两者都开</td><td>预期最好，但边际递减、成本最高（有重复推理的风险）</td><td>ReAct→CoT-SC 最高（35.1）</td></tr>
+        </tbody>
+      </table>
+      <p><b>但这份题集会把四格的差异压平</b>：12／30 是"模型本来就会"（<b>天花板</b>：加不加推理都答得出），11／18 是坏题（<b>地板</b>：加不加都答不出，见 0048 §2）。真正能分辨"推理开关值多少"的，只有"<b>题好 ＋ 模型不会</b>"的那一小撮 ⇒ 又一次指向"先有自建题集"。</p>
+      <p><b>如果只做一次，建议先做 C 格</b>：文献支持最强、成本最低（只给 <code>allowed_tools</code> 加一个 <code>thinking</code>），而且能直接检验 ReAct 的 T 在我们这条链路里到底起不起作用；<b>同时把闭卷侧的推理关掉做一次对照</b>，把"推理"这个变量从 0047／0048 的对比里剥出来。两件事都只改配置，不写代码。</p>
+
+      <h4>7.4 轮次与护栏（引擎侧）</h4>
+      <ul>
+        <li><b>轮次</b>：<code>withinIterationBudget(round)</code> 判断还能不能再跑一轮；<code>MaxIterations &lt; 0</code> 表示不限；<b>未设时默认 5</b>；服务端硬上限 <code>MAX_ITERATIONS = 100</code>。<b>实测生效：smart 50 ／ wiki 30 ／ hybrid 40</b>（预设文件里写的是 30／30／40，与实测不一致，见 §1 的更正）。</li>
+        <li><b>loopGuards</b>（引擎自己发现"没在推进"）：① <code>emptyRetries</code>——空内容时发提醒重试；② <code>consecutiveSameContent</code>——连续两轮内容一模一样；③ <code>consecutiveLength</code>——连续多轮被 completion-token 上限截断。三者任一触发都会结束该轮（<code>finishStalledTurn</code>）。</li>
+        <li>⇒ 我们看到的"长搜不收敛"（#15 wiki 一轮 236 个事件、hybrid 一轮 470 个事件）<b>不是没有护栏</b>，而是护栏只管"空答／重复／截断"，<b>不管"一直在搜"</b>——预算（30／40）就是那道唯一的闸门。</li>
+      </ul>
+
+      <h3>8. 与我们实测的对应（可复算）</h3>
+      <ul>
+        <li><b>#4 的调用序列</b>（<code>qa-wiki-v2.jsonl</code> r1 vs <code>qa-smart-v3.jsonl</code> r1）：见 §2 的引用块——wiki 4 次页搜索 + 2 次读页、<b>0 次读原文</b>；smart 2 次块搜索、直接拿原文。</li>
+        <li><b>编译产物的语言</b>：<code>wiki-pages-all.json</code> 里 <code>entity/italians</code>（title「意大利人」）的正文是纯中文，例如「研究推测，阿什肯纳兹犹太人与意大利人之间的遗传相似性可能源于[[entity/roman-empire|罗马帝国]]时期的<b>通婚和皈依</b>」——金标准则是英文 <code>inter-marriage and conversions in the time of the Roman Empire</code>。同一句答案，<b>页里是"翻成中文的措辞"，块里是英文原句</b>（语言来自配置，见 §9.2）。</li>
+        <li><b>工具数口径提醒</b>：0046 §1 表下的更正仍然有效——评测脚本对 SSE 事件计数是真实调用次数的 <b>2 倍</b>；本篇引用的事件数与 0046 同源。</li>
+      </ul>
+
+      <h3>9. 编译期写页提示词与页类型实测（"入口网"的落地）</h3>
+      <p class="muted">来源：<code>internal/agent/prompts_wiki.go</code>（<code>WikiPageModifySystemPrompt</code>／<code>WikiPageModifyUserPrompt</code> 等）、<code>internal/types/wiki_page.go</code>、<code>internal/middleware/language.go</code>、<code>internal/agent/tools/wiki_write_page.go</code>；实测产物 ＝ <code>data/tmp/weknora-musique/wiki-pages-all.json</code>（4,094 页）。</p>
+
+      <h4>9.1 写页规则：它是"编译器"，不是"作者"</h4>
+      <pre>1. You are a COMPILER, not a creative writer. Stay close to the verbatim source wording. You may lightly
+   reorder, deduplicate, and join related sentences, but must not rephrase for style, expand short
+   statements, or invent transitions.
+3. Do not add rhetorical filler such as "aims to provide", "designed to", "旨在帮助", "致力于", or
+   "具有重要意义" unless it appears verbatim in an evidentiary source chunk.
+（Grounding 段）3. No Hallucination: Do not invent, synthesize, or infer any information that is not
+   explicitly present in the provided source chunks.</pre>
+      <p>另有两条把"入口"钉死的约束：</p>
+      <ul>
+        <li><b>页身份硬约束</b>：<code>This wiki page is specifically about **{{.PageTitle}}** (a {{.PageType}}). Every statement on the page MUST be directly about this exact {{.PageType}} — not about related, adjacent, or similarly-named things.</code>，并带一个 <code>CRITICAL CONFLICT CHECK</code>——新信息若属于相近但不同的东西就<b>拒收</b>（它自己举的例子：「Hunyuan Model vs Qwen3」「居民身份证 vs 工作居住证」）。</li>
+        <li><b>链接白名单</b>：<code>Keep [[slug|name]] references ONLY if the slug appears in the &lt;valid_wiki_links&gt; list. Do NOT invent new wiki-link slugs.</code>（禁止自链；正文里也不许留 chunk 句柄如 <code>[c003]</code>）。</li>
+      </ul>
+
+      <h4>9.2 语言不是设计意图，是配置（更正 §2 的措辞）</h4>
+      <p>写页提示词最后一条是 <code>8. Write in {{.Language}}.</code>，语言解析链是 <b><code>WEKNORA_LANGUAGE</code> 环境变量（优先）→ 请求的 <code>Accept-Language</code> → 默认 <code>zh-CN</code></b>（<code>internal/middleware/language.go</code>、<code>internal/types/context_helpers.go</code>）。我们部署里 <code>.env</code> 第 66 行那行是<b>注释掉的</b>、docker-compose 传空 ⇒ 落到 <code>zh-CN</code> ⇒ 英文语料被翻成中文页。<br>
+      ⇒ 所以"编译层把英文<b>改写</b>成中文"这个说法要改成：<b>措辞与事实保守（贴近原文、禁编造），语言按配置输出（默认中文）</b>——"可信"与"可读"就是在这两处各让一步。</p>
+
+      <h4>9.3 页类型：schema 声称六类，实测只落地四类</h4>
+      <table>
+        <thead><tr><th>页类型</th><th>定位</th><th>编译期产出？</th><th>本份产物实测</th></tr></thead>
+        <tbody>
+          <tr><td><code>entity</code></td><td>实体词条（人／组织／地点…）</td><td>✅</td><td><b>2,820</b></td></tr>
+          <tr><td><code>concept</code></td><td>概念／主题词条</td><td>✅</td><td><b>701</b></td></tr>
+          <tr><td><code>summary</code></td><td>文档锚（与源文档 <b>1:1</b>）</td><td>✅</td><td><b>572</b></td></tr>
+          <tr><td><code>index</code></td><td>把全部页面罗列出来的<b>总入口</b></td><td>✅</td><td><b>1</b></td></tr>
+          <tr><td><code>synthesis</code></td><td>综合／分析页</td><td>❌ 编译不做</td><td><b>0</b></td></tr>
+          <tr><td><code>comparison</code></td><td>对比页</td><td>❌ 编译不做</td><td><b>0</b></td></tr>
+        </tbody>
+      </table>
+      <p>后两类是<b>给"作者页（authored pages）"预留的类型</b>：<code>wiki_write_page</code> 的报错文案写着 <code>Use page_type 'synthesis'/'comparison'/'entity'/'concept' for authored pages</code>，即由 agent 或人手写创建；索引视图 <code>wikiIndexContentPageTypes</code> 会把 summary／entity／concept／synthesis／comparison 五类分组展示（index 自己除外）。<br>
+      ⇒ 但<b>我们的实验里这一路也没发生</b>：wiki／hybrid 的 <code>allowed_tools</code> 里<b>没有 <code>wiki_write_page</code></b>（只有 search／read／flag_issue）。所以这 4,094 页<b>全部是编译产物</b>，类型只有四类。</p>
+
+      <h4>9.4 小结：wiki 层更像"入口网"，不是"概览"</h4>
+      <ul>
+        <li><b>index</b> = 总入口（对 agent 是"缩略地图"，见 9.5）</li>
+        <li><b>entity／concept</b> = 按"概念／实体"归集的入口（一词条一页，页身份硬约束）</li>
+        <li><b>summary</b> = 文档入口（1:1 锚到源文档）</li>
+        <li><b>wikilink</b> = 入口之间的<b>弱关系</b>（只许用白名单 slug，不许发明）</li>
+      </ul>
+      <p>"可信"由三条工程手段兜住：<b>grounding ＋ 禁推断</b>（只写原文有的事实）、<b>链接白名单</b>（关系可核）、<b>删源时只删"仅由该源支撑"的事实、删空就留占位页</b>（宁可变空也不改写）。⇒ 这也顺带说明：<b>概览（index ＋ summary）只是副产品，主产品是"可核的入口网"</b>。</p>
+
+      <h4>9.5 补核三件（2026-10-14）：枚举入口、authored 页、图谱归属</h4>
+      <p><b>① 枚举入口：agent 有，但被刻意压成"缩略地图"。</b>（<b>更正 9.4 原先"agent 没有枚举入口"的说法</b>）<code>wiki_read_page('index')</code> 会被服务端合成一段"索引概览"：intro ＋ 按类型分组（<code>## Entity (N)</code> …），每组列 <code>[[slug]] — summary</code>，而<b>每组上限 <code>wikiIndexAgentTopK = 20</code></b>；源码注释写着它的用途是让 agent "get a sense of the wiki's shape"，更深的探索应该走 <code>wiki_search</code>，压小则是为了控制喂给 LLM 的体积（<code>internal/agent/tools/wiki_tools.go:18-60</code>）。<b>完整清单只在 MCP 侧</b>：<code>wiki_index</code> 工具（"Browse the table of contents … grouped by type (summary, entity, concept, ...)"，<code>limit</code> 默认 50／最大 200，<code>internal/mcpserver/tools_wiki.go:47-53</code>）与 UI。<br>
+      ⇒ 而 <code>wiki_researcher</code> 的提示词<b>明确允许</b>走这条路：<code>Find an entry point with wiki_search, or read the index when the user requests an overview.</code> 所以设计是：<b>"要全貌"给缩略图，"要细节"走检索</b>——枚举在 agent 侧是<b>被截断的能力</b>。</p>
+      <p><b>② synthesis／comparison 谁写：专用 agent，不是编译。</b>编译不产这两类（实测 0／0，§9.3）；索引视图为它们预留分组；而能写它们的是 <code>wiki_write_page</code>，该工具只出现在 <b><code>builtin-wiki-fixer</code>（"维基修订"，agent_type <code>custom</code>、<code>kb_selection_mode: selected</code>，另带 <code>wiki_replace_text</code>／<code>wiki_rename_page</code>／<code>wiki_delete_page</code>／<code>wiki_read_issue</code>／<code>wiki_update_issue</code>）</b>。⇒ 它们是<b>"作者页"</b>：由人工或专用修订 agent 写；我们的三条路线都没权限，所以本批实验里不可能出现。</p>
+      <p><b>③ 图谱工具挂给谁：只挂在"智能推理"上，且按 KB 能力门控。</b><code>config/builtin_agents.yaml</code> 里只有 <code>builtin-smart-reasoning</code>（<code>rag-qa</code>）的 <code>allowed_tools</code> 含 <code>query_knowledge_graph</code>（顺带它也是唯一开了 <code>web_search_enabled: true</code> 的）；<code>builtin-wiki-researcher</code> 没有。前端 <code>tool-capabilities.ts</code> 写着 <code>query_knowledge_graph: { allOf: ['graph'] }</code>——<b>只有所选知识库暴露 <code>graph</code> 能力时这个工具才让勾</b>；而三条预设的 <code>kb_filter</code>（rag-qa→any_of[vector,keyword]／wiki-qa→any_of[wiki]／hybrid→any_of[vector,keyword,wiki]）<b>都没写 graph</b>。<br>
+      ⇒ 读法：图谱是<b>"可选增强"</b>——默认只搭在通用推理 agent 上，且要 KB 真建了图谱才生效；两条"检索路线"预设（wiki／hybrid）都没绑它。这也解释了 0048 那批实验里<b>图谱一次都没被调用</b>。</p>
+
+      <h3>10. 待办</h3>
+      <ul>
+        <li>hybrid 压到 30 轮复跑（拆"工具多"与"预算大"）——<b>未做</b>。</li>
+        <li><b>把 <code>WEKNORA_LANGUAGE</code> 设成 <code>en-US</code> 重编译一遍</b>（§9.2）：一刀切开"wiki 的词面吃亏来自翻译还是来自改写"——若英文页让 wiki 在 #4 上追平 smart，就是翻译的锅。这是原先"编译保留英文原文"那条待办的<b>正解</b>，不用动提示词。</li>
+        <li><b>把 <code>config.thinking</code> 打开（或把闭卷侧关掉）再对比一次</b>（§7.1 第二条）：现在"闭卷（带推理）vs 三臂（不带推理）"是个混淆对照。最小做法是<b>只改一个变量</b>——要么三臂开推理复跑、要么闭卷关推理重测；否则那条"不检索反而更准"的差距里，推理的贡献分不出来。做法与四格预估见 §7.3。</li>
+        <li>日志里查 <code>wiki_flag_issue</code> 的实际调用次数——<b>未做</b>。</li>
+        <li><b>把 <code>thinking</code> / <code>todo_write</code> 挂上复跑同一批题</b>：见 §7.3 的推荐（先做 C 格）——<b>暂缓</b>，建议与自建题集一起做。</li>
+        <li><s>查 <code>synthesis</code>／<code>comparison</code> 是谁生成的</s>——<b>已核（§9.5 ②）</b>：编译不产；能写的只有 <code>builtin-wiki-fixer</code>（"维基修订"专用 agent，带 <code>wiki_write_page</code> 等）。</li>
+        <li><code>internal/modelcontext/tool_policy.go</code> 细读（工具可见性／权限是怎么裁的）——<b>未做</b>。</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

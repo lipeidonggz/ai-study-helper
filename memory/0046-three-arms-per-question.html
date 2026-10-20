@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>0046 · 三臂逐题归因（30 题）· 先 4 跳，再 2／3 跳</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .muted { color: var(--muted); }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .no { color: #cf222e; font-weight: 600; }
+    pre { background: var(--code-bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+    .tbl-wide { font-size: 0.82em; }
+    .orig { background: var(--code-bg); border-left: 3px solid rgba(127,127,127,0.35); border-radius: 6px; padding: 8px 12px; margin: 8px 0; line-height: 1.65; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="page-head">
+      <h1>0046 · 三臂逐题归因（30 题）</h1>
+      <p class="subtitle"><b>一句话</b>：0045 记的是总账（五条路线、成本、外推到论文）；这一篇只做一件事——<b>把 wiki／smart-v3／hybrid 三臂在 30 道题上的失败与成功，一题一题拆开</b>，先 4 跳，再 2／3 跳。目的是搞清"差距到底出在链条的哪一环"，也是"融合三条路线"这件事的前置功课。</p>
+      <p class="subtitle">状态：<span class="muted">△ 进行中（4 跳已写；2／3 跳待补）</span> · 现场时间：2026-10-12 · 上游：<a href="0045-musique-retrieval-experiment.html">0045</a>（实验总账）／<a href="0044-weknora-retrieval-outline.html">0044</a>（提纲）</p>
+      <p class="subtitle"><a href="index.html">← 返回记忆主页</a> · 数据：<code>data/tmp/weknora-musique/qa-{wiki-v2,smart-v3,hybrid-v2}*.jsonl</code>（各 3 轮）</p>
+    </header>
+
+    <section class="card">
+      <h2>第一部分 · 思路简要描述 ＋ 结论</h2>
+
+      <h3 style="margin-top:16px;">0. 这篇要干什么（框架与口径）</h3>
+      <p><b>为什么单独成篇</b>：0045 已经 18 万字节，逐题归因放进去读不动；而且 0045 的 §7.17（4 跳专项）用的是<b>单轮</b>数据，其中一条结论<b>已被三轮均值推翻</b>（见 §2）——这篇用三轮数据重做，并把"每题卡在哪一环"当成主线。</p>
+      <p><b>归因三问</b>（每道题都按这三问过）：</p>
+      <table>
+        <thead><tr><th>问</th><th>看什么</th></tr></thead>
+        <tbody>
+          <tr><td><b>① 证据到位了吗</b></td><td>链条断在第几跳——是入口没找对，还是中间实体选错，还是最后一跳没做</td></tr>
+          <tr><td><b>② 答案选对了吗</b></td><td>实体选错／层级没换（州→城市、城市→县）／形式不对（答成句子）／干脆放弃</td></tr>
+          <tr><td><b>③ 代价多少</b></td><td>工具调用次数与是否"点火"（多搜不收敛）</td></tr>
+        </tbody>
+      </table>
+      <p><b>口径</b>：三臂各 3 轮 × 10 题／档（共 90 题次／臂）；F1 按 SQuAD 式归一化（词级，部分正确给分）；"工具数"一列取自评测脚本对 SSE 事件的计数，<b>原始记录按事件计、是真实调用次数的 2 倍</b>（见 §1 表下的口径更正）；判定"对"用 F1 ≥ 0.5 当近似线（严格 EM 另列在主表）。</p>
+
+      <h3 style="margin-top:16px;">0.5 先说一条口径：这份成绩单里有多少是模型记忆（✅ 2026-10-12 补测）</h3>
+      <p><b>为什么要先讲这个</b>：MuSiQue 论文用「Q-only 基线 4.6 F1」（只给问题、不给上下文，等价于闭卷）证明它的题不能靠记忆作答。这条护栏是 2022 年的模型卡出来的。我们拿同一批 30 题、与该臂作答模型相同的模型做了闭卷基线，结论是：<b>护栏已经不在了</b>。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>路线（同 30 题）</th><th>总 F1</th><th>EM</th><th>2 跳</th><th>3 跳</th><th>4 跳</th><th>空答率</th></tr></thead>
+        <tbody>
+          <tr><td><b>闭卷 · 直连 API flash（3 轮）</b></td><td><b>0.431</b></td><td>0.389</td><td>0.688</td><td>0.367</td><td>0.240</td><td>7%</td></tr>
+          <tr><td>闭卷 · 直连 API pro（3 轮）</td><td>0.508</td><td>0.444</td><td>0.711</td><td>0.422</td><td>0.390</td><td>11%</td></tr>
+          <tr><td>闭卷 · WeKnora 版 flash（3 轮，<b>已弃用</b>）</td><td>0.207</td><td>0.144</td><td>0.164</td><td>0.352</td><td>0.103</td><td>4%</td></tr>
+          <tr><td>经典 RAG（B 臂）flash（3 轮）</td><td>0.331</td><td>0.244</td><td>0.562</td><td>0.257</td><td>0.173</td><td>0%</td></tr>
+          <tr><td>Agentic 块 smart-v3 ／ wiki ／ hybrid（3 轮）</td><td>0.529／0.523／<b>0.559</b></td><td>0.456／0.467／0.489</td><td>0.826／0.764／0.811</td><td>0.492／0.470／0.669</td><td>0.268／0.335／0.198</td><td>0%</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>同模型对齐后，agent 的净增益只有 +0.09~+0.13</b>：闭卷 flash 0.431 对三个 agent 臂 0.523~0.559（逐题平均 F1 差：wiki <b>+0.092</b>、smart-v3 <b>+0.098</b>、hybrid <b>+0.128</b>）。逐题看：wiki 与闭卷<b>都对 15 题</b>，只有开卷对 7 题、只有闭卷对 1 题。</li>
+        <li><b>经典 RAG 打不过纯记忆</b>：0.331 &lt; 0.431（逐题平均差 <b>−0.101</b>）。有 <b>8 道题"只有闭卷能对、经典 RAG 三轮全错"</b>，反向只有 2 道。⇒ 在这份语料上，"检索 top-10 ＋ 一次生成"是<b>负贡献</b>——塞进来的干扰段把模型带偏了。这与 §2 读数④、以及 0045 里"证据召回上去、F1 反而降"是同一件事。</li>
+        <li><b>换成更强的模型，记忆就把差距填平了</b>：pro 闭卷 0.508，与 flash 的三个 agent 臂（0.52~0.56）基本持平（逐题差 +0.015~+0.052，噪声量级）。⇒ 在这批题上，"上 agent 检索"与"换个更强模型"带来的提升量级相近。<b>没跑 pro ＋ agent</b>，所以这只能当"记忆上界"的参照，不能反推 pro 开卷能得多少。</li>
+      </ul>
+      <p><b>闭卷两行的参数口径（两模型完全一致）</b>：无系统提示；<code>temperature=0.7</code>、<code>max_tokens=16384</code>、<b>内部推理默认开启</b>（<code>thinking</code> 关闭是最初探针用的，结果已被完整批次整轮覆盖，不在表内）。唯一变量是模型本身：实测 90／90 行都带 <code>reasoning_tokens&gt;0</code>（flash 中位 2940、pro 中位 1131），耗时中位 19.1s／25.4s、最大 120.9s／373.0s，撞 16384 上限导致空答 6／90 与 10／90。⇒ <b>pro 得分更高、但推理 token 只有 flash 的一半不到</b>，这是模型自身风格差异，不是参数差异。</p>
+      <p class="muted">两个必须记住的坑：① <b>参数敏感</b>——该模型先产出内部推理，<code>max_tokens=4096</code> 时难题会把预算全烧在推理上、正文为空（#21 实测空答），<code>reasoning_effort</code> 设 low／medium／high 都无效，<b>给到 16384 才正常收尾</b>；关掉推理则秒答但基本瞎猜（#21 答 <code>Tyler</code>）。② <b>WeKnora 版闭卷不可用</b>（0.207）：harness 注入了系统提示与 KB 语境，模型会吐 <code>Let me search the knowledge base</code>，还编出 <code>&lt;kb doc=…&gt;</code> 引用；基准只认直连版。</p>
+      <p><b>怎么读后面的表</b>：绝对 F1 <b>不能</b>当"知识库能力"——它含一大块模型记忆。§2 的"wiki 领先薄"、§3 的逐题成败、以及最后"三条路线能不能融合"的结论，都要在<b>同模型闭卷基线（flash 0.431）</b>上做差来读。§3.1 的 #21 是最好的例证：闭卷 flash 三轮 <code>空／Chilton／Green Bay</code>、闭卷 pro 三轮 <code>Green Bay／Chilton／Green Bay</code>——<b>金答案与 smart 臂那个错答 <code>Chilton</code>，两个模型都能凭记忆给出</b>，这题谁对谁错基本是掷骰子。</p>
+
+      <h3>1. 4 跳：矩阵（10 题 × 3 臂 × 3 轮）</h3>
+      <p>格式 <code>r1/r2/r3 → 均值</code>；工具数三列分别对应 wiki／smart／hybrid 的三轮值。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>#</th><th>问题（简）</th><th>金答案</th><th>wiki</th><th>smart-v3</th><th>hybrid</th><th>工具数 w／s／h（三轮）</th></tr></thead>
+        <tbody>
+          <tr><td>21</td><td>县治</td><td>Green Bay</td><td>0/1/1 → <b>0.67</b></td><td>1/0/0 → 0.33</td><td>0/0/1 → 0.33</td><td>12/28/16 ・ 24/92/24 ・ 22/30/20</td></tr>
+          <tr><td>22</td><td>地区建立年份</td><td>1932</td><td>1/1/1 → <b>1.00</b></td><td>1/0/1 → 0.67</td><td>0/1/0 → 0.33</td><td>20/14/20 ・ 44/142/8 ・ 16/22/54</td></tr>
+          <tr><td>23</td><td>德国神父的州</td><td>Saxony-Anhalt</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>10/16/22 ・ 2/4/2 ・ 4/4/6</td></tr>
+          <tr><td>24</td><td>新币与独立宣言</td><td>the dynasty regrouped…</td><td>0/0/0.06 → 0.02</td><td>0/0/0 → 0</td><td>0/0/0.08 → 0.03</td><td>58/10/66 ・ 8/6/74 ・ 8/8/48</td></tr>
+          <tr><td>25</td><td>与某城接壤</td><td>Rio Linda</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>32/14/16 ・ 8/8/<b>122</b> ・ <b>114</b>/8/20</td></tr>
+          <tr><td>26</td><td>两处差异</td><td>two cities</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>22/18/18 ・ 8/12/8 ・ 30/52/30</td></tr>
+          <tr><td>27</td><td>最湿年份</td><td>1905</td><td>1/1/1 → <b>1.00</b></td><td>1/1/1 → <b>1.00</b></td><td>1/0.67/1 → 0.89</td><td>14/12/10 ・ 4/4/4 ・ 4/4/4</td></tr>
+          <tr><td>28</td><td>与 Sacramento 接壤</td><td>Rio Linda</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>0/0/0 → 0</td><td>22/20/94 ・ <b>150/168/162</b> ・ <b>94/130/146</b></td></tr>
+          <tr><td>29</td><td>成为首府的年份</td><td>1839</td><td>1/0/1 → <b>0.67</b></td><td>1/1/0 → <b>0.67</b></td><td>1/0.06/0.05 → 0.37</td><td>18/24/18 ・ 8/8/4 ・ 8/8/8</td></tr>
+          <tr><td>30</td><td>与某县接壤</td><td>Presque Isle County</td><td>0/0/0 → 0</td><td>0.02/0.02/0.01 → 0.02</td><td>0.02/0.02/0.04 → 0.03</td><td>16/18/<b>88</b> ・ 58/54/118 ・ 54/44/32</td></tr>
+        </tbody>
+      </table>
+      <p><b>三臂 4 跳均值</b>：wiki <b>0.335</b> ＞ smart-v3 0.268 ＞ hybrid <b>0.198</b>。</p>
+      <p class="muted">⚠️ <b>更正 0045 §7.17</b>：那一节用单轮（r1）得出"4 跳是 smart-v3 <b>唯一反超</b> wiki 的档位（0.402 vs 0.300）"。<b>三轮均值下这条反转</b>：wiki 反超 smart，且 hybrid 在这一档最差。</p>
+
+      <p class="muted">⚠️ <b>工具数口径更正（2026-10-12）</b>：上表「工具数」一列来自评测脚本对 SSE 事件的计数，而 WeKnora 对<b>同一次工具调用会同时发两种事件</b>，所以列里的数是<b>真实调用次数的 2 倍</b>。两条核对：① 结构化核对——wiki／smart-v3／hybrid 九个跑批文件共 270 行，<code>len(tool_calls) == 2 × len(tool_events)</code> <b>无一例外</b>；② 服务端日志核对——逐次数 <code>execute_start</code>，wiki #21 三轮真实为 6／14／8 次（表里 12／28／16）、wiki #9 为 17 次（0045 记 34）、smart-v3 #28 为 75 次（表里 150，且它 30 轮撞的是 <code>max_iterations</code> 而不是调用数）。<b>排名与结论不受影响，绝对值一律要除以 2</b>；0045 中的工具数是同一口径。是否把两张表的数值直接改成真实次数，待定。</p>
+
+      <h3>2. 4 跳：四条读数</h3>
+      <table class="tbl-wide">
+        <thead><tr><th>#</th><th>读数</th><th>支撑</th></tr></thead>
+        <tbody>
+          <tr><td>①</td><td><b>真正被答对的只有 4 道</b>（#21／#22／#27／#29）</td><td>#23／#25／#26／#28 三臂全零；#24／#30 只有 0.02–0.08 的残分（靠词面蹭到）</td></tr>
+          <tr><td>②</td><td><b>wiki 的领先几乎全挂在 #21、#22 两道题上</b></td><td>wiki − smart 的差： #21 <b>+0.34</b>、#22 <b>+0.33</b>，其余题目 ≤ ±0.02 ⇒ "4 跳 wiki 最强"的样本基础很薄</td></tr>
+          <tr><td>③</td><td><b>轮次摇摆是常态</b>——10 道题没有一道"某臂稳定赢"</td><td>#21 wiki 0/1/1 对 smart 1/0/0（<b>完全互补</b>）；#22 smart 1/0/1；#29 hybrid 1/0.06/0.05（那一轮它答的是链条描述）</td></tr>
+          <tr><td>④</td><td><b>工具数把"点火"标出来了</b>：多搜但不收敛</td><td>#28 smart 150/168/162、hybrid 94/130/146；#25 smart 8/8/<b>122</b>、hybrid <b>114</b>/8/20；#30 wiki 16/18/88、smart 58/54/118；#22 smart 44/<b>142</b>/8</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3. 4 跳：逐题归因（10 题）</h3>
+      <p>一题一小节：先列 <b>英文原题 / 中文翻译 / 正确答案</b>，再给三臂三轮表现与卡点判定；本节末尾是卡点分类表。（逐题细拆中，已细拆的标 ✅。）</p>
+
+      <h4>3.1 ✅ #21 ｜ 接壤县的县治（金答案 Green Bay）</h4>
+      <p><b>英文原题</b>：What is the seat of the county sharing a border with the county in which J. P. Hayes was born?</p>
+      <p><b>中文翻译</b>：J. P. Hayes 出生的那个县，与它接壤的县，其<b>县治</b>（seat）是哪里？</p>
+      <p><b>正确答案</b>：<b>Green Bay</b></p>
+      <p><b>官方四跳分解</b>：J. P. Hayes → 出生地 <code>Appleton</code> → 属 <code>Outagamie County</code> → 与 <code>Brown County</code> 接壤 → Brown 的县治 <code>Green Bay</code>。</p>
+
+      <p><b>四段支撑原文（全文照抄）</b>：这四段是 MuSiQue <b>官方标注</b>的支撑段落（上游 <code>question_decomposition</code> 的 <code>paragraph_support_idx</code>），对应 <code>corpus/</code> 下四个同名文件，<b>正文一字未改</b>（加粗为本文所加）。顺序按官方 hop 1→4 排——<code>supporting_titles</code> 本身是无序集合，逐跳对应关系已与上游下标核对一致。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · 出生地</b> ｜ <code>J. P. Hayes.md</code></p>
+          <div class="orig"># J. P. Hayes<br><br>Hayes was born and raised in <b>Appleton, Wisconsin</b>. He attended the University of Texas at El Paso, where he was a member of the golf team. He majored in marketing and graduated in 1988. In 1989, he turned professional.</div>
+          <p class="muted"><b>中文翻译</b>：海斯在威斯康星州阿普尔顿出生并长大。他就读于德克萨斯大学埃尔帕索分校（UTEP），在校期间是该校高尔夫球队的成员。他主修市场营销，于 1988 年毕业。1989 年，他转为职业球员。</p>
+          <p>说明：四段里<b>唯一一句直陈关系</b>——「born and raised in Appleton」；后两句（大学、转职业）与题目无关。注意它只给到<b>城市</b>、<b>没给县</b>：县这一层要靠下一段才接得上。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 阿普尔顿 → 奥塔加米县</b> ｜ <code>John C. Petersen.md</code></p>
+          <div class="orig"># John C. Petersen<br><br>John C. Petersen (November 2, 1842 – July 10, 1887) was an American butcher and farmer <b>from Appleton, Wisconsin</b> who served as a member of the Wisconsin State Assembly <b>from Outagamie County</b>. He was elected in 1878 as a Greenbacker, and was re-elected the next year as a "Greenback Democrat" (even though he was opposed by a Democrat).</div>
+          <p class="muted"><b>中文翻译</b>：约翰·C·彼得森（1842 年 11 月 2 日 — 1887 年 7 月 10 日）是一位来自威斯康星州阿普尔顿的美国屠夫兼农民，曾任威斯康星州众议院奥塔加米县议员。他于 1878 年以绿背党人（Greenbacker）身份当选，次年又以「绿背民主党人」身份连任（尽管当时有一名民主党人反对他）。</p>
+          <p>说明：全语料里<b>唯一</b>把「阿普尔顿」与「奥塔加米县」放进同一句的段落（Appleton 只出现在 2 篇、Outagamie 只出现在 2 篇，交集就是这一段）。可它靠的是<b>同一个人的两重身份</b>（家住阿普尔顿 ＋ 代表奥塔加米县），仍然是<b>同句共现，不是「A 属于 B」</b>；而且 Petersen 是 19 世纪的屠夫兼农民、绿背党议员，与题目毫无关联，属于典型"过路证人"——读到了也不像证据。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 布朗县 ↔ 奥塔加米县</b> ｜ <code>Pulaski High School.md</code></p>
+          <div class="orig"># Pulaski High School<br><br>Pulaski High School is a public high school in Pulaski, Wisconsin, in <b>Brown County</b>, Wisconsin (school district also serves parts of Shawano, <b>Outagamie</b> and Oconto counties), that serves students in grades 9 through 12. Its mascot is the Red Raider.</div>
+          <p class="muted"><b>中文翻译</b>：普拉斯基高中是威斯康星州普拉斯基（位于威斯康星州布朗县）的一所公立高中（其学区还覆盖肖诺县、奥塔加米县和奥康托县的部分地区），招收 9 至 12 年级学生。其吉祥物是「红色袭击者」（Red Raider）。</p>
+          <p>说明：这是整题<b>唯一的桥</b>，也是"弱桥"的出处——两县同现的媒介是「<b>学区覆盖</b>」，而<b>学区可以跨县</b>，所以这句推不出「两县接壤」。但上游标注把这一跳的关系直接写成 <code>shares border with</code>：<b>标注侧用自己的世界知识，把一段"共现"当成了"接壤"</b>。证据形态与它要断言的关系<b>不同构</b>——这是整条标注链最薄的一环。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 绿湾 ↔ 布朗县</b> ｜ <code>Jerome Quinn.md</code></p>
+          <div class="orig"># Jerome Quinn<br><br>Born in <b>Green Bay</b>, Wisconsin, Quinn was a realtor and served on the Green Bay Common Council, the <b>Brown County</b>, Wisconsin Board of Supervisors, the local Board of Education, and the Wisconsin State Assembly from 1955 until 1973. He was a Republican.</div>
+          <p class="muted"><b>中文翻译</b>：奎因出生于威斯康星州绿湾，是一名房地产经纪人，曾先后任职于绿湾市议会、威斯康星州布朗县监事会、当地教育委员会，并于 1955 年至 1973 年任威斯康星州众议院议员。他是一名共和党人。</p>
+          <p>说明：绿湾与布朗县的联系同样来自<b>履历罗列</b>（出生地 ＋ 曾任布朗县监事会成员），也是一句<b>共现</b>；而<b>全语料没有一句说「绿湾是布朗县的县治」</b>（<code>county seat</code> 全库只命中 4 篇：Mecklenburg County／Sant Martí d'Empúries／Springfield, Illinois／Tallahassee, Florida，全与本题无关）。所以 hop 4 的「县治」关系同样是<b>世界知识补的</b>。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>是：海斯生于阿普尔顿（直陈）；阿普尔顿与奥塔加米县同现；布朗县与奥塔加米县同现（靠学区）；绿湾与布朗县同现。<b>「接壤」与「县治」这两个关系词，一次都没落到这四个实体上</b>——它们是标注者用世界知识补出来的。</p>
+
+      <p><b>▸ 现象：三臂三轮表现</b></p>
+      <p><b>三臂三轮</b>：wiki <code>Appleton</code> ✗ → <code>Green Bay</code> ✓ → <code>Green Bay</code> ✓；smart <code>Green Bay</code> ✓ → 〈"知识库缺少这条链所需的链接文档（Outagamie County…）"〉✗ → <code>Chilton</code> ✗；hybrid <code>Appleton</code> ✗ → 〈"知识库似乎没有 Outagamie 邻县的信息"〉✗ → <code>Green Bay</code> ✓。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 三轮服务端日志逐步核过）</p>
+      <p><b>三轮的前两三步完全一样</b>：都先用 <code>wiki_search</code> 找到「J. P. 海斯」→ 读该页与「阿普尔顿」页 → 拿到 hop 1（海斯生于阿普尔顿）。<b>分叉全在 hop 2→3</b>：怎么从「阿普尔顿属奥塔加米县」走到「与奥塔加米县接壤的那个县」。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（括号内为真实调用次数）</th><th>关键差异</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>r1</td>
+            <td>搜「J\. P\. Hayes」→ 搜「Hayes」→ 读 [j-p-hayes, appleton] → 读海斯原文 → 搜「Outagamie|Calumet|Winnebago County|county seat」→ <b>只读「奥塔加米县」页</b> → 作答（6 轮、6 次）</td>
+            <td><b>拿到 hop 2 就落点</b>，没再去找接壤县</td>
+            <td><code>Appleton</code> ✗</td>
+          </tr>
+          <tr>
+            <td>r2</td>
+            <td>搜「J. P. Hayes」→ 读 summary → 读 appleton → 搜「Outagamie County」<b>（0 命中）</b>→ 搜「county seat」（命中 Mecklenburg 等无关页）→ 搜「Wisconsin county」<b>（0）</b>→ 读「威斯康星州」页 → 读海斯原文 → <b>搜「Appleton」命中 Petersen 页</b>，才拿到通往「奥塔加米县」的入口 → 读「奥塔加米县」→ 搜「Calumet|Winnebago|Brown County」→ 搜「Brown County」→ 读「布朗县」页 → 读 Pulaski 原文块（14 次）</td>
+            <td>入口绕了远路，但<b>把「邻县」这条线拉到底</b></td>
+            <td><code>Green Bay</code> ✓</td>
+          </tr>
+          <tr>
+            <td>r3</td>
+            <td>搜「J\. P\. Hayes」→ 搜「Hayes」→ 读 [j-p-hayes, appleton] → <b>搜「Outagamie|奥塔加米|Calumet|Winnebago」（中英混写）</b> → 读 [wisconsin, john-c-petersen] → <b>一次批量读 [outagamie-county, brown-county, calumet-county, winnebago-county]</b> → 搜「county seat|县治|seat of」→ 搜「Green Bay|Appleton」（8 次）</td>
+            <td><b>把候选邻县整体拉下来再筛</b></td>
+            <td><code>Green Bay</code> ✓</td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>r1 那轮是题目理解没到位</b>：题干是两层嵌套（出生县 → 与它接壤的县 → 该县县治），r1 把 <code>Appleton</code>（出生县自己的县治）当成了答案，"接壤"那一跳丢了。同 prompt 同模型三轮给出三个不同答案（<code>Appleton</code>／<code>Green Bay</code>／<code>Green Bay</code>）——这类抖动是 LLM 的常态，只影响"哪一轮蒙对"，不必过度解读。</li>
+        <li><b>需要的桥页当时就在 r1 自己的搜索结果里</b>：r1 第 4 次搜索（<code>Outagamie|Calumet|Winnebago County|county seat</code>）返回 10 条，其中第 5 条就是「普拉斯基高中」页，摘要片段写着「位于<b>布朗县</b>…其学区还覆盖…<b>奥塔加米县</b>」——两个县同现的那一句。r1 只打开了「奥塔加米县」页，没读它。⇒ 这轮更像<b>该读的没读</b>，不是检索没给。</li>
+        <li><b>两个实现细节放大了摇摆</b>：① <code>wiki_search("Outagamie County")</code> 在 r2 里 <b>0 命中</b>——因为「奥塔加米县」页<b>没有登记英文别名</b>（「布朗县」有 <code>Brown County</code>、「绿湾」有 <code>Green Bay</code>，它没有），r3 靠中英混写查询绕开了这个坑；② r3 批量读的 <code>entity/calumet-county</code>、<code>entity/winnebago-county</code> <b>这两页不存在</b>（全库 4094 页里都没有），读回来是空的——对模型来说，「邻县页读不到」和「邻县不存在」是同一个信号。</li>
+      </ul>
+
+      <p><b>⇒ D1 小结</b>：三轮的差别不在库（同一份 Wiki、同一批页面），也不在轮数（6／14／8 次都收了尾），而在<b>这一轮有没有把「接壤县」当成一个必须确定的对象去办</b>——r1 没办（把题面的嵌套读丢，直接拿 hop 2 的答案收场），r2 绕了远路把它办到底，r3 一次批量读候选县页、最省。而之所以办得这么飘，根在证据层：库里没有能<b>确定</b>唯一答案的关系句（5 个合法解、库里只覆盖 2 个），于是每轮都在用记忆填那个空缺——r1 填的是 hop 2 的答案，r2／r3 填的是 Brown→Green Bay。⇒ 这与 0045 §7.11／§7.12 记的「缺判停标准」是同类问题的两面：那边是<b>停不下来</b>（#28 换了 30 轮假设），这边是<b>停得太早、落点不稳</b>；共同机制是<b>没有可判断的充分性标准</b>。</p>
+      <p><b>▸ 过程分析 ②：另两臂与跨臂的共同点</b>（未逐轮深拆，只记观察）</p>
+      <ul>
+        <li><b>答 <code>Appleton</code> 的不止 wiki</b>：hybrid r1 也答了它，同样是“本县县治”（hop 2 的答案），没有跨到接壤县。</li>
+        <li><b>两轮“放弃”其实判断正确</b>：smart r2、hybrid r2 都说“知识库缺 Outagamie 邻县的信息”——按语料实况这句话成立（语料里没有县界这一层知识）。</li>
+        <li><b>smart r2 答了 <code>Chilton</code></b>（Calumet 县治）：这是开卷臂里唯一一次冒出“按题面合法、按标注错”的答案；它的复现机制见归因 ③。</li>
+        <li><b>三臂在这题上对错互补、谁都不稳</b>（wiki 0/1/1、smart 1/0/0、hybrid 0/0/1）——同 prompt 同模型跨轮不一致，属 LLM 常态。</li>
+      </ul>
+
+      <p><b>▸ 归因 ①：证据形态——知识库只提供“共现”</b></p>
+      <ul>
+        <li><b>四跳里只有第一跳是语料直说的</b>：hop 1「Hayes was born and raised in <b>Appleton, Wisconsin</b>」是直陈事实；hop 2／3／4 都只是 <b>同句共现</b>——Petersen 那句把 Appleton 与 <b>Outagamie County</b> 并列、Pulaski 那句把 <b>Brown County</b> 与 <b>Outagamie</b> 并列、Quinn 那句把 <b>Green Bay</b> 与 <b>Brown County</b> 并列，<b>没有一句把关系说出口</b>。</li>
+        <li><b>两个关系词全语料都没落到这几个实体上（已核）</b>：<code>county seat</code> 在 572 段里只命中 4 篇（Mecklenburg County／Sant Martí d'Empúries／Springfield, Illinois／Tallahassee, Florida），<b>与 Brown、Green Bay 无关</b>；也没有任何一句把 Outagamie 与 Brown 说成接壤。也就是说，这题的"桥"是标注者用世界知识补出来的，语料只提供了共现线索。</li>
+        <li><b>hop 3 是弱桥</b>：唯一把 Brown 与 Outagamie 放在一起的句子，说的是"<b>学区也服务 Outagamie 等县的部分地区</b>"——而<b>学区可以跨县</b>，它并不证明"两县接壤"。这条链的中间跳靠的是"同句共现"，不是"县界关系"。</li>
+      </ul>
+
+      <p><b>▸ 归因 ②：题目层——题面有几个合法解</b>（✅ 外部核过）</p>
+      <p><b>接壤县与它们的县治</b>（✅ 外部核过：Wikipedia「Outagamie County, Wisconsin」的 Adjacent counties 段 ＋ 各县条目，访问 2026-10-12）：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>接壤县</th><th>方位</th><th>县治</th><th>在 572 段语料里？</th></tr></thead>
+        <tbody>
+          <tr><td>Shawano County</td><td>北</td><td>Shawano</td><td>✅ 1 篇（Pulaski 学区那串括号里）</td></tr>
+          <tr><td><b>Brown County</b></td><td>东</td><td><b>Green Bay</b> ← 金标准</td><td>✅ 2 篇（Jerome Quinn、Pulaski）</td></tr>
+          <tr><td>Calumet County</td><td>东南</td><td>Chilton</td><td>❌ 0 篇（<code>Calumet</code> 全库 0 次；<code>Chilton</code> 只在 <code>Brian Song</code> 里当人名）</td></tr>
+          <tr><td>Winnebago County</td><td>西南</td><td>Oshkosh</td><td>❌ 0 篇</td></tr>
+          <tr><td>Waupaca County</td><td>西</td><td>Waupaca</td><td>❌ 0 篇</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">另：Outagamie 自己的县治是 <code>Appleton</code>，且 Appleton 的市域部分跨进 Calumet 与 Winnebago 两县。<b>⇒ 五个合法答案里，语料只覆盖了两个</b>（Brown、Shawano）；另外三个县在 572 段里<b>一次都没出现</b>。所以"只用知识库"这条路<b>连题面都无法穷举</b>——这不是模型的问题，是语料与题面的关系问题。</p>
+      <ul>
+        <li><b>标注把"多解之一"当成了唯一解</b>：题面问的是"与出生县接壤的那个县"，而现实里 Outagamie 接壤 5 个县，各自县治都算合法答案（<code>Green Bay</code>／<code>Chilton</code>／<code>Oshkosh</code>／<code>Shawano</code>／<code>Waupaca</code>）；标注链只认 Brown，把答案钉死在它上面——<b>而题面本身没有这个约束</b>。</li>
+      </ul>
+
+      <p><b>这句话到底怎么读？</b>——<b>两种读法都通，而且两种都推不出金答案</b>：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>读法</th><th>推出的地区</th><th>是金答案（沙特）吗</th></tr></thead>
+        <tbody>
+          <tr><td><b>① 同时正北于两者</b>：north of｛中东，波斯湾｝</td><td>中东正北 ≈ 土耳其（窄读「中东」则为黎巴嫩／叙利亚）；波斯湾正北 = 伊朗；<b>没有地区能同时满足</b></td><td>✗</td></tr>
+          <tr><td><b>② 中东正北 ＋ 临波斯湾</b>（把 and 读成第二个定位条件）</td><td>中东正北的国家都不临波斯湾（土耳其临黑海与地中海，黎巴嫩／叙利亚不临）</td><td>✗</td></tr>
+          <tr><td><b>③ 把指代强行换成"也门以北 ＋ 濒临波斯湾"</b>（＝用世界知识改写题面，不是题面的解）</td><td><b>沙特阿拉伯</b>（＝标注认定的那个）</td><td>✗ <b>题面没给这个指代</b>——推出来的东西不算"题面的答案"</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 表下结论：<b>这道题在"题面＋证据块"的意义上没有解</b>——凡能答出 1932 的路径，都要先把题面改掉。</p>
+      <p>读法 ③ 只是<b>解释标注从哪来</b>，不是题面的解。它的依据：hop 3 的支撑段原文正是「bordering the Persian Gulf and the Red Sea, <b>north of Yemen</b>」——「也门以北 ＋ 濒临波斯湾」精确指向沙特。而题面里那个位置锚被换成了「the region where [Israel] is located and the Persian Gulf」。⇒ 很可能原始单跳问题是「哪个国家位于<b>也门以北</b>且濒临波斯湾」，合成时位置锚被桥实体替换掉了——上游 hop 3 的文本本身就带占位符（<code>what region lies immediately to the north of #2 and the persian gulf</code>），是机器拼出来的句子。</p>
+      <p class="muted">⇒ 所以这题不是「模型没读懂」，而是<b>不存在一种读法能让金答案成立</b>：三臂的错法各不相同（锚到内志／波斯湾以北／海湾诸国），其实都是在给一个无解的句子找解。</p>
+      <p><b>▸ 为什么会造出这样的句子：MuSiQue 的生产机制</b>（✅ 论文原文核实，arXiv 2108.00573）</p>
+      <ul>
+        <li><b>最终问句是人工写的</b>（S7 “Crowdsource Question Compositions”）：论文原话是 workers composed <b>coherent</b> questions from our final DAGs of single-hop questions——众包工人在 MTurk 上，按一张"单跳问题 DAG"写出<b>通顺</b>的一句话（2／3／4 跳分别付 25／40／60 美分）；质检方式是每批抽 10–20 条人工看 ＋ 邮件反馈。</li>
+        <li><b>但骨架是机器拼的</b>（S2 “Find Composable Single-hop Pairs”）：拼接条件只有三条——(i) <code>a₁</code> 是命名实体、且<b>出现在</b> <code>q₂</code> 里；(ii) <code>a₂</code> 不在 <code>q₁</code> 里；(iii) 两段不同。<b>只要求"实体出现"，不检查关系语义</b>——"正北"这类错就是在这里注入的。</li>
+        <li><b>跳问题本身带占位符</b>：本条 hop 3 的原文是 <code>what region lies immediately to the north of #2 and the persian gulf</code>——<code>#2</code> 是他们的图表示，不是自然问句；工人拿到的是图（Fig. 3 的标注界面里能看到分解图与对应段落），任务只是把它缝成一句话。</li>
+        <li><b>质检射程不覆盖"关系是否正确"</b>：MuSiQue 的核心合格判据（条件 (2)）测的是"不给上下文／遮掉上一跳答案后能否答出"，即<b>必要性</b>；它既不检查跳间关系是否成立，也不检查答案是否唯一。</li>
+      </ul>
+      <p>⇒ 合起来看：<b>人工只负责"把机器拼出的骨架写通顺"，结构错误在拼接环节就已注入，而质检射程不覆盖语义与地理正确性</b>。所以这类"语法没毛病、语义说不通"的题会成批出现，不是个案疏忽——#21 的"多解"与 #22 的"方位错配"，是同一机制的两个不同表现。</p>
+      <p><b>▸ 归因 ③：机制——这题的答案为什么不可归因</b></p>
+      <p><b>这题要答对，需要哪几层知识？</b>把"知识库给的知识"和"世界知识"并排摆开，看模型各自拿去做了什么：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>知识来源 · 层次</th><th>在 #21 上的内容</th><th>知识库里有吗</th><th>模型拿它做了什么</th><th>事后能验证吗</th></tr></thead>
+        <tbody>
+          <tr><td><b>知识库 · 事实</b></td><td>海斯生于阿普尔顿；阿普尔顿与奥塔加米县同现；布朗县与奥塔加米县同现（学区覆盖）；绿湾与布朗县同现</td><td>✅ 四段支撑原文</td><td>检索、读页、引用</td><td>✅ 可查（有原文与出处）</td></tr>
+          <tr><td>世界知识 · L1 术语与指代</td><td>county＝县、seat＝县治、"# J. P. Hayes" 是人名</td><td>部分（标题给了实体）</td><td>读懂题目</td><td>❌ 无法分离（否则读不了题）</td></tr>
+          <tr><td>世界知识 · <b>P 题面预设</b></td><td>"一个县通常有多个接壤县" ⇒ "<b>the</b> county sharing a border with…" 的定指并不唯一</td><td>❌ 语料没有"县界"这一层</td><td>几乎没有一次主动做；本可用来判断"题面有多个合法解"</td><td>✅ 可外部核（见上表）</td></tr>
+          <tr><td>世界知识 · <b>L2 关系补齐</b></td><td>"学区覆盖奥塔加米县" ⇒ "两县接壤"（hop 3 的桥）</td><td>❌ 全库没有一句说两县接壤</td><td>补上中间那一跳</td><td>❌ 不可查（文本没写）</td></tr>
+          <tr><td>世界知识 · <b>L3 实例与答案</b></td><td>Outagamie 的邻居与各自县治；Green Bay ／ <code>Chilton</code> 本身</td><td>❌ 5 个邻居里语料只覆盖 Brown、Shawano</td><td>直接给出答案（含错答 <code>Chilton</code>）</td><td>❌ 不可查（只能用闭卷差分估，见 §0.5）</td></tr>
+        </tbody>
+      </table>
+      <p>五层并排看，这题的结论很干净：<b>知识库只提供"共现"，世界知识提供"关系"和"实例"，而"接壤""县治"这两个关系词全库一次都没落到这四个实体上</b>。于是：① 链条中段（hop 3）是 L2 补出来的、不是读出来的 → <b>E 弱桥</b>；② 题面的唯一性预设（P）在语料里既无法证实也无法证伪，一旦用世界知识检查就发现 5 个合法解 → <b>D 题面多解</b>；③ 这题闭卷也能答（L3，§0.5 量到纯记忆 0.431~0.508）→ 它的"答对"里有多少是读出来的、多少是记出来的，<b>不可分离</b>。</p>
+      <p><b>一个可复现的旁证</b>：<code>Chilton</code> 在三处独立出现（smart r2、闭卷 flash r2、闭卷 pro r2）。吐出它必须同时用 <b>P</b>（先意识到接壤县不止一个）和 <b>L3</b>（知道 Calumet 与 Outagamie 相邻、且 Calumet 县治是 Chilton）——所以它不是随机错，而是"知识库里没有、模型记忆里有"时的自然输出。</p>
+
+      <p><b>▸ 归因 ④：结论</b></p>
+      <p><b>这题不是“落点漂”</b>，而是<b>“桥接那一跳的证据形式不支撑关系”＋题面本身非唯一解</b>（这一条推翻了 0045 §7.17 对它的归类）。⇒ 新增一类卡点：<b>E 弱桥</b>（中间跳靠同句共现，而不是权威关系）；这题同时命中 <b>D</b>（题面多解）。⇒ <b>证据只够让人猜，不够让人定</b>。</p>
+      <p><b>▸ 本题在金标准层面的判定</b>：金标准 <code>Green Bay</code> <b>是对的，但题目没保证它唯一</b>——现实里 5 个接壤县的县治都是合法解，标注只认其中一个。修法：扩答案集，或改写题面使其唯一。本题<b>仍可当探针</b>（考"会不会指出定指不唯一"，即 P 层）。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b>：这题的价值是把两种<b>性质完全不同</b>的失败模式拆开了——在此之前，它们在分析里是混着说的：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>失败模式</th><th>在 #21 上的形态</th><th>损害什么</th></tr></thead>
+        <tbody>
+          <tr><td><b>A 标注把多解之一当唯一解</b></td><td>现实里 5 个合法答案（见上表），金标准只认 Brown；题面"<b>the</b> county…"的定指预设并不成立</td><td><b>评测有效性</b>——答对了也不说明能力</td></tr>
+          <tr><td><b>B 模型用记忆替代证据</b></td><td>闭卷 flash／pro 都能答出 Green Bay（§0.5）；错答 <code>Chilton</code> 在 smart r2、闭卷 flash r2、闭卷 pro r2 <b>三处独立复现</b></td><td><b>产品可信性</b>——答案没有库内依据</td></tr>
+        </tbody>
+      </table>
+      <p>两者叠在本题上，后果是<b>信号两头都被污染</b>：模型给出 <code>Green Bay</code> 时，分不清它是走完了证据链还是想起来了；给出 <code>Chilton</code>／<code>Appleton</code> 时，也分不清那是推理错、还是记忆错。⇒ <b>就"这道题在产品评测里有没有用"而言，它是无效的，甚至是反向的</b>——它奖励的恰是产品里最不该鼓励的行为（用记忆补关系、给出一个"世界里为真"的解）；但它<b>在研究侧仍然成立</b>：原设定是"给定这 20 段，把标注链走完"，它做得到。<b>这是用途错配，不是题目坏了。</b></p>
+      <p><b>本题顺带给出两个用法</b>：① 这类题不该删，该<b>改判</b>——从"答对才算好"改成"<b>能识别出题面定指不唯一并声明</b>才算好"（它天然是 P 层探针，而且诱饵有效：<code>Chilton</code> 稳定可触发）；② 记下 P 的落地难点——<b>"库内唯一"不等于"现实唯一"</b>：本题库里确实只有 Brown 一条线索，轻量版 P（库内唯一性检查）会判它唯一、照样漏掉；要抓住它，只有"允许用记忆做 P 并声明"或"把结构层补进语料"两条路，前者便宜但不可核，后者可核但贵。这就是为什么 P 只能"最好"由结构层提供，不能"必须"。</p>
+
+      <p><b>⚙ 顺带记一条修法路径</b>：本题这种“理解不稳”（把接壤那一跳读丢）<b>可以靠提示词修</b>——例如在提示词里要求“先把题面拆成『出生县 → 与它接壤的县 → 该县县治』，再逐层确认”。但提示词是<b>全局动作</b>：它对本题有效、可能顺手把别的题带坏，所以<b>必须用跨题回归来验收</b>（这正是这个 30 题评测台的用途）。按本项目纪律，提示词属“基础件”，改动要人工复核、不自行合入。</p>
+      <p class="muted">📌 本节只做 #21 的归因。它牵出的通用问题（知识来源与层次怎么摆、指标与产品标准为何冲突、"答对"为何不能当能力证据）<b>不在本节展开，留到 10 道 4 跳题全部拆完后统一收口</b>（见 §6 的待收口清单）。</p>
+
+      <h4>3.2 #22 ｜ 地区建立年份（金答案 1932）</h4>
+      <p><b>英文原题</b>：When was the region immediately north of the region where the country that secured southern Lebanon is located and the Persian Gulf established?</p>
+      <p><b>中文翻译（直译，<u>刻意保留原句的歧义</u>）</b>：那个地区——“位于『拿下南黎巴嫩的那个国家所在的地区』与波斯湾的正北”的那个地区——是何时建立的？</p>
+      <p class="muted">⚠️ <b>英文原句本身有歧义</b>：<code>immediately north of [A] and [B]</code> 里的 and 有两种挂法——① 同时正北于 A 与 B；② 正北于 A，且（另给一个条件）与 B 相关。中文直译无法消解，只能原样保留。<b>两种读法的分析与结论见 归因 ②</b>（结论：两种读法都推不出金答案）。</p>
+      <p class="muted">📌 注意：<b>金答案（1932）只由标注给出，并不能由「题面＋证据块」共同推出来</b>——题面里根本没有"沙特阿拉伯"这个指代，是标注侧把"the region"当成了沙特。<b>标注的"意图"不构成独立依据</b>：它的正当表达渠道本来就只有题面与证据块；题面与 gold 冲突时，<b>这道题就是坏的</b>（见 归因 ②）。</p>
+      <p><b>正确答案</b>：<b>1932</b></p>
+      <p><b>官方四跳分解</b>：谁拿下南黎巴嫩 → <code>Israel</code> → 以色列位于哪 → <code>Middle East</code> → 在 #2 与波斯湾<b>正北</b>的那个地区 → <code>Kingdom of Saudi Arabia</code> → 该地区何时建立 → <code>1932</code>。（四跳落到<b>四段</b>支撑原文，但只有<b>三个不同文档</b>：两跳都归在 Israel 这个标题下，用的却是两段不同正文。）</p>
+      <p><b>四段支撑原文（全文照抄）</b>：与 #21 同一口径——官方 <code>paragraph_support_idx</code> 指定的支撑段，对应 <code>corpus/</code> 下同名文件，<b>正文一字未改</b>（加粗为本文所加）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · 谁拿下南黎巴嫩</b> ｜ <code>Israel.md</code></p>
+          <div class="orig"># Israel<br><br>On 11 March 1978, a PLO guerilla raid from Lebanon led to the Coastal Road Massacre. Israel responded by launching an invasion of southern Lebanon to destroy the PLO bases south of the Litani River. Most PLO fighters withdrew, but <b>Israel was able to secure southern Lebanon</b> until a UN force and the Lebanese army could take over. The PLO soon resumed its policy of attacks against Israel. In the next few years, the PLO infiltrated the south and kept up a sporadic shelling across the border. Israel carried out numerous retaliatory attacks by air and on the ground.</div>
+          <p class="muted"><b>中文翻译</b>：1978 年 3 月 11 日，巴勒斯坦解放组织（PLO）从黎巴嫩发动的一次游击袭击，导致了「沿海公路大屠杀」。以色列的回应是入侵南黎巴嫩，以摧毁利塔尼河以南的 PLO 基地。PLO 的大部分战士撤退了，但以色列得以控制南黎巴嫩，直到联合国部队和黎巴嫩军队能够接手。不久后，PLO 又恢复了对以色列发动袭击的策略。此后数年，PLO 渗透进南部，并持续越过边界进行零星炮击。以色列则通过空袭和地面行动进行了多次报复性打击。</p>
+          <p>说明：<b>明写</b>——「Israel was able to secure southern Lebanon until a UN force and the Lebanese army could take over」。这一跳是整题最干净的一跳。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 以色列位于哪</b> ｜ <code>Israel__1.md</code>（<b>同名第二段</b>）</p>
+          <div class="orig"># Israel<br><br>Israel (/ˈɪzreɪəl/ or /ˈɪzriːəl/; Hebrew: יִשְׂרָאֵל‎ Yisrā'el; Arabic: إِسْرَائِيل‎ Isrāʼīl), officially the State of Israel (Hebrew: מְדִינַת יִשְׂרָאֵל‎ Medīnat Yisrā'el [mediˈnat jisʁaˈʔel] ( listen); Arabic: دولة إِسْرَائِيل‎ Dawlat Isrāʼīl [dawlat ʔisraːˈʔiːl]), is a sovereign state in Western Asia. The country is <b>situated in the Middle East</b> at the southeastern shore of the Mediterranean Sea and the northern shore of the Gulf of Aqaba in the Red Sea. It shares land borders with Lebanon to the north, Syria in the northeast, Jordan on the east, the Palestinian territories (which are claimed by the State of Palestine and are partially controlled by Israel) comprising the West Bank and Gaza Strip to the east and west, respectively, and Egypt to the southwest. It contains geographically diverse features within its relatively small area. Israel's financial and technology center is Tel Aviv while Jerusalem is both the self-designated capital and most populous individual city under the country's governmental administration. Israeli sovereignty over Jerusalem is internationally unrecognized.[note 1]</div>
+          <p class="muted"><b>中文翻译</b>：以色列（读作 /ˈɪzreɪəl/ 或 /ˈɪzriːəl/；希伯来语：יִשְׂרָאֵל‎ Yisrā'el；阿拉伯语：إِسْرَائِيل‎ Isrāʼīl），正式名称为以色列国，是位于西亚的一个主权国家。<b>该国地处中东</b>，位于地中海东南岸以及红海亚喀巴湾的北岸。它的陆地边界是：北部与黎巴嫩接壤，东北部与叙利亚接壤，东部与约旦接壤；东侧与西侧分别与约旦河西岸和加沙地带相邻（这属于巴勒斯坦领土，由巴勒斯坦国主张主权、目前部分由以色列控制）；西南部与埃及接壤。在相对狭小的国土内，它拥有多样化的地理特征。以色列的金融与科技中心是特拉维夫，而耶路撒冷既是其自行指定的首都，也是其政府管辖下人口最多的单个城市。以色列对耶路撒冷的主权未获国际承认。〔原注 note 1〕</p>
+          <p>说明：<b>明写</b>——「The country is situated in the Middle East」。<b>但要注意它和 hop 1 用的是同名、不同正文的两段</b>：<code>Israel.md</code> 讲 1978 年入侵南黎巴嫩，<code>Israel__1.md</code> 是国名条目开篇；语料里靠文件名后缀 <code>__1</code> 区分（见 本题产出 ①）。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 中东与波斯湾正北的那个地区</b> ｜ <code>Geography of Saudi Arabia.md</code></p>
+          <div class="orig"># Geography of Saudi Arabia<br><br>The Kingdom of Saudi Arabia is a country situated in Southwest Asia, the largest country of Arabia, <b>bordering the Persian Gulf</b> and the Red Sea, north of Yemen. Its extensive coastlines on the Persian Gulf and Red Sea provide great leverage on shipping (especially crude oil) through the Persian Gulf and Suez Canal. The kingdom occupies 80% of the Arabian Peninsula. Most of the country's boundaries with the United Arab Emirates (UAE), Oman, and the Republic of Yemen (formerly two separate countries: the Yemen Arab Republic or North Yemen; and the People's Democratic Republic of Yemen or South Yemen) are undefined, so the exact size of the country remains unknown. The Saudi government estimate is at 2,217,949 square kilometres, while other reputable estimates vary between 2,149,690 and 2,240,000 sq. kilometres. Less than 1% of the total area is suitable for cultivation, and in the early 1990s, population distribution varied greatly among the towns of the eastern and western coastal areas, the densely populated interior oases, and the vast, almost empty deserts.</div>
+          <p class="muted"><b>中文翻译</b>：沙特阿拉伯王国位于西南亚，是阿拉伯半岛上面积最大的国家，<b>濒临波斯湾和红海</b>，位于也门以北。它在波斯湾和红海上的漫长海岸线，为经波斯湾和苏伊士运河的航运（尤其是原油）提供了极大的便利。该王国占据阿拉伯半岛约 80% 的面积。它与阿拉伯联合酋长国（UAE）、阿曼以及也门共和国之间的大部分边界尚未划定，因此该国的确切面积仍然未知。沙特政府的估算为 2,217,949 平方公里，而其他可靠来源的估算在 2,149,690 至 2,240,000 平方公里之间。全国总面积中适合耕种的土地不足 1%；在 20 世纪 90 年代初，人口分布差异显著，主要集中在东部与西部沿海地区的城镇、内陆人口稠密的绿洲，以及广阔而几乎空无一人的沙漠地带。</p>
+          <p>说明：<b>只明写一半</b>——「bordering the Persian Gulf」有，但题面要的「<b>正北</b>」在这段里<b>找不到任何支撑</b>（该段只给了「north of Yemen」）。这是本页唯一的弱环节，见 归因 ②。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 该地区何时建立</b> ｜ <code>Saudi Arabia.md</code></p>
+          <div class="orig"># Saudi Arabia<br><br>The area of modern - day Saudi Arabia formerly consisted of four distinct regions: Hejaz, Najd and parts of Eastern Arabia (Al - Ahsa) and Southern Arabia ('Asir). The Kingdom of Saudi Arabia was <b>founded in 1932 by Ibn Saud</b>. He united the four regions into a single state through a series of conquests beginning in <b>1902</b> with the capture of Riyadh, the ancestral home of his family, the House of Saud. Saudi Arabia has since been an absolute monarchy, effectively a hereditary dictatorship governed along Islamic lines. The ultraconservative Wahhabi religious movement within Sunni Islam has been called ``the predominant feature of Saudi culture '', with its global spread largely financed by the oil and gas trade. Saudi Arabia is sometimes called`` the Land of the Two Holy Mosques'' in reference to Al - Masjid al - Haram (in Mecca) and Al - Masjid an - Nabawi (in Medina), the two holiest places in Islam. As of 2013, the state had a total population of 28.7 million, of which 20 million were Saudi nationals and 8 million were foreigners. As of 2017, the population is 33 million. The state's official language is Arabic.</div>
+          <p class="muted"><b>中文翻译</b>：现代沙特阿拉伯的领土，过去由四个各具特色的地区组成：汉志（Hejaz）、内志（Najd），以及东部阿拉伯（哈萨，Al-Ahsa）和南部阿拉伯（阿西尔，'Asir）的部分地区。<b>沙特阿拉伯王国由伊本·沙特于 1932 年建立。</b>他通过一系列征服把这四个地区统一为单一国家，这一进程<b>始于 1902 年攻占利雅得</b>——利雅得是其家族沙特家族（House of Saud）的祖居之地。此后，沙特阿拉伯一直是君主专制国家，实质上是沿伊斯兰教路线治理的世袭专制政体。逊尼派伊斯兰教内部极端保守的瓦哈比宗教运动，被称为「沙特文化的主导特征」，其全球传播主要由石油与天然气贸易提供资金。沙特阿拉伯有时被称为「两圣寺之地」，指的是伊斯兰教最神圣的两处地方——麦加禁寺和麦地那先知清真寺。截至 2013 年，该国总人口为 2,870 万，其中 2,000 万为沙特国民、800 万为外籍人士；截至 2017 年，人口为 3,300 万。该国官方语言为阿拉伯语。</p>
+          <p>说明：<b>明写</b>——「The Kingdom of Saudi Arabia was founded in 1932 by Ibn Saud」。<b>但同一段里还有一个年份 1902</b>（「conquests beginning in 1902 with the capture of Riyadh」）——这是段内数字干扰，hybrid r1 正是答了这个 1902（见 过程分析 ②）。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：以色列拿下南黎巴嫩（明写）；以色列位于中东（明写，但在同名第二段）；沙特阿拉伯濒临波斯湾（明写）、在也门以北（明写）；沙特王国 1932 年建立（明写，同段另有 1902）。<b>四跳里三跳有明写支撑，只有 hop 3 的「正北」没有</b>——所以这题的证据基础比 #21 好得多，问题出在别处（见 归因）。</p>
+
+      <p><b>▸ 现象：三臂三轮表现</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>臂</th><th>r1</th><th>r2</th><th>r3</th><th>真实调用次数 r1／r2／r3</th><th>耗时 r1／r2／r3</th></tr></thead>
+        <tbody>
+          <tr><td>wiki</td><td><b>1932</b> ✓</td><td><b>1932</b> ✓</td><td><b>1932</b> ✓</td><td>10／7／10</td><td>7.6／4.2／6.9 s</td></tr>
+          <tr><td>smart-v3</td><td><b>1932</b> ✓</td><td>认输 ✗（"exhaustive search"）</td><td><b>1932</b> ✓</td><td>22／<b>71</b>／4</td><td>29.4／<b>146.1</b>／5.3 s</td></tr>
+          <tr><td>hybrid</td><td><code>1902</code> ✗</td><td><b>1932</b> ✓</td><td>认输 ✗</td><td>8／11／27</td><td>11.1／12.7／33.0 s</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">对照 §2 读数④：smart 在这题上的<b>真实调用 22／71／4</b>（原表记的是事件数 44／142／8）——r2 是这一档最典型的「点火」样本。wiki 三轮全对且都在 7–10 次调用内收尾。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 三轮服务端日志逐次核过）</p>
+      <p>三轮的<b>入口几乎一样</b>：都先搜 <code>southern Lebanon</code>／<code>Persian Gulf</code>，再读 <code>entity/persian-gulf</code>、<code>entity/saudi-arabia</code> 页。差别只在"要不要再绕一圈"。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（括号内为真实调用次数）</th><th>关键差异</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1</td><td>搜 <code>southern Lebanon</code> → 搜 <code>Persian Gulf established</code> → 搜 <code>Lebanon</code> → 搜 <code>Persian Gulf</code> → 读 [jumeirah-beach, lebanon, israel] → 读 [persian-gulf, saudi-arabia, iraq, kuwait] → 搜「阿拉伯半岛」→ 读 [arabian-peninsula, uae, oman, yemen] → 读 [jordan, syria, egypt] → 搜 <code>Hashemite|约旦|叙利亚历史</code>（10 次）</td><td>绕到周边国家一圈才收</td><td><b>1932</b> ✓</td></tr>
+          <tr><td>r2</td><td>搜 <code>southern Lebanon</code> → 搜 <code>Persian Gulf</code> → 搜 <code>Lebanon</code> → 搜 <code>Gulf</code> → 读 [persian-gulf] → 读 [geography-of-saudi-arabia] → 读 [saudi-arabia]（7 次）</td><td><b>最省</b>：直奔沙特那两页就够</td><td><b>1932</b> ✓</td></tr>
+          <tr><td>r3</td><td>搜 4 次 → 读 [persian-gulf, lebanon, israel] → 搜 <code>Umm al-Quwain|emirate</code> → 搜 <code>Trucial|UAE|Dubai</code> → 读 [uae, saudi-arabia] → <code>read_document</code>(Umm) → 搜「波斯湾|阿拉伯」（10 次）</td><td>中途岔到海湾诸酋长国，又折回沙特页</td><td><b>1932</b> ✓</td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D1 小结</b>：三轮都<b>没有为 hop 2（以色列位于中东）单独检索</b>——它们直接用自带知识；也都没被 hop 3 的「正北」绊住，因为 <code>saudi-arabia</code> 页就在入口检索里，页上同时有「濒临波斯湾」和「1932 建国」。⇒ 这题 wiki 的稳定来自<b>入口一次命中</b>（gold 段与它需要的关系都在同一页/邻页）。对照 #21：那题入口也命中了，但库里缺的正是「接壤」那一跳。</p>
+
+      <p><b>▸ 过程分析 ②：另两臂怎么走的</b>（✅ 服务端日志）</p>
+      <ul>
+        <li><b>smart：同一臂同题，调用量差 18 倍。</b>r1 用 22 次（14 次检索）答对；r3 <b>只用 4 次</b>就答对；而 r2 跑了 <b>71 次</b>（61 次 <code>search_knowledge</code> ＋ 6 次 <code>list_documents</code> ＋ 4 次 <code>read_document</code>）、146 秒后认输——它把「the region」反复试成黎巴嫩／约旦／伊拉克／科威特，甚至试到「波斯湾这个地理实体何时形成」。⇒ <b>同一模型、同一题，r2 停下来换假设就是收不住</b>（§2 读数④的"点火"）。</li>
+        <li><b>hybrid r1（答 <code>1902</code>）：把「the region」锚成了内志（Najd）。</b>它的路径是搜 <code>Najd region north of Eastern Arabia</code> → 搜 <code>Najd established Emir…</code> → <code>list_documents(Najd)</code> → <code>wiki_search(Najd|Riyadh|Emirate)</code> → 读 [najd, al-ahsa, riyadh]。而 <code>entity/najd</code> 页里同时写着「1932 建国」和「1902 攻占利雅得」——它挑了后者。⇒ <b>错不在找不到段落，而在段落里挑错了年份</b>（也是「region 指代」锚错的连带后果）。</li>
+        <li><b>hybrid r3（27 次后认输）：把「the region」锚成「波斯湾以北」。</b>于是试了 Iran（1979）、Iraq（王国建立）、Mesopotamia 一路，读到 <code>gulf-of-oman</code>／<code>arabian-sea</code>／<code>indian-ocean</code> 还在海上打转。⇒ 同样卡在<b>指代锚定</b>，不是召回。</li>
+      </ul>
+      <p><b>⇒ D2 小结</b>：两臂的错都<b>不是「没找到 gold 段」</b>——<code>saudi-arabia</code> 页一直在库里、也含 1932——而是<b>把题面里的 the region 锚到了别的地理实体</b>（内志／波斯湾以北／海湾诸国）。这属于 <b>A 落点漂</b>在"描述型题面"上的形态：题面不点名实体，只给方位与邻接描述，锚定就成了成败关键。</p>
+
+      <p><b>⇒ D 块的一处口径（本题能不能用来评价 Agent）</b>：<b>不能。</b>因为题面与 gold 冲突（见 归因 ②），<b>这道题本身就是无效题</b>——同一个无效题面上出现了三种表现：① wiki 靠面词锚定、<b>跳过题面的「正北」约束</b>并答出 1932；② smart r2／hybrid r3 <b>按字面读</b>（north of Israel → Lebanon），如实报告"库内无据"；③ hybrid r1 锚成内志，答 1902。这三种都只是"在一个坏题面上怎么收场"的<b>行为事实</b>，<b>不能据此判断哪个 Agent 做得对或不对</b>——要判断"做法对错"，前提是任务本身成立。（实操上：本题的 0／1 分对能力评价没有信息量，统计时应<b>单列或作废</b>。）</p>
+
+      <p><b>▸ 归因 ①：证据形态</b></p>
+      <ul>
+        <li><b>四跳里三跳有明写支撑</b>（hop 1「secured southern Lebanon」、hop 2「situated in the Middle East」、hop 4「founded in 1932」），只有 <b>hop 3 的「正北」没有任何文本支撑</b>——该段只写了「bordering the Persian Gulf」和「north of Yemen」。⇒ 证据基础明显好于 #21（那边是「只有第一跳直陈」）。</li>
+        <li><b>hop 2 的支撑是「同名第二段」</b>：四跳只用到三段原文，其中 <code>Israel.md</code>（1978 年入侵南黎巴嫩）与 <code>Israel__1.md</code>（国名条目开篇「位于西亚…地处中东」）正文完全不同，靠文件名后缀 <code>__1</code> 区分。⇒ 多跳题的支撑段可能是「同名异文」，这一点对索引与编译都是坑（见 本题产出 ①）。</li>
+        <li><b>gold 段里有段内数字干扰</b>：<code>Saudi Arabia.md</code> 同时写着 <b>1932</b>（建国）与 <b>1902</b>（攻占利雅得、统一进程的起点）。⇒ 「段落命中」不等于「答案定位正确」。</li>
+      </ul>
+
+      <p><b>▸ 归因 ②：题目层——关系词与金答案错配</b>（✅ 外部核过：Wikipedia「Saudi Arabia」条，访问 2026-10-13）</p>
+      <p>维基写沙特「bordered by the Red Sea to the west, <b>Jordan, Iraq, and Kuwait to the north</b>, the Persian Gulf, Bahrain, Qatar, and the United Arab Emirates <b>to the east</b>, Oman to the southeast, and Yemen to the south」，并写「<b>The Gulf of Aqaba in the northwest separates it from Egypt and Israel</b>」。
+      ⇒ 沙特相对以色列在<b>东南</b>、相对波斯湾是<b>东临</b>——都<b>不是「正北」</b>。而题面问的是「the region immediately <b>north</b> of the region where [Israel] is located and the Persian Gulf」。</p>
+      <p><b>判定：与 #21 同属 D（题面本身坏），但形态不同</b>——#21 是<b>多解</b>（5 个合法答案金标准只认 1 个），#22 是<b>关系词错配</b>（方位词与金答案不符）。两者都让「答对」这件事不再等价于「走通了证据链」。</p>
+
+      <p><b>▸ 归因 ③：机制——这题有没有记忆捷径</b>（闭卷对照，✅ 3 轮 × 2 模型）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>闭卷</th><th>r1</th><th>r2</th><th>r3</th><th>耗时</th></tr></thead>
+        <tbody>
+          <tr><td>flash</td><td><code>29 October 1923</code> ✗</td><td><code>1923</code> ✗</td><td>空答 ✗（撞 16384 上限）</td><td>80.7／71.9／86.9 s</td></tr>
+          <tr><td>pro</td><td>空答 ✗</td><td>空答 ✗</td><td>空答 ✗</td><td><b>339.6／302.7／243.5 s</b>（三次全撞 16384 上限）</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>6 次闭卷全部得 0</b>——这道题<b>没有记忆捷径</b>，与 #21 恰好相反（那边闭卷多轮能答出金答案）。另外注意两个细节：flash 两轮答的是 <code>1923</code>（土耳其共和国成立的年份），是典型的「邻近数字」干扰；pro 三次不是拒绝作答，而是<b>推理吃光预算、没吐出答案</b>——评分时"空答"要和"答错"分开记账。</p>
+
+      <p><b>▸ 归因 ④：结论</b></p>
+      <p>这题的卡点是三样叠加：<b>A 落点漂</b>（题面用「the region」这种描述而非实体名，三臂的错都出在把 region 锚成内志 / 波斯湾以北 / 海湾诸国）＋ <b>C 多搜后放弃</b>（smart r2 71 次、hybrid r3 27 次）＋ <b>D 题面关系词错配</b>（「正北」与金答案不符）。与 #21 对照：#21 是「E 弱桥＋D 多解」，#22 是「A 落点漂＋C 点火＋D 错配」——<b>同为 4 跳，卡点结构完全不同</b>，这正是逐题拆的价值。　⚠️ 但要按 D 块的口径读：这些是<b>无效题面上的行为观察</b>，不是「能力缺陷」；本题不该进入能力比较的分母。</p>
+      <p><b>▸ 本题在金标准层面的判定</b>：金标准 <code>1932</code> <b>是错的</b>——题面与 gold 冲突，不存在任何读法指向沙特阿拉伯。修法：改题面（例如"濒临波斯湾且在也门以北的地区"）<b>或</b>改 gold，至少改一个。本题<b>不能当探针</b>，只能作无效题剔除。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>同名异文段</b>：一个实体可能有两段（甚至多段）不同正文，各自支撑不同的跳（<code>Israel.md</code> / <code>Israel__1.md</code>）。索引或编译若按标题合并、只留一段，就会丢掉某一跳的支撑。本例里 WeKnora 的编译页 <code>entity/israel</code> 把两段并成了一页（含「地处中东」），所以没被坑——但这是运气，不是保证。</li>
+        <li><b>段内数字干扰</b>：gold 段里 1932 与 1902 并存，错答 1902 就是从同一个段落里挑错了年份。⇒ 「证据召回」类指标要把「找到段落」和「定位到正确断言」分开。</li>
+        <li><b>记忆贡献是逐题属性</b>：#22 闭卷 6/6 得 0，#21 闭卷能答出金答案。⇒ §0.5 那个 0.431／0.508 是**均值**，不能当每题常数去减；要归因记忆，得逐题做闭卷对照。</li>
+        <li><b>闭卷基线会被推理预算截断</b>：pro 在这题三次都撞 16384 输出上限（243–340 秒/题）。⇒ 报闭卷数时必须单独列"空答率"，否则会把"没答完"混进"答错"。</li>
+        <li><b>题面与 gold 冲突 ⇒ 判无效，且该题不得用于评价 Agent</b>：#22 的 gold（1932）无法由「题面＋证据块」推出——它是标注侧把“the region”当成沙特补出来的；「标注意图」不是独立依据（意图的正当表达渠道本来就只有题面与证据块）。<b>更要紧的是：别在坏题上评 Agent</b>——说"wiki 跳过约束所以做法不对"、或说"按字面拒答所以更忠实"，都隐含了"题目本身成立"这一前提；题目无效时，<b>答对和答错都不携带能力信息</b>，只能记录行为事实。⇒ 配套动作：这类题在 30 题统计里应<b>单列或作废</b>。</li>
+      </ol>
+      <h4>3.3 #23 ｜ 德国神父的州（金答案 Saxony-Anhalt）</h4>
+      <p><b>英文原题</b>：The German priest, who wanted to reform the religious denomination now the largest in the US, preached a sermon on Marian devotion soon before his death in which German state?</p>
+      <p><b>中文翻译</b>：那位想改革"如今美国最大的宗教派别"的德国神父，在去世前不久宣讲了一篇关于圣母敬礼的布道——他是在德国的<b>哪个州</b>？</p>
+      <p><b>正确答案</b>：<b>Saxony-Anhalt</b>（萨克森-安哈尔特）</p>
+      <p><b>官方四跳分解</b>：美国最大的宗教派别 → <code>The Catholic Church</code> → 谁想改革（整顿）它 → <code>Martin Luther</code> → 他去世前一个月在哪里讲圣母敬礼的布道 → <code>Wittenberg</code> → 该地所属行政区域 → <code>Saxony-Anhalt</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：与 #21／#22 同一口径——官方 <code>paragraph_support_idx</code> 指定的支撑段，对应 <code>corpus/</code> 下同名文件，<b>正文一字未改</b>（加粗为本文所加），中文翻译随附。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · 美国最大的宗教派别</b> ｜ <code>Religion in the United States.md</code></p>
+          <div class="orig"># Religion in the United States<br><br><b>The Catholic Church, 68,202,492 members</b> The Southern Baptist Convention, 16,136,044 members The United Methodist Church, 7,679,850 members The Church of Jesus Christ of Latter - day Saints, 6,157,238 members The Church of God in Christ, 5,499,875 members</div>
+          <p class="muted"><b>中文翻译</b>：天主教 68,202,492 名成员；美南浸信会 16,136,044 名；联合卫理公会 7,679,850 名；耶稣基督后期圣徒教会 6,157,238 名；神的教会 5,499,875 名。</p>
+          <p>说明：这一段是一串<b>成员数清单</b>——<b>没有"largest"这类字样</b>，"最大"要靠<b>自己比较数值</b>得出（68.2M 远超第二名 16.1M）。这一跳是"可推"而非"明写"。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 谁想改革它</b> ｜ <code>Reformation.md</code></p>
+          <div class="orig"># Reformation<br><br>Although there had been significant earlier attempts to reform the Catholic Church before Luther -- such as those of Jan Hus, Peter Waldo, and John Wycliffe -- <b>Martin Luther is widely acknowledged to have started the Reformation</b> with the Ninety - five Theses. Luther began by criticising the sale of indulgences, insisting that the Pope had no authority over purgatory and that the Catholic doctrine of the merits of the saints had no foundation in the Bible. The Protestant Reformation, however, would come to incorporate doctrinal changes such as a complete reliance on Scripture as a source of proper belief (sola scriptura) and the belief that faith in Jesus, and not good works, is the only way to obtain God's pardon for sin (sola fide). The core motivation behind these changes was theological, though many other factors played a part, including the rise of nationalism, the Western Schism that eroded loyalty to the Papacy, the perceived corruption of the Roman Curia, the impact of humanism, and the new learning of the Renaissance that questioned much traditional thought.</div>
+          <p class="muted"><b>中文翻译</b>：尽管在路德之前已有一些改革天主教会的重要尝试——例如扬·胡斯、彼得·瓦尔道与约翰·威克里夫的尝试——但人们普遍认为，马丁·路德以《九十五条论纲》开启了宗教改革。路德起初批评的是赎罪券的售卖，坚持教皇对炼狱没有权柄、天主教会关于圣徒功德的教义在《圣经》中没有根据。……（后文讲新教改革的教义变更与促成长背景）</p>
+          <p>说明：明写"是路德开启了宗教改革"。<b>但同段还提到三位更早的改革者</b>（胡斯、瓦尔道、威克里夫）——题面用「<b>German priest</b>」把范围收到路德一个人身上（胡斯是捷克人、威克里夫是英格兰人、瓦尔道在里昂）。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 他在哪讲圣母敬礼的布道</b> ｜ <code>Mary, mother of Jesus.md</code></p>
+          <div class="orig"># Mary, mother of Jesus<br><br>Despite Martin Luther's harsh polemics against his Roman Catholic opponents over issues concerning Mary and the saints, theologians appear to agree that Luther adhered to the Marian decrees of the ecumenical councils and dogmas of the church. He held fast to the belief that Mary was a perpetual virgin and the Theotokos or Mother of God. Special attention is given to the assertion that Luther, some three-hundred years before the dogmatization of the Immaculate Conception by Pope Pius IX in 1854, was a firm adherent of that view. Others maintain that Luther in later years changed his position on the Immaculate Conception, which, at that time was undefined in the Church, maintaining however the sinlessness of Mary throughout her life. For Luther, early in his life, the Assumption of Mary was an understood fact, although he later stated that the Bible did not say anything about it and stopped celebrating its feast. Important to him was the belief that Mary and the saints do live on after death. "Throughout his career as a priest-professor-reformer, Luther preached, taught, and argued about the veneration of Mary with a verbosity that ranged from childlike piety to sophisticated polemics. His views are intimately linked to his Christocentric theology and its consequences for liturgy and piety." Luther, while revering Mary, came to criticize the "Papists" for blurring the line, between high admiration of the grace of God wherever it is seen in a human being, and religious service given to another creature. He considered the Roman Catholic practice of celebrating saints' days and making intercessory requests addressed especially to Mary and other departed saints to be idolatry. His final thoughts on Marian devotion and veneration are preserved in <b>a sermon preached at Wittenberg only a month before his death</b>:</div>
+          <p class="muted"><b>中文翻译</b>：（前文讲路德对马利亚的立场：永久童贞女、上帝之母、无染原罪、圣母升天等）……路德虽然敬重马利亚，却逐渐批评"教皇派"模糊了界线——对上帝恩典的崇高赞赏与把宗教性服事献给另一个受造物之间的界线；他认为罗马天主教庆祝圣徒纪念日、特别向马利亚等已故圣徒代求，属于偶像崇拜。<b>他关于圣母敬礼与崇敬的最后思考，保存在他去世前一个月于维滕贝格（Wittenberg）宣讲的一篇布道中：</b></p>
+          <p>说明：<b>关键句明写</b>——「a sermon preached at <b>Wittenberg</b> only a month before his death」，一步同时给出地点与时间。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 该地属于哪个州</b> ｜ <code>Wittenberg (district).md</code></p>
+          <div class="orig"># Wittenberg (district)<br><br>Wittenberg is a district () <b>in the east of Saxony-Anhalt</b>, Germany. Neighboring districts are (from west clockwise) Anhalt-Bitterfeld, the district-free city of Dessau-Roßlau, the districts of Potsdam-Mittelmark, Teltow-Fläming and Elbe-Elster in Brandenburg, and the district of Nordsachsen in the <b>Free State of Saxony</b>.</div>
+          <p class="muted"><b>中文翻译</b>：维滕贝格是德国<b>萨克森-安哈尔特</b>东部的一个县。相邻行政区（自西顺时针）为：安哈尔特-比特费尔德、不设区的代绍-罗斯劳市、勃兰登堡州的波茨坦-米特尔马克与泰尔托-弗莱明、易北-埃尔斯特等县，以及萨克森自由州的北萨克森县。</p>
+          <p>说明：首句<b>明写</b>"in the east of <b>Saxony-Anhalt</b>"。<b>但同段后半又出现了一个邻州</b>「Free State of <b>Saxony</b>」——这正是三臂后来答 <code>Saxony</code> 的来源（见第 2 步）。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：教派成员数清单（天主教最大，需比较）；路德开启了宗教改革（另有三名更早的改革者可排除）；路德去世前一个月在<b>维滕贝格</b>讲过圣母敬礼的布道（明写）；维滕贝格在<b>萨克森-安哈尔特</b>东部（明写，是"县"条目）。⇒ <b>题面要的三段信息（人、地点、州）在语料里都有落点</b>，只有"最大派别"需要一步数值比较。</p>
+
+      <p><b>▸ 正确解法：这题该怎么一步步找到答案</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面给的约束</th><th>去哪段找</th><th>证据原句（摘）</th><th>这一步的结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>"如今美国<b>最大</b>的宗教派别"</td><td><code>Religion in the United States.md</code></td><td>一串成员数：Catholic 68,202,492／Southern Baptist 16,136,044／…</td><td>天主教会（<b>必须自己做数值比较</b>，段落没写 largest）</td></tr>
+          <tr><td>2</td><td>"想改革它、而且是<b>德国</b>神父"</td><td><code>Reformation.md</code></td><td>"Martin Luther is widely acknowledged to have started the Reformation"</td><td>马丁·路德（用"德国"排掉胡斯／瓦尔道／威克里夫；⚠️ <b>"德国人"这条语料里没有</b>，属 L1 常识）</td></tr>
+          <tr><td>3</td><td>"去世前不久讲的、关于<b>圣母敬礼</b>的布道"</td><td><code>Mary, mother of Jesus.md</code>（末句）</td><td>"a sermon preached at <b>Wittenberg</b> only a month before his death"</td><td>维滕贝格</td></tr>
+          <tr><td>4</td><td>"在德国的哪个<b>州</b>"</td><td><code>Wittenberg (district).md</code>（首句）</td><td>"Wittenberg is a district in the east of <b>Saxony-Anhalt</b>, Germany"</td><td><b>Saxony-Anhalt</b></td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 一句话：<b>数值比较定派别 → 用「德国神父」定人 → 末句定地点 → 首句定州</b>。四步里三跳落在语料里；第 2 步那个"<b>德国人</b>"的身份<b>四段支撑里没有</b>（四段里 <code>German／Germany</code> 只出现 1 次，还是在 <code>Wittenberg (district)</code> 段里说县在德国；全库 572 段也没有 "Luther ＋ German" 同段）——<b>但在 KB 层它是可查的</b>：编译页 <code>entity/martin-luther</code> 首句即「马丁·路德是<b>德国</b>神学家」（编译时补写）。所以对 agent 而言，这一步是"KB 里的一句话 ＋ 一点 L1 常识"，不是纯靠记忆。（"神父"这个身份语料里也有：<code>Mary, mother of Jesus.md</code> 的「as a <b>priest</b>-professor-reformer, Luther preached…」。）⇒ <b>本题不需要 L2（补关系）或 L3（补答案）。</b></p>
+      <p class="muted">三个最容易踩的点（先记着，第 2 步会看到三臂正好踩在这里）：① <b>停在 hop 3 的答案</b>——Wittenberg 是城市／县，题问的是<b>州</b>（"层级没换"）；② <b>被同段里的邻州名带走</b>——<code>Wittenberg (district)</code> 段里既有 <code>Saxony-Anhalt</code>（正确）也有 <code>Free State of Saxony</code>（邻州，错）；③ <b>县／镇同名</b>——条目是 Wittenberg 县，路德讲道在 Wittenberg 镇，两者同属 Saxony-Anhalt，所以答案不变。</p>
+      <p><b>▸ 本题在金标准层面的判定（初步）</b>：<b>题面成立，gold 可由「题面＋语料」推出</b>（三段明写 ＋ 一步数值比较）；外部核过的一点是——维基「Martin Luther」写的"最后布道"在 Eisleben（1546-02-15，去世前三天），与语料那句 Wittenberg（去世前一个月）是两场不同布道，<b>但两地同在 Saxony-Anhalt，换哪种读法 gold 都成立</b>。⇒ <b>本题不属于坏题</b>（不进 §6 坏题台账）。待第 2 步拆完三臂过程后再定稿。</p>
+
+      <p><b>▸ 现象：wiki 三轮全错</b>（本节只拆 wiki——它是"编译 Wiki"这条路的直接体现；smart／hybrid 的九轮分布见 §1 矩阵，这里不展开）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>预测</th><th>真实调用次数</th><th>耗时</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1</td><td><code>Wittenberg</code> ✗</td><td>5</td><td>3.81 s</td></tr>
+          <tr><td>wiki r2</td><td><code>Fribourg</code> ✗</td><td>8</td><td>4.72 s</td></tr>
+          <tr><td>wiki r3</td><td><code>Saxony</code> ✗</td><td>11</td><td>8.21 s</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（括号内为真实调用次数）</th><th>卡在哪</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1</td><td>搜「Marian devotion sermon」<b>（0 命中）</b>→ 搜「largest religious denomination in the United States」<b>（0 命中）</b>→ 搜 <code>Catholic</code>（30）→ 搜 <code>Luther</code>（26，首条是无关的 Wisconsin Evangelical Lutheran Synod）→ 读 [<code>entity/martin-luther</code>, <code>entity/shengmu-maliya</code>] → 作答（5 次）</td><td><b>停在"地点"这一跳</b>：两页都只说"于维滕贝格所讲的一篇道中"</td><td><code>Wittenberg</code> ✗<br><span class="muted">没换层级（问州、答城市）</span></td></tr>
+          <tr><td>r2</td><td>搜「Marian devotion sermon priest」<b>（0）</b>→ 搜「largest denomination…」<b>（0）</b>→ 搜 <code>Marian</code>（10，首条是罗马军改 Marian reforms）→ 搜 <code>sermon</code><b>（0）</b>→ 搜 <code>priest</code> → 读 [<code>peter-canisius</code>, <code>marian-devotion</code>, <code>rosary</code>] → <code>read_document</code>(History of the Rosary, 查 "sermon") → <code>read_document</code>(同文档, 查 "Fribourg") → 作答（8 次）</td><td><b>认错人</b>：被"圣母敬礼"这条线带到玫瑰经推广者 Canisius</td><td><code>Fribourg</code> ✗<br><span class="muted">双重违反，见 ②-3</span></td></tr>
+          <tr><td>r3</td><td>搜「Marian devotion sermon priest reform」<b>（0）</b>→ 搜「largest denomination…」<b>（0）</b>→ 搜 <code>Lutheran</code>（7，首条仍是 Lutheran Synod）→ 搜 <code>Marian</code>（10）→ 读 [<code>peter-canisius</code>, <code>marian-devotion</code>] → <code>read_document</code>(History of the Rosary) → 搜 <code>Canisius</code>（5）→ 搜 <code>sermon</code><b>（0）</b>→ 搜「宗教改革|Reformation」（15）→ 搜「Martin Luther|Luther」（15）→ 读 [<code>martin-luther</code>, <code>shengmu-maliya</code>] → 作答（11 次）</td><td>先后被 Canisius 带跑；回到路德页后<b>仍未走"州"这一步</b>（<code>Saxony</code> 的确切来源无法从日志确证——搜索预览被截断）</td><td><code>Saxony</code> ✗<br><span class="muted">层级对了、取错州</span></td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结（三点硬事实）</b>：① <b>三轮都没有读 <code>entity/wittenberg-district</code> 或 <code>entity/saxony-anhalt</code></b>——而"维滕贝格在萨克森-安哈尔特"只写在这两页上；② <b>自然语言查询一律 0 命中</b>（三条证据），能命中的只有单词（<code>Catholic</code>／<code>Luther</code>／<code>Marian</code>／<code>sermon</code>／<code>Lutheran</code>）；③ <b>单词检索的首条结果就带偏</b>：<code>Marian</code> → 罗马军改 <i>Marian reforms</i>、<code>Luther</code> → 无关的 <i>Wisconsin Evangelical Lutheran Synod</i>。</p>
+
+      <p><b>▸ 过程分析 ②：这是编译的问题，还是 Agent 的问题？</b></p>
+      <p><b>1）编译层：关键事实都在，甚至做了"加法"。</b><code>entity/martin-luther</code> 页写明"马丁·路德是<b>德国</b>神学家"，并在末节写"他关于马利亚敬礼的最终思想，保存在去世前仅一个月于<b>维滕贝格</b>所讲的一篇道中"；<code>entity/wittenberg-district</code> 页写明"位于德国<b>萨克森-安哈尔特州</b>东部"；<code>entity/saxony-anhalt</code> 页也在。<b>注意</b>：原始支撑段 <code>Reformation.md</code> 里根本没有 "German"（全库 572 段也没有 Luther＋German 同段）——"德国神学家"是<b>编译时补写</b>进去的。也就是说，编译层在这里<b>帮了解题</b>（补上 L1 常识），不是坏它。</p>
+      <p><b>2）但编译层有两处坑。</b>① <b>"维滕贝格"是裸文本，没有 wikilink</b>：两页里那句话都没有链到 <code>entity/wittenberg-district</code>，于是 Wiki 招牌的"顺链跳转"在这一跳<b>断了</b>——从"路德在维滕贝格讲道"走到"维滕贝格属于哪个州"，只能靠再检索一次（大概因为语料里的 Wittenberg 是<b>城市</b>，而编译页只有<b>县</b>条目，同名不同实体，编译器没敢连）。② <b>跨页关系没有收拢</b>：答案需要"人 → 地点 → 州"三段跨页连接，编译只做到了"人 → 地点"（收在 martin-luther 页里）。</p>
+      <p><b>3）r2 专项：<code>Fribourg</code> 跟题面完全不匹配，而且是"双重违反"。</b>① <b>它不是德国的州</b>——Fribourg（弗里堡）是<b>瑞士</b>的州／城市，直接违反题面的 "in which <b>German</b> state"；② <b>它在我们这个库里根本不存在</b>：<code>Fribourg</code>／<code>Freiburg</code> 在语料 572 段里 <b>0 篇</b>、在编译页 4094 个里 <b>0 个</b>——这个答案是从<b>模型记忆</b>里捞出来的（L3：记忆当答案）。链条是：库里的 <code>marian-devotion</code>／<code>rosary</code>／<code>History of the Rosary</code> 把"圣母敬礼"与"宗教改革"绑在同一页（方向是反的：以圣母敬礼弥补宗教改革的损害）→ 它把题面那个人<b>认成 Canisius</b> → 再用记忆补出 Canisius 的去世地 Fribourg。<b>关键是：题面那个硬限定「German state」本身就足以否掉它，一查就知道错</b>，而 agent 没做这一步自查。</p>
+      <p><b>4）Agent 层：三轮三种错法，一个共同点。</b>r1 <b>没换层级</b>（问州答城市）、r2 <b>认错人＋违反"德国"限定</b>、r3 <b>取错州</b>（Saxony ≠ Saxony-Anhalt）；<b>共同点是三轮都没执行第 4 步</b>——把"地点"换成"行政区域"，而这一步所需的两个页面从未被读过。</p>
+      <p><b>⇒ 判定</b>：<b>不是"编译错了"</b>——库里答案齐全、还额外补了"德国"这一条；真正的成因是<b>三方叠加</b>：编译层没把"维滕贝格 → 州"这条跨页关系连起来（缺 wikilink、没收拢）＋ 检索层只会字面匹配（自然语言查询 0 命中，逼模型退化成单词试探、撞上同形近名页）＋ Agent 没走最后一步、也没拿题面约束自查。一个佐证：这题<b>闭卷 6/6 全对</b>（flash×3、pro×3），而<b>开卷 9/9 全错</b>——模型自己知道 Luther→Wittenberg→Saxony-Anhalt，一进检索就断在"维滕贝格在哪个州"。⇒ <b>断点在链路，不在知识。</b></p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>答完要用题面的硬约束自查</b>：#23 r2 的 <code>Fribourg</code> 违反 "German state"，<b>纯靠题面就能否掉</b>，不需要任何额外知识。这是最便宜的一道自检，而三轮里没有一轮做。</li>
+        <li><b>编译层要连"跨页关系"，不能只做单段落归纳</b>：<code>martin-luther</code> 页写了"在维滕贝格讲道"，却没把"维滕贝格县在萨克森-安哈尔特"连进来（维滕贝格是裸文本、无 wikilink），顺链跳转在这一跳失效；答案需要三段跨页连接，编译只做到两段。</li>
+        <li><b>检索层要能吃自然语言</b>：三条自然语言查询 0 命中，把模型推向单词试探，而单词检索的首条结果就带偏（<i>Marian reforms</i> 是罗马军改、<i>Wisconsin Evangelical Lutheran Synod</i> 与题无关）。</li>
+        <li><b>"闭卷对、开卷错"是链路诊断信号</b>：闭卷 6/6（模型知道答案）vs 开卷 9/9（检索链路断）⇒ 说明要修的是编译/检索链路，不是模型知识。</li>
+      </ol>
+
+      <p><b>▸ 延伸讨论：这条链路本质是 ReAct，业界的 ReAct 改进能不能用？</b>（由本题失败引出；通用部分留待 §6 收口）</p>
+      <p><b>先确认它是 ReAct，而且是"裸 ReAct"</b>：WeKnora 源码自述 "the core engine for running <b>ReAct</b> agents"、<code>executeLoop executes the main ReAct loop</code>（<code>internal/agent/engine.go</code>），日志里每轮都是 <code>runReActIteration</code>；循环形态＝选工具 → 执行 → 观察回灌 → 下一轮，直到不带工具调用收尾或撞 <code>max_iterations</code>（我们设 30／40／50）。<b>但我们的臂是 <code>thinking=false</code></b>：每轮日志都是 <code>finish=tool_calls, content=0 chars</code>——ReAct 论文里那段显式的 "Reason" 文本没写出来，推理被压进了"选哪个工具、填什么参数"。⇒ <b>凡是要"回顾自己推理"的方法在这里缺少抓手，能抓的只有工具调用与观察记录。</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>失败形态（我们的实例）</th><th>病灶</th><th>对症的文献方法</th><th>落地层</th></tr></thead>
+        <tbody>
+          <tr><td><b>停在中间跳</b>：wiki r1 答 <code>Wittenberg</code>（#23）、答 <code>Appleton</code>（#21）</td><td>没有全局计划，也没有"必须落到最终问句"的约束</td><td><b>Self-Ask</b>／MuSiQue 式<b>分解-执行</b>／ReWOO 的 Plan 段</td><td>prompt 级</td></tr>
+          <tr><td><b>停不下来</b>：smart r2 换 71 次假设、hybrid r3 27 次（#22）</td><td>没有收敛与判停判据</td><td><b>Self-RAG</b>（ISREL／ISSUP 反思标记）＋ 轮数与预算护栏</td><td>prompt 级（判据）＋ 框架级（护栏）</td></tr>
+          <tr><td><b>认错实体／被同形页带偏</b>：锚到 Canisius（#23 r2）；<i>Marian reforms</i>（罗马军改）、<i>Lutheran Synod</i></td><td>缺检索结果的相关性判断</td><td><b>CRAG</b>（判"对／错／模糊"再决定改查）／<b>IRCoT</b>（用推理句驱动下一轮检索）</td><td>prompt 级</td></tr>
+          <tr><td><b>用记忆补库外答案</b>：<code>Fribourg</code> 全库 0 次（#23 r2）；<code>Chilton</code>（#21）</td><td>缺答案可溯性检查</td><td><b>Self-RAG 的 ISSUP</b>；"答案溯源"</td><td>prompt 级</td></tr>
+          <tr><td><b>不做题面约束自查</b>：<code>Fribourg</code> 违反 "German state"</td><td>缺提交前的一致性检查</td><td>Reflexion／Self-Refine 的自评环节（需<b>结构化</b>）</td><td>prompt 级</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>Reflection 类需要"可判定的失败信号"</b>：Reflexion 原场景有环境反馈（单测／编译器）、Self-Refine 有自评；我们提交前<b>没有 ground truth</b>。⇒ 反思只能落在<b>内部约束</b>上（题面硬约束、答案可溯性、库内依据）——<b>要结构化检查，不要自由文本反思</b>。</li>
+        <li><b>ReWOO 的一次成型计划，对我们这种脆弱检索是双刃剑</b>：省 token 的代价是对中间结果不敏感；而实测是"自然语言查询 0 命中、字面匹配、首条结果带偏"——计划第一跳落空就整条崩。⇒ 要用<b>带重规划的交错版</b>（Plan-and-Solve ＋ 每步校验，或 LLMCompiler 式 DAG ＋ replan）。</li>
+        <li><b>指标口径会惩罚最对症的改进</b>：F1／EM 单答案口径下，"列出多个合法解"（#21）与"声明题面无解"（#22）都是 0 分。⇒ 这些改进必须在<b>产品口径</b>（可核、可拒答、遗漏透明）下评估，否则会被指标打回去。</li>
+      </ul>
+      <p><b>最小验证路径（改 prompt 就能加臂，沿用现有 30 题 × 3 轮评测台）</b>：① <b>分解臂</b>——"先拆成 N 个子问题、逐个确认、最后必须回答原问题"（对着"停在中间跳"）；② <b>自查臂</b>——收尾前强制两问："答案满足题面每个硬约束吗？""这个答案在库里哪一段？"（对着 <code>Fribourg</code>）；③ <b>检索改写臂</b>——把自然语言长查询改成关键词组合（对着"0 命中"与同形干扰）。每条臂同时记 token 与轮数，因为分解与自查都会加轮数。</p>
+      <p class="muted">📌 一句话：<b>能应用，落点不在"更强的反思"，而在把隐含的检查显式化</b>——分解（走完链条）／约束自查（满足题面）／可溯性（答案来自库）／判停（该停就停）。另：上面这张表目前只是<b>假设清单</b>（深拆仅 3 题、其中 2 题还是坏题），判定要靠剩余 7 题上的失败统计。</p>
+      <h4>3.4 #24 ｜ 被驱逐者的方式（金答案：The dynasty regrouped and defeated the Portuguese）</h4>
+      <p><b>英文原题</b>：How were people from whom new coins were a proclamation of independence by the Somali Muslim Ajuran Empire expelled from the natural boundary between Thailand and A Magne's country?</p>
+      <p><b>中文翻译（直译，保留原句的生硬）</b>：那些“被索马里穆斯林阿茹兰帝国用新铸币宣示独立、脱离其统治”的人，是如何被驱逐出“泰国与 A Magne 所在国之间的天然边界”的？</p>
+      <p><b>正确答案</b>：<code>The dynasty regrouped and defeated the Portuguese</code>（王朝重整旗鼓，击败了葡萄牙人）</p>
+      <p><b>官方四跳分解</b>：A Magne 属于哪个国家 → <code>Laos</code> → 泰国与老挝之间的天然边界是什么 → <code>Myanmar</code> → 阿茹兰帝国用新铸币对谁宣示独立 → <code>the Portuguese</code> → 葡萄牙人是怎么被赶出去的 → <code>The dynasty regrouped and defeated the Portuguese</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：与前面同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · A Magne 属于哪个国家</b> ｜ <code>A Magne.md</code></p>
+          <div class="orig"># A Magne<br><br>A Magne is a <b>village in south-eastern Laos</b> near the border with Vietnam. It is located in Sa Mouay District in Saravane Province.</div>
+          <p class="muted"><b>中文翻译</b>：A Magne（阿马涅）是老挝东南部靠近越南边界的一个村庄，位于沙拉湾省萨穆艾县。</p>
+          <p>说明：<b>明写</b>「village in south-eastern <b>Laos</b>」✓</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 泰国与老挝之间的天然边界</b> ｜ <code>Geography of Myanmar.md</code></p>
+          <div class="orig"># Geography of Myanmar<br><br>Myanmar (also known as Burma) is the northwestern-most country of mainland Southeast Asia, <b>bordering China, India, Bangladesh, Thailand and Laos</b>. It lies along the Indian and Eurasian Plates, to the southeast of the Himalayas. To its west is the Bay of Bengal and to its south is the Andaman Sea. It is strategically located near major Indian Ocean shipping lanes.</div>
+          <p class="muted"><b>中文翻译</b>：缅甸（又称 Burma）是东南亚大陆最西北的国家，<b>与中国、印度、孟加拉国、泰国和老挝接壤</b>。它位于印度板块与欧亚板块交界处，在喜马拉雅山脉东南；西临孟加拉湾，南临安达曼海，靠近印度洋主要航道。</p>
+          <p>说明：段落只写「<b>bordering … Thailand and Laos</b>」——它说的是“接壤”，<b>不是“天然边界”</b>，全段也没有出现 “natural boundary” 字样。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 阿茹兰帝国用新铸币对谁宣示独立</b> ｜ <code>Ottoman Empire__1.md</code></p>
+          <div class="orig"># Ottoman Empire<br><br>The discovery of new maritime trade routes by Western European states allowed them to avoid the Ottoman trade monopoly. The Portuguese discovery of the Cape of Good Hope in 1488 initiated a series of Ottoman-Portuguese naval wars in the Indian Ocean throughout the 16th century. The Somali Muslim Ajuran Empire, allied with the Ottomans, defied the Portuguese economic monopoly in the Indian Ocean by employing a new coinage which followed the Ottoman pattern, thus proclaiming an attitude of <b>economic independence in regard to the Portuguese</b>.</div>
+          <p class="muted"><b>中文翻译</b>：西欧国家发现新的海上贸易航线，得以绕开奥斯曼的贸易垄断。1488 年葡萄牙人发现好望角，由此开启了整个 16 世纪在印度洋上的奥斯曼—葡萄牙海战。与奥斯曼结盟的索马里穆斯林阿茹兰帝国，通过采用仿照奥斯曼样式的新铸币，对抗葡萄牙在印度洋的经济垄断，从而对葡萄牙宣示了一种<b>经济独立</b>的姿态。</p>
+          <p>说明：<b>明写</b>「proclaiming … <b>economic independence in regard to the Portuguese</b>」✓</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 葡萄牙人是怎么被赶出去的</b> ｜ <code>Myanmar.md</code></p>
+          <div class="orig"># Myanmar<br><br><b>The dynasty regrouped and defeated the Portuguese in 1613</b> and Siam in 1614. It restored a smaller, more manageable kingdom, encompassing Lower Myanmar, Upper Myanmar, Shan states, Lan Na and upper Tenasserim. The Restored Toungoo kings created a legal and political framework whose basic features would continue well into the 19th century. The crown completely replaced the hereditary chieftainships with appointed governorships in the entire Irrawaddy valley, and greatly reduced the hereditary rights of Shan chiefs. Its trade and secular administrative reforms built a prosperous economy for more than 80 years. From the 1720s onward, the kingdom was beset with repeated Meithei raids into Upper Myanmar and a nagging rebellion in Lan Na. In 1740, the Mon of Lower Myanmar founded the Restored Hanthawaddy Kingdom. Hanthawaddy forces sacked Ava in 1752, ending the 266-year-old Toungoo Dynasty.</div>
+          <p class="muted"><b>中文翻译</b>：<b>该王朝重整旗鼓，于 1613 年击败了葡萄牙人</b>，1614 年击败了暹罗。它重建了一个更小、更易治理的王国，涵盖下缅甸、上缅甸、掸邦诸土邦、兰纳和上丹那沙林；后东吁诸王建立的法律与政治框架的基本特征一直延续到 19 世纪。王室在伊洛瓦底江流域以委任总督取代世袭酋长制，并大幅削减掸族首领的世袭权利；其贸易与世俗行政改革带来了 80 多年的繁荣经济。自 18 世纪 20 年代起，王国屡遭 Meithei 人对上缅甸的侵扰，兰纳也叛乱不断。1740 年，下缅甸的孟族建立了后汉沙瓦底王国；1752 年汉沙瓦底军队洗劫阿瓦，终结了延续 266 年的东吁王朝。</p>
+          <p>说明：<b>金答案就是这段第一句</b> ✓——但这段讲的是“<b>东吁王朝击败葡萄牙人</b>”，<b>没有“驱逐出某地”的说法</b>。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：A Magne 在老挝（明写）；缅甸与泰国、老挝<b>接壤</b>（明写）；阿茹兰帝国用新铸币对<b>葡萄牙</b>宣示经济独立（明写）；东吁王朝 1613 年<b>击败葡萄牙人</b>（明写，＝金答案）。⇒ <b>四段里没有一句提到“天然边界”，更没有“泰国与老挝之间的天然边界”。</b></p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b>（✅ hop 2 已外部核实）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>A Magne 属于哪个国家</td><td>“a village in south-eastern <b>Laos</b>”</td><td>✅ 成立</td></tr>
+          <tr><td>2</td><td><b>泰国与老挝之间的天然边界</b></td><td>库里只说缅甸 “bordering … Thailand and Laos”（<b>接壤</b>）</td><td><b>❌ 不成立</b>：维基「Laos–Thailand border」写明该边界长 1,845 公里、“<b>over half of which follows the Mekong River</b>”，北端才是“<b>tripoint with Myanmar</b>”——<b>泰老之间的天然边界是湄公河</b>，缅甸只是北端三国交界点上的国家，并不夹在两国之间（泰老直接接壤）</td></tr>
+          <tr><td>3</td><td>阿茹兰帝国用新铸币对谁宣示独立</td><td>“proclaiming … <b>economic independence in regard to the Portuguese</b>”</td><td>✅ 成立</td></tr>
+          <tr><td>4</td><td>葡萄牙人是怎么被赶出去的</td><td>“<b>The dynasty regrouped and defeated the Portuguese in 1613</b>”</td><td>✅ 事实成立（＝金答案）；但这段说的是“<b>击败</b>”，<b>没有“驱逐”</b>，也没说地点</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>第 2 跳不成立</b>，而它恰好是把整句题面的“地点”钉死的那一跳：题面问的是“被驱逐出『泰国与老挝之间的天然边界』”，按字面那个地方是<b>湄公河</b>——而库里既没有“天然边界”这一层，也<b>没有“湄公河”</b>（语料 572 段 <code>Mekong</code> <b>0 次</b>、编译页 4094 个 <code>Mekong</code>／<code>湄公河</code> <b>0 个</b>）。⇒ <b>按题面字面读，这道题无处可答</b>；能答出 1613 那句的路径，都要先把“天然边界”改写成“缅甸”。</p>
+
+      <p><b>▸ 现象：wiki 三轮全错</b>（本节只拆 wiki；smart／hybrid 分布见 §1 矩阵）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>预测</th><th>真实调用次数</th><th>耗时</th><th>形态</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1</td><td><code>Somalis</code> ✗</td><td><b>29</b></td><td>22.71 s</td><td><b>点火</b></td></tr>
+          <tr><td>wiki r2</td><td><code>The Vietnamese</code> ✗</td><td>5</td><td>3.81 s</td><td><b>锚错</b></td></tr>
+          <tr><td>wiki r3</td><td><code>Portuguese</code> ✗</td><td><b>33</b></td><td>18.42 s</td><td><b>点火 ＋ 停在 hop 3</b></td></tr>
+        </tbody>
+      </table>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（真实调用次数）</th><th>卡在哪</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1<br>（29 次）</td><td>搜 <code>Ajuran Empire</code> → <code>Somali</code> → <code>Ajuran|Ajuuraan</code> → <code>coin|coins|currency</code> → 读 [<code>ajuran-empire</code>, <code>coin-minting</code>, <code>ottoman-empire</code>] → <code>read_document</code> → 搜 <code>expelled|expulsion|driven out</code> → <code>Thailand|Siam</code> → <code>Magne</code> → 读 [<code>a-magne</code>, <code>thailand</code>, <code>myanmar</code>, <code>siam</code>] → 搜 <code>refugee|fled</code> → <code>Kachin|Shan|Karen|Rohingya|Muslim</code> → <code>Malay</code> → 搜 <code>natural boundary|border|boundary</code> → 读 [<code>patani</code>, <code>PULO</code>, <code>separatist-insurgency</code>] → 搜 <code>Kelantan|Perak|Kedah|Terengganu</code> → <code>Malaysia|Malaya</code> → 读 [<code>malaysia</code>, <code>somalia</code>, <code>somali-republic</code>] → 搜 <code>1965|Singapore|federal</code> → … → 读 <code>index</code> → 搜 <code>Malay|Thai</code> → 读两个 summary</td><td>把“索马里穆斯林被驱逐”当成主线，一路漂到马来半岛、泰国南部、1965 新加坡</td><td><code>Somalis</code> ✗<br><span class="muted">它的输出里甚至自己写了“老挝与泰国以<b>湄公河</b>为天然边界”——用常识修了题面，却仍被索马里这条线带走</span></td></tr>
+          <tr><td>r2<br>（5 次）</td><td>搜 <code>Ajuran</code> → 搜 <code>Magne</code> → 读 [<code>ajuran-empire</code>, <code>a-magne</code>, <code>laos</code>, <code>vietnam</code>] → 读两个文档</td><td>被“A Magne 靠近<b>越南</b>边境”带走</td><td><code>The Vietnamese</code> ✗</td></tr>
+          <tr><td>r3<br>（33 次）</td><td>搜 <code>Ajuran Empire</code> → <b>搜 <code>natural boundary between Thailand</code></b> → … → 搜 <code>proclamation of independence</code>／<code>new coins</code>／<code>currency</code> → 搜 <code>Omani|Oman</code> → 读 [<code>portugal</code>, <code>ajuran-empire</code>, <code>1958-djibouti-referendum</code>, <code>djibouti</code>] → 读三个文档（含 <code>portugal</code> 页）</td><td>一开始就直奔“天然边界”，但库里没有这一层；后段找到了葡萄牙那条线，却只答了“谁”（hop 3 的答案）</td><td><code>Portuguese</code> ✗</td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结</b>：三轮里两轮“点火”（29／33 次调用），一轮直接锚错（<code>The Vietnamese</code>）；<b>没有一轮走到“1613 年东吁王朝击败葡萄牙人”那句话</b>——而它在编译层里明明白白地存在（见下）。</p>
+
+      <p><b>▸ 过程分析 ②：编译的问题，还是 Agent 的问题？</b></p>
+      <p><b>1）先把编译层查清楚</b>：<code>entity/a-magne</code> 页写“老挝东南部”✓；<code>entity/myanmar</code>／<code>entity/thailand</code>／<code>entity/laos</code> 三页都只写“<b>接壤</b>”（如“缅甸与五个国家接壤：中国、印度、孟加拉国、泰国、老挝”），<b>没有一页说过“天然边界”</b>；<code>entity/ajuran-empire</code> 页明写“采用奥斯曼式铸币对抗葡萄牙的经济垄断”✓；金答案那句<b>也在库里</b>——<code>entity/portugal</code> 页写着“在缅甸历史上，复兴的东吁王朝重新集结后，于 <b>1613 年击败了葡萄牙人</b>”，另有 10 个编制页含 “1613”。⇒ <b>编译层既没有制造这个错误，也没有丢掉答案</b>：错误的“天然边界＝缅甸”只存在于<b>题面与标注链</b>里。<b>（这里的“标注链”＝官方 <code>question_decomposition</code> 的四跳 Q/A；它属于<b>元数据，不进语料</b>——链条的问句与占位符在 572 段里 <b>0 命中</b>（<code>&gt;&gt;</code>／<code>#1</code>／<code>natural boundary lies between</code> 全为 0），这也是为什么我们查 <code>natural boundary</code>／<code>Mekong</code> 都是空的：那两个词只活在链条与题面里。链条只用于说明跳转、逐跳评测与构造/质检，agent 在库里看不到它。）</b></p>
+      <p><b>2）所以这题的性质</b>：<b>与 #22 同型——题面与 gold 冲突</b>（这里冲突的是“地点”这一环），而且更硬：#22 的“正北”好歹还有点历史地理的含糊空间，这题的“泰国与老挝之间的天然边界”按字面只有一个答案（<b>湄公河</b>），而库里连“湄公河”都没有。⇒ <b>本题是无效题：不能用来评价 Agent</b>——三轮的“点火”与“锚错”都只是“在一个无解题面上怎么收场”。</p>
+      <p><b>3）顺手暴露一个更普遍的失败形态</b>：<code>natural boundary</code> 这类“<b>关系名词</b>”（天然边界、接壤、所在国、所属行政区域）在库里往往<b>根本没有对应的事实层</b>——我们查过：语料里 <code>natural boundary</code> 只剩 1 篇无关的 <i>Phu Kradueng</i>、<code>tripoint</code> 0 篇、<code>Mekong</code> 0 篇。于是当题面用这类关系名词指代一个实体时，<b>检索必然落空</b>，agent 只能靠常识猜或干脆漂移（r1 就是这样漂的）。</p>
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b>——<b>拒答，而且理由要落在“题面”而不是“证据”</b></p>
+      <p>按字面，那个“地点”是<b>湄公河</b>（一条河），既不是国家、也不是“能被驱逐出去”的实体；所以严格答题者的正确输出是：<i>“题面里的『泰国与老挝之间的天然边界』指向湄公河（一条河），而不是一个国家或地点；按题面无法确定被驱逐的地点，因此这道题无法回答。”</i>（若还想补一句“如果原意是『与泰国、老挝都接壤的那个国家』，那指向缅甸”，也必须明确标为<b>猜测</b>、不作为答案。）</p>
+      <p><b>关键区分：说“没找到证据” ≠ 说“题面指代不成立”。</b>前者是<b>证据层</b>判断，后者是<b>题目层</b>判断。实测里<b>三轮都没有做过题目层判断</b>；而 r1 恰好最刺眼——它<b>自己算出了“老挝与泰国以湄公河为天然边界”</b>（说明它发现了矛盾），却仍然答了 <code>Somalis</code>。<b>发现了矛盾却绕过去猜，才是坏行为</b>；据此拒答才是对的。</p>
+      <p><b>三种情况的正确行为不同，别混</b>：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>题</th><th>病</th><th>正确行为</th></tr></thead>
+        <tbody>
+          <tr><td>#21</td><td>题面成立、答案不唯一（现实 5 个合法解）</td><td><b>不是拒答</b>：列出多个合法解，并说明“标注链支持的是哪一个”</td></tr>
+          <tr><td>#22</td><td>题面与 gold 冲突（“正北”错配）</td><td><b>拒答</b>：指出题面无解（按字面没有指向沙特的读法）</td></tr>
+          <tr><td>#24</td><td>题面与 gold 冲突（“天然边界”错配）</td><td><b>拒答</b>：指出指代不成立（那是湄公河，不是国家）</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 这也解释了为什么本题<b>不能进能力比较的分母</b>：拒答与乱猜在 F1 上都是 0（实测 <code>Somalis</code> 0／<code>The Vietnamese</code> 0／<code>Portuguese</code> 0.06），<b>分数区分不出“对的行为”与“坏的行为”</b>。</p>
+      <p><b>▸ 指标适配：这题用 F1 衡量合不合适？</b></p>
+      <p><b>不合适。</b>原因不是“gold 是句子”，而是<b>这题问的是 “how”</b>：<b>① 等价表述多</b>——如 “They were defeated militarily by the Burmese dynasty in 1613” 或 “By force — the Toungoo dynasty regrouped and beat them” 都语义正确，但 F1 只认与金标准那一种措辞的词面重合；<b>② 长答案被惩罚</b>——F1 含 precision 项，“多说”要扣分，答得更全反而更低（本题实测：三臂的长解释只拿到 <b>0.02–0.08</b> 的词面残分）；<b>③ 与实体型题混算会失真</b>——4 跳这 10 题里本题是句子型、其余多为实体型，混进同一个均值会把这一档整体压低且没有信息量。</p>
+      <p><b>⇒ 替代判据（按成本从低到高）</b>：<b>① 要素覆盖</b>——把 gold 拆成必须出现的事实要素（谁：the dynasty／Toungoo；做了什么：regrouped and defeated；对象：the Portuguese；时间：1613），按覆盖率给分；<b>② LLM 判官</b>——判“回答是否与 gold 的断言等价／被其蕴含”；<b>③ 按答案类型分档</b>——实体型（F1／EM）／数值型（EM）／句子型（要素或判官）各用各的判据，且<b>报数时标注“句子型题的 F1 只是词面下界，不参与跨题均值”</b>。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>测试集要连“判据／答案类型”一起定</b>：题目＋答案之外，还要规定这类题的答案属于哪种类型、用什么判——否则改完金标准再重跑，出来的数仍然不可读（本题就是标本：F1 与“答得好不好”无关）。</li>
+        <li><b>“关系名词”型指代要有事实层托底</b>：<code>natural boundary</code>／<code>tripoint</code>／<code>Mekong</code> 在库里全为 0，题面一用它指代实体，检索必然落空。⇒ 要么改题面（换成实体名），要么把“关系层”补进语料（正是我们前面说的“结构层”缺口）。</li>
+        <li><b>“点火”与“锚错”是两种可区分的失败形态</b>：同题三轮，r1／r3 点火（29／33 次调用、漂移），r2 锚错（5 次就锁到越南）。⇒ 修法不同：点火要判停判据，锚错要“检索结果相关性判断”（对上 §3.3 的 CRAG／Self-RAG）。</li>
+      </ol>
+
+      <h4>3.5 #25 ｜ 与某城接壤的城市（金答案 Rio Linda）</h4>
+      <p><b>英文原题</b>：What city shares a border with the place where the person who went to the state known for its Mediterranean climate during the gold rush worked?</p>
+      <p><b>中文翻译</b>：那个“在淘金热期间去了『以地中海气候著称的那个州』”的人，其工作所在地与哪个城市接壤？</p>
+      <p><b>正确答案</b>：<code>Rio Linda</code></p>
+      <p><b>官方四跳分解</b>：哪个州以地中海气候著称 → <code>California</code> → 淘金热期间去了加州的某个人 → <code>Samuel Brannan</code> → 他的工作地点 → <code>Sacramento</code> → 与萨克拉门托接壤的地方 → <code>Rio Linda</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · 以地中海气候著称的州</b> ｜ <code>Geography of the United States.md</code></p>
+          <div class="orig"># Geography of the United States<br><br>Due to its large size and wide range of geographic features, the United States contains examples of nearly every global climate. The climate is temperate in most areas, subtropical in the Southern United States, tropical in Hawaii and southern Florida, polar in Alaska, semiarid in the Great Plains west of the 100th meridian, <b>Mediterranean in coastal California</b> and arid in the Great Basin. Its comparatively favorable agricultural climate contributed (in part) to the country's rise as a world power, with infrequent severe drought in the major agricultural regions, a general lack of widespread flooding, and a mainly temperate climate that receives adequate precipitation.</div>
+          <p class="muted"><b>中文翻译</b>：由于幅员辽阔、地理特征多样，美国几乎包含了全球所有气候类型的例子。大部分地区气候温和；美国南部为亚热带，夏威夷与南佛罗里达为热带，阿拉斯加为极地气候，100 度经线以西的大平原为半干旱，<b>沿海加利福尼亚为地中海气候</b>，大盆地为干旱。其相对有利的农业气候（部分地）促成了该国崛起为世界强国……</p>
+          <p>说明：<b>明写</b>「<b>Mediterranean in coastal California</b>」✓</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 淘金热期间去了加州的某个人</b> ｜ <code>California Gold Rush__1.md</code></p>
+          <div class="orig"># California Gold Rush<br><br>Rumors of the discovery of gold were confirmed in March 1848 by San Francisco newspaper publisher and merchant <b>Samuel Brannan</b>. Brannan hurriedly set up a store to sell gold prospecting supplies, and walked through the streets of San Francisco, holding aloft a vial of gold, shouting ``Gold! Gold! Gold from the American River! ''</div>
+          <p class="muted"><b>中文翻译</b>：关于发现黄金的传闻，于 1848 年 3 月由旧金山报纸出版人兼商人<b>塞缪尔·布兰南</b>证实。布兰南匆忙开设了一家出售淘金用具的商店，并在<b>旧金山</b>街头高举一瓶金子大喊“金子！金子！来自美国河的金子！”</p>
+          <p>说明：明写人名 ✓。他出现的地点是<b>旧金山</b>而非“加州”——但这一步<b>在本库可推</b>：编译页 <code>entity/san-francisco</code> 明写“旧金山是美国<b>加利福尼亚</b>州城市”，于是“他在旧金山”⇒“他在加州”；时间 1848-03 也落在淘金热期（1848–1855）内。<b>（口径提醒：核对关系时要看整个证据库——语料＋编译页，不能只看这 4 段支撑原文。）</b></p>
+        </li>
+        <li>
+          <p><b>hop 3 · 他的工作地点</b> ｜ <code>History of Sacramento, California.md</code></p>
+          <div class="orig"># History of Sacramento, California<br><br>The history of Sacramento, California, <b>began with its founding by Samuel Brannan and John Augustus Sutter, Jr. in 1848</b> around an embarcadero that his father, John Sutter, Sr. constructed at the confluence of the American and Sacramento Rivers a few years prior.</div>
+          <p class="muted"><b>中文翻译</b>：加利福尼亚州萨克拉门托的历史，始于 1848 年由<b>塞缪尔·布兰南</b>与小约翰·奥古斯都·萨特在该城的建立——建城围绕着其父老约翰·萨特此前数年在美国河与萨克拉门托河交汇处修建的一处内河码头展开。</p>
+          <p>说明：明写“布兰南参与建城” ✓——但把“建城者”读成他的 <b>work location</b>，本身已是一层松动。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 与萨克拉门托接壤的地方</b> ｜ <code>Rio Linda High School.md</code></p>
+          <div class="orig"># Rio Linda High School<br><br>Rio Linda High School is a high school <b>located in Rio Linda, Sacramento, CA</b>. It has an enrollment of 2,035 students. It is part of the Twin Rivers Unified School District, and was formerly part of the Grant Unified School District.</div>
+          <p class="muted"><b>中文翻译</b>：里奥琳达高中是一所位于<b>加利福尼亚州萨克拉门托的里奥琳达</b>（Rio Linda, Sacramento, CA）的高中，在校学生 2,035 人。它隶属于双河联合学区，此前曾隶属于格兰特联合学区。</p>
+          <p>说明：⚠️ 这句说的是里奥琳达<b>在萨克拉门托（县）之内</b>，<b>不是“与萨克拉门托接壤”</b>；而且题面问 “What <b>city</b>”，里奥琳达其实是个 <b>CDP</b>（见下）。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：加州沿海是地中海气候（明写）；布兰南 1848 年 3 月在旧金山证实发现黄金、并开商店卖淘金用具（明写）；布兰南与萨特二世 1848 年建了萨克拉门托（明写）；里奥琳达高中位于“里奥琳达，萨克拉门托，加州”（明写）。⇒ <b>四段里没有一句说“里奥琳达与萨克拉门托接壤”。</b></p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b>（✅ hop 4 与“接壤城市是否唯一”已外部核实）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>以地中海气候著称的州</td><td>“<b>Mediterranean in coastal California</b>”</td><td>✅ 成立</td></tr>
+          <tr><td>2</td><td>淘金热期间去了加州的某个人</td><td>布兰南 1848 年 3 月在<b>旧金山</b>证实发现黄金</td><td><b>✅ 可推</b>：库内明写“旧金山是美国<b>加利福尼亚</b>州城市”（编译页 <code>entity/san-francisco</code>），由“他在旧金山”即可推出“他在加州”；时间 1848-03 也落在淘金热期（1848–1855）内。<b>（注意</b>：这层连接在数据集自己的 20 段里并未明写——含 “San Francisco” 的那段不含 “California”，含 “California” 的那些段不含 SF；是<b>标题线索＋KB 编译页</b>把两端接上的。<b>）</b></td></tr>
+          <tr><td>3</td><td>此人的工作地点</td><td>他与萨特二世<b>共同建立</b>萨克拉门托</td><td>⚠️ 松动：“建城者”被读成“工作地点”</td></tr>
+          <tr><td>4</td><td><b>与萨克拉门托接壤的那个城市</b></td><td>“located in <b>Rio Linda, Sacramento, CA</b>”（在萨克拉门托<b>境内</b>）</td><td><b>❌ 不成立</b>：关系是“在……之内”，不是“接壤”；且维基「Rio Linda, California」首句即 “is a <b>census-designated place (CDP)</b> in Sacramento County”——<b>它是 CDP，不是 city</b></td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>第 4 跳不成立</b>。而且即便接受“接壤”这个读法，<b>题面也不唯一</b>：与萨克拉门托市接壤的城市不止一个——维基「Sacramento, California」条里就点到 <b>West Sacramento</b>（隔萨克拉门托河相对）、<b>Elk Grove</b>、<b>Citrus Heights</b>（另有 Rancho Cordova 等）。⇒ <b>这题同时叠加了三种病：关系错配（in→border）＋ 非唯一解（多个接壤城市）＋ 类型不符（问 city、答 CDP）。</b></p>
+
+      <p><b>▸ 现象：wiki 三轮全错</b>（本节只拆 wiki；smart／hybrid 分布见 §1 矩阵）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>预测</th><th>真实调用次数</th><th>耗时</th><th>形态</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1</td><td><code>Wickham</code> ✗</td><td>16</td><td>12.22 s</td><td><b>跨主题漂移</b>（漂到澳洲）</td></tr>
+          <tr><td>wiki r2</td><td><code>Orange</code> ✗</td><td>7</td><td>4.91 s</td><td>同上（澳洲线）</td></tr>
+          <tr><td>wiki r3</td><td><code>Orange</code> ✗</td><td>8</td><td>5.51 s</td><td>同上（澳洲线）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">对照：<b>闭卷 6/6 全是 <code>Daly City</code></b>（flash ×3、pro ×3，且六次完全一致）——它走的是另一条替代链：旧金山 → 与旧金山接壤的城市 Daly City，即把 hop 3 的 Sacramento 换成了段落里出现的 San Francisco。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（真实调用次数）</th><th>卡在哪</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1<br>（16 次）</td><td>搜 <code>gold rush Mediterranean climate</code> → <code>Mediterranean climate state</code> → <code>gold rush</code> → <code>Mediterranean</code> → <code>went to California</code> → 搜 <code>California</code>(30) → 读 [<code>california</code>, <code>california-gold-rush</code>, <code>soulsbyville</code>] → 搜 <code>Australia|Hargraves</code>(40) → 搜 <code>border|borders|shares a border</code>(40) → 读 [<code>edward-hargraves</code>, <code>australian-gold-rushes</code>, <code>orange</code>, …] → 搜 <code>New South Wales</code> → 搜 <code>city</code> → 读 [<code>james-hannell</code>, <code>newcastle</code>] → 搜 <code>Wickham</code> → 搜 <code>Newcastle</code> → <code>read_document</code></td><td>“gold rush”命中了<b>澳大利亚淘金热</b>，整轮都在这条线上（New South Wales／Newcastle／Wickham）</td><td><code>Wickham</code> ✗<br><span class="muted">Wickham 是澳洲 Newcastle 的城区</span></td></tr>
+          <tr><td>r2<br>（7 次）</td><td>搜 <code>Mediterranean climate gold rush</code> → <code>gold rush California</code> → <code>gold</code>(30) → <code>California</code>(30) → 读 [<code>california</code>, <code>mediterranean-climate</code>, <code>southern-california</code>] → 搜 <code>went to California</code> → 读 [<code>australian-gold-rushes</code>, <code>edward-hargraves</code>, <code>californian-goldfields</code>]</td><td>后半程转到澳洲条目</td><td><code>Orange</code> ✗</td></tr>
+          <tr><td>r3<br>（8 次）</td><td>搜 <code>Mediterranean climate gold rush</code> → <code>gold rush</code> → <code>Mediterranean</code> → <code>went to California</code> → <code>加利福尼亚?</code> → <code>淘金?</code> → 读 [<code>california</code>, <code>australian-gold-rushes</code>, <code>hargraves</code>] → 读 [<code>edward-hargraves</code>, <code>orange</code>, <code>ophir</code>]</td><td>同样落在澳洲线（Ophir 是澳洲淘金热起点）</td><td><code>Orange</code> ✗</td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结</b>：三轮<b>都没走到 Sacramento／Rio Linda 那条线</b>——它们被 “gold rush” 这个词带去了<b>另一场淘金热（澳大利亚）</b>；而闭卷走的是第三条线（旧金山 → Daly City）。<b>三条线各错各的，没有一条能落在金标准上。</b></p>
+
+      <p><b>▸ 过程分析 ②：编译的问题，还是 Agent 的问题？</b></p>
+      <p><b>1）编译层大多忠实，但这次出现了“确定化错误”（新形态）。</b>忠实的那部分：<code>entity/samuel-brannan</code>（“旧金山报纸出版商…1848 年 3 月证实…与萨特二世共同建立萨克拉门托”）、<code>entity/sacramento</code>、<code>entity/california-gold-rush</code> 都与原文一致。'
+        '但 <code>entity/rio-linda</code> 页写成「里奥琳达是美国加利福尼亚州<b>萨克拉门托市的一个地区</b>」，<code>entity/rio-linda-high-school</code> 也写成「位于…<b>萨克拉门托市</b>里奥琳达地区」——'
+        '<b>原文只说 “Rio Linda, Sacramento, CA”（可读作县或都会区），编译层把它“确定化”成了“萨克拉门托市内的一个地区”，这是错的</b>（Rio Linda 是 Sacramento <b>County</b> 里的 CDP，不在市界内）。'
+        '⇒ 与 #22／#24 的“忠实保留原文关系”相反，这里<b>编译层自己把模糊关系收紧成了错的断言</b>。</p>')
+      <p><b>2）Agent 层的病灶是“跨主题漂移”。</b>“gold rush”这个关键词同时命中<b>加利福尼亚淘金热</b>与<b>澳大利亚淘金热</b>两组页面（<code>australian-gold-rushes</code>／<code>edward-hargraves</code>／<code>orange</code>／<code>ophir</code>），wiki 三轮全部被拽到澳洲那条线上（r1 甚至一路搜到 New South Wales／Newcastle／Wickham）。'
+        '⇒ 这是<b>关键词检索的“同词不同事”</b>问题：词面命中，主题不同，而 agent 缺少“当前子目标是否被服务”的判断（对上 §3.3 的 CRAG／相关性判断）。</p>')
+      <p><b>3）所以这题的性质</b>：<b>坏题</b>——题面与 gold 冲突（关系错配）＋ 非唯一解（多个接壤城市）＋ 类型不符（问 city、答 CDP）。按前面的口径，它<b>不能用来评价 Agent</b>。</p>
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b>——<b>拒答</b>，理由要落在题面：</p>
+      <p><i>“与萨克拉门托接壤的城市不止一个（West Sacramento、Elk Grove、Citrus Heights 等），题面无法唯一确定；而且证据里说的里奥琳达是位于萨克拉门托<b>境内</b>的 CDP，不是与其接壤的城市。”</i>'
+        '⇒ 与 #22／#24 同属“题面无解／不唯一 ⇒ 拒答或声明”这一类（#21 则是“多解 ⇒ 列出候选”）。</p>')
+
+      <p><b>▸ 指标适配：这题用 F1 合适吗？</b>——<b>合适</b>。金答案 <code>Rio Linda</code> 是短实体，F1／EM 读数稳定（与 #24 的 “how” 型句子答案正相反）。'
+        '⇒ <b>本题的问题在题目，不在指标</b>：这也说明“指标适配”要<b>逐题看答案类型</b>，而不是一刀切。</p>')
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>编译层会“确定化”模糊关系并造出新错误</b>：原文 “Rio Linda, Sacramento, CA” 只是“在萨克拉门托（县）”，编译页把它收紧成“萨克拉门托<b>市</b>的一个地区”。⇒ 编译不是只做忠实摘要，它还会<b>替原文下判断</b>；这类“收紧”错误要单独抽查（尤其当地名同时是县／市／都会区时）。</li>
+        <li><b>关键词检索会“跨主题漂移”</b>：“gold rush”把三轮全带去澳大利亚淘金热。⇒ 需要“当前子目标相关性判断”作为闸门（CRAG／Self-RAG 的 ISREL），否则词面命中的噪声主题会整条接管推理。</li>
+        <li><b>坏题形态再添一种组合</b>：关系错配（in→border）＋ 非唯一解（多个接壤城市）＋ 类型不符（问 city、答 CDP）——三种病同时出现时，连“正确行为”都要写清楚（本题＝拒答并说明“不唯一＋类型不符”）。</li>
+      </ol>
+
+      <h4>3.6 #26 ｜ “还有其他什么差异”（金答案：two cities）</h4>
+      <p><b>英文原题</b>：Besides areas of the country gaining control of Florida after the conflict Charles Edmund Nugent participated in, what other differences exist between where Carlos Barral died and Real Madrid?</p>
+      <p><b>中文翻译（直译）</b>：除了“在 Charles Edmund Nugent 参与的那场冲突之后取得佛罗里达控制权的那个国家的<b>各个地区</b>”之外，“Carlos Barral 去世的地方”与“皇家马德里”之间还有哪些<b>其他差异</b>？</p>
+      <p><b>正确答案</b>：<code>two cities</code></p>
+      <p><b>官方四跳分解</b>：<code>Charles Edmund Nugent &gt;&gt; conflict</code> → <code>Revolutionary War</code> → 谁在 #1 结束后取得佛罗里达 → <code>Spain</code> → 卡洛斯·巴拉尔死在哪座城市 → <code>Barcelona</code> → 除了 #2 的“那些地区”，#3 与皇家马德里还有哪些差异 → <code>two cities</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · Nugent 参与的那场冲突</b> ｜ <code>Charles Edmund Nugent.md</code></p>
+          <div class="orig"># Charles Edmund Nugent<br><br>Nugent served in the naval brigade in the invasions of Martinique, Saint Lucia, and Guadaloupe during the <b>French Revolutionary Wars</b> and, when William Cornwallis assumed command of the blockade of Brest, Nugent was selected to serve as his Captain of the Fleet during the Napoleonic Wars. He never commanded any fleet or naval station but did rise to the highest rank in the Navy.</div>
+          <p class="muted"><b>中文翻译</b>：努金特曾以海军旅成员身份参加<b>法国大革命战争</b>期间对马提尼克、圣卢西亚与瓜德罗普的入侵；当威廉·康沃利斯接手布雷斯特封锁时，他被选为其舰队上校，参加<b>拿破仑战争</b>期间的行动。他从未指挥过任何舰队或海军基地，但确实晋升到了海军的最高军衔。</p>
+          <p>说明：⚠️ 段里只有「<b>French Revolutionary Wars</b>」与「Napoleonic Wars」——<b>没有"美国独立战争"</b>；而 hop 2 需要恰恰是后者（见下）。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · #1 之后谁取得佛罗里达</b> ｜ <code>Jacksonville, Florida.md</code></p>
+          <div class="orig"># Jacksonville, Florida<br><br>Spain ceded Florida to the British in 1763 after the French and Indian War, and the British soon constructed the King's Road connecting St. Augustine to Georgia. The road crossed the St. Johns River at a narrow point, which the Seminole called Wacca Pilatka and the British called the Cow Ford or Cowford; these names ostensibly reflect the fact that cattle were brought across the river there. The British introduced the cultivation of sugar cane, indigo and fruits as well the export of lumber. As a result, the northeastern Florida area prospered economically more than it had under the Spanish. Britain ceded control of the territory back to Spain in 1783, <b>after its defeat in the American Revolutionary War</b>, and the settlement at the Cow Ford continued to grow. After Spain ceded the Florida Territory to the United States in 1821, American settlers on the north side of the Cow Ford decided to plan a town, laying out the streets and plats. They soon named the town Jacksonville, after Andrew Jackson. Led by Isaiah D. Hart, residents wrote a charter for a town government, which was approved by the Florida Legislative Council on February 9, 1832.</div>
+          <p class="muted"><b>中文翻译</b>：1763 年法印战争后西班牙把佛罗里达割让给英国……<b>1783 年，英国在</b>美国独立战争中<b>战败后，把该领地的控制权归还给西班牙</b>，Cow Ford 的定居点继续发展。1821 年西班牙把佛罗里达领地割让给美国后，美国定居者决定建镇，随后以安德鲁·杰克逊之名把镇子命名为 Jacksonville……</p>
+          <p>说明：✅ 明写「after its defeat in the <b>American Revolutionary War</b>」——所以 #1 应当是<b>美国独立战争</b>，而 hop 1 的答案只写“Revolutionary War”、其支撑段讲的却是<b>法国</b>大革命战争。⇒ <b>第 1、2 跳对不上</b>。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 巴拉尔死在哪座城市</b> ｜ <code>Carlos Barral.md</code></p>
+          <div class="orig"># Carlos Barral<br><br>Carlos Barral was <b>born in Barcelona, Spain</b>. In 1957, he joined Víctor Seix in the management of the publishing house Seix Barral, which had been founded by his parents in 1911, and which became the most prestigious publishing house in the 1960s and thereafter.</div>
+          <p class="muted"><b>中文翻译</b>：卡洛斯·巴拉尔<b>出生于</b>西班牙巴塞罗那。1957 年，他加入维克托·塞伊什，共同管理由其父母于 1911 年创办的 Seix Barral 出版社，该社在 1960 年代及其后成为最负盛名的出版社。</p>
+          <p>说明：⚠️ 全段只写「<b>born in Barcelona</b>」——<b>没有一句提到他"去世"在哪</b>。⇒ 这一跳的答案是<b>从出生地推出来的</b>（或来自世界知识），不是读出来的。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 还有哪些差异</b> ｜ <code>FC Barcelona.md</code></p>
+          <div class="orig"># FC Barcelona<br><br>There is often a fierce rivalry between the two strongest teams in a national league, and this is particularly the case in La Liga, where the game between Barcelona and Real Madrid is known as El Clásico. From the start of national competitions the clubs were seen as representatives of two rival regions in Spain: Catalonia and Castile, <b>as well as of the two cities</b>. The rivalry reflects what many regard as the political and cultural tensions felt between Catalans and the Castilians, seen by one author as a re-enactment of the Spanish Civil War.</div>
+          <p class="muted"><b>中文翻译</b>：一个国家联赛中两支最强球队之间往往存在激烈对抗，西甲尤其如此——巴塞罗那与皇家马德里的比赛被称为 El Clásico。自全国性赛事创办之初，这两家俱乐部就被视为西班牙两个对立地区（加泰罗尼亚与卡斯蒂利亚）的代表，<b>同时也是"这两座城市"的代表</b>。这种对抗反映了许多人认为存在于加泰罗尼亚人与卡斯蒂利亚人之间的政治与文化紧张关系……</p>
+          <p>说明：⚠️ <b>金答案 <code>two cities</code> 就是从这句的「as well as of the two cities」抠出来的短语</b>——它不是对“还有哪些差异”的回答。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：努金特参加过法国大革命战争与拿破仑战争；1783 年英国（在<b>美国</b>独立战争中战败后）把佛罗里达还给西班牙；巴拉尔<b>出生</b>于巴塞罗那；巴萨与皇马代表加泰罗尼亚与卡斯蒂利亚“<b>这两座城市</b>”。⇒ <b>四段里既没有“America 独立战争＝努金特参与的冲突”，也没有“巴拉尔去世在哪”。</b></p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Nugent 参与的“那场冲突”</td><td>“during the <b>French Revolutionary Wars</b> … during the Napoleonic Wars”</td><td><b>❌ 对不上</b>：段落讲的是法国大革命战争／拿破仑战争，而 hop 2 需要的是<b>美国</b>独立战争</td></tr>
+          <tr><td>2</td><td>#1 之后谁取得佛罗里达</td><td>“ceded control … back to <b>Spain</b> in 1783, after its defeat in the <b>American Revolutionary War</b>”</td><td>✅ 自身成立（但依赖第 1 跳指的是美国独立战争）</td></tr>
+          <tr><td>3</td><td>巴拉尔<b>去世</b>在哪座城市</td><td>“was <b>born in Barcelona</b>, Spain”</td><td><b>❌ 无据</b>：只有出生地，没有去世地</td></tr>
+          <tr><td>4</td><td>两者的“其他差异”</td><td>“as well as of the <b>two cities</b>”</td><td><b>❌ 金答案不是答案</b>：短语片段；且题面把<b>城市</b>（巴拉尔去世地）与<b>俱乐部</b>（皇家马德里）并比，属类别错配</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>四种缺陷同时出现</b>：hop 1／2 错位（“革命战争”指代不清）＋ hop 3 无据（出生地 ≠ 去世地）＋ 金答案是句子片段（<code>two cities</code>）＋ 题面类别错配（城市 vs 俱乐部）。另外题面自身的措辞也是拧的：把“<b>西班牙</b>（一个国家）取得佛罗里达”写成了“那个国家的<b>各个地区</b>”。</p>
+
+      <p><b>▸ 字面拆解：为什么这题“读一遍就能判它坏”</b></p>
+      <p>句子骨架＝<b>“Besides [Z]，what other differences exist between [X] and [Y]？”</b>，三处坏在句法层：① <b>Z 的指代坏</b>：“the country”＝西班牙（见下），可“取得佛罗里达控制权”的主体是<b>国家</b>，写成“那个国家的<b>各个地区</b>取得佛罗里达”就换了类；② <b>Besides 两边不同类</b>：Z 是“地区集合”，不是“某一项差异”，这个“除了……之外”挂不上；③ <b>X 与 Y 不可比</b>：一边是<b>城市</b>（巴拉尔去世地），一边是<b>俱乐部</b>（皇家马德里）——唯一的“差异”就是“一个是城市、一个是俱乐部”，而这恰好是闭卷四轮给出的回答。</p>
+      <p><b>它本来想说什么（推测，可自洽）</b>：hop 3 原文是 <code>Besides the areas of #2, …</code>，而 <code>#2 = Spain</code>——所以“areas of #2”最可能指<b>西班牙的各个地区</b>（即支撑段里那对“加泰罗尼亚 vs 卡斯蒂利亚”）。那么这句想问的其实是：<b>“除了『巴萨与皇马分别代表加泰罗尼亚和卡斯蒂利亚』之外，还有哪些其他差异？”</b> 但<b>即便按这个读法，金答案 <code>two cities</code> 仍不成立</b>——它回的正是被 Besides <b>排除掉</b>的那一项，属答非所问。</p>
+      <p><b>数据核对：“the country”到底指谁</b>：<code>Jacksonville, Florida.md</code> 明写“1783 年英国在<b>美国独立战争</b>战败后把佛罗里达归还<b>西班牙</b>”，所以指的是<b>西班牙</b>；而库里的 Florida <b>只有两种身份</b>——<code>entity/florida</code>（“美国东南部的一个州”）与 <code>entity/jacksonville</code>（“美国佛罗里达州东北部城市”），<b>没有任何一页把 Florida 当城市</b>，也没有乌拉圭／智利等同名 “Florida”。⇒ 这题的坏<b>不在 KB</b>，而在标注链 hop 1／3 与最终题面。</p>
+      <p><b>▸ 现象：wiki 三轮全错</b>（本节只拆 wiki；smart／hybrid 分布见 §1 矩阵）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>预测</th><th>真实调用次数</th><th>耗时</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1</td><td><code>France</code> ✗</td><td>11</td><td>7.02 s</td></tr>
+          <tr><td>wiki r2</td><td><code>Madrid</code> ✗</td><td>9</td><td>6.13 s</td></tr>
+          <tr><td>wiki r3</td><td><code>Madrid</code> ✗</td><td>9</td><td>6.73 s</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">对照：<b>闭卷六轮里有四轮</b>（含两轮 pro）给出的都是“<b>Barcelona is a city, while Real Madrid is a football club</b>”这类回答——<b>它们其实在指出题面的类别错配</b>，只是 F1 判 0；flash r1 给的是“Barcelona is in Catalonia, while Madrid is in the Community of Madrid”。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（真实调用次数）</th><th>卡在哪</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1<br>（11 次）</td><td>搜 <code>Charles Edmund Nugent</code> → <code>Carlos Barral</code> → <code>Real Madrid</code> → 读两个 summary → 搜 <code>Madrid</code> → 读 [<code>real-madrid</code>, <code>madrid</code>, <code>spain</code>, <code>barcelona</code>] → 读 [<code>carlos-barral</code>, <code>florida</code>] → <code>read_document</code> → 搜 <code>佛罗里达.*(控制|割让|获得)|美国独立战争</code>（regex）→ <code>read_document</code> → 读 [<code>united-kingdom</code>]</td><td>它已经摸到“佛罗里达＋独立战争”这条线，但最终答成“参与国”那一侧</td><td><code>France</code> ✗</td></tr>
+          <tr><td>r2<br>（9 次）</td><td>搜 Nugent → Barral → Real Madrid → 读两个 summary → 搜 <code>Florida|Real Madrid|Madrid</code> → <b>搜 <code>Carlos Barral died|Barral death</code></b> → 读 [<code>real-madrid</code>, <code>florida</code>, <code>carlos-barral</code>] → 搜 <code>Barral</code>(20) → 搜 <code>d13|d14|…|d18</code></td><td><b>它明确去查了“Barral 的死”</b>——而库里没有这条（只有出生地）</td><td><code>Madrid</code> ✗</td></tr>
+          <tr><td>r3<br>（9 次）</td><td>搜 Nugent → Barral → 读两个 summary → 读两个文档 → 搜 Real Madrid → 搜 <code>Spain|Florida</code>(regex) → 读 [<code>florida</code>, <code>spain</code>, <code>carlos-barral</code>, <code>barcelona</code>] → 读 [<code>real-madrid</code>]</td><td>同样是“知道要查死地、库里没有”</td><td><code>Madrid</code> ✗</td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结</b>：三轮都**先读到了正确的页面**（<code>carlos-barral</code>／<code>real-madrid</code>／<code>florida</code>），r2 甚至专门搜了 “Barral died”；但**库里没有“去世地”这条**，于是它们只能就地猜（答 <code>Madrid</code>——把皇家马德里当成城市）。⇒ 这轮的失败**不是检索不到页面，而是证据本身缺那一跳**。</p>
+
+      <p><b>▸ 过程分析 ②：编译的问题，还是 Agent 的问题？</b></p>
+      <p><b>1）编译层：这次是“忠实保留了缺陷 ＋ 多了一处同名合并”。</b>忠实的一面：<code>entity/charles-edmund-nugent</code> 页写的是“曾参加<b>法国大革命战争</b>中的加勒比海入侵行动，并在拿破仑战争期间担任舰队上校”——<b>没有补成“美国独立战争”</b>（即：hop 1 的错配来自标注链，不是编译）；'
+        '<code>entity/carlos-barral</code> 页同样只写“出生于西班牙巴塞罗那”，<b>没有补死地</b>（来源本身就没有）。'
+        '新的一面：<code>entity/barcelona</code> 页把<b>两个不同的巴塞罗那合并了</b>——“巴塞罗那是<b>委内瑞拉</b>安索阿特吉州的首府城市……巴塞罗那也是<b>西班牙</b>的一座城市，是卡洛斯·巴拉尔的出生地”。⇒ 这是编译层<b>同名异实体合并／消歧失败</b>，与前面见过的“补写”（#23 的“德国神学家”、#25 hop 2 的“旧金山⊂加州”）和“收紧出错”（#25 的“萨克拉门托市的一个地区”）并列为第三种形态。</p>')
+      <p><b>2）Agent 层：它做的其实是对的方向。</b>三轮都在第一、二步就读到了 <code>carlos-barral</code>、<code>real-madrid</code>、<code>florida</code> 这三页；r2 还专门搜了 <code>Carlos Barral died|Barral death</code>——<b>它知道缺的是“死地”这一跳</b>。库里确实没有，于是它就地取了库里能抓到的词（<code>Madrid</code>／<code>France</code>）。⇒ 这是<b>证据缺口下的收场方式问题</b>，而不是“找不到页面”。</p>')
+      <p><b>3）所以这题的性质</b>：<b>坏题</b>——而且是“多缺陷叠加”的极端样本（第 4 点里的四种缺陷）。按前面的口径，<b>它不能用来评价 Agent</b>。</p>')
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b></p>
+      <p>不是拒答、也不是给出某个实体，而是<b>指出题面不可比 ＋ 金答案不是答案</b>：</p>
+      <p><i>“题面把‘Carlos Barral 去世的地方’（一座<b>城市</b>）与‘皇家马德里’（一家<b>足球俱乐部</b>）并列求‘差异’，两者不同类，无法比较；而且证据里只写了巴拉尔<b>出生</b>于巴塞罗那，没有写他去世在哪。另：金答案 ‘two cities’ 是原句的片段，不是对‘差异’的回答。”</i></p>
+      <p class="muted">有意思的是：<b>闭卷六轮里有四轮自发给出了‘一个城市 vs 一个俱乐部’这种回答</b>——也就是说，<b>模型本来就能做对该做的事</b>，是题面和指标把这种回答判成了错。</p>
+
+      <p><b>▸ 指标适配：这题用 F1／EM 合适吗？</b>——<b>都无从谈起</b>：金答案是句子片段 <code>two cities</code>，既不是实体也不是可裁判的断言；而“正确输出”（指出不可比）在 F1／EM 下必然是 0。⇒ 这题的<b>指标有效性也归零</b>，与 #24（指标不适配）、#25（指标适配、题目不适配）构成三种不同的“坏法 × 指标”组合。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>编译层的第三种形态：同名异实体合并／消歧失败</b>（<code>entity/barcelona</code> 把委内瑞拉与西班牙的两座同名城市并成一页）。⇒ 与“补写”“收紧”并列，都属编译层要单独抽查的行为。</li>
+        <li><b>“跳无据”要在逐跳核对里单独标出</b>：本题 hop 3 问“去世地”，支撑段只给“出生地”——这类“答案要点在文本里根本没有”的跳，靠逐跳核对就能抓出来（不能只看最终答案对不对）。</li>
+        <li><b>金答案可能是“句子片段”</b>：<code>two cities</code> 是从原句抠出来的短语。⇒ 这类题的判据既不是 F1 也不是 EM，而是<b>先判题目无效</b>；测试集构建时要专门筛“答案是否为完整可裁判单元”。</li>
+        <li><b>“指标惩罚对的行为”再添一例</b>：闭卷四轮给出了“城市 vs 俱乐部”这个正确观察，却被 F1 判 0。⇒ 与 #21（认输被判 0）同类，进一步说明<b>指标标准与产品标准在这类题上方向相反</b>。</li>
+        <li><b>坏题有“可判定层级”</b>：<b>L-a 句子层可判</b>（#26：读一遍就能看出类别错配、Besides 挂不上、金答案是片段）／<b>L-b 需要外部事实</b>（#21 的 5 个合法解、#22 的“正北”、#24 的湄公河、#25 的多个接壤城市）／<b>L-c 需要逐跳核对</b>（#23 的“德国人”、#24 的“驱逐”措辞这类“松动”）。⇒ 实操价值：L-a 可以在入库前用规则／小模型自动筛掉，L-b、L-c 才需要人工或外部核验。</li>
+      </ol>
+
+      <h4>3.7 #27 ｜ 最湿年份（金答案 1905）——第二道正常题</h4>
+      <p><b>英文原题</b>：What was the wettest year in the second largest city in the state where Yuma's Library District is located?</p>
+      <p><b>中文翻译</b>：Yuma（尤马）的图书馆区所在的<b>那个州</b>里，<b>第二大城市</b>最湿的一年是哪一年？</p>
+      <p><b>正确答案</b>：<code>1905</code></p>
+      <p><b>官方四跳分解</b>：<code>Yuma &gt;&gt; located in the administrative territorial entity</code> → <code>Yuma County</code> → #1 的图书馆区在哪个州 → <code>Arizona</code> → #2 的第二大城市 → <code>Tucson</code> → #3 的最湿年份 → <code>1905</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · Yuma 属于哪个行政区域</b> ｜ <code>Yuma, Colorado.md</code></p>
+          <div class="orig"># Yuma, Colorado<br><br>The City of Yuma is a Home Rule Municipality that is the most populous city <b>in Yuma County, Colorado</b>, United States. The population was 3,524 at the 2010 census.</div>
+          <p class="muted"><b>中文翻译</b>：尤马市是一个自治市（Home Rule Municipality），是<b>科罗拉多州</b>尤马县人口最多的城市；2010 年人口普查时为 3,524 人。</p>
+          <p>说明：⚠️ <b>这是"科罗拉多的尤马"</b>——与题面所需的（亚利桑那的）Yuma County Library District <b>同名不同地</b>；这一跳其实**不是答题所必需**（题面里的“Yuma's Library District”由图书馆区段自己解决）。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 图书馆区在哪个州</b> ｜ <code>Yuma County Library District.md</code></p>
+          <div class="orig"># Yuma County Library District<br><br>The Yuma County Library District serves the population of <b>Yuma County, Arizona</b>. Today the library district consists of the nearly 80,000 square foot Main Library located in Yuma as well as branches in downtown Yuma, the Foothills, Somerton, San Luis, Wellton, Dateland, and Roll. The first Yuma Library, a Carnegie library, opened February 24, 1921 with 1,053 volumes and seating for 20 persons. Located in Sunset Park, the Yuma Carnegie Library underwent several expansions and renovations over the years, including a $4.2 million renovation completed in 2009. The Yuma Carnegie library still operates today as the Heritage Branch Library in downtown Yuma.</div>
+          <p class="muted"><b>中文翻译</b>：尤马县图书馆区服务于<b>亚利桑那州</b>尤马县的居民。如今该图书馆区由位于尤马、面积近 80,000 平方英尺的主图书馆，以及分布在尤马市中心、Foothills、Somerton、San Luis、Wellton、Dateland 与 Roll 的分馆组成。第一家尤马图书馆是卡内基图书馆，1921 年 2 月 24 日开馆，当时有 1,053 册藏书、20 个座位……</p>
+          <p>说明：✅ <b>明写“Yuma County, Arizona”</b>——题面的指代在这一段就唯一确定。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 该州的第二大城市</b> ｜ <code>Tucson, Arizona__1.md</code></p>
+          <div class="orig"># Tucson, Arizona<br><br>Tucson is located 118 mi (190 km) southeast of Phoenix and 60 mi (97 km) north of the United States - Mexico border. The 2010 United States Census puts the city's population at 520,116 with a metropolitan area population at 980,263. In 2009, Tucson ranked as the 32nd largest city and 52nd largest metropolitan area in the United States. A major city in the Arizona Sun Corridor, Tucson is the largest city in southern Arizona, <b>the second largest in the state after Phoenix</b>. It is also the largest city in the area of the Gadsden Purchase. As of 2015, The Greater Tucson Metro area has exceeded a population of 1 million.</div>
+          <p class="muted"><b>中文翻译</b>：图森位于菲尼克斯东南 118 英里（190 公里）、美墨边境以北 60 英里（97 公里）。2010 年美国人口普查显示该市人口为 520,116，都会区人口 980,263。2009 年图森位列全美第 32 大城市、第 52 大都会区。作为亚利桑那“太阳走廊”的重要城市，图森是亚利桑那州南部最大的城市，<b>是仅次于菲尼克斯的全州第二大城市</b>；它也是加兹登购地区域内最大的城市。截至 2015 年，大图森都会区人口已超过 100 万。</p>
+          <p>说明：✅ <b>明写“the second largest in the state after Phoenix”</b>。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 图森的最湿年份</b> ｜ <code>Tucson, Arizona.md</code></p>
+          <div class="orig"># Tucson, Arizona<br><br>At the University of Arizona, where records have been kept since 1894, the record maximum temperature was 115 °F (46 °C) on June 19, 1960, and July 28, 1995, and the record minimum temperature was 6 °F (−14 °C) on January 7, 1913. There are an average of 150.1 days annually with highs of 90 °F (32 °C) or higher and an average of 26.4 days with lows reaching or below the freezing mark. Average annual precipitation is 11.15 in (283 mm). There is an average of 49 days with measurable precipitation. <b>The wettest year was 1905</b> with 24.17 in (614 mm) and the driest year was 1924 with 5.07 in (129 mm). The most precipitation in one month was 7.56 in (192 mm) in July 1984. The most precipitation in 24 hours was 4.16 in (106 mm) on October 1, 1983. Annual snowfall averages 0.7 in (1.8 cm). The most snow in one year was 7.2 in (18 cm) in 1987. The most snow in one month was 6.0 in (15 cm) in January 1898 and March 1922.</div>
+          <p class="muted"><b>中文翻译</b>：在亚利桑那大学（记录自 1894 年起），最高气温纪录为 115 °F（1960-06-19 与 1995-07-28），最低气温纪录为 6 °F（1913-01-07）。每年平均有 150.1 天气温达 90 °F 以上，平均 26.4 天最低气温达到或低于冰点。年平均降水量 11.15 英寸（283 毫米），平均每年有 49 天出现可测量降水。<b>最湿年份是 1905 年，降水 24.17 英寸（614 毫米）</b>；最干年份是 1924 年，5.07 英寸（129 毫米）。单月最大降水为 1984 年 7 月的 7.56 英寸；24 小时最大降水为 1983 年 10 月 1 日的 4.16 英寸。年降雪平均 0.7 英寸；单年最大降雪为 1987 年的 7.2 英寸……</p>
+          <p>说明：✅ <b>明写“The wettest year was 1905”</b>；同段还有 1913（最低温）、1924（最干）、1983／1984／1987 等干扰项。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：Yuma（科罗拉多那座）在科罗拉多尤马县；尤马县图书馆区服务于<b>亚利桑那州</b>尤马县；图森是<b>亚利桑那州第二大城市</b>；图森<b>最湿年份是 1905</b>。⇒ <b>题面需要的三跳（州 → 第二大城市 → 最湿年份）全部明写。</b></p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Yuma 属于哪个县</td><td>“the most populous city in <b>Yuma County, Colorado</b>”</td><td>⚠️ 成立但**同名不同地**：这是科罗拉多的尤马；链条其实不需要它</td></tr>
+          <tr><td>2</td><td>该图书馆区在哪个州</td><td>“serves the population of <b>Yuma County, Arizona</b>”</td><td>✅ 明写（题面指代在此唯一确定）</td></tr>
+          <tr><td>3</td><td>该州第二大城市</td><td>“<b>the second largest in the state after Phoenix</b>”（Tucson）</td><td>✅ 明写</td></tr>
+          <tr><td>4</td><td>该市最湿年份</td><td>“<b>The wettest year was 1905</b>”</td><td>✅ 明写</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>除第 1 跳的“同名”注记外，其余三跳都是明写</b>；题面每个指代都能在库内唯一解析。⇒ <b>本题成立（正常题）</b>。</p>
+
+      <p><b>▸ 正确解法：这题该怎么一步步找到答案</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面给的约束</th><th>去哪段／哪页找</th><th>证据原句（摘）</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>“Yuma's Library District”</td><td><code>Yuma County Library District.md</code></td><td>“serves the population of <b>Yuma County, Arizona</b>”</td><td>该图书馆区在<b>亚利桑那州</b>（一步到位，不需要先查 Yuma 属于哪个县）</td></tr>
+          <tr><td>2</td><td>“the <b>second largest</b> city in the state”</td><td><code>Tucson, Arizona__1.md</code></td><td>“the <b>second largest in the state after Phoenix</b>”</td><td>图森</td></tr>
+          <tr><td>3</td><td>“the <b>wettest</b> year”</td><td><code>Tucson, Arizona.md</code></td><td>“<b>The wettest year was 1905</b>”</td><td><b>1905</b></td></tr>
+        </tbody>
+      </table>
+      <p>⇒ 一句话：<b>图书馆区页给州 → 图森页给“州内第二大城市” → 图森气温/降水节给“最湿年份”</b>。三步都在同一批页面里，且每页自带下一跳所需的信息。</p>
+
+      <p><b>▸ 现象：三臂九轮全对</b>（本节仍只拆 wiki；smart／hybrid 同样全对）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>臂</th><th>r1</th><th>r2</th><th>r3</th><th>真实调用次数</th><th>耗时</th></tr></thead>
+        <tbody>
+          <tr><td>wiki</td><td>1905 ✓</td><td>1905 ✓</td><td>1905 ✓</td><td>7／6／5</td><td>5.2／5.7／4.1 s</td></tr>
+          <tr><td>smart-v3</td><td>1905 ✓</td><td>1905 ✓</td><td>1905 ✓</td><td>2／2／2</td><td>3.6／3.2／2.8 s</td></tr>
+          <tr><td>hybrid</td><td>1905 ✓</td><td><code>Answer: 1905</code>（0.67）</td><td>1905 ✓</td><td>2／2／2</td><td>3.9／3.8／4.3 s</td></tr>
+          <tr><td><b>闭卷</b></td><td>1905</td><td><b>1983</b>（＝单日最大降水那年的干扰）</td><td>1905</td><td>0／0／0</td><td>8.7／3.6／12.2 s</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">⇒ 这题**记忆也能答**（闭卷 5/6 对）；三臂里 smart／hybrid 只用 2 次调用就收尾，wiki 5–7 次。唯一的分数差来自 hybrid r2 的输出前缀（<code>Answer:</code> → F1 0.67）。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（真实调用次数）</th><th>关键差异</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1<br>（7 次）</td><td>搜 <code>Yuma.*Library District|Library District.*Yuma</code>（正则）→ 搜 <code>Yuma</code> → 读 [<code>yuma-county-library-district</code>] → 读 [<code>arizona</code>] → 搜 <code>wettest year|Tucson.*wettest|wettest.*Tucson</code> → 读 [<code>tucson</code>] → 搜 <code>wettest</code></td><td>入口用**正则**一次命中图书馆区页</td><td>1905 ✓</td></tr>
+          <tr><td>r2<br>（6 次）</td><td>搜 <code>Yuma.*Library District|Library District</code> → 搜 <code>Yuma</code> → 读 [<code>yuma-county-library-district</code>, <code>yuma</code>] → 读 [<code>arizona</code>, <b><code>yuma-county</code></b>] → 搜 <code>Tucson|wettest year|second largest city</code> → 读 [<code>tucson</code>, summary]</td><td>它**读过** <code>yuma-county</code>（＝科罗拉多那页），但没被带偏</td><td>1905 ✓</td></tr>
+          <tr><td>r3<br>（5 次）</td><td>搜 <code>Yuma.*Library District</code> → 搜 <code>Yuma</code> → 读 [<code>yuma-county-library-district</code>, <code>arizona</code>] → 搜 <code>Arizona|Phoenix|Tucson</code> → 读 [summary, <code>tucson</code>]</td><td><b>最省</b>：5 次调用收尾</td><td>1905 ✓</td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结</b>：三轮的入口都是同一形态——<b>用“Yuma + Library District”这类词面线索一次命中图书馆区页</b>，随后 <code>arizona</code> → <code>tucson</code> 每跳命中。⇒ 与坏题（#25 的“gold rush”漂到澳洲、#24 的“天然边界”0 命中）对照：**这题的题面用词与语料用词是对齐的**，所以检索不费劲。</p>
+
+      <p><b>▸ 过程分析 ②：编译层核查</b></p>
+      <p><b>1）答案路径上的页面都忠实且充分</b>：<code>entity/yuma-county-library-district</code> 明写“服务于美国<b>亚利桑那州</b>尤马县人口”；<code>entity/arizona</code> 明写“尤马县及其图书馆区位于该州境内”“<b>图森是该州第二大城市</b>”；<code>entity/tucson</code> 明写“**最湿润年份：1905 年**”。⇒ 三步在编译层里都有落点，且表述与原文一致。</p>
+      <p><b>2）但编译层出了“同名混链”（不影响本题）</b>：<code>entity/yuma-county</code> 页的内容是<b>科罗拉多</b>的（“<b>美国科罗拉多州</b>的一个县，尤马市为其人口最多的城市”），然而亚利桑那的图书馆区页却把它链成“[[entity/yuma-county|尤马县]]图书馆区”；<code>entity/yuma</code> 页又说“尤马是美国<b>亚利桑那州</b>尤马县的城市”，却把“尤马市”链到科罗拉多的 <code>entity/yuma-colorado</code>。⇒ 两个“Yuma 县／市”在图上混在了一起。有意思的是 r2 **确实读过**那页（科罗拉多的 yuma-county），但因为答案路径不依赖它，**没被带偏**。</p>
+      <p><b>3）所以本题的性质</b>：<b>正常题</b>——题面成立、三跳明写、gold 可推；编译层的“同名”瑕疵没有进入答案路径。</p>
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b></p>
+      <p>**直接给出 <code>1905</code>**（题面与链条成立，不需要拒答或列候选）。若想更严谨，可附一句限定：<i>“注：库内另有同名的 Yuma, Colorado；本题指的是亚利桑那的 Yuma County Library District。”</i>——这是**加分项而非必需项**（因为题面里的 “Yuma's Library District” 在库内唯一）。</p>
+
+      <p><b>▸ 指标适配：这题用 F1／EM 合适吗？</b>——<b>合适</b>：金答案是四位年份，属“数值／短实体”型，F1 与 EM 读数稳定。本题唯一的分差来自 hybrid r2 的 `Answer:` 前缀（0.67）——那是**输出格式**问题，不是判据问题。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>“好题长什么样”——可作入库标准的草稿</b>：① 题面每个指代都能在语料内**唯一解析**（“Yuma's Library District” → 图书馆区页）；② 每一跳的关键事实在指定段落里**明写**（亚利桑那／州内第二大／最湿 1905）；③ 答案**类型单一、可裁判**（年份）；④ 题面用词与语料用词**对齐**（词面检索即可命中）。</li>
+        <li><b>“同名实体”问题清单再添一例</b>：编译页把<b>科罗拉多与亚利桑那的两个 Yuma 县／市混链</b>。这是本页第三次遇到同类问题（#25 的 Rio Linda＝萨克拉门托县内 CDP、#26 的两座 Barcelona 合页、#27 的两个 Yuma 混链）⇒ 建议在 §6 收口时**单列一份“同名实体清单”**，作为重做语料／编译时的必查项。</li>
+        <li><b>好题上“入口一次命中”的表现</b>：三轮 wiki 都用“Yuma＋Library District”这类词面线索一次命中，随后三跳都命中、5–7 次调用收尾。⇒ 与坏题对照可见：**检索命中率不是“能力问题”，而是“题面—语料对齐度”问题**。</li>
+      </ol>
+
+      <h4>3.8 #28 ｜ 与某城接壤（金答案 Rio Linda）——#25 的同尾链兄弟题</h4>
+      <p><b>英文原题</b>：What shares a border with the city where the person who went to the state where Baskin-Robbins was founded during the gold rush works?</p>
+      <p><b>中文翻译</b>：那个“在淘金热期间去了『Baskin-Robbins 创立所在的那个州』”的人，其<b>工作所在城市</b>与<b>什么</b>接壤？</p>
+      <p><b>正确答案</b>：<code>Rio Linda</code></p>
+      <p><b>官方四跳分解</b>：Baskin-Robbins 创立于哪个州 → <code>California</code> → 淘金热期间去了加州的某个人 → <code>Samuel Brannan</code> → 他的工作地点 → <code>Sacramento</code> → 与萨克拉门托接壤的东西 → <code>Rio Linda</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · Baskin-Robbins 创立于哪个州</b> ｜ <code>Baskin-Robbins.md</code></p>
+          <div class="orig"># Baskin-Robbins<br><br>Baskin-Robbins is an American chain of ice cream and cake specialty shop restaurants. Based in Canton, Massachusetts, it was <b>founded in 1945 by Burt Baskin and Irv Robbins in Glendale, California</b>. It claims to be the world's largest chain of ice cream specialty stores, with 7,500 locations, including nearly 2,500 shops in the United States and over 5,000 in other countries as of December 28, 2013. Baskin-Robbins sells ice cream in nearly 50 countries.</div>
+          <p class="muted"><b>中文翻译</b>：Baskin-Robbins 是美国冰淇淋与蛋糕连锁专卖店品牌，总部位于马萨诸塞州坎顿；<b>1945 年由 Burt Baskin 与 Irv Robbins 创立于加州格伦代尔</b>。它自称是全球最大的冰淇淋专卖连锁，拥有 7,500 家门店（美国近 2,500 家、海外 5,000 余家，截至 2013-12-28），在近 50 个国家销售冰淇淋。</p>
+          <p>说明：✅ <b>明写"加州"</b>——本跳干净。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 淘金热期间去了加州的人</b> ｜ <code>California Gold Rush__1.md</code>（<b>与 #25 同一段</b>）</p>
+          <div class="orig"># California Gold Rush<br><br>Rumors of the discovery of gold were confirmed in March 1848 by San Francisco newspaper publisher and merchant <b>Samuel Brannan</b>. Brannan hurriedly set up a store to sell gold prospecting supplies, and walked through the streets of San Francisco, holding aloft a vial of gold, shouting ``Gold! Gold! Gold from the American River! ''</div>
+          <p class="muted"><b>中文翻译</b>：关于发现黄金的传闻，于 1848 年 3 月由旧金山报纸出版人兼商人<b>塞缪尔·布兰南</b>证实。布兰南匆忙开设了一家出售淘金用具的商店，并在旧金山街头高举一瓶金子大喊“金子！金子！来自美国河的金子！”</p>
+          <p>说明：明写人名 ✓；但段落里他在<b>旧金山</b>，措辞是标注侧加的“去了加州”（在本库可由“旧金山⊂加利福尼亚”推出，同 #25 的处理）。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 他的工作地点</b> ｜ <code>History of Sacramento, California.md</code>（<b>与 #25 同一段</b>）</p>
+          <div class="orig"># History of Sacramento, California<br><br>The history of Sacramento, California, <b>began with its founding by Samuel Brannan and John Augustus Sutter, Jr. in 1848</b> around an embarcadero that his father, John Sutter, Sr. constructed at the confluence of the American and Sacramento Rivers a few years prior.</div>
+          <p class="muted"><b>中文翻译</b>：加利福尼亚州萨克拉门托的历史，始于 1848 年由<b>塞缪尔·布兰南</b>与小约翰·奥古斯都·萨特在该城的建立……</p>
+          <p>说明：明写“参与建城” ✓；但把“建城者”读成 <b>work location</b> 仍是一层松动（同 #25）。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 与萨克拉门托接壤的东西</b> ｜ <code>Rio Linda High School.md</code>（<b>与 #25 同一段</b>）</p>
+          <div class="orig"># Rio Linda High School<br><br>Rio Linda High School is a high school <b>located in Rio Linda, Sacramento, CA</b>. It has an enrollment of 2,035 students. It is part of the Twin Rivers Unified School District, and was formerly part of the Grant Unified School District.</div>
+          <p class="muted"><b>中文翻译</b>：里奥琳达高中是一所位于<b>加利福尼亚州萨克拉门托的里奥琳达</b>（Rio Linda, Sacramento, CA）的高中，在校学生 2,035 人，隶属双河联合学区……</p>
+          <p>说明：⚠️ 又是“<b>在萨克拉门托境内</b>”（in），被标注链写成“<b>接壤</b>”（border）；且 Rio Linda 是 <b>CDP</b>，题面问的是 “What shares a border”（宽到可以是任何东西）。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：Baskin-Robbins 1945 年创立于加州格伦代尔（明写）；布兰南 1848 年 3 月在旧金山证实发现黄金（明写）；布兰南与萨特二世 1848 年建萨克拉门托（明写）；里奥琳达高中位于“里奥琳达，萨克拉门托，加州”（明写）。⇒ <b>仍然没有一句说“里奥琳达与萨克拉门托接壤”。</b></p>
+
+      <p><b>▸ 与 #25 同源：这是一条被复用的尾链</b>（✅ 从 id 直接可证）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>题</th><th>id</th><th>第一跳</th><th>后三跳来源</th></tr></thead>
+        <tbody>
+          <tr><td>#25</td><td><code>4hop1__<b>33012</b>_53706_795904_580996</code></td><td>以地中海气候著称的州 → 加州</td><td rowspan="2"><b>完全相同</b>：<code>53706</code>（布兰南）／<code>795904</code>（萨克拉门托）／<code>580996</code>（里奥琳达）</td></tr>
+          <tr><td>#28</td><td><code>4hop1__<b>158877</b>_53706_795904_580996</code></td><td>Baskin-Robbins 创立的州 → 加州</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ MuSiQue 把<b>同一条三跳尾链</b>（布兰南 → 萨克拉门托 → 里奥琳达）复用了两次、只换了入口。后果是：<b>尾链上的缺陷被复制了两遍</b>——hop 4 的“in→border”错配、答案不唯一、CDP 类型不符，两题**同时中招**。</p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Baskin-Robbins 创立于哪个州</td><td>“founded … in <b>Glendale, California</b>”</td><td>✅ 明写</td></tr>
+          <tr><td>2</td><td>淘金热期间去了加州的某个人</td><td>布兰南 1848 年 3 月在<b>旧金山</b>证实发现黄金</td><td>⚠️ 措辞由标注加严（“去了加州”）；本库可推</td></tr>
+          <tr><td>3</td><td>此人的工作地点</td><td>他与萨特二世<b>共同建立</b>萨克拉门托</td><td>⚠️ “建城者”被读成“工作地点”</td></tr>
+          <tr><td>4</td><td><b>与萨克拉门托接壤的东西</b></td><td>“located in <b>Rio Linda, Sacramento, CA</b>”（在境内）</td><td><b>❌ 不成立</b>：关系是“在……之内”，不是“接壤”；且 Rio Linda 是 <b>CDP</b>；与萨克拉门托接壤的城市亦有多个（West Sacramento／Elk Grove／Citrus Heights…）</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>与 #25 同型坏题</b>：关系错配（in→border）＋ 非唯一解 ＋ 类型不符。</p>
+
+      <p><b>▸ 现象：九轮全败，而且这是全实验最贵的一题</b>（✅ token 从服务端日志按 session 去重求和）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>臂 · 轮</th><th>预测</th><th>真实调用</th><th>耗时</th><th>prompt</th><th>completion</th><th>合计 token</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1</td><td>认输（“could not verify the full chain”）</td><td>11</td><td>8.6 s</td><td>114,476</td><td>624</td><td>115,100</td></tr>
+          <tr><td>wiki r2</td><td><code>California</code> ✗（停在 hop 1）</td><td>10</td><td>8.0 s</td><td>70,234</td><td>469</td><td>70,703</td></tr>
+          <tr><td>wiki r3</td><td>“I'll research this step by step.”（未给答案）</td><td><b>47</b></td><td>54.5 s</td><td>986,312</td><td>6,525</td><td><b>992,837</b></td></tr>
+          <tr><td>smart-v3 r1</td><td>认输＋“证据支持的链条是……”</td><td>75</td><td>118.6 s</td><td>2,104,552</td><td>7,945</td><td><b>2,112,497</b></td></tr>
+          <tr><td>smart-v3 r2</td><td>认输</td><td>84</td><td>144.5 s</td><td>4,054,954</td><td>9,984</td><td><b>4,064,938</b></td></tr>
+          <tr><td>smart-v3 r3</td><td>认输</td><td>81</td><td>246.3 s</td><td>8,104,768</td><td>28,363</td><td><b>8,133,131</b></td></tr>
+          <tr><td>hybrid r1</td><td>认输＋最佳链条</td><td>47</td><td>99.2 s</td><td>2,220,687</td><td>9,839</td><td>2,230,526</td></tr>
+          <tr><td>hybrid r2</td><td>认输</td><td>65</td><td>140.2 s</td><td>4,930,021</td><td>11,602</td><td><b>4,941,623</b></td></tr>
+          <tr><td>hybrid r3</td><td>认输</td><td>73</td><td>152.2 s</td><td>5,941,198</td><td>12,158</td><td><b>5,953,356</b></td></tr>
+          <tr><td><b>闭卷</b>（6 轮）</td><td>`空`／`Daly City`／`Daly City`（flash）；`Daly City`／`空`／`Daly City`（pro）</td><td>0</td><td>36–298 s</td><td colspan="3">4/6 又是 <code>Daly City</code>（旧金山→接壤城市的替代链，同 #25）</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>同一条坏链，token 从 7 万（wiki r2）一路到 813 万（smart r3）——相差约 115 倍</b>；九轮没有一轮给出可验证答案。<b>这是 §3.3 那条“缺判停判据”的最强实证</b>，也是 0045 §7.12 用来讲判停机制的那道题。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（真实调用次数）</th><th>卡在哪</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1<br>（11 次）</td><td>搜 <code>Baskin-Robbins</code> → 搜 <code>gold rush</code> → 读 [<code>baskin-robbins</code>, <code>glendale-california</code>, summary] → 搜 <code>Glendale</code> → 搜「淘金热|gold rush|加利福尼亚」→ 读 [<code>california</code>, <code>california-gold-rush</code>, <code>concept/california-gold-rush</code>] → 搜 <code>went to|traveled to|visited</code> → 搜 <code>border|borders|shares a border|neighboring</code> → 搜 <code>Glendale</code>(20) → 搜 <code>city</code>(50) ×2</td><td>入口（Baskin-Robbins→格伦代尔→加州）都拿到了，<b>但“谁去了加州”这一跳搜不到</b>（<code>went to</code> 类查询无效）</td><td><b>认输</b></td></tr>
+          <tr><td>r2<br>（10 次）</td><td>搜 Baskin-Robbins → 搜 gold rush → 读 [<code>baskin-robbins</code>, <code>glendale-california</code>] → 搜「gold rush.*(went|travel|moved|state)|加州淘金热」→ 搜「Baskin-Robbins.*founded.*gold rush」→ 读 [<code>california</code>] → 搜 <code>went to California|moved to|traveled to</code> → 搜 <code>gold rush</code>(50) → 读两个文档</td><td>同样卡在“谁去了加州”</td><td><code>California</code> ✗</td></tr>
+          <tr><td>r3<br>（47 次）</td><td>搜 Baskin-Robbins → 搜 gold rush → 读 [<code>baskin-robbins</code>, <code>glendale-california</code>] → 搜 <code>went to California during the gold rush</code> → 搜正则 → 读两个 summary → <b>搜 <code>Republican Party first presidential candidate</code></b> → 搜 <code>John C. Frémont</code> → 读 [<code>republican-party</code>, <code>california</code>] → …（省略 29 次）… → 搜 <code>Denver</code>(50) → 搜 <code>Kansas|Nebraska|Wyoming|Utah|Arizona|Oklahoma|New Mexico</code>(50) → 读 [<code>utah</code>, <code>arizona</code>, <code>arkansas</code>] → 读 [<code>mississippi</code>, <code>colorado-rapids</code>, <code>commerce-city</code>] → 搜 <code>Mississippi|Tennessee|Alabama|Louisiana|Missouri|Iowa|Texas|Ohio</code>(50) → 读 [<code>missouri</code>, <code>iowa</code>]</td><td>把“淘金热期间去了加州的人”猜成<b>政治人物／探险家</b>（Frémont 那条线），随后在<b>美国各州</b>页面之间游荡</td><td>未给答案</td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结</b>：三轮都把入口拿对了（Baskin-Robbins → 格伦代尔 → 加州），**全部卡在“谁去了加州”这一跳**——而库里对应的说法是“布兰南 1848 年 3 月在旧金山证实发现黄金”，**并没有“went to California”这种表述**，所以 <code>went to / traveled to / moved to</code> 这类查询一律落空。</p>
+
+      <p><b>▸ 过程分析 ②：编译的问题，还是 Agent 的问题？</b></p>
+      <p><b>1）编译层忠实，但继承了 #25 那处“收紧出错”。</b>忠实的一面：<code>entity/baskin-robbins</code> 明写“创立地点：<b>格伦代尔，加利福尼亚州</b>”；<code>entity/samuel-brannan</code>／<code>entity/sacramento</code> 与原文一致。'
+        '出错的一面：<code>entity/rio-linda</code> 依旧写“里奥琳达是美国加利福尼亚州<b>萨克拉门托市的一个地区</b>”、<code>entity/rio-linda-high-school</code> 写“位于…萨克拉门托<b>市</b>里奥琳达地区”——<b>与 #25 是同一处编译层错误</b>（把县内 CDP 说成市的一部分）。</p>')
+      <p><b>2）Agent 层的病灶有两层</b>：① <b>措辞错位</b>——题面问“谁在淘金热期间<b>去了</b>加州”，库里只有“<b>在旧金山</b>证实发现黄金”，词面不匹配 ⇒ 大量 <code>went to</code> 类查询 0 命中；② <b>停止条件缺失</b>——搜不到就换假设，从 Frémont 一路换到各州页，<b>没人叫停</b>（smart r3 45 次 LLM 调用、813 万 token 后才认输）。</p>')
+      <p><b>3）所以本题的性质</b>：<b>坏题（与 #25 同型）</b>，且它是“<b>成本失控</b>”的旗舰样本——<b>题目坏 ＋ 判停缺 ＝ 账单爆炸</b>。</p>')
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b>——<b>拒答</b>，理由同 #25：与萨克拉门托接壤的城市不止一个、且证据里的里奥琳达是<b>境内 CDP</b> 而非接壤城市；题面问 “what shares a border” 更是宽到无法唯一确定。</p>
+
+      <p><b>▸ 指标适配：这题用 F1／EM 合适吗？</b>——<b>合适</b>（金答案是短实体 <code>Rio Linda</code>）。问题在<b>题目</b>，不在指标；真正需要改的是“<b>允许拒答并正确记分</b>”，否则这类题只会奖励“硬猜”。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>“尾链复用”会把缺陷复制两遍</b>：MuSiQue 用同一条三跳尾链配了两个入口（#25／#28），于是尾链上的“in→border 错配＋答案不唯一＋类型不符”<b>在两道题上同时出现</b>。⇒ 做筛查时按<b>来源题 id 聚类</b>能一次性抓到这类“同源坏点”，比逐题看省力。</li>
+        <li><b>坏题＋缺判停 ⇒ 账单爆炸（可量化）</b>：同一条坏链上，token 从 <b>7 万</b>（wiki r2）到 <b>813 万</b>（smart r3），<b>相差约 115 倍</b>；smart 三轮 211 万→406 万→813 万，<b>逐轮翻倍</b>。⇒ 生产上必须有“预算闸门＋无进展即停”，否则单题就能烧掉整批的预算。</li>
+        <li><b>“措辞错位”是一种可检测的检索失败</b>：题面用 “went to California”，库里只有 “in San Francisco”，<code>went to / traveled to / moved to</code> 类查询全 0 命中。⇒ 检索层需要<b>改写与同义扩展</b>（把“去了 X”扩成“在 X／从 X／迁往 X”），或至少把 0 命中当作“换策略”的信号。</li>
+      </ol>
+
+      <h4>3.9 #29 ｜ 成为首府的年份（金答案 1839）——同名城市在链条里被混用</h4>
+      <p><b>英文原题</b>：When did the death city of Taito Kantonen become the capital of the US state having the statue being the title of the various Latin Mother goddess?</p>
+      <p><b>中文翻译（直译）</b>：Taito Kantonen 的<b>去世城市</b>，是在哪一年成为“那个拥有『以各种拉丁母亲神祇之称号』命名的那座雕像”的美国的州的<b>首府</b>的？</p>
+      <p><b>正确答案</b>：<code>1839</code></p>
+      <p><b>官方四跳分解</b>：各种拉丁母亲神祇的称号是什么 → <code>alma mater</code> → #1 所属行政区域 → <code>Illinois</code> → <code>Taito Kantonen &gt;&gt; place of death</code> → <code>Springfield</code> → #3 何时成为 #2 的首府 → <code>1839</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · “各种拉丁母亲神祇的称号”</b> ｜ <code>Alma mater.md</code></p>
+          <div class="orig"># Alma mater<br><br>Before its current usage, alma mater was an honorific <b>title for various Latin mother goddesses</b>, especially Ceres or Cybele, and later in Catholicism for the Virgin Mary. It entered academic usage when the University of Bologna adopted the motto Alma Mater Studiorum ("nurturing mother of studies"), which describes its heritage as the oldest operating university in the Western world. It is related to alumnus, a term used for a university graduate that literally means a "nursling" or "one who is nourished".</div>
+          <p class="muted"><b>中文翻译</b>：在当前的用法之前，<b>alma mater</b> 是对<b>各种拉丁母亲神祇</b>（尤其是刻瑞斯或库柏勒）的尊称，后来在天主教中指圣母马利亚。它进入学术用法，始于博洛尼亚大学采用格言 <i>Alma Mater Studiorum</i>（“养育学问的母亲”）……</p>
+          <p>说明：✅ 明写。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 那座雕像在哪个州</b> ｜ <code>Alma Mater (Illinois sculpture).md</code></p>
+          <div class="orig"># Alma Mater (Illinois sculpture)<br><br>The Alma Mater is a bronze statue by sculptor Lorado Taft, a beloved symbol of the <b>University of Illinois at Urbana-Champaign</b>. The 10,000-pound statue depicts a mother-figure wearing academic robes and flanked by two attendant figures representing "Learning" and "Labor", after the University's motto "Learning and Labor." Sited at the corner of Green and Wright Streets at the heart of the campus, the statue is an iconic figure for the university and a popular backdrop for student graduation photos. It is appreciated for its romantic, heraldic overtones and warmth of pose. The statue was removed from its site at the entrance to the university for restoration in 2012 and was returned to its site in the spring of 2014.</div>
+          <p class="muted"><b>中文翻译</b>：Alma Mater 是雕塑家洛拉多·塔夫特创作的青铜雕像，是<b>伊利诺伊大学厄巴纳-香槟分校</b>深爱的象征。这尊重达 10,000 磅的雕像描绘一位身着学术礼袍的母亲形象，两侧各有一位侍立人物，分别代表“学习”与“劳动”，呼应校训“学习与劳动”……</p>
+          <p>说明：✅ 可推——“Illinois”出现在<b>大学名</b>里（段落未直接说“伊利诺伊州”）。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · Kantonen 的去世城市</b> ｜ <code>Taito Kantonen.md</code></p>
+          <div class="orig"># Taito Kantonen<br><br>Taito A. Kantonen (24 April 1900 in Karstula, Finland – <b>26 April 1993 in Springfield, Ohio, United States</b>) was a theologian. At the age of 3 he moved to the United States, where he later attended Harvard University and received a degree in theology. He wrote many books including "Man in the Eyes of God".</div>
+          <p class="muted"><b>中文翻译</b>：泰托·A·坎托宁（1900-04-24 生于芬兰卡尔斯图拉 — <b>1993-04-26 卒于美国俄亥俄州斯普林菲尔德</b>）是一位神学家。3 岁时移居美国，后就读哈佛大学并获得神学学位。他著有多部书，包括《上帝眼中的男人》。</p>
+          <p>说明：⚠️ <b>明写的是 Springfield, <u>Ohio</u></b>（俄亥俄州）——而下面那一段讲的是 Springfield, <u>Illinois</u>。</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 该城市何时成为该州首府</b> ｜ <code>Springfield, Illinois.md</code></p>
+          <div class="orig"># Springfield, Illinois<br><br>Springfield's original name was Calhoun, after Senator John C. Calhoun of South Carolina. The land that Springfield now occupies was originally settled by trappers and traders who came to the Sangamon River in 1818. The settlement's first cabin was built in 1820, by John Kelly. It was located at what is now the northwest corner of Second Street and Jefferson Street. In 1821, Calhoun became the county seat of Sangamon County due to fertile soil and trading opportunities. Settlers from Kentucky, Virginia, and as far as North Carolina came to the city. By 1832, Senator Calhoun had fallen out of the favor with the public and the town renamed itself Springfield after Springfield, Massachusetts. At that time, Springfield, Massachusetts was comparable to modern - day Silicon Valley -- known for industrial innovation, concentrated prosperity, and the celebrated Springfield Armory. Most importantly, it was a city that had built itself up from frontier outpost to national power through ingenuity -- an example that the newly named Springfield, Illinois, sought to emulate. Kaskaskia was the first capital of the Illinois Territory from its organization in 1809, continuing through statehood in 1818, and through the first year as a state in 1819. Vandalia was the second state capital of Illinois from 1819 to 1839. <b>Springfield became the third and current capital of Illinois in 1839</b>. The designation was largely due to the efforts of Abraham Lincoln and his associates; nicknamed the ``Long Nine ''for their combined height of 54 feet (16 m).</div>
+          <p class="muted"><b>中文翻译</b>：斯普林菲尔德原名卡尔霍恩（得名于南卡罗来纳州参议员约翰·C·卡尔霍恩）；其土地最早由 1818 年迁至桑加蒙河的皮毛猎人与商人定居；1820 年建起第一座木屋；1821 年成为桑加蒙县县治；1832 年因卡尔霍恩参议员失势，镇子改名为斯普林菲尔德（取自马萨诸塞州的斯普林菲尔德）……卡斯卡斯基亚是伊利诺伊领地的第一任首府（1809 年起，延续到 1818 年建州及 1819 年首年），万达利亚是第二任州首府（1819–1839），<b>斯普林菲尔德于 1839 年成为伊利诺伊的第三任、也是现任首府</b>……</p>
+          <p>说明：✅ <b>明写“1839”</b>——但这是<b>伊利诺伊州</b>的斯普林菲尔德。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：alma mater 曾是拉丁母亲神祇的称号（明写）；伊利诺伊大学那尊雕像在伊利诺伊（由大学名可推）；<b>Kantonen 卒于俄亥俄州的斯普林菲尔德</b>（明写）；<b>伊利诺伊州的斯普林菲尔德</b>于 1839 年成为该州首府（明写）。⇒ <b>两段里的 Springfield 不是同一座城市。</b></p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>“各种拉丁母亲神祇的称号”</td><td>“alma mater was an honorific <b>title for various Latin mother goddesses</b>”</td><td>✅ 明写</td></tr>
+          <tr><td>2</td><td>该称号所指的雕像在哪个州</td><td>“University of <b>Illinois</b> at Urbana-Champaign”</td><td>✅ 可推（州名在大学名里）</td></tr>
+          <tr><td>3</td><td>Kantonen 的<b>去世城市</b></td><td>“26 April 1993 in <b>Springfield, Ohio</b>, United States”</td><td>✅ 明写，但属于<b>俄亥俄州</b></td></tr>
+          <tr><td>4</td><td>该城市何时成为该州首府</td><td>“Springfield became the capital of <b>Illinois</b> in <b>1839</b>”</td><td><b>❌ 对不上</b>：俄亥俄的斯普林菲尔德从未成为伊利诺伊州首府；这一段把<b>两座同名城市</b>当成同一座</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>第 3→4 跳断裂</b>：金答案 1839 回答的是“<b>伊利诺伊州</b>斯普林菲尔德何时成为州府”，而题面问的是“<b>Kantonen 的去世城市</b>（＝俄亥俄州斯普林菲尔德）”。⇒ <b>本题是坏题（同名实体在链条内混用）</b>，而且这次混淆发生在<b>标注链自己</b>里——比 #26／#27 的编译层混链更靠上游。</p>
+      <p>题面本身另有两处生硬：① “the US state <b>having the statue being the title of</b> the various Latin Mother goddess” 是模板拼接产物（“拥有那座以称号命名的雕像的州”）；② 全句把“神祇称号 → 雕像 → 州 → 城市 → 首府年份”硬串成一句，靠的是粘连而非自然的提问方式。</p>
+
+      <p><b>▸ 为什么 wiki 有两轮“对”？（✅ 三轮日志逐次核过）</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>它读到了什么</th><th>它跳过了什么</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1（9 次）</td><td>搜 <code>Taito Kantonen</code> → <b>读 Kantonen 摘要（其中明写“（俄亥俄州）”）</b> → 搜 <code>Springfield</code> → 搜 <code>capital</code> → <b>直接读 <code>entity/springfield-illinois</code></b></td><td><b>没读 <code>entity/springfield-ohio</code></b>，也没把“俄亥俄州”与“伊利诺伊州首府”对一下</td><td>1839 ✓</td></tr>
+          <tr><td>r3（9 次）</td><td>同上：搜 Kantonen → 读摘要 → 搜 <code>Mother goddess</code>／<code>goddess</code>／<code>statue</code>／<code>Springfield</code>／<code>capital</code> → <b>读 <code>entity/springfield-illinois</code></b></td><td>同样没读俄亥俄那一页</td><td>1839 ✓</td></tr>
+          <tr><td><b>r2（12 次）</b></td><td>搜 Kantonen → 读摘要 → <b>读 <code>entity/springfield-ohio</code></b>（“是俄亥俄州的城市；泰托·坎托宁于 1993 年在此去世”）→ 搜 <code>statue</code> → 搜 <code>capital</code> → <b>搜 <code>Ohio|Columbus|capital of Ohio</code></b> → 读 <code>entity/ohio</code></td><td>注意到了州不对，但把问题转成“俄亥俄的首府哪年成为首府”</td><td><code>1816</code> ✗</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">⇒ 两轮“对”的共同点是：<b>它们跳过了那个会暴露题目缺陷的检查</b>（没读俄亥俄的斯普林菲尔德、也没比对两个同名的州），于是与<b>标注链犯了同一个忽略</b>，答案自然与 gold 一致；而唯一读了俄亥俄那一路的 r2，反而因为改问了“俄亥俄首府”的问题而丢分。</p>
+      <p class="muted">⚠️ 口径提醒：本题是<b>无效题</b>，按前面（§3.2／§3.4）的口径，<b>在无效题上“对”与“错”都不携带能力信息</b>。上面记的是<b>行为事实</b>（谁读了哪一页、谁跳过了哪一步），<b>不是</b>对 Agent 做能力评价。</p>
+
+      <p><b>▸ 现象：十二轮里只有五轮答对，而且错法五花八门</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>臂</th><th>r1</th><th>r2</th><th>r3</th><th>真实调用次数</th></tr></thead>
+        <tbody>
+          <tr><td>wiki</td><td>1839 ✓</td><td><code>1816</code> ✗</td><td>1839 ✓</td><td>9／12／9</td></tr>
+          <tr><td>smart-v3</td><td>1839 ✓</td><td>1839 ✓</td><td><code>April 26, 1993</code> ✗（＝<b>去世日期</b>）</td><td>4／4／2</td></tr>
+          <tr><td>hybrid</td><td>1839 ✓</td><td>链条描述（0.06）✗</td><td>链条描述（0.05）✗</td><td>4／4／4</td></tr>
+          <tr><td><b>闭卷</b></td><td>flash <code>1797</code>；pro 1839</td><td>flash <code>1797</code>；pro 1839</td><td>flash <code>1797</code>；pro <code>July 4, 1839</code></td><td>0</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">⇒ 错法包括：<code>1816</code>（哥伦布成为俄亥俄首府的年份）、<code>April 26, 1993</code>（去世日期）、<code>1797</code>（flash 三轮一致）、以及两轮“只给链条描述”。<b>没有一轮指出“两个 Springfield 不是一回事”。</b></p>
+
+      <p><b>▸ 过程分析 ②：编译层核查——KB 其实把两个 Springfield 分得很清楚</b></p>
+      <p><code>entity/taito-kantonen</code> 页写“他于 1993 年 4 月 26 日在 [[<code>entity/springfield-ohio</code>|斯普林菲尔德]]（<b>俄亥俄州</b>）逝世”；<code>entity/springfield-ohio</code> 页写“斯普林菲尔德是美国<b>俄亥俄州</b>的城市。泰托·坎托宁于 1993 年在此去世”；<code>entity/springfield-illinois</code> 页写“是<b>伊利诺伊州</b>首府，<b>1839 年</b>成为州府”。⇒ <b>消歧信息在库里是齐的（连链接都指对了），缺的是题面／链条的约束</b>——这也是本题与前几题的关键差别：<b>#26／#27 是编译层混链，#29 是标注链自己混用，而 KB 反而比标注更清楚。</b></p>
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b>——<b>拒答／指出同名混用</b>：<i>“Kantonen 去世于<b>俄亥俄州</b>的斯普林菲尔德，而 1839 年是<b>伊利诺伊州</b>斯普林菲尔德成为州府的年份；题面把两座同名城市当成了同一座，因此无法作答。”</i></p>
+
+      <p><b>▸ 指标适配：这题用 F1／EM 合适吗？</b>——<b>合适</b>（金答案是四位年份）。问题在<b>题目</b>：它奖励的是“忽略同名差异、照抄标注链那一支”。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>“同名实体”是<b>贯穿三层</b>的通用风险，不只是编译层问题</b>：本页已出现四次——#25（<code>Rio Linda</code>：县内 CDP 被说成市的一部分）、#26（两座 <code>Barcelona</code> 被合成一页）、#27（两个 <code>Yuma</code> 县／市混链）、<b>#29（两座 <code>Springfield</code> 在<u>标注链</u>里被当成同一座）</b>。⇒ 风险同时存在于<b>标注链、编译层、检索层</b>；重做语料／编译／检索时都要做消歧（用“州／县／国”限定）。</li>
+        <li><b>在坏题上“答对”常来自与标注同一个忽略</b>：#29 两轮“对”的共同点是<b>跳过了那个会暴露缺陷的检查</b>（没读俄亥俄那页），而唯一读了的 r2 反而丢分。⇒ <b>行为事实</b>可记；但按无效题口径，<b>不能据此评 Agent 能力</b>。</li>
+        <li><b>“约束在库里、却没用上”是可测的失败形态</b>：<code>entity/taito-kantonen</code> 与 <code>entity/springfield-ohio</code> 都明写“俄亥俄州”，三轮 agent 也都读过其中之一，<b>但没有一轮拿它去校验最终答案</b>。⇒ 这正是 §3.3 那条“<b>提交前用题面／证据约束自查</b>”的现成反例。</li>
+      </ol>
+
+      <h4>3.10 #30 ｜ 与某县接壤（金答案 Presque Isle County）——三重不成立</h4>
+      <p><b>英文原题</b>：Which county shares a border with the county where the most populous city in the state where WEKL operates is located?</p>
+      <p><b>中文翻译</b>：WEKL 运营所在的那个州里，<b>人口最多的城市</b>所在的县，与哪个县接壤？</p>
+      <p><b>正确答案</b>：<code>Presque Isle County</code>（普雷斯克岛县，<b>密歇根州</b>）</p>
+      <p><b>官方四跳分解</b>：WEKL 在哪个州 → <code>Georgia</code> → 该州人口最多的城市 → <code>Atlanta</code> → #2 所属的行政区域 → <code>Montmorency County</code>（密歇根州！） → #3 与谁接壤 → <code>Presque Isle County</code>。</p>
+      <p><b>四段支撑原文（全文照抄）</b>：同一口径（官方 <code>paragraph_support_idx</code> 指定；正文一字未改，加粗为本文所加；中文翻译随附）。顺序按官方 hop 1→4 排。</p>
+      <ol>
+        <li>
+          <p><b>hop 1 · WEKL 在哪个州</b> ｜ <code>WEKL.md</code></p>
+          <div class="orig"># WEKL<br><br>WEKL, known on-air as "102.3 K-Love", is a Contemporary Christian radio station in the United States, <b>licensed by the Federal Communications Commission (FCC) to Augusta, Georgia</b>, broadcasting on 102.3 MHz with an ERP of 1.5 kW. Its studios are located at the Augusta Corporate Center with the market’s other iHeartMedia owned sister stations in Augusta, and the transmitter is located in Augusta near Fort Gordon.</div>
+          <p class="muted"><b>中文翻译</b>：WEKL 以“102.3 K-Love”为品牌播出，是美国的一家当代基督教广播电台，由<b>联邦通信委员会（FCC）授权给佐治亚州奥古斯塔</b>，频率 102.3 MHz，有效辐射功率 1.5 kW。其演播室位于奥古斯塔企业中心，与该市场其他 iHeartMedia 旗下电台同处；发射台位于奥古斯塔、靠近戈登堡。</p>
+          <p>说明：✅ 明写“<b>Augusta, Georgia</b>”。</p>
+        </li>
+        <li>
+          <p><b>hop 2 · 该州人口最多的城市</b> ｜ <code>List of municipalities in Georgia (U.S. state).md</code></p>
+          <div class="orig"># List of municipalities in Georgia (U.S. state)<br><br><b>The largest municipality by population in Georgia is Atlanta with 420,003 residents</b>, and the smallest municipality by population is Edge Hill with 24 residents. The largest municipality by land area is Augusta, a consolidated city - county, which spans 302.47 sq mi (783.4 km), while Edge Hill and Santa Claus are tied for the smallest at 0.18 sq mi (0.47 km) each.</div>
+          <p class="muted"><b>中文翻译</b>：<b>佐治亚州人口最多的市镇是亚特兰大（420,003 人）</b>，人口最少的市镇是 Edge Hill（24 人）。陆地面积最大的市镇是奥古斯塔（市县合并市），面积 302.47 平方英里……</p>
+          <p>说明：✅ 明写“the largest municipality by population in <b>Georgia</b> is <b>Atlanta</b>”。</p>
+        </li>
+        <li>
+          <p><b>hop 3 · 该城市所属的县</b> ｜ <code>Sno*Drift.md</code></p>
+          <div class="orig"># Sno*Drift<br><br>Sno*Drift is a rally racing event held in Montmorency County, Michigan, annually, <b>with headquarters in Atlanta, Michigan</b>. The event is currently the first Rally America National Rally Championship event of the season. Currently the event is organized into three distinct rallies: the national championship event covering both days of rallying, and two regional rally events each covering one of the two days. Competitors may be entered in any or all of these events simultaneously.</div>
+          <p class="muted"><b>中文翻译</b>：Sno*Drift 是每年在<b>密歇根州蒙莫朗西县</b>举办的拉力赛事，<b>总部位于密歇根州的亚特兰大</b>。该赛事目前是拉力美国国家拉力锦标赛每个赛季的首场比赛，分为三个独立赛事……</p>
+          <p>说明：❌ <b>同名混用</b>——这里说的 Atlanta 是<b>密歇根州</b>的那座（维基：「a census-designated place … It is the <b>county seat of Montmorency County</b>」），而 hop 2 指的是<b>佐治亚州</b>的亚特兰大。（另：语料文件名把标题里的 <code>*</code> 换成了 <code>_</code>，实际文件是 <code>Sno_Drift.md</code>。）</p>
+        </li>
+        <li>
+          <p><b>hop 4 · 该县与谁接壤</b> ｜ <code>Alpena Power Company.md</code></p>
+          <div class="orig"># Alpena Power Company<br><br>Alpena Power Company is a public utility company that provides electricity to most of Alpena County, Michigan, <b>as well as southeastern Presque Isle County</b> and the village of Hillman, in Montmorency County. The headquarters are located in Alpena, Michigan. The company was founded in 1881 by George N. Fletcher.</div>
+          <p class="muted"><b>中文翻译</b>：阿尔皮纳电力公司是一家公共事业公司，为密歇根州<b>阿尔皮纳县</b>大部分地区供电，也覆盖<b>普雷斯克岛县东南部</b>以及<b>蒙莫朗西县</b>的希尔曼村；公司总部位于密歇根州阿尔皮纳，1881 年由 George N. Fletcher 创立。</p>
+          <p>说明：⚠️ 段落把 Presque Isle County 与 Montmorency County <b>并列</b>，<b>但没有说“接壤”</b>（关系靠世界知识；现实中两县确实相邻）。</p>
+        </li>
+      </ol>
+      <p>⇒ <b>四段合起来能给出的全部信息</b>：WEKL 由 FCC 授权给佐治亚州奥古斯塔（明写）；佐治亚州人口最多的市镇是亚特兰大（明写）；Sno*Drift 在密歇根州蒙莫朗西县举办、总部在<b>密歇根州的亚特兰大</b>（明写）；阿尔皮纳电力公司的供电区含<b>普雷斯克岛县东南部</b>与<b>蒙莫朗西县的希尔曼村</b>（明写）。⇒ <b>两条“亚特兰大”都在库里，而且都带着州名。</b></p>
+
+      <p><b>▸ 链条逐跳核对：这题成立吗？</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>步</th><th>题面／链条要求</th><th>证据里实际有什么</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>WEKL 在哪个州</td><td>“licensed … to <b>Augusta, Georgia</b>”</td><td>✅ 明写</td></tr>
+          <tr><td>2</td><td>该州人口最多的城市</td><td>“largest municipality by population in <b>Georgia</b> is <b>Atlanta</b>”</td><td>✅ 明写</td></tr>
+          <tr><td>3</td><td>该城市所属的县</td><td>“held in <b>Montmorency County, Michigan</b> … headquarters in <b>Atlanta, Michigan</b>”</td><td><b>❌ 同名混用</b>：这是<b>密歇根州</b>的亚特兰大</td></tr>
+          <tr><td>4</td><td>该县与谁接壤</td><td>“<b>Presque Isle County</b> … <b>Montmorency County</b>”（并列，未说接壤）</td><td>⚠️ 关系未明写，靠世界知识</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>与 #29 同型：链条把两座同名城市当成一座，于是从佐治亚跳到密歇根。</b></p>
+
+      <p><b>▸ 三重不成立（①、② 已外部核实）</b></p>
+      <table class="tbl-wide">
+        <thead><tr><th>#</th><th>问题</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td>①</td><td><b>同名混用</b>：gold 指向密歇根</td><td>链条用 “<b>Atlanta, Michigan</b>” 那一段去回答“佐治亚州人口最多的城市”，随后一路都在密歇根（Montmorency → Presque Isle）。维基确认 “Atlanta, Michigan” 存在且 “It is the <b>county seat of Montmorency County</b>”。</td></tr>
+          <tr><td>②</td><td><b>“亚特兰大所在的县”本身不唯一</b></td><td>维基「DeKalb County, Georgia」：“It contains roughly <b>10% of the city of Atlanta</b> (the other <b>90% lies in Fulton County</b>)”。⇒ Fulton 与 DeKalb 都是候选，而题面用的是定指 “the county where … is located”。</td></tr>
+          <tr><td>③</td><td><b>即便定为 Fulton County，“接壤县”也有多个</b></td><td>DeKalb（1853 年 Fulton 正是从 DeKalb 西半部划出，两者沿直线接壤）、Cobb、Gwinnett、Douglas（原 Campbell 县的一部分并入西南 Fulton）、Cherokee（其东南角被划出成为北 Fulton）等——维基各页可核。⇒ 答案不唯一（与 #21 同病）。</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ <b>这是 4 跳 10 题里“坏得最全”的一道</b>：同名混用（#29 同型）＋ 指代不唯一 ＋ 答案不唯一，三重叠加。</p>
+
+      <p><b>▸ 一个更要命的附带缺口：佐治亚那一路在库里根本不可答</b></p>
+      <p>我们要核的这一步是“亚特兰大属于哪个县”——结果是：<b>语料 572 段里 <code>Fulton</code>／<code>DeKalb</code>／<code>Cobb</code>／<code>Gwinnett</code> 全部 0 次出现</b>，<b>编译页 4094 个里也一样 0 页</b>（<code>entity/fulton-county</code> 不存在，而 <code>entity/montmorency-county</code>／<code>entity/presque-isle-county</code> 反而都有）。'
+        '⇒ 按字面读（守在佐治亚）的 agent，最后一步只能靠<b>世界知识</b>补；这正是 wiki r1／r2 答 <code>Fulton</code> 的来源，也是 r3 那 44 次调用的去向（它甚至去读 <code>entity/fulton-county</code>，读不到，然后反复搜 <code>county</code>）。</p>')
+
+      <p><b>▸ 现象：18 轮全部停在“佐治亚”这一支</b>（✅ token 从服务端日志按 session 去重求和）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>臂 · 轮</th><th>预测</th><th>真实调用</th><th>耗时</th><th>合计 token</th></tr></thead>
+        <tbody>
+          <tr><td>wiki r1 ／ r2</td><td><code>Fulton</code> ✗ ／ <code>Fulton</code> ✗</td><td>8 ／ 9</td><td>5.5 ／ 9.5 s</td><td>38,737 ／ 120,885</td></tr>
+          <tr><td>wiki r3</td><td>未给答案（“I'll research this step by step.”）</td><td><b>40</b></td><td>56.7 s</td><td><b>1,305,444</b></td></tr>
+          <tr><td>smart-v3 r1 ／ r2 ／ r3</td><td>三轮都是“只支持部分链条”的长解释</td><td>29 ／ 27 ／ <b>59</b></td><td>42.4 ／ 26.6 ／ 71.0 s</td><td>790,316 ／ 186,834 ／ <b>1,212,741</b></td></tr>
+          <tr><td>hybrid r1 ／ r2 ／ r3</td><td><code>Gwinnett County</code> ✗ ／ 部分链条 ／ 部分链条</td><td>27 ／ 22 ／ 16</td><td>28.9 ／ 23.6 ／ 16.4 s</td><td>364,619 ／ 196,953 ／ 134,421</td></tr>
+          <tr><td><b>闭卷</b>（6 轮）</td><td>`Cobb`／`DeKalb`／`Cobb`（flash）；`Cobb`／`DeKalb`／`Cobb`（pro）</td><td>0</td><td>25–121 s</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <p>⇒ **12 轮开卷 ＋ 6 轮闭卷，18 轮全部走在“佐治亚”这一支**：<code>Fulton</code>（亚特兰大所在的县）、<code>Gwinnett</code>、<code>Cobb</code>、<code>DeKalb</code>（都是佐治亚的县，且 Cobb／DeKalb 确实与 Fulton 接壤）。<b>没有一个走到密歇根</b>——也就是说，<b>所有 agent 都按字面把题读成了“佐治亚的县”</b>（这正是合理读法），而 gold 要求跟着那条同名混用的链跳到密歇根。</p>
+
+      <p><b>▸ 过程分析 ①：wiki 三轮分别怎么走的</b>（✅ 服务端日志逐次核过）</p>
+      <table class="tbl-wide">
+        <thead><tr><th>轮次</th><th>真实动作（真实调用次数）</th><th>卡在哪</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>r1<br>（8 次）</td><td>搜 <code>WEKL</code> → 搜 <code>most populous city</code> → 读 [<code>wekl</code>, <code>augusta</code>] → 搜「Georgia|佐治亚」→ 读 [summary] → 搜「Atlanta|亚特兰大」→ 读 [<code>atlanta</code>] → 搜 <code>Fulton|富尔顿|county|县</code></td><td>拿到“佐治亚→亚特兰大”后，去找“亚特兰大所在的县”</td><td><code>Fulton</code> ✗<br><span class="muted">（用世界知识补的县名）</span></td></tr>
+          <tr><td>r2<br>（9 次）</td><td>搜 <code>WEKL</code> → 读 [<code>augusta</code>, <code>georgia</code>] → 搜 <code>county|县|郡</code>(30) → 搜 <code>人口最多</code>(20) → 读 [<code>atlanta</code>] → 搜 <code>Fulton</code>(20) → 搜「亚特兰大.*县|富尔顿|Fulton County」(20) → 读 summary → 搜 <code>county, Georgia|佐治亚州.*县</code>(20)</td><td>同样卡在“县”这一跳；<b>连续 4 次搜 county／Fulton 均无所得</b></td><td><code>Fulton</code> ✗</td></tr>
+          <tr><td>r3<br>（40 次）</td><td>搜 <code>WEKL</code> → 搜 <code>most populous city</code> → 读 [<code>wekl</code>, <code>augusta</code>] → 搜「佐治亚州|Georgia」(30) → <b>读 [<code>atlanta</code>, <code>fulton-county</code>]</b>（后者不存在）→ <code>read_document</code> → 搜 <code>county|县</code>(20) → 搜 <code>Atlanta.*county|Fulton|DeKalb|Cobb</code> → <code>read_document</code> ×3 → 搜 <code>Atlanta</code> → …（省略 22 次）… → 搜 <code>county</code>(40) → 搜 <code>Wayne County|韦恩县|Fulton County|富尔顿县|DeKalb</code> → 搜 <code>county</code>(30) ×3 → 读 [<code>index</code>]</td><td><b>它一直在找“Fulton／县”这一层</b>，而库里根本没有——最后退化成反复搜 <code>county</code></td><td>未给答案<br><span class="muted">（1.3M token）</span></td></tr>
+        </tbody>
+      </table>
+      <p><b>⇒ D 小结</b>：三轮都先把“WEKL→佐治亚→亚特兰大”走对了（明写），**全部卡在“亚特兰大属于哪个县”**；库里没有这一层，于是 r1／r2 用世界知识答 <code>Fulton</code>、r3 反复搜到放弃。</p>
+
+      <p><b>▸ 过程分析 ②：编译的问题，还是 Agent 的问题？</b></p>
+      <p><b>1）编译层这次做对了消歧。</b><code>entity/atlanta</code> 页把两座城市分写得很清楚：“亚特兰大是美国<b>佐治亚州</b>人口最多的城市，拥有 420,003 名居民……<b>亚特兰大也是美国密歇根州的一个城市</b>，是 Sno*Drift 拉力赛的总部所在地”；<code>entity/sno-drift</code> 也写“总部位于密歇根州亚特兰大”。⇒ <b>消歧信息在库里，缺的是链条的约束</b>（与 #29 完全一致）。</p>
+      <p><b>2）但库里缺了另一层：Fulton County。</b>语料与编译页里 <code>Fulton</code>／<code>DeKalb</code>／<code>Cobb</code>／<code>Gwinnett</code> <b>全部 0 命中</b>，所以“亚特兰大属于哪个县”这一步在库内不可答——只能靠世界知识。⇒ <b>这题两条支路都不通</b>：字面支（佐治亚）缺一层、且答案不唯一；标注支（密歇根）前提错误。</p>
+      <p><b>3）Agent 层：18 轮给出的都是同一个“合理答案”。</b>所有轮次都按字面读（佐治亚 → 亚特兰大 → 找一个县），只是因为库里没有 Fulton，各自用不同的替代方式收场（<code>Fulton</code>／<code>Gwinnett</code>／<code>Cobb</code>／<code>DeKalb</code>／长解释）。⇒ 这是<b>系统性的一致行为</b>，不是随机错。</p>
+
+      <p><b>▸ 那这题的“正确输出”是什么？</b>——<b>拒答／指出三重问题</b>：<i>“WEKL 在佐治亚，亚特兰大是该州人口最多的城市；但（a）亚特兰大跨 Fulton 与 DeKalb 两县（约 90%／10%），（b）与 Fulton 接壤的县有多个，（c）题面所需的『亚特兰大所属县』不在本知识库中；而金答案 Presque Isle County 属密歇根州，是另一座 Atlanta 引出的结果。”</i></p>
+
+      <p><b>▸ 指标适配：这题用 F1／EM 合适吗？</b>——<b>合适</b>（金答案是县名）。问题在<b>题目</b>：它会给“跟着坏链跳”记分，而把 18 轮一致的字面读法全部判 0。</p>
+
+      <p><b>▸ 本题的产出（方法层；后面每题在同一位置继续累积）</b></p>
+      <ol>
+        <li><b>“同名混用”族再添一例</b>：#30 的 <code>Atlanta</code>（佐治亚／密歇根）。⇒ 4 跳 10 题里已有 <b>5 题</b>涉及同名／消歧问题（#25 <code>Rio Linda</code>、#26 <code>Barcelona</code>、#27 <code>Yuma</code>、#29 <code>Springfield</code>、#30 <code>Atlanta</code>）——<b>同名实体是这批题里最高频的缺陷族</b>。</li>
+        <li><b>“库里缺一层”有两种收场：用世界知识补，或长搜后放弃</b>：#30 缺 <code>Fulton County</code>——r1／r2 用世界知识答（得 0）、r3 长搜 40 次后放弃（1.3M token）。⇒ 这一层该由语料／编译补（就像 #23 的编译页补了“德国神学家”），不能指望模型每次都补对。</li>
+        <li><b>当 gold 要求“跟着一条坏链跳”时，所有 agent 会给出同一个“合理但被判错”的答案</b>：18 轮全部停在佐治亚支（<code>Fulton</code>／<code>Gwinnett</code>／<code>Cobb</code>／<code>DeKalb</code>）。⇒ 这对选型有直接意义：<b>这类题上的低分不是能力信号，而是评测与题目的系统性错配</b>。</li>
+      </ol>
+
+      <p><b>卡点分类（4 跳 10 题）</b>：</p>
+      <table class="tbl-wide">
+        <thead><tr><th>卡点</th><th>含义</th><th>题</th><th>谁最常犯</th></tr></thead>
+        <tbody>
+          <tr><td><b>A 落点漂</b></td><td>链走通了，最后一跳选错实体／层级（含跨州）</td><td>#25、#29、#30</td><td>三臂都犯</td></tr>
+          <tr><td><b>B 层级没换</b></td><td>定位对了，没换行政层级（城市↔州↔县）</td><td>#23</td><td>三臂都犯（九轮全错）</td></tr>
+          <tr><td><b>C 多搜后放弃</b></td><td>能答／该答，但反复换假设后认输</td><td>#22、#28</td><td>smart／hybrid 居多（工具数 118–168）</td></tr>
+          <tr><td><b>D 题面本身坏</b></td><td>题面不唯一（#21 外部核过：现实里 5 个合法答案，语料只覆盖 2 个）／问的是类型而答实体</td><td>#21、#24、#26、#28（＋#25 已标记）</td><td>三臂都无解</td></tr>
+          <tr><td><b>E 弱桥</b></td><td>中间跳靠"同句共现"而非权威关系（如"学区覆盖"被当作"县界接壤"）</td><td>#21</td><td>三臂都只够猜</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">🔄 <b>归类更正</b>：#21 在 0045 §7.17 里被归为 <b>A 落点漂</b>，细拆支撑原文后改判为 <b>E 弱桥 ＋ D</b>（见 3.1）——它最后那一跳并不"漂"，而是整条链的中间跳本来就没有关系句可依。</p>
+      <p>⇒ 4 跳的失败<b>主要是 A 与 C</b>：<b>链条不是断在"找不到"，而是断在"最后怎么落"以及"落不下来时停不下来"</b>。这也解释了为什么 4 跳上 wiki 反而略好——它的页/链接结构让"落点选择"多了一层显式依据（但样本只有两道题，见读数②）。</p>
+
+      <h3>4. 2 跳（待做）</h3>
+      <p class="muted">占位：2 跳是经典路线最强的一档（quick 0.55、smart 0.826、wiki 0.764），值得单独看"三臂在哪几道题上分道扬镳"（0045 §7.14 有单轮版，这里要用三轮重做）。</p>
+
+      <h3>5. 3 跳（待做）</h3>
+      <p class="muted">占位：3 跳是 hybrid 的主场（0.669，三轮全胜），要查"它凭什么在这一档赢"——候选解释：wiki 导航找到了页，块级引用又给出原文证据（0045 §7.16 有单轮版）。</p>
+
+      <h3>6. 阶段性结论（4 跳 10 题拆完版 · 2026-10-13）</h3>
+      <h4>6.1 十条结论（每条都标了支撑它的题）</h4>
+      <ol>
+        <li><b>这一档的“分数”基本不可用。</b>4 跳 10 题里，<b>正常题只有 2 道</b>（#23、#27），<b>坏题 8 道</b>（#21／#22／#24／#25／#26／#28／#29／#30，逐题可指认，见 §6.6 台账）。⇒ §2 的 4 跳分层排名（wiki 0.335 ＞ smart 0.268 ＞ hybrid 0.198）<b>不能当能力证据</b>：谁高谁低取决于“哪条坏链恰好被哪条路线接上”。</li>
+        <li><b>坏题不是“手滑”，是构造机制的产物，因而成族出现。</b>关系错配 4 题（#22／#24／#25／#28）、<b>同名／消歧 5 题</b>（#25／#26／#27／#29／#30）、多解／指代不唯一 3 题（#21／#25／#30）、金答案不是答案 1 题（#26）、同尾链复用 1 题（#28＝#25 的尾链）。机制见 §3.2（自下而上拼接 ＋ 只查结构条件 ＋ 人工只负责写通顺 ＋ 质检不查关系正确性）。</li>
+        <li><b>坏题有三级可判定性（L-a／L-b／L-c）。</b>L-a 句子层可判（#26：读一遍就知类别错配、金答案是片段）／L-b 需外部事实（#21 的 5 个合法解、#22 的“正北”、#24 的湄公河、#25 的多个接壤城市、#30 的三重）／L-c 需逐跳核对（#23 的“德国人”、#24 的“驱逐”措辞这类“松动”）。<b>L-a 可自动筛，L-b／L-c 才要人工＋外部核验。</b></li>
+        <li><b>在两道正常题上，决定成败的是“题面—语料对齐度”，不是 agent 架构。</b>#23：三臂九轮<b>全错</b>而闭卷 <b>6/6 全对</b> ⇒ 知识在模型里，<b>断点在链路</b>（编译层没连“维滕贝格→州”、检索只吃字面匹配）；#27：三臂九轮<b>全对且极省</b>（smart／hybrid 各 2 次调用），因为题面用词与语料用词对齐、词面检索即通。⇒ 选型要问的是“<b>语料结构 ＋ 题面用词</b>”，不是“选 wiki 还是选块”。</li>
+        <li><b>成本由“题目可解性 ＋ 判停”决定，与 agent 聪明程度无关。</b>正常题 2–7 次调用，坏题 8–84 次；同一条坏链（#25 vs #28）token 从 <b>7 万</b>到 <b>813 万</b>，<b>差 115 倍</b>；90 轮里仅 16 轮认输/长解释，且集中在最贵两题（#28 7/9、#30 5/9）。</li>
+        <li><b>agent 的默认行为是“答”，不是“不说”。</b>这 10 题 × 9 轮共 90 次里，<b>74 次直接给出答案</b>，即便在坏题上；而且给出的是<b>同一条“合理字面读法”</b>——#30 的 18 轮（含闭卷）全停在佐治亚支（Fulton／Gwinnett／Cobb／DeKalb）。⇒ 产品上“会不会说不知道”是<b>缺失能力</b>；评测上“合理但被判错”是<b>系统性风险</b>。</li>
+        <li><b>指标在坏题上会反向激励。</b>认输记 0（#21）、指出“城市≠俱乐部”记 0（#26）、18 轮合理字面读法全记 0（#30），而“跟着坏链跳”反而能拿分。⇒ 任何改动都必须在<b>产品口径</b>（可核、可拒答、遗漏透明）下评估。</li>
+        <li><b>手上多了三件可复用的诊断工具。</b>① 坏题三级判定（L-a／L-b／L-c）；② <b>同名实体清单</b>（含消歧口径：用州／县／国限定）；③ <b>尾链聚类 ＋ KB↔标注一致性核对</b>（#25／#28 靠 id 后三段相同一眼认出；#29／#30 靠“KB 反而消歧正确”确认约束在库里而不在题里）。</li>
+        <li><b>主命题被正面支持。</b>“编译一层能带来多少增益，取决于原语料结构”被两道正常题一正一反证实（#23 缺跨页连接／#27 结构好到几乎不用编译帮忙）；§0.5 的闭卷基线（纯记忆 0.431／0.508）不受影响（全 30 题口径）。但<b>“wiki vs 块 agent 谁强”在这批题上读不出来</b>。</li>
+        <li><b>边界（别过度外推）。</b>不能说“MuSiQue 有 80% 是坏题”——我们只切了 10 道 4 跳（本就最难档）；2／3 跳两档尚未逐题拆，很可能有同类坏题（#26 的 hop 1／2 错位就不是 4 跳独有的）。</li>
+      </ol>
+
+      <h4>6.2 十题名单：谁能进能力比较、谁必须剔除</h4>
+      <table class="tbl-wide">
+        <thead><tr><th>题</th><th>判定</th><th>能否进“能力比较”</th><th>处理建议</th></tr></thead>
+        <tbody>
+          <tr><td>#21</td><td>坏（定指不唯一）</td><td>否</td><td>改判为 <b>P 层探针</b>（考“会不会指出不唯一”），或扩答案集后重新入库</td></tr>
+          <tr><td>#22</td><td>坏（题面与 gold 冲突）</td><td>否</td><td>剔除，或改题面/改 gold</td></tr>
+          <tr><td><b>#23</b></td><td><b>正常</b></td><td><b>是</b></td><td>保留；但需与闭卷基线做差（该题闭卷 6/6 对）</td></tr>
+          <tr><td>#24</td><td>坏（关系错配 ＋ 指标不适配）</td><td>否</td><td>剔除；若保留需改判据（句子型答案用要素／判官）</td></tr>
+          <tr><td>#25</td><td>坏（关系错配＋多解＋类型不符）</td><td>否</td><td>剔除，或改题面（限定唯一关系）后重入库</td></tr>
+          <tr><td>#26</td><td>坏（多缺陷叠加）</td><td>否</td><td>剔除；gold 换成可裁判断言后再考虑</td></tr>
+          <tr><td><b>#27</b></td><td><b>正常</b></td><td><b>是</b></td><td>保留；注意记忆也能答（闭卷 5/6 对），必须带闭卷基线</td></tr>
+          <tr><td>#28</td><td>坏（与 #25 同尾链）</td><td>否</td><td>与 #25 一并处理（同源缺陷，按 id 尾段聚类一次改完）</td></tr>
+          <tr><td>#29</td><td>坏（同名城市混用）</td><td>否</td><td>剔除；可留作“同名消歧”探针</td></tr>
+          <tr><td>#30</td><td>坏（三重不成立）</td><td>否</td><td>剔除；若要复用需补“城市→县”语料层并限定唯一答案</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">⇒ <b>4 跳这一档可用于能力比较的只剩 2 道</b>（#23、#27），且两题闭卷都能答——所以这一档的任何结论<b>都必须与闭卷基线一起报</b>。若要把 4 跳做成“可用的一档”，要么重做那 8 道（改题面／gold），要么补齐缺的语料层（如 #30 缺 <code>Fulton County</code>）。</p>
+
+      <h4>6.3 下一步（三条，按可执行性排序）</h4>
+      <ol>
+        <li><b>用同一套方法抽查 2／3 跳</b>（逐题拆太贵，可先按“L-a 句子层筛查 ＋ 同名实体清单 ＋ KB↔标注一致性核对”三件工具批量过），量出坏题率——这决定后面还要不要继续用这份题库。</li>
+        <li><b>按“改题面／改 gold”重做那 8 道坏题，再重算 4 跳</b>；同时补 <code>Fulton County</code> 这类缺层，看 4 跳能否变成可用档。</li>
+        <li><b>按“问题→方法”落第一轮臂</b>：分解臂（走完链条）／自查臂（提交前用题面硬约束＋可溯性检查）／检索改写臂（自然语言→关键词、0 命中即换策略），三条都带闭卷基线一起报。</li>
+      </ol>
+
+
+      <h4>6.4 落地方法论：一个迭代闭环（沛东 2026-10-13 定）</h4>
+      <ol>
+        <li><b>第一步：先把"有金标准支撑的测试集"做出来。</b>没有它指方向，后面所有工作都是在碰运气——而且它同时是<b>出发点</b>和<b>验收器</b>——所以测试集不只是“题目＋答案”，还要<b>把每题的判据／答案类型一起定下来</b>（实体型／数值型／句子型各用各的判据，见 §3.4 的指标适配讨论）。<i>（本轮的对应物：30 题分层切片 ＋ 闭卷基线 §0.5 ＋ 题目台账。）</i></li>
+        <li><b>第二步：按测试集的特点选主技术方案。</b>例：这批题是要拆的 <b>4 跳</b>问题，那么经典 RAG 必然搞不定；于是我们选了"基于 WeKnora 的 LLM-Wiki 检索"作为重点方案。<i>（对应本轮的 wiki 臂与三臂对照。）</i></li>
+        <li><b>第三步：重点拆"问题出在哪"，再按问题归纳方法去调整。</b>业界方法很多，必然要<b>选择着用</b>；而"改动是否有效"只能靠测试集来判断——没有它就只能猜。<i>（对应逐题拆 #21／#22／#23… → 卡点分类 → 再对照业界方法挑选。）</i></li>
+        <li><b>如此迭代循环</b>：第一步（测试集）与第三步（拆问题→改方法）互为反馈，才是正确的解题之道。<i>（本轮的循环点：拆完 10 题收口本节 → 下一轮按"问题→方法"改 prompt／加臂 → 同一测试集复测。）</i></li>
+      </ol>
+      <p class="muted">📌 这个闭环也解释了为什么前面要花那么多力气在"测试集体检"上（§0.5 闭卷基线、§6 题目台账）：<b>测试集本身不干净，第三步的所有结论都会歪</b>——#21／#22 就是现成的例子。</p>
+      <h4>6.5 待收口清单（逐题分析里长出来的通用问题）</h4>
+      <ol>
+        <li><b>知识来源分层</b>——知识库事实 ／ 世界知识的 L1 术语与指代、P 题面预设、L2 关系补齐、L3 实例与答案；关键是这几层<b>事后可验证的程度完全不同</b>（#21 是完整标本：只有"知识库事实"可查）。</li>
+        <li><b>必要性 ≠ 充分性</b>——MuSiQue 的条件 (2) 只认证"上下文是必要的"，不认证"给定段落能推出答案"；两者之间那块空间就是"猜"。</li>
+        <li><b>指标标准 vs 产品标准</b>——F1／EM 不区分推出来的和猜出来的，于是奖励猜、惩罚诚实认输（#21 实测：认输 0 分、猜中 1.0）；产品要的是可信、可核、不误导，方向相反。</li>
+        <li><b>闭卷基线是必配口径（§0.5）</b>——纯记忆 0.431（flash）／0.508（pro）已接近三条 agent 路线（0.52~0.56），所以绝对 F1 不能当"知识库能力"读。</li>
+        <li><b>好 Agent 的可测定义与改题思路</b>——答案是"能否溯源到读过的原文"＋"不确定时是否声明"；要真正考"忠实使用知识库"，需在同一段语料里配"只靠世界知识才成立"的同类诱饵，使正确答案唯一。</li>
+        <li><b>“同名实体”清单（贯穿三层的通用风险）</b>——已出现四次：#25 的 <code>Rio Linda</code>（萨克拉门托县内 CDP，被说成“萨克拉门托市的一个地区”）、#26 的两座 <code>Barcelona</code>（委内瑞拉／西班牙被合成一页）、#27 的两个 <code>Yuma</code>（科罗拉多／亚利桑那的县与市被混链）、#29 的两座 <code>Springfield</code>（<b>标注链</b>把俄亥俄与伊利诺伊的斯普林菲尔德当成同一座，而 KB 反而消歧正确）。⇒ 风险同时存在于<b>标注链、编译层、检索层</b>；重做语料／编译／检索时都要用“州／县／国”限定做消歧，并把“同名候选”作为检索与自查的必查项。</li>
+        <li><b>坏题的“可判定层级”三档（L-a／L-b／L-c）</b>——由 #26 引出：句子层可判（读一遍即知坏）／需要外部事实才能判（多解、关系错配）／需要逐跳核对才能判（“松动”措辞）。重做测试集时，第一档可自动筛，后两档要人工＋外部核验。</li>
+        <li><b>核对口径：判断关系成不成立，要看整个 KB（语料＋编译页）</b>——只查 572 段会漏掉编译层处理过的那一层：编译页既会<b>补写</b>（<code>entity/san-francisco</code> 补了“旧金山⊂加利福尼亚”、<code>entity/martin-luther</code> 补了“德国神学家”），也会<b>收紧出错</b>（<code>entity/rio-linda</code> 把原文的 “Rio Linda, Sacramento, CA” 收紧成“萨克拉门托<b>市</b>的一个地区”）。本页 §3.5（hop 2 的更正）与 §3.3（“德国人”那一步）都因此改过判定。</li>
+        <li><b>ReAct／检索链路的改进方向</b>（由 #23 引出，见 §3.3 的延伸讨论）：Self-Ask／分解-执行、Self-RAG 的 ISREL／ISSUP、CRAG、IRCoT、ReWOO（需带重规划的变体）……待 10 题拆完后，按"问题 → 方法"归并成一张对照表，并落成可跑的臂（分解臂／自查臂／检索改写臂）。</li>
+      </ol>
+      <h4>6.6 题目台账（10 道 4 跳，逐题累积）</h4>
+      <p class="muted"><b>缺陷类型＝无</b>的题不属坏题（即 6.2 里“可进能力比较”的题）。世界知识分层 L1／P／L2／L3 的定义见 §3.1 归因 ③ 的知识来源表。</p>
+      <table class="tbl-wide">
+        <thead><tr><th>题号</th><th>缺陷类型</th><th>金标准是否错</th><th>需要哪层世界知识</th><th>修法</th><th>能否当探针</th></tr></thead>
+        <tbody>
+          <tr><td>#21</td><td>定指不唯一（现实 5 个合法解）</td><td>否——<b>对，但不唯一</b></td><td>L1 ＋ P ＋ <b>L2</b> ＋ <b>L3</b></td><td>扩答案集，或改写题面使其唯一</td><td><b>可</b>：考"会不会指出定指不唯一"（P 层）</td></tr>
+          <tr><td>#22</td><td>题面与 gold 冲突（"正北"错配）</td><td><b>是</b>——答非所问</td><td>L1 ＋ <b>L2</b>（改写题面）</td><td>改题面（如"濒临波斯湾且在也门以北"）或改 gold，至少改一个</td><td><b>不可</b>：只能剔除</td>（正确行为＝拒答／声明题面不成立）</tr>
+          <tr><td>#23</td><td><b>无</b>（题面成立、gold 可由语料推出）</td><td>否——正确</td><td><b>仅 L1</b>（"那位德国神父"＝路德）</td><td>不需要</td><td>可（正常题）：考"能不能按四步走通"</td></tr>
+          <tr><td>#24</td><td>题面与 gold 冲突（“泰国与老挝之间的天然边界”＝缅甸 ✗ 实为湄公河）</td><td><b>是</b>——答非所问</td><td>L1 ＋ <b>L2</b>（改写题面）</td><td>改题面（把“天然边界”换成实体／或改问地点），或改 gold</td><td><b>不可</b>：只能剔除</td>（正确行为＝拒答／声明题面不成立）</tr>
+          <tr><td>#25</td><td>关系错配（in→border）＋ 非唯一解（多个接壤城市）＋ 类型不符（问 city、答 CDP）</td><td><b>是</b>——答非所问</td><td>L1 ＋ <b>L2</b>（改写关系）＋ <b>P</b>（判断是否唯一）</td><td>改题面（换成唯一的关系／实体，或改问“位于萨克拉门托境内的哪个地方”），或改 gold</td><td><b>不可</b>：只能剔除（正确行为＝拒答／声明题面不唯一＋类型不符）</td></tr>
+          <tr><td>#26</td><td>多缺陷叠加：hop1／2 错位（“革命战争”指代不清）＋ hop3 无据（出生地≠去世地）＋ 金答案是句子片段（<code>two cities</code>）＋ 题面类别错配（城市 vs 俱乐部）</td><td><b>是</b>——金答案不是答案</td><td>L1 ＋ <b>L2</b>（补齐“美国独立战争／死地”）</td><td>改 gold（换成可裁判的断言）并改题面（去掉类别错配的那一半），或整题废弃</td><td><b>不可</b>：只能剔除（正确行为＝指出“不可比＋金答案不是答案”）</td></tr>
+          <tr><td>#27</td><td><b>无</b>（题面成立、三跳明写、gold 可推）｜附注：hop 1 的支撑段是同名的「科罗拉多的尤马」，且编译层把两个 Yuma 县／市混链——但均未进入答案路径</td><td>否——正确</td><td><b>仅 L1</b></td><td>不需要</td><td>可（正常题）：考“能不能按三步走通”</td></tr>
+          <tr><td>#28</td><td>与 #25 <b>同尾链</b>（id 后三段相同）：关系错配（in→border）＋ 非唯一解 ＋ 类型不符；另附：<b>成本失控旗舰样本</b>（同一条坏链 7 万→813 万 token）</td><td><b>是</b>——答非所问</td><td>L1 ＋ <b>L2</b>（改写关系）＋ <b>P</b>（判断是否唯一）</td><td>同 #25：改题面或改 gold；且必须补“判停／预算闸门”</td><td><b>不可</b>：只能剔除（正确行为＝拒答／声明题面不唯一）</td></tr>
+          <tr><td>#29</td><td><b>同名城市在标注链里被混用</b>（Kantonen 卒于 Springfield, <b>Ohio</b>，链条却用 Springfield, <b>Illinois</b> 的“1839 成为州府”）＋ 题面模板拼接生硬</td><td><b>是</b>——前提不成立（答非所问）</td><td>L1 ＋ <b>L2</b>（区分同名）＋ <b>P</b>（判断前提是否成立）</td><td>改题面（用州限定同名城市）或改 gold；KB 其实已消歧（见 §3.9）</td><td><b>不可</b>：只能剔除（正确行为＝指出同名混用）</td></tr>
+          <tr><td>#30</td><td><b>三重不成立</b>：同名混用（<code>Atlanta</code> 佐治亚／密歇根，gold 因此指向密歇根）＋ 指代不唯一（亚特兰大跨 Fulton／DeKalb）＋ 答案不唯一（多个县与 Fulton 接壤）；另附：<b>字面支在库里缺一层</b>（<code>Fulton</code> 全库 0 命中）</td><td><b>是</b>——答非所问</td><td>L1 ＋ <b>L2</b>（区分同名）＋ <b>P</b>（判断是否唯一）</td><td>改题面（限定城市／县）并改 gold；同时把“城市所属县”补进语料</td><td><b>不可</b>：只能剔除（正确行为＝指出三重问题）</td></tr>
+        </tbody>
+      </table>
+      <p class="muted"><b>10 道 4 跳全部拆完</b>：正常题 <b>2 道</b>（#23、#27），坏题 <b>8 道</b>。§2 的 4 跳读数建立在这 8 道坏题之上，因此<b>不能当能力证据</b>（见 §6.1 第 1 条、§6.2 名单）。</p>
+    </section>
+
+    <section class="card">
+      <h2>第二部分 · 现场细节（考古层）</h2>
+
+      <h3>数据源与口径</h3>
+      <pre>wiki    : qa-wiki-v2.jsonl / -r2 / -r3
+smart-v3: qa-smart-v3.jsonl / -r2 / -r3
+hybrid  : qa-hybrid-v2.jsonl / -r2 / -r3
+（每臂 3 轮 × 30 题；F1 用 SQuAD 式词级归一化；工具数取 tool_calls 长度）</pre>
+
+      <h3>4 跳逐轮原始预测（节选，完整见 jsonl）</h3>
+      <pre>#21 wiki: Appleton ✗ / Green Bay ✓ / Green Bay ✓   smart: Green Bay ✓ / “缺链接文档” ✗ / Chilton ✗
+#22 wiki: 1932×3 ✓   smart: 1932 ✓ / “穷尽搜索后放弃” ✗ / 1932 ✓   hybrid: 1902 ✗ / 1932 ✓ / “放弃” ✗
+#23 三臂九轮: Wittenberg / Fribourg / Saxony  （都停在第一跳）
+#24 三臂: Somalis / The Vietnamese / Portuguese(0.05) / By the French / vote rigging / Thousands of Somalis / “Expelling thousands of Somalis…”×2
+#25 wiki: Wickham / Orange / Orange   smart: Orange / Coloma / “找不到完整链条”   hybrid: “穷尽语料” / Bathurst / Los Angeles
+#26 wiki: France / Madrid / Madrid    smart: Barcelona×3   hybrid: “链条确认中” / Spain / Madrid
+#27 三臂: 1905（hybrid r2 输出 “Answer: 1905” → 0.67）
+#28 三臂九轮全部“穷尽搜索后放弃／给出错误链条”
+#29 wiki: 1839 ✓ / 1816 ✗ / 1839 ✓   smart: 1839 ✓✓ / April 26, 1993 ✗   hybrid: 1839 ✓ / 链条描述 ×2
+#30 wiki: Fulton / Fulton / “我将逐步研究”   smart: 致歉式长解释 ×3（0.01–0.02）   hybrid: Gwinnett County / 部分链条 ×2</pre>
+
+      <h3>复现资产</h3>
+      <p><code>experiments/weknora/weknora_qa_eval.py</code>（<code>ask</code>／<code>score</code>／<code>tokens</code>）；数据 <code>data/tmp/weknora-musique/qa-*.jsonl</code>。本页所有逐题数字可用该脚本重算。</p>
+      <p><b>闭卷基线（§0.5）</b>：<code>experiments/weknora/closedbook_direct.py</code>（直连模型 API，密钥运行时从容器 DB 取密文解密、不落盘）与 <code>experiments/weknora/closedbook_eval.py</code>（走 WeKnora、agent 无工具，已弃用但保留作对照）；数据 <code>data/tmp/weknora-musique/qa-closedbook-direct-{flash,pro}{,-r2,-r3}.jsonl</code>、<code>qa-closedbook-{flash,pro}*.jsonl</code>；汇总 <code>data/tmp/_cb_all.txt</code>（总表）、<code>data/tmp/_cb_overlap.txt</code>（逐题对照）。</p>
+    </section>
+
+    <footer class="page-foot">
+      <p><a href="index.html">← 返回记忆主页</a> · <a href="0045-musique-retrieval-experiment.html">0045 实验总账</a></p>
+    </footer>
+  </div>
+</body>
+</html>

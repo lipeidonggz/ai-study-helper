@@ -179,7 +179,7 @@
       </div>
       <p class="muted"><b>范围规则</b>：<code>search_blocks</code> 与 <code>scan_term</code> 只按文档范围（<code>doc_ids</code>）；<b>章节范围只用在 <code>list_blocks</code></b>（单篇内）。<code>doc_ids</code> 省略表示全库，显式传空数组属于 <code>invalid_argument</code>，不能根据模型意图猜成“全库”或“空范围”。</p>
       <p><b>所有工具绑定同一 collection 快照</b>：Harness 在请求开始时固定 <code>collection_snapshot_id</code>，本次请求的全部工具调用都读取该快照；模型不选择、也不传 collection 参数。后台完成新快照后只原子切换“活动快照指针”，不回写进行中的请求；新请求使用新快照。活动快照不存在、仍不可读或已损坏时，工具返回 <code>collection_unavailable</code>，绝不能伪装成 <code>no_match</code> 或 <code>scope_empty</code>。</p>
-      <p><b>工具公共错误仍放在 payload 中</b>：Harness 成功派发后 <code>harness_status=ok</code>；工具用统一结构 <code>{"error":{"code":"...","message":"...","retryable":false}}</code> 表示业务或上游失败。公共错误码至少包括 <code>invalid_argument</code>（必填项为空、参数类型／范围非法）、<code>scope_not_found</code>（指定 doc／section 不存在）、<code>collection_unavailable</code>（无可用快照）、<code>upstream_unavailable</code>（embedding 等上游失败且重试无效）和 <code>internal_error</code>。合法但无内容的结果仍用各工具的空结果字段表达，不能升格为错误。</p>
+      <p><b>工具公共错误仍放在 payload 中</b>：Harness 成功派发后 <code>harness_status=ok</code>；工具用统一结构 <code>{"error":{"code":"...","message":"...","retryable":false}}</code> 表示业务、依赖或工具内部失败。公共错误码至少包括 <code>invalid_argument</code>（必填项为空、参数类型／范围非法）、<code>scope_not_found</code>（指定 doc／section 不存在）、<code>collection_unavailable</code>（无可用快照）、<code>upstream_unavailable</code>（embedding 等上游失败且重试无效）和 <code>tool_internal_error</code>。合法但无内容的结果仍用各工具的空结果字段表达，不能升格为错误；Harness 自身的异常属于外层 <code>harness_internal_error</code>，不能和工具错误混用。</p>
       <p class="muted"><b>公共块返回形态</b>：凡返回正文块，至少携带 <code>block_id / doc_id / doc_title / source_label / section_path / text</code>。内部字符偏移和检索分数不返回给模型；<code>doc_title</code> 与 <code>source_label</code> 用于消歧和最终引用展示，原始 <code>doc_id#block_id</code> 仍是机器可核验键。<code>result_tokens</code> 统一按本次请求固定的对话模型 tokenizer／估算器计算，用于 Harness 的上下文准入，不是 embedding 模型 token 数。</p>
       <p class="muted">工具约束中标 <b>【质量属性·X】</b> 的条目来自 §9 的局部预检，不是工具自身功能。</p>
       <table class="tbl-wide">
@@ -213,6 +213,10 @@
       <b>输出</b>：<code>documents[]</code>，按 doc 分组——每项含 <code>doc_id / doc_title / source_label</code> ＋ <code>sections</code>［path[]、ordinal、title、depth、<code>own_blocks</code>、<code>own_context_tokens</code>、<code>subtree_blocks</code>、<code>subtree_context_tokens</code>、first_line］；doc 不存在时该项返回公共 <code>error</code>；<b>无章节文档</b>（未识别出任何章节标题）返回根节（<code>path: []</code>、title＝文档标题、<code>depth: 0</code>）<br>
       <b>返回示例</b>：<code>{"documents":[{"doc_id":"doc_a5","doc_title":"How we contain Claude","source_label":"Anthropic","sections":[{"path":["Patterns for containing agents","Pattern 3: The local VM"],"ordinal":"3.3","title":"Pattern 3: The local VM (Claude Cowork)","depth":2,"own_blocks":3,"own_context_tokens":540,"subtree_blocks":5,"subtree_context_tokens":980,"first_line":"Claude Cowork runs on a user&#39;s desktop…"}]},{"doc_id":"doc_o2","doc_title":"Harness engineering","source_label":"OpenAI","sections":[{"path":["…"],"ordinal":"1","title":"…","depth":1,"own_blocks":4,"own_context_tokens":700,"subtree_blocks":6,"subtree_context_tokens":1100,"first_line":"…"}]}],"result_tokens":430}</code><br>doc 不存在：<code>{"documents":[{"doc_id":"doc_missing","error":{"code":"scope_not_found","message":"doc not found","retryable":false}}],"result_tokens":24}</code><br>无章节文档：<code>{"documents":[{"doc_id":"doc_x","doc_title":"Untitled","source_label":"Local","sections":[{"path":[],"title":"Untitled","depth":0,"own_blocks":12,"own_context_tokens":3200,"subtree_blocks":12,"subtree_context_tokens":3200,"first_line":"…"}]}],"result_tokens":90}</code><br>
       <b>约束</b>：<b>【质量属性·可靠性】</b>doc 不存在按 doc 返回公共错误；<code>documents[]</code> 保持输入 <code>doc_ids</code> 顺序，重复 id 取首次；<code>own_*</code> 只统计该节直属块，<code>subtree_*</code> 统计该节及全部后代；无章节文档返回根节（<code>path: []</code>、title＝文档标题、<code>depth: 0</code>）；重名标题 path 唯一化；章节顺序按原文；不做摘要、不返回 block id。</p>
+
+      <p class="muted"><b>token 字段口径</b>：<code>own_context_tokens</code>／<code>subtree_context_tokens</code> 是由固定 <code>ChunkSizingEstimator</code> 聚合的近似提示，用于让 Agent 判断范围大小，不是当前对话模型的精确 token 数；运行时真正的预算判断仍对实际工具 payload 计算 <code>result_tokens</code>。</p>
+      <p class="muted"><b>拆分表格的返回上下文</b>：如果 block 来自被拆分的表格，返回中可附带 <code>table_context</code>（caption、表头、行组序号）。它不是正文证据，也不参与 <code>text</code> 的字符偏移和引用；但必须计入本次工具的实际 <code>result_tokens</code>，让模型能看懂没有表头的行组。</p>
+      <p class="muted"><b>关键词索引口径</b>：<code>search_blocks</code> 的关键词路径使用 doc_title／section_path／table_context／block.text 组装的 search_text，经固定 analyzer 建 BM25 倒排；<code>scan_term</code> 则绕过 analyzer，直接对 block.text 做 NFC＋大小写折叠后的字面扫描。关键词索引零命中不能代替 <code>scan_term</code> 的证否。</p>
 
       <h3>T3 search_blocks</h3>
       <p><b>工具说明（给模型）</b>：需要按语义查找候选证据时调用；按语义与关键词混合检索相关块，可按文档限定范围，返回排序后的前 N 条候选（块引用＋全文）。它是候选召回，不是完整枚举；确认精确字符串是否存在应使用 <code>scan_term</code>。</p>
@@ -296,7 +300,9 @@
         <li><code>question</code>：本次用户问题。</li>
         <li><code>history</code>：本次请求内已有的 Thought、Action 和 Observation 轨迹，不包含跨请求状态。</li>
         <li><code>finished</code>：是否已经收到 <code>Finish</code>。</li>
-        <li><code>tool_calls</code>：本次请求已经执行的工具调用数；初版上限 <code>max_tool_calls = 8</code>。</li>
+        <li><code>agent_turns</code>：模型产生决策的次数；每次输出一个 Action（包括 <code>Finish</code>）记为一次。</li>
+        <li><code>tool_calls</code>：模型请求执行并实际派发的<b>逻辑工具动作数</b>；初版上限 <code>max_tool_calls = 8</code>。一个工具调用是一轮 Agent 决策中的可选动作，不单独构成一个循环。</li>
+        <li><code>model_calls</code>：实际发给模型的请求次数，包括自动重试；用于成本、Trace 与故障定位，不另设固定次数上限。</li>
         <li><code>context_tokens</code>：下一次模型调用预计携带的上下文 token；用户可配置 <code>max_context_tokens</code>，默认 <code>100000</code>。</li>
         <li><code>used_tokens</code>：本次请求累计消耗的<b>对话模型</b> token，按 provider 返回值统计，缺失时使用估算；用户可配置 <code>max_request_tokens</code>，默认 <code>400000</code>。embedding API 的 token 另按供应商口径记入 trace 和成本统计，不与对话 token 直接相加。</li>
         <li><code>finalization_reserve_tokens = 4000</code>：从累计预算中预留，用于预算耗尽后生成最终回答；工具循环实际可用的是前 396000 token。</li>
@@ -325,7 +331,7 @@
         <tbody>
           <tr><td><b>工具业务结果</b>：doc 不存在、无匹配、范围为空</td><td>作为正常 payload 返回给模型；不自动重试</td><td>只计本次工具调用的 token</td></tr>
           <tr><td><b>协议错误</b>：Action 格式错误、JSON 无法解析、出现多个 Action</td><td>追加 <code>protocol_error</code> Observation，让模型下一轮修正；它不是传输重试</td><td>模型调用 token 正常计入</td></tr>
-          <tr><td><b>瞬时工具错误</b>：超时、临时基础设施失败</td><td>同一操作最多自动重试 1 次；仍失败则返回 <code>internal_error</code> 或对应工具不可用状态</td><td>模型重试产生的 token 计入 <code>max_request_tokens</code>；不设独立“重试预算”</td></tr>
+          <tr><td><b>瞬时工具错误</b>：超时、临时基础设施失败</td><td>同一操作最多自动重试 1 次；仍失败则在工具 payload 中返回 <code>tool_internal_error</code> 或 <code>upstream_unavailable</code></td><td>模型重试产生的 token 计入 <code>max_request_tokens</code>；不设独立“重试预算”</td></tr>
           <tr><td><b>瞬时模型错误</b>：超时、限流</td><td>同一调用最多自动重试 1 次；仍失败则停止循环并返回明确错误</td><td>所有实际 token 都累计到 <code>max_request_tokens</code></td></tr>
           <tr><td><b>上下文／请求预算耗尽</b></td><td>不重试；返回 <code>context_budget_exceeded</code> 或 <code>request_budget_exceeded</code></td><td>已发生的调用照常计入</td></tr>
           <tr><td><b>部分来源失败</b></td><td>其他来源继续；最终回答可以包含已成功部分，但必须具名声明缺失来源，不能声称完整</td><td>按实际调用计</td></tr>
@@ -343,7 +349,7 @@
       <div class="prompt-draft">Observation:
 {
   "harness_status": "ok",
-  "tool": "<tool_name>",
+  "tool": "&lt;tool_name&gt;",
   "payload": { "...按 §7 的工具返回契约..." },
   "message": null
 }</div>
@@ -356,7 +362,7 @@
           <tr><td><code>tool_unavailable</code></td><td>Action 指向当前不可用的工具。</td></tr>
           <tr><td><code>context_budget_exceeded</code></td><td>下一次模型调用预计超过用户设置的 <code>max_context_tokens</code>，Harness 停止继续调用模型。</td></tr>
           <tr><td><code>request_budget_exceeded</code></td><td>本次请求累计消耗的对话模型 token 超过用户设置的 <code>max_request_tokens</code>，Harness 停止继续调用对话模型。</td></tr>
-          <tr><td><code>internal_error</code></td><td>Harness 自身异常。</td></tr>
+          <tr><td><code>harness_internal_error</code></td><td>Harness 自身异常。</td></tr>
         </tbody>
       </table>
       <p>公共层只负责两件事：</p>
@@ -421,7 +427,7 @@ Action: Finish[最终答案]
 工具执行后，系统会以 Observation 追加到 History：
 
 {
-  "harness_status": "ok | protocol_error | tool_unavailable | context_budget_exceeded | request_budget_exceeded | internal_error",
+  "harness_status": "ok | protocol_error | tool_unavailable | context_budget_exceeded | request_budget_exceeded | harness_internal_error",
   "tool": "<工具名或 null>",
   "payload": {...} 或 null,
   "message": null 或 "<错误说明>"
@@ -434,7 +440,7 @@ Action: Finish[最终答案]
 4. tool_unavailable 表示当前工具不可用，应改用可用工具或 Finish，不能据此判断文档内容不存在。
 5. context_budget_exceeded 表示下一次模型调用的上下文超过用户上限；Harness 不得继续发起该模型调用，应返回明确超界错误。
 6. request_budget_exceeded 表示本次请求累计 token 超过用户上限；Harness 不得继续调用模型，应返回明确超界错误。
-7. internal_error 表示 Harness 异常，应返回失败状态并报告无法继续。
+7. harness_internal_error 表示 Harness 异常，应返回失败状态并报告无法继续。
 8. 模型不得自行生成 Observation。
 &lt;/observation_protocol&gt;
 
@@ -453,7 +459,7 @@ Action: Finish[最终答案]
 &lt;coverage&gt;
 1. 用户要求“有哪些”“全部”“整节”“所有要点”时，先明确范围，再进行完整枚举；Top-k 结果不能冒充全集。
 2. 需要比较多个来源时，逐篇取得每个来源的证据；一次全库检索不能代替逐源覆盖检查。
-3. 范围未取全、结果被截断或某篇文档无法访问时，必须说明缺了什么。
+3. 范围未取全、结果无法进入上下文或某篇文档无法访问时，必须说明缺了什么。
 4. collection_status.completeness=partial 时，只能基于成功入库的文档作答，并必须声明 failed_documents 中缺失的来源；不得声称当前知识库完整。
 &lt;/coverage&gt;
 
@@ -475,11 +481,11 @@ Action: Finish[最终答案]
 &lt;termination&gt;
 满足以下任一条件时停止检索并输出 Finish：
 1. 当前问题所需证据已经足够。
-2. 必需证据无法取得，或结果被截断，但已经能说明缺口。
+2. 必需证据无法取得，或结果无法进入上下文，但已经能说明缺口。
 3. 重复尝试没有产生新的有效证据，继续调用工具没有明确目的。
 4. 目标对象无法唯一确定，需要用户澄清。
 5. 输出预算不足，内容尚未讲完；此时必须声明“内容未完”。
-6. 收到 context_budget_exceeded、request_budget_exceeded 或工具轮次达到上限的状态时，直接输出 Finish，并说明因运行预算停止而未完成的部分；若 Harness 无法再发起模型调用，则由 Harness 直接返回错误。
+6. 收到 context_budget_exceeded、request_budget_exceeded，或逻辑工具调用数达到 max_tool_calls 时，直接输出 Finish，并说明因运行预算停止而未完成的部分；若 Harness 无法再发起模型调用，则由 Harness 直接返回错误。
 &lt;/termination&gt;
 
 &lt;question&gt;
@@ -576,7 +582,7 @@ Action: Finish[最终答案]
           </tr>
           <tr>
             <td><b>成本</b></td>
-            <td>8 次工具调用、单块 ≤450 token、用户可配置 100k／400k 预算</td>
+            <td>8 次工具调用、单块默认约 450 token 目标（固定 sizing estimator）、用户可配置 100k／400k 预算</td>
             <td><span class="ok">✅ 闭合</span></td>
             <td>未测</td>
             <td>当前数值是按 8 轮估算；需用实际 N、tokenizer、工具结果分布校准。</td>
@@ -632,7 +638,7 @@ Action: Finish[最终答案]
           </tr>
           <tr>
             <td><b>可安装性／可运维性／资源占用</b></td>
-            <td>§9.7 v0.1：Windows x64 桌面应用；原生安装；对话固定 DeepSeek 最新 Flash，embedding 使用独立供应商；用户分别填写两个 API Key；不要求 Docker／外部数据库；统一数据根、后台入库、手动更新、仅回环访问</td>
+            <td>§9.7 v0.1：Windows x64 桌面应用；原生安装；对话固定 DeepSeek 最新 Flash，embedding 固定阿里云百炼 <code>qwen3.7-text-embedding</code>；用户分别填写两个 API Key；不要求 Docker／外部数据库；统一数据根、后台入库、手动更新、仅回环访问</td>
             <td><span class="ok">✅ 闭合</span></td>
             <td>未测</td>
             <td>完成安装包与内部组件形态选型，并验证干净机器安装、首启双 Key 配置、断网／限流、后台入库、升级回滚、卸载保留数据和回环访问。</td>
@@ -748,7 +754,7 @@ Action: Finish[最终答案]
         <tbody>
           <tr>
             <td><b>Trace 根记录</b></td>
-            <td><code>trace_id</code>／<code>schema_version</code>／<code>app_version</code>／开始与结束时间；请求固定的 <code>collection_snapshot_id</code>、<code>snapshot_status</code> 与 <code>completeness</code>；最终状态和 <code>termination_reason</code>；工具轮次、重试次数、对话／embedding token 和预算状态；<code>trace_status=complete|partial|dropped</code> 与丢弃事件数；用户问题 artifact 引用（<code>metadata</code> 模式只记 hash）</td>
+            <td><code>trace_id</code>／<code>schema_version</code>／<code>app_version</code>／开始与结束时间；请求固定的 <code>collection_snapshot_id</code>、<code>snapshot_status</code> 与 <code>completeness</code>；最终状态和 <code>termination_reason</code>；<code>agent_turns</code>／<code>tool_calls</code>／<code>model_calls</code>、重试次数、对话／embedding token 和预算状态；<code>trace_status=complete|partial|dropped</code> 与丢弃事件数；用户问题 artifact 引用（<code>metadata</code> 模式只记 hash）</td>
             <td>从一次请求回看整体结果，区分正常完成、预算终止、协议失败和内部错误</td>
           </tr>
           <tr>
@@ -889,8 +895,8 @@ Action: Finish[最终答案]
           <tr><td><b>应用</b></td><td><code>app_version</code>、build ID 或 Git commit</td><td>运行的是哪一版产品代码</td></tr>
           <tr><td><b>提示词</b></td><td><code>bundle_source=release|experiment</code>；bundle ID／版本／内容 hash／父版本（若有）；每个模板的 ID／版本／hash；工具描述 bundle 的版本与 hash；每次实际渲染提示词的 hash</td><td>模型看到的行为规则和工具说明来自发布基线还是实验版本，具体是哪一版</td></tr>
           <tr><td><b>Agent 控制</b></td><td>循环版本、Action／Observation 执行契约版本、工具契约版本、工具白名单版本</td><td>循环语义、协议解析和允许能力是哪一版</td></tr>
-          <tr><td><b>模型（两套）</b></td><td><b>对话</b>：provider＝DeepSeek，请求模型＝最新 Flash，供应商返回的模型版本／fingerprint（若有）、温度、top-p、max output tokens、seed、request ID；<b>embedding</b>：独立 provider、模型名、模型版本、向量维度、归一化方式和 request ID</td><td>分别说明生成答案和生成向量用的是哪个模型服务；实现时还要固定供应商 API 的实际 model ID，不能只记录市场名称</td></tr>
-          <tr><td><b>语料与索引</b></td><td><code>collection_snapshot_id</code>；doc 版本；chunker；对话上下文 tokenizer／估算器；embedding 模型、版本与 tokenizer；索引 schema 与检索常数（如 RRF、Top-K）</td><td>检索基于哪一份语料和哪一种索引实现，块大小与检索预算按哪套 token 口径</td></tr>
+          <tr><td><b>模型（两套）</b></td><td><b>对话</b>：provider＝DeepSeek，请求模型＝最新 Flash，供应商返回的模型版本／fingerprint（若有）、温度、top-p、max output tokens、seed、request ID；<b>embedding</b>：provider＝阿里云百炼，model ID＝<code>qwen3.7-text-embedding</code>，1024 维，dense 输出，记录模型版本、归一化方式和 request ID</td><td>分别说明生成答案和生成向量用的是哪个模型服务；实现时固定实际 model ID，不能只记录市场名称</td></tr>
+          <tr><td><b>语料与索引</b></td><td><code>collection_snapshot_id</code>；doc 版本；chunker；固定 sizing estimator；embedding 模型、版本与 tokenizer；索引 schema 与检索常数（如 RRF、Top-K）</td><td>检索基于哪一份语料和哪一种索引实现；运行时结果预算由当前对话模型实测；块大小和 embedding 输入按各自版本解析</td></tr>
           <tr><td><b>运行配置</b></td><td>上下文／请求预算、最终回答预留、trace 模式及其他可能影响结果的开关</td><td>同一运行是否受到不同用户配置影响</td></tr>
         </tbody>
       </table>
@@ -912,7 +918,7 @@ Action: Finish[最终答案]
       <p><b>9.5.4 collection 快照与保留</b></p>
       <ul>
         <li>每次会改变检索结果的入库／重建产生新的不可变 <code>collection_snapshot_id</code>；trace 永远引用生成时的快照，不使用“当前 collection”这类会漂移的引用。</li>
-        <li><code>doc.version</code>、切分器、对话上下文 tokenizer／估算器、embedding 模型与 tokenizer、索引参数都归属快照；块上不重复存完整版本组，只通过所属 collection／doc 解析。</li>
+        <li><code>doc.version</code>、切分器、固定 sizing estimator、embedding 模型与 tokenizer、索引参数都归属快照；块上不重复存完整版本组，只通过所属 collection／doc 解析。对话模型切换不改变入库数据，只影响运行时实际 payload 计数；embedding 模型切换必须新建快照。</li>
         <li>“证据复现”不要求旧快照存在，因为完整 trace 已保存实际输入与返回；“检索重放”要求旧快照仍可加载。</li>
         <li>快照保留与磁盘占用直接冲突。单机版允许用户配置快照保留数量或期限，但若要声称某个 trace “可检索重放”，其 collection 快照必须至少覆盖该 trace 的保留期；否则 viewer 必须显示快照缺失并如实降级。</li>
         <li>collection 快照保留数量、压缩方式与清理策略归入库侧设计；当前先定语义，不提前拍物理实现。</li>
@@ -993,7 +999,7 @@ Action: Finish[最终答案]
           <tr><td><b>平台</b></td><td>Windows x64</td><td>其他操作系统不进入第一版验收，不为跨平台同时维护多套安装链路</td></tr>
           <tr><td><b>产品形态</b></td><td>桌面应用外壳</td><td>前端、后端和本地存储作为一个产品安装与启动；内部子进程由外壳管理，用户不手工启动服务</td></tr>
           <tr><td><b>正式安装路径</b></td><td>原生桌面安装包；Docker 只用于开发／测试</td><td>正式用户不安装 Docker；Docker 路径不承担产品可安装性验收</td></tr>
-          <tr><td><b>模型</b></td><td>只使用云端 API；对话固定为 <b>DeepSeek 最新 Flash</b>；embedding 使用另一家独立供应商和固定模型</td><td>不做本地 LLM、GPU 推理或模型市场。文档中的“最新 Flash”是产品口径，实现时必须固定并记录供应商 API 的真实 model ID</td></tr>
+          <tr><td><b>模型</b></td><td>只使用云端 API；对话固定为 <b>DeepSeek 最新 Flash</b>；embedding 固定为阿里云百炼 <code>qwen3.7-text-embedding</code>（1024 维、dense）</td><td>不做本地 LLM、GPU 推理或模型市场。文档中的名称是产品口径，实现时必须固定并记录供应商 API 的真实 model ID</td></tr>
           <tr><td><b>凭证</b></td><td>对话与 embedding <b>分别填写两个 API Key</b>，第一版不假设可复用</td><td>首启分别提供获取指引和连通性测试；两个密钥独立保存、独立失效、独立替换，都不能进入普通配置文件、日志或 trace</td></tr>
           <tr><td><b>外部服务</b></td><td>不要求用户安装数据库或容器</td><td>必要存储与索引必须是应用内置、随包分发或由应用自动监管的组件</td></tr>
           <tr><td><b>硬件基线</b></td><td>4 核 CPU／8GB 内存／SSD，不要求 GPU</td><td>不承担本地模型推理；资源重点在桌面壳、后端、索引和入库任务</td></tr>
@@ -1008,7 +1014,7 @@ Action: Finish[最终答案]
       <ul>
         <li>提供一个面向当前 Windows 用户的安装包；默认按用户安装，不要求管理员权限，安装后从开始菜单／桌面启动。</li>
         <li>桌面应用负责拉起内部后端并等待健康检查；若使用本地 HTTP／SSE，内核只绑定 <code>127.0.0.1</code>，使用随机端口和每次启动的会话令牌，不对局域网暴露。</li>
-        <li>首启向导要求分别填写<b>对话 API Key</b>和<b>embedding API Key</b>，对两项服务分别执行连通性测试，再确认数据目录。对话固定为 DeepSeek 最新 Flash，embedding 模型由另一家供应商固定，不向普通用户暴露模型参数矩阵。</li>
+        <li>首启向导要求分别填写<b>对话 API Key</b>和<b>embedding API Key</b>，对两项服务分别执行连通性测试，再确认数据目录。对话固定为 DeepSeek 最新 Flash，embedding 固定为阿里云百炼 <code>qwen3.7-text-embedding</code>，不向普通用户暴露模型参数矩阵。</li>
         <li><b>两个 API Key 分别存入 Windows 凭证保护机制</b>（如 Credential Manager／DPAPI），不写入普通 JSON、备份包、应用日志或 trace。日志和错误上报中的 Authorization 头必须脱敏。</li>
         <li>首启必须明确告知：用户文档的正文／块会发送给独立的云端 embedding 供应商，问答上下文和模型输入会发送给 DeepSeek。隐私不作为本产品当前的卖点或质量目标，但不能把数据外发做成隐式行为。</li>
         <li>云端不可达或 Key 无效时，应用仍能启动并进入状态页；核心问答明确不可用，不伪造本地降级答案，也不反复弹窗轰炸用户。</li>
@@ -1057,7 +1063,7 @@ Action: Finish[最终答案]
       </ul>
 
       <div class="key">
-        <b>本节结论</b>：第一版是<b>面向普通非技术用户的 Windows x64 单机桌面应用</b>。正式安装不依赖 Docker、外部数据库或手工启动服务；对话固定使用 DeepSeek 最新 Flash，embedding 使用另一家独立供应商，用户分别填写两个 API Key。应用采用统一数据根、后台入库、手动更新、默认 <code>metadata</code> trace 和仅回环访问。部署目标是“用户只感知一个应用”，所有内部组件由桌面壳和产品生命周期管理。
+        <b>本节结论</b>：第一版是<b>面向普通非技术用户的 Windows x64 单机桌面应用</b>。正式安装不依赖 Docker、外部数据库或手工启动服务；对话固定使用 DeepSeek 最新 Flash，embedding 固定使用阿里云百炼 <code>qwen3.7-text-embedding</code>，用户分别填写两个 API Key。应用采用统一数据根、后台入库、手动更新、默认 <code>metadata</code> trace 和仅回环访问。部署目标是“用户只感知一个应用”，所有内部组件由桌面壳和产品生命周期管理。
       </div>
       <p class="muted"><b>技术选型边界</b>：桌面壳具体采用哪项技术、内置向量索引选什么、Windows 安装器怎么打包，仍留到技术选型阶段；本节只锁定用户体验、部署形态、资源与运维验收条件。如果第一版改为面向开发者的 Docker 产品，本节结论必须重写。</p>
     </section>
@@ -1079,7 +1085,7 @@ Action: Finish[最终答案]
         </tbody>
       </table>
 
-      <p><b>初版选路径 1：直接给全文块。</b>理由不是"WeKnora 这么做"，而是：单块先按<b>对话模型上下文 tokenizer</b> 计 450 token 的暂定上限（不是红线，入库侧验证后可调整；embedding 供应商的 token 上限另行校验），配合 <code>N</code> 与单次返回预算，能把单次检索的上下文代价控制住；同时没有摘要失真，金标准里的精确数字与归属判断最安全；少一轮、少一个工具、少一条版本链。跨轮上下文成本留给 Agent 循环，通过轮次、工具调用次数与停止条件继续约束。</p>
+      <p><b>初版选路径 1：直接给全文块。</b>理由不是"WeKnora 这么做"，而是：单块用固定 sizing estimator 以约 450 token 为目标（这是启发式切块目标，不是精确模型限制；embedding 供应商限制另行校验），配合 <code>N</code> 与单次返回预算控制上下文代价；同时没有摘要失真，金标准里的精确数字与归属判断最安全；少一轮、少一个工具、少一条版本链。跨轮上下文成本留给 Agent 循环，通过轮次、工具调用次数与停止条件继续约束。</p>
 
       <p><b>路径 2 作为后备。</b>只有实测发现"全文块把上下文撑爆、且 N 降不下来"时才考虑；真要做，优先<b>抽取式</b>（原文关键句），不做生成式——450 token 的块压成 100 token，最容易丢的恰恰是数字、限定词、归属，而这些正是金标准要判的东西；生成式摘要只在块很大（如 &gt;1k token）或候选很多时才划算。</p>
 
@@ -1106,7 +1112,7 @@ Action: Finish[最终答案]
       </table>
 
       <h3>11.2 块记录（初稿）</h3>
-      <p>双模型下必须区分两套 token 口径：<b>上下文 token</b>用于单块大小、<code>result_tokens</code>、100k 上下文预算和 400k 请求预算，按对话模型 tokenizer／稳定估算器计算；<b>embedding token</b>用于 embedding 供应商的输入上限和计费校验，按该供应商 tokenizer 计算。两者不能共用一个含义含糊的 <code>token_count</code>。</p>
+      <p>双模型下必须区分两套 token 口径：<b>上下文 token</b>用于默认块目标、<code>result_tokens</code>、100k 上下文预算和 400k 请求预算，由固定 sizing estimator 和当前对话模型运行时计量；<b>embedding usage</b>用于 Qwen 批处理和计费，以 API 实际返回的 input token usage 为准。两者不能共用一个含义含糊的 <code>token_count</code>。</p>
       <table class="tbl-wide">
         <thead><tr><th>字段</th><th>用途</th></tr></thead>
         <tbody>
@@ -1115,10 +1121,10 @@ Action: Finish[最终答案]
           <tr><td><code>section_path: string[]</code></td><td>规范且唯一；重名加序号；根节为 <code>[]</code></td></tr>
           <tr><td><code>block_index: int</code></td><td>文档内顺序；<code>list_blocks</code> 按它返回</td></tr>
           <tr><td><code>text</code></td><td>完整原文；供返回全文、<code>scan_term</code>、引用核对</td></tr>
+          <tr><td><code>table_context</code>（可选）</td><td>拆分表格的 caption／可靠表头／行组序号；供模型阅读和 embedding 输入，不是 <code>text</code> 中的证据，不计入字符偏移</td></tr>
           <tr><td><code>char_start</code>／<code>char_end</code></td><td>在原文中的字符偏移；字符级可溯源</td></tr>
           <tr><td><code>content_hash</code></td><td>去重与版本核对</td></tr>
-          <tr><td><code>context_token_count</code></td><td>按指定对话模型 tokenizer／估算器计算；供 450 token 分块、<code>result_tokens</code>、大纲与上下文预算。若对话模型变化，必须按新 tokenizer 重算或重建快照</td></tr>
-          <tr><td><code>embedding_token_count</code></td><td>按当前 embedding 供应商口径计算；供输入上限、批处理与成本校验，不参与模型上下文预算</td></tr>
+          <tr><td><code>context_token_estimate</code></td><td>由固定 <code>ChunkSizingEstimator</code> 产生的近似大小提示；供默认块目标、<code>SectionStats</code> 和范围规划。它不是运行时结果预算的精确依据，也不随对话模型切换保存多套版本</td></tr>
           <tr><td><code>lang</code></td><td>zh／en／mixed（文档级或块级）</td></tr>
         </tbody>
       </table>
@@ -1129,7 +1135,7 @@ Action: Finish[最终答案]
         <li><b>章节</b>：<code>doc_id / path[] / ordinal / depth / parent_path / own_block_count / own_context_tokens / subtree_block_count / subtree_context_tokens / first_line</code>——对应 <code>get_outline</code> 的 <code>own_*</code> 与 <code>subtree_*</code>，可实时聚合，也可预计算。</li>
       </ul>
 
-      <p><b>版本</b>：见 §9.5——collection 级以不可变 <code>collection_snapshot_id</code> 汇总对话上下文 tokenizer／估算器、embedding provider／模型／tokenizer、语料、索引与检索常数版本；doc 级存文档版本与切分器版本；不在每个块上重复。</p>
+      <p><b>版本</b>：见 §9.5——collection 级以不可变 <code>collection_snapshot_id</code> 汇总固定 sizing estimator、embedding provider／模型／tokenizer、语料、索引与检索常数版本；对话模型或运行时 tokenizer 变化只影响当次请求的 payload 计数。doc 级存文档版本与切分器版本；不在每个块上重复。</p>
 
       <h3>11.4 检索侧对入库侧的契约要求（汇总）</h3>
       <p>这一节不是入库流程设计，而是把散在工具、提示词、可复现与运维章节里的依赖集中成<b>检索侧消费的数据契约</b>。入库具体怎样解析、切分、embedding 和构建索引仍归入库侧设计，但产物必须满足以下要求。</p>
@@ -1138,7 +1144,7 @@ Action: Finish[最终答案]
         <tbody>
           <tr>
             <td><b>Collection 快照与发布</b></td>
-            <td>不可变 <code>collection_snapshot_id</code>；<code>snapshot_status=ready|ready_partial|failed</code>；<code>completeness=complete|partial</code>；失败文档清单及错误；所有索引完成后才能原子发布，不能先暴露半成品</td>
+            <td>不可变 <code>collection_snapshot_id</code>；<code>snapshot_status=building|ready|ready_partial|failed</code>；<code>completeness=complete|partial</code>；失败文档清单及错误；所有索引完成后才能原子发布，不能先暴露半成品。<b><code>ready_partial</code> 只表示批次中部分文档完整成功、部分文档失败</b>；单篇文档必须解析、切分、embedding 和索引全部成功才进入快照，不允许把残缺文档当成功文档发布</td>
             <td>请求开始时固定快照；只读取 ready／ready_partial；partial 必须进入模型上下文并触发遗漏透明；failed／缺失返回 <code>collection_unavailable</code></td>
           </tr>
           <tr>
@@ -1157,9 +1163,9 @@ Action: Finish[最终答案]
             <td>全文返回、精确扫描、按原文顺序枚举、字符级溯源、去重与版本核对</td>
           </tr>
           <tr>
-            <td><b>双 token 口径</b></td>
-            <td><code>context_token_count</code> 与 <code>embedding_token_count</code>；分别记录对话上下文 tokenizer／估算器与 embedding tokenizer 的版本</td>
-            <td>450 token 分块、<code>result_tokens</code>、上下文／请求预算使用前者；embedding 输入上限与成本校验使用后者，禁止混算</td>
+            <td><b>token 口径</b></td>
+            <td>固定的 <code>context_token_estimate</code>；运行时按当前模型对实际工具 payload 计算 <code>result_tokens</code>；embedding 构建期 token 预检与实际 usage 另行记录</td>
+            <td>默认块目标、<code>result_tokens</code>、上下文／请求预算使用前者；Qwen 批处理与计费使用 API 返回的实际 usage，禁止混算</td>
           </tr>
           <tr>
             <td><b>向量索引</b></td>
@@ -1218,9 +1224,9 @@ Action: Finish[最终答案]
         <li><b>验证门槛 H1</b>：简单类首字延迟 P50／P90 ≤ 10s，且通过率满足 N＝10、K＝9；两条都过就不加快车道。</li>
         <li><b>初版运行预算</b>：最多 8 次工具调用；<code>max_context_tokens</code>／<code>max_request_tokens</code> 用户可配置，默认 100k／400k（预留 4k 给最终回答）；超界由 Harness 返回明确错误。</li>
         <li><b>检索执行契约</b>：请求固定 collection 快照；工具共用参数错误／空结果／上游失败语义；章节范围包含后代；初版不另做 evidence assembler。</li>
-        <li><b>双 token 口径</b>：对话上下文预算与 embedding 输入／成本分开计算；所有工具返回按对话 tokenizer 估算的 <code>result_tokens</code>。</li>
-        <li><b>入库接口</b>：§11.4 汇总了快照发布、文档消歧、章节树、块身份、双 token、索引、完整性、生命周期与引用展示要求。</li>
-        <li><b>下一步</b>：按 §11.4 的接口契约进入<b>入库侧设计</b>，确定解析、切分、文档／章节结构、双 token、embedding、索引、快照发布与后台任务；入库设计完成并回检质量属性后，再做桌面壳、内置索引、安装器等具体技术选型与实现。</li>
+        <li><b>token 口径</b>：入库时只存固定 estimator 的 <code>context_token_estimate</code>；运行时按当前模型对实际工具 payload 计算 <code>result_tokens</code>；embedding 输入限制与成本单独预检，三者不混算。</li>
+        <li><b>入库接口</b>：§11.4 汇总了快照发布、文档消歧、章节树、块身份、token 口径、索引、完整性、生命周期与引用展示要求。</li>
+        <li><b>下一步</b>：按 §11.4 的接口契约进入<b>入库侧设计</b>，确定解析、切分、文档／章节结构、上下文 profile、embedding 输入、索引、快照发布与后台任务；入库设计完成并回检质量属性后，再做桌面壳、内置索引、安装器等具体技术选型与实现。</li>
         <li><b>尚未回答</b>：入库侧设计；提示词最终文案与逐例回归、预算实测、超时／重试、trace 与版本清单实现及默认值校准、兼容迁移与回滚实现、安装包与内部组件技术选型、安装验收、工具契约实现。</li>
       </ul>
     </section>

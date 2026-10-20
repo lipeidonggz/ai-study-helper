@@ -61,7 +61,7 @@
         {
           "id": "a5-e3",
           "text": "具体翻车教训（missed risks：元教训如'最薄弱层是自己构建的那层 / custom proxy 在重大事故中出问题'，或具体事故如 trust dialog 之前 / 用户作为注入向量 / 批准域名外泄 / VM 隔离挡端点检测）",
-          "probe": "覆盖须含：A5 存在翻车教训的证据——元教训（最薄弱层是自己构建的那层、custom proxy 在重大事故中出问题等）或任一具体事故（trust dialog 之前、用户作为注入向量、白名单外泄、VM 隔离挡端点检测等）均可，给出一例即算 covered"
+          "probe": "覆盖须含：Anthropic《How we contain Claude》存在翻车教训的证据——元教训（最薄弱层是自己构建的那层、custom proxy 在重大事故中出问题等）或任一具体事故（trust dialog 之前、用户作为注入向量、白名单外泄、VM 隔离挡端点检测等）均可，给出一例即算 covered"
         }
       ],
       "ext": []
@@ -73,7 +73,7 @@
     "boundary_claims": [],
     "format_expected": "结构化：先分列两文各自承认的局限/未解问题与未来展望（来源分明），再给同/异或关系判断并明确收口；依据标注清晰；不得以资料不完整替代结论",
     "judge_shape": "checklist",
-    "note": "切面探针（局限与展望）：core 复用 O2/A5 点表中对应主题的 probe；2026-09-07 草稿经沛东确认设计后落 JSON。",
+    "note": "切面探针（局限与展望）：core 复用 OpenAI《Harness engineering》／Anthropic《How we contain Claude》点表中对应主题的 probe；2026-09-07 草稿经沛东确认设计后落 JSON。",
     "annotated_at": "2026-09-07",
     "annotated_by": "local"
   },
